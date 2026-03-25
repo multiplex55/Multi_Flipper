@@ -1,32 +1,88 @@
-# If you prefer the allow list template instead of the deny list, see community template:
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
-#
-# Binaries for programs and plugins
+# Binaries
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
 
-# Test binary, built with `go test -c`
-*.test
+# Build output
+/build/
+/tmp/
 
-# Code coverage profiles and other test artifacts
-*.out
-coverage.*
-*.coverprofile
-profile.cov
+# Local clone of GitHub wiki (for editing wiki from repo)
+wiki-repo/
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
+# Old docs/wiki markdown dump + local notes (do not track in repo)
+docs/
 
-# Go workspace file
-go.work
-go.work.sum
+# Local marketing landing (work in progress, do not track yet)
+landing/
 
-# env file
+# SDE data cache (large, auto-downloaded)
+/data/
+# Station AI wiki RAG mirror/index artifacts (generated)
+/data/wiki-rag/
+/tmp/wiki-rag/
+/internal/api/data/wiki-rag/
+/scripts
+# SQLite database files
+flipper.db
+flipper.db-shm
+flipper.db-wal
+
+# Legacy config backup
+config.json
+config.json.bak
+
+# Frontend dependencies
+frontend/node_modules/
+
+# Frontend build output
+frontend/dist/
+
+# Tauri build artifacts
+frontend/src-tauri/target/
+frontend/src-tauri/gen/schemas/
+# Tauri sidecar (Go server binary, built by make.ps1)
+frontend/src-tauri/binaries/
+# SDE data cache created by Go backend during Tauri runs
+frontend/src-tauri/data/
+# SQLite DB created by Go backend during Tauri runs
+frontend/src-tauri/*.db
+frontend/src-tauri/*.db-shm
+frontend/src-tauri/*.db-wal
+
+# TypeScript build cache
+frontend/tsconfig.tsbuildinfo
+
+# Air live-reload config
+.air.toml
+
+# Claude settings
+.claude/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment files
+.out
 .env
+.env.local
+.env.*.local
+frontend/.env
+frontend/.env.local
+NUL
+tmp_ai_server.log
+tmp_ai_server.err
 
-# Editor/IDE
-# .idea/
-# .vscode/
+# Local Discord setup/scratch workspace (do not track)
+discord-local/
