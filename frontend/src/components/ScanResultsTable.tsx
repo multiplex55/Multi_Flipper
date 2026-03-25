@@ -11,7 +11,7 @@ import {
 import type { FlipResult, StationCacheMeta, WatchlistItem, RouteState, SystemDanger } from "@/lib/types";
 import { formatISK, formatMargin } from "@/lib/format";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
-import { buildRouteBatchMetadataByRow, rowBatchIdentityKey } from "@/lib/batchMetrics";
+import { buildRouteBatchMetadataByRow } from "@/lib/batchMetrics";
 import {
   compareBatchSyntheticValues,
   formatBatchSyntheticCell,
