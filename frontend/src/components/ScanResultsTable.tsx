@@ -11,6 +11,7 @@ import {
 import type { FlipResult, StationCacheMeta, WatchlistItem, RouteState, SystemDanger } from "@/lib/types";
 import { formatISK, formatMargin } from "@/lib/format";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
+import { buildRouteBatchMetadataByRow, rowBatchIdentityKey } from "@/lib/batchMetrics";
 import {
   addToWatchlist,
   clearStationTradeStates,
@@ -41,7 +42,8 @@ const CACHE_TTL_FALLBACK_MS = 20 * 60 * 1000;
 const COLUMN_PREFS_STORAGE_PREFIX = "eve-scan-columns:v1:";
 const ITEM_GROUPING_STORAGE_KEY = "eve-radius-group-by-item:v1";
 
-type SortKey = keyof FlipResult;
+type SyntheticSortKey = "RouteSafety" | "BatchNumber" | "BatchProfit" | "BatchTotalCapital";
+type SortKey = keyof FlipResult | SyntheticSortKey;
 type SortDir = "asc" | "desc";
 type RegionGroupSortMode = "period_profit" | "now_profit" | "trade_score";
 type HiddenMode = "done" | "ignored";
@@ -205,6 +207,24 @@ const baseColumnDefs: ColumnDef[] = [
     key: "TotalProfit",
     labelKey: "colProfit",
     width: "min-w-[120px]",
+    numeric: true,
+  },
+  {
+    key: "BatchNumber",
+    labelKey: "colBatchNumber",
+    width: "min-w-[90px]",
+    numeric: true,
+  },
+  {
+    key: "BatchProfit",
+    labelKey: "colBatchProfit",
+    width: "min-w-[120px]",
+    numeric: true,
+  },
+  {
+    key: "BatchTotalCapital",
+    labelKey: "colBatchTotalCapital",
+    width: "min-w-[130px]",
     numeric: true,
   },
   {
@@ -675,7 +695,21 @@ function rowS2BBfSRatio(row: FlipResult): number {
   return rowS2BPerDay(row) / bfs;
 }
 
-function getCellValue(row: FlipResult, key: SortKey): unknown {
+function getCellValue(
+  row: FlipResult,
+  key: SortKey,
+  batchMetricsByRow: Record<
+    string,
+    { batchNumber: number; batchProfit: number; batchTotalCapital: number }
+  >,
+): unknown {
+  if (key === "BatchNumber" || key === "BatchProfit" || key === "BatchTotalCapital") {
+    const metadata = batchMetricsByRow[rowBatchIdentityKey(row)];
+    if (!metadata || metadata.batchNumber <= 0) return null;
+    if (key === "BatchNumber") return metadata.batchNumber;
+    if (key === "BatchProfit") return metadata.batchProfit;
+    return metadata.batchTotalCapital;
+  }
   if (key === "IskPerM3") {
     if (row.IskPerM3 != null && Number.isFinite(row.IskPerM3)) {
       return row.IskPerM3;
@@ -685,12 +719,21 @@ function getCellValue(row: FlipResult, key: SortKey): unknown {
   if (key === "S2BPerDay") return rowS2BPerDay(row);
   if (key === "BfSPerDay") return rowBfSPerDay(row);
   if (key === "S2BBfSRatio") return rowS2BBfSRatio(row);
-  return row[key];
+  if (key === "RouteSafety") return null;
+  return row[key as keyof FlipResult];
 }
 
-function passesFilter(row: FlipResult, col: ColumnDef, fval: string): boolean {
+function passesFilter(
+  row: FlipResult,
+  col: ColumnDef,
+  fval: string,
+  batchMetricsByRow: Record<
+    string,
+    { batchNumber: number; batchProfit: number; batchTotalCapital: number }
+  >,
+): boolean {
   if (!fval) return true;
-  const cellVal = getCellValue(row, col.key);
+  const cellVal = getCellValue(row, col.key, batchMetricsByRow);
   return col.numeric
     ? passesNumericFilter(cellVal as number, fval)
     : passesTextFilter(cellVal, fval);
@@ -698,8 +741,23 @@ function passesFilter(row: FlipResult, col: ColumnDef, fval: string): boolean {
 
 /* ─── Cell formatting ─── */
 
-function fmtCell(col: ColumnDef, row: FlipResult): string {
-  const val = getCellValue(row, col.key);
+function fmtCell(
+  col: ColumnDef,
+  row: FlipResult,
+  batchMetricsByRow: Record<
+    string,
+    { batchNumber: number; batchProfit: number; batchTotalCapital: number }
+  >,
+): string {
+  const val = getCellValue(row, col.key, batchMetricsByRow);
+  if (col.key === "BatchNumber") {
+    if (val == null || Number(val) <= 0) return "\u2014";
+    return Number(val).toLocaleString();
+  }
+  if (col.key === "BatchProfit" || col.key === "BatchTotalCapital") {
+    if (val == null || Number(val) <= 0) return "\u2014";
+    return formatISK(Number(val));
+  }
   if (
     col.key === "ExpectedProfit" ||
     col.key === "RealProfit" ||
@@ -909,6 +967,14 @@ export function ScanResultsTable({
   const columnDefs = useMemo(
     () => orderedColumnDefs.filter((col) => !hiddenColumns.has(col.key)),
     [orderedColumnDefs, hiddenColumns],
+  );
+
+  const batchMetricsByRow = useMemo(
+    () =>
+      columnProfile === "default"
+        ? buildRouteBatchMetadataByRow(results, cargoLimit)
+        : {},
+    [columnProfile, results, cargoLimit],
   );
 
   // Watchlist
@@ -1177,7 +1243,7 @@ export function ScanResultsTable({
           for (const col of columnDefs) {
             const fval = filters[col.key];
             if (!fval) continue;
-            if (!passesFilter(ir.row, col, fval)) return false;
+            if (!passesFilter(ir.row, col, fval, batchMetricsByRow)) return false;
           }
           return true;
         })
@@ -1202,8 +1268,8 @@ export function ScanResultsTable({
         return sortDir === "asc" ? diff : -diff;
       }
 
-      const av = getCellValue(a.row, sortKey);
-      const bv = getCellValue(b.row, sortKey);
+      const av = getCellValue(a.row, sortKey, batchMetricsByRow);
+      const bv = getCellValue(b.row, sortKey, batchMetricsByRow);
       if (typeof av === "number" || typeof bv === "number") {
         if (av == null && bv == null) return 0;
         if (av == null) return 1;
@@ -1231,7 +1297,16 @@ export function ScanResultsTable({
     }
 
     return { indexed, filtered, sorted, variantByRowId };
-  }, [results, filters, columnDefs, sortKey, sortDir, pinnedIds, routeSafetyMap]);
+  }, [
+    results,
+    filters,
+    columnDefs,
+    sortKey,
+    sortDir,
+    pinnedIds,
+    routeSafetyMap,
+    batchMetricsByRow,
+  ]);
 
   // Available market groups derived from current results (region mode only)
   const availableGroups = useMemo<{ name: string; count: number }[]>(() => {
@@ -1871,7 +1946,7 @@ export function ScanResultsTable({
     const csvRows = rows.map((ir) =>
       columnDefs
         .map((col) => {
-          const str = String(getCellValue(ir.row, col.key) ?? "");
+          const str = String(getCellValue(ir.row, col.key, batchMetricsByRow) ?? "");
           return str.includes(",") ? `"${str}"` : str;
         })
         .join(","),
@@ -1894,7 +1969,7 @@ export function ScanResultsTable({
         : visibleRows;
     const header = columnDefs.map((c) => t(c.labelKey)).join("\t");
     const tsv = rows.map((ir) =>
-      columnDefs.map((col) => fmtCell(col, ir.row)).join("\t"),
+      columnDefs.map((col) => fmtCell(col, ir.row, batchMetricsByRow)).join("\t"),
     );
     navigator.clipboard.writeText([header, ...tsv].join("\n"));
     addToast(t("copied"), "success", 2000);
@@ -2056,6 +2131,7 @@ export function ScanResultsTable({
         tFn={t}
         routeSafetyEntry={routeSafetyMap[`${ir.row.BuySystemID}:${ir.row.SellSystemID}`]}
         onRouteSafetyClick={handleRouteSafetyClick}
+        batchMetricsByRow={batchMetricsByRow}
       />
     ),
     [
@@ -2076,6 +2152,7 @@ export function ScanResultsTable({
       variantByRowId,
       routeSafetyMap,
       handleRouteSafetyClick,
+      batchMetricsByRow,
     ],
   );
 
@@ -3298,6 +3375,10 @@ interface DataRowProps {
   tFn: (key: TranslationKey, vars?: Record<string, string | number>) => string;
   routeSafetyEntry: RouteState | undefined;
   onRouteSafetyClick: (from: number, to: number, e: import("react").MouseEvent) => void;
+  batchMetricsByRow: Record<
+    string,
+    { batchNumber: number; batchProfit: number; batchTotalCapital: number }
+  >;
 }
 
 /* ─── Trade Score Badge ─── */
@@ -3371,6 +3452,7 @@ const DataRow = memo(
     onToggleVariantGroup, onContextMenu, onLmbClick,
     onToggleSelect, onTogglePin, tFn,
     routeSafetyEntry, onRouteSafetyClick,
+    batchMetricsByRow,
   }: DataRowProps) {
     return (
       <tr
@@ -3479,9 +3561,9 @@ const DataRow = memo(
                 onRouteSafetyClick={onRouteSafetyClick}
               />
             ) : col.key === "BuyStation" ? (
-              <span className="truncate">{fmtCell(col, ir.row)}</span>
+              <span className="truncate">{fmtCell(col, ir.row, batchMetricsByRow)}</span>
             ) : (
-              fmtCell(col, ir.row)
+              fmtCell(col, ir.row, batchMetricsByRow)
             )}
           </td>
         ))}
