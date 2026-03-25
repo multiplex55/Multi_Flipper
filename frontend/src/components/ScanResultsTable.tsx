@@ -13,6 +13,12 @@ import { formatISK, formatMargin } from "@/lib/format";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { buildRouteBatchMetadataByRow, rowBatchIdentityKey } from "@/lib/batchMetrics";
 import {
+  compareBatchSyntheticValues,
+  formatBatchSyntheticCell,
+  getBatchSyntheticValue,
+  passesBatchNumericFilter,
+} from "@/lib/scanTableBatchColumns";
+import {
   addToWatchlist,
   clearStationTradeStates,
   deleteStationTradeStates,
@@ -704,11 +710,7 @@ function getCellValue(
   >,
 ): unknown {
   if (key === "BatchNumber" || key === "BatchProfit" || key === "BatchTotalCapital") {
-    const metadata = batchMetricsByRow[rowBatchIdentityKey(row)];
-    if (!metadata || metadata.batchNumber <= 0) return null;
-    if (key === "BatchNumber") return metadata.batchNumber;
-    if (key === "BatchProfit") return metadata.batchProfit;
-    return metadata.batchTotalCapital;
+    return getBatchSyntheticValue(row, key, batchMetricsByRow);
   }
   if (key === "IskPerM3") {
     if (row.IskPerM3 != null && Number.isFinite(row.IskPerM3)) {
@@ -734,9 +736,10 @@ function passesFilter(
 ): boolean {
   if (!fval) return true;
   const cellVal = getCellValue(row, col.key, batchMetricsByRow);
-  return col.numeric
-    ? passesNumericFilter(cellVal as number, fval)
-    : passesTextFilter(cellVal, fval);
+  if (col.key === "BatchNumber" || col.key === "BatchProfit" || col.key === "BatchTotalCapital") {
+    return passesBatchNumericFilter(cellVal as number | null, fval);
+  }
+  return col.numeric ? passesNumericFilter(cellVal as number, fval) : passesTextFilter(cellVal, fval);
 }
 
 /* ─── Cell formatting ─── */
@@ -750,13 +753,8 @@ function fmtCell(
   >,
 ): string {
   const val = getCellValue(row, col.key, batchMetricsByRow);
-  if (col.key === "BatchNumber") {
-    if (val == null || Number(val) <= 0) return "\u2014";
-    return Number(val).toLocaleString();
-  }
-  if (col.key === "BatchProfit" || col.key === "BatchTotalCapital") {
-    if (val == null || Number(val) <= 0) return "\u2014";
-    return formatISK(Number(val));
+  if (col.key === "BatchNumber" || col.key === "BatchProfit" || col.key === "BatchTotalCapital") {
+    return formatBatchSyntheticCell(col.key, val as number | null);
   }
   if (
     col.key === "ExpectedProfit" ||
@@ -1270,6 +1268,9 @@ export function ScanResultsTable({
 
       const av = getCellValue(a.row, sortKey, batchMetricsByRow);
       const bv = getCellValue(b.row, sortKey, batchMetricsByRow);
+      if (sortKey === "BatchNumber" || sortKey === "BatchProfit" || sortKey === "BatchTotalCapital") {
+        return compareBatchSyntheticValues(av as number | null, bv as number | null, sortDir);
+      }
       if (typeof av === "number" || typeof bv === "number") {
         if (av == null && bv == null) return 0;
         if (av == null) return 1;
