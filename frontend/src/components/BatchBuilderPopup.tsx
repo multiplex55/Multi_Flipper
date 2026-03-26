@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatISK } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import { buildBatch, routeLineKey, type BatchBuildResult } from "@/lib/batchMetrics";
+import { formatBatchLinesToMultibuyLines } from "@/lib/batchManifestFormat";
 import type { FlipResult } from "@/lib/types";
 import { Modal } from "./Modal";
 import { useGlobalToast } from "./Toast";
@@ -50,7 +51,7 @@ export function BatchBuilderPopup({
   const copyManifest = useCallback(async () => {
     if (!anchorRow || batch.lines.length === 0) return;
     const lines: string[] = [];
-    const multibuyLines = batch.lines.map((line) => `${line.row.TypeName} ${line.units.toString()}`);
+    const multibuyLines = formatBatchLinesToMultibuyLines(batch.lines);
     lines.push(`Route: ${anchorRow.BuyStation} -> ${anchorRow.SellStation}`);
     lines.push(
       `Cargo m3: ${
