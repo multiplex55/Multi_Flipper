@@ -234,10 +234,6 @@ func (s *Server) resolveUpdate(ctx context.Context) (updateResolved, error) {
 	}
 
 	currentNorm := normalizeVersion(current)
-	if currentNorm == "" || currentNorm == "dev" {
-		return resp, nil
-	}
-
 	rel, err := s.fetchLatestRelease(ctx)
 	if err != nil {
 		return resp, err
@@ -412,7 +408,8 @@ func escapeSingleQuotes(v string) string {
 }
 
 func normalizeVersion(v string) string {
-	v = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(v, "v"), "V"))
+	v = strings.TrimSpace(v)
+	v = strings.TrimPrefix(strings.TrimPrefix(v, "v"), "V")
 	if v == "" {
 		return ""
 	}

@@ -38,6 +38,7 @@ import { formatISK } from "./lib/format";
 import { useAuth } from "./lib/useAuth";
 import { useVersionCheck } from "./lib/useVersionCheck";
 import { useEsiStatus } from "./lib/useEsiStatus";
+import { evaluateUpdatePoll } from "./lib/updatePolling";
 import type {
   ContractResult,
   FlipResult,
@@ -424,6 +425,7 @@ function App() {
   const [updateApplying, setUpdateApplying] = useState(false);
   const [updateApplyError, setUpdateApplyError] = useState("");
   const [updateApplyStarted, setUpdateApplyStarted] = useState(false);
+  const [updateExpectedVersion, setUpdateExpectedVersion] = useState("");
   const [patrons, setPatrons] = useState<PatronEntry[]>([]);
   const [patronsLoading, setPatronsLoading] = useState(false);
   const [patronsError, setPatronsError] = useState("");
@@ -681,11 +683,13 @@ function App() {
     setUpdateApplying(true);
     setUpdateApplyStarted(false);
     setUpdateApplyError("");
+    setUpdateExpectedVersion("");
     try {
       const result = await applyAppUpdate();
       if (!result.ok) {
         throw new Error(result.message || t("updateModalFailed"));
       }
+      setUpdateExpectedVersion((result.to_version || "").trim());
       setUpdateApplyStarted(true);
     } catch (err) {
       const reason = err instanceof Error ? err.message : t("updateModalFailed");
@@ -705,20 +709,16 @@ function App() {
     const poll = async () => {
       if (cancelled) return;
       attempts++;
-      try {
-        const status = await getUpdateCheckStatus();
-        if (cancelled) return;
-
-        const current = (status.current_version || "").trim();
-        const versionChanged = current !== "" && current !== appVersion;
-        const noPendingUpdate = !status.has_update && !status.check_error;
-        if (sawDisconnect || versionChanged || noPendingUpdate) {
-          window.location.reload();
-          return;
-        }
-      } catch {
-        // Old backend can disappear before the updated process starts.
-        sawDisconnect = true;
+      const evaluation = await evaluateUpdatePoll(
+        getUpdateCheckStatus,
+        sawDisconnect,
+        updateExpectedVersion,
+      );
+      if (cancelled) return;
+      sawDisconnect = evaluation.sawDisconnect;
+      if (evaluation.shouldReload) {
+        window.location.reload();
+        return;
       }
 
       if (attempts >= maxAttempts) {
@@ -737,7 +737,7 @@ function App() {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [updateApplying, updateApplyStarted, appVersion, t]);
+  }, [updateApplying, updateApplyStarted, t, updateExpectedVersion]);
 
   // Load config on mount
   useEffect(() => {

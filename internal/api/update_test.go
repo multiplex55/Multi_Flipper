@@ -24,6 +24,11 @@ func TestIsVersionNewer(t *testing.T) {
 		{latest: "1.5.4", current: "1.5.4-2-g48d7110-dirty", want: false},
 		{latest: "1.5.4-3-gabc1234", current: "1.5.4-2-gabc1234", want: true},
 		{latest: "1.5.4-2-gabc1234", current: "1.5.4-3-gabc1234-dirty", want: false},
+		{latest: "v2.0.0", current: "V1.9.9", want: true},
+		{latest: "1.2.3", current: "release-2026.03", want: true},
+		{latest: "1.2.3", current: "dev-custom", want: true},
+		{latest: "1.5.4-2-g48d7110", current: "v1.5.4", want: true},
+		{latest: "v1.5.4", current: "1.5.4-2-g48d7110", want: false},
 	}
 
 	for _, tc := range cases {
@@ -33,6 +38,32 @@ func TestIsVersionNewer(t *testing.T) {
 			got := isVersionNewer(tc.latest, tc.current)
 			if got != tc.want {
 				t.Fatalf("isVersionNewer(%q, %q) = %v, want %v", tc.latest, tc.current, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeVersion(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{in: " v1.2.3 ", want: "1.2.3"},
+		{in: "V1.2.3+build42", want: "1.2.3"},
+		{in: "  ", want: ""},
+		{in: "release-2026.03", want: "release-2026.03"},
+		{in: "v1.2.3-4-gdeadbee-dirty", want: "1.2.3-4-gdeadbee-dirty"},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.in, func(t *testing.T) {
+			t.Parallel()
+			got := normalizeVersion(tc.in)
+			if got != tc.want {
+				t.Fatalf("normalizeVersion(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
 	}
