@@ -110,7 +110,8 @@ describe("BatchBuilderPopup copy manifest", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Copy manifest" }));
 
     const manifest = writeText.mock.calls[0][0];
-    const appended = manifest.split("\n\n").at(-1) ?? "";
+    const sections = manifest.split("\n\n");
+    const appended = sections[sections.length - 1] ?? "";
 
     expect(appended).toContain("Anchor Paste 1500");
     expect(appended).not.toContain("Anchor Paste 1,500");
@@ -132,10 +133,11 @@ describe("BatchBuilderPopup copy manifest", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Copy manifest" }));
 
     const manifest = writeText.mock.calls[0][0];
-    const appendedNames = (manifest.split("\n\n").at(-1) ?? "")
+    const sections = manifest.split("\n\n");
+    const appendedNames = (sections[sections.length - 1] ?? "")
       .split("\n")
       .filter(Boolean)
-      .map((line) => line.replace(/\s\d+$/, ""));
+      .map((line: string) => line.replace(/\s\d+$/, ""));
 
     expect(appendedNames).toEqual(displayedOrder);
   });
