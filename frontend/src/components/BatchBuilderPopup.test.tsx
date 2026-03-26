@@ -67,6 +67,8 @@ describe("BatchBuilderPopup copy manifest", () => {
       Volume: 2,
       ProfitPerUnit: 300,
       UnitsToBuy: 2000,
+      ExpectedBuyPrice: 115,
+      ExpectedSellPrice: 430,
     }),
     makeRow({
       TypeID: 33,
@@ -97,11 +99,39 @@ describe("BatchBuilderPopup copy manifest", () => {
     expect(writeText).toHaveBeenCalledTimes(1);
     const manifest = writeText.mock.calls[0][0];
 
-    expect(manifest).toContain("Route: Jita IV - Moon 4 -> Amarr VIII (Oris) - Emperor Family Academy");
+    expect(manifest).toContain("Buy Station: Jita IV - Moon 4");
+    expect(manifest).toContain("Jumps to Buy Station: 0");
+    expect(manifest).toContain("Sell Station: Amarr VIII (Oris) - Emperor Family Academy");
+    expect(manifest).toContain("Jumps Buy -> Sell: 0");
     expect(manifest).toContain("Items: 3");
-    expect(manifest).toContain("Anchor Paste | qty 1,500 | vol 1,500 m3 | profit 150,000 ISK");
-    expect(manifest).toContain("Dense Isogen | qty 2,000 | vol 4,000 m3 | profit 600,000 ISK");
+    expect(manifest).toContain("Total capital: 630,000 ISK");
+    expect(manifest).toContain("Total gross sell: 1,340,000 ISK");
+    expect(manifest).toContain("Total profit: 1,500,000 ISK");
+    expect(manifest).toContain("Total isk/jump: 0 ISK");
+    expect(manifest).toContain(
+      "Anchor Paste | qty 1,500 | buy 100 ISK | sell 120 ISK | vol 1,500 m3 | profit 150,000 ISK",
+    );
+    expect(manifest).toContain(
+      "Dense Isogen | qty 2,000 | buy 115 ISK | sell 430 ISK | vol 4,000 m3 | profit 600,000 ISK",
+    );
     expect(manifest).toContain("\n\nAnchor Paste 1500\nDense Isogen 2000\nMedium Mexallon 2500");
+  });
+
+  it("computes total isk/jump from route jumps when non-zero", async () => {
+    renderPopup({
+      anchorRow: makeRow({
+        ...anchorRow,
+        BuyJumps: 3,
+        SellJumps: 2,
+      }),
+      rows,
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Copy manifest" }));
+
+    const manifest = writeText.mock.calls[0][0];
+    expect(manifest).toContain("Total profit: 1,500,000 ISK");
+    expect(manifest).toContain("Total isk/jump: 300,000 ISK");
   });
 
   it("appends quantities without commas and only multibuy fields", async () => {

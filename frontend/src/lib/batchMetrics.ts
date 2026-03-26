@@ -6,6 +6,7 @@ export type BatchLine = {
   volume: number;
   profit: number;
   capital: number;
+  grossSell: number;
   iskPerM3: number;
 };
 
@@ -14,6 +15,7 @@ export type BatchBuildResult = {
   totalVolume: number;
   totalProfit: number;
   totalCapital: number;
+  totalGrossSell: number;
   remainingM3: number | null;
   usedPercent: number | null;
 };
@@ -51,6 +53,12 @@ export function rowCapitalPerUnit(row: FlipResult): number {
   const expected = safeNumber(row.ExpectedBuyPrice);
   if (expected > 0) return expected;
   return Math.max(0, safeNumber(row.BuyPrice));
+}
+
+export function rowSellPerUnit(row: FlipResult): number {
+  const expected = safeNumber(row.ExpectedSellPrice);
+  if (expected > 0) return expected;
+  return Math.max(0, safeNumber(row.SellPrice));
 }
 
 export function rowMaxUnits(row: FlipResult): number {
@@ -123,6 +131,7 @@ export function buildBatch(
       totalVolume: 0,
       totalProfit: 0,
       totalCapital: 0,
+      totalGrossSell: 0,
       remainingM3: cargoLimitM3 > 0 ? cargoLimitM3 : null,
       usedPercent: cargoLimitM3 > 0 ? 0 : null,
     };
@@ -184,6 +193,7 @@ export function buildBatch(
       volume,
       profit: units * candidate.profitPerUnit,
       capital: units * candidate.capitalPerUnit,
+      grossSell: units * rowSellPerUnit(candidate.row),
       iskPerM3: candidate.density,
     });
     if (Number.isFinite(remaining)) {
@@ -202,13 +212,14 @@ export function buildBatch(
   const totalVolume = lines.reduce((sum, line) => sum + line.volume, 0);
   const totalProfit = lines.reduce((sum, line) => sum + line.profit, 0);
   const totalCapital = lines.reduce((sum, line) => sum + line.capital, 0);
+  const totalGrossSell = lines.reduce((sum, line) => sum + line.grossSell, 0);
   const remainingM3 = Number.isFinite(capacity) ? Math.max(0, capacity - totalVolume) : null;
   const usedPercent =
     Number.isFinite(capacity) && capacity > 0
       ? Math.min(100, (totalVolume / capacity) * 100)
       : null;
 
-  return { lines, totalVolume, totalProfit, totalCapital, remainingM3, usedPercent };
+  return { lines, totalVolume, totalProfit, totalCapital, totalGrossSell, remainingM3, usedPercent };
 }
 
 export function buildRouteBatchMetadataByRow(
