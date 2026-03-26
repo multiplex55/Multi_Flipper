@@ -62,27 +62,47 @@ export function BatchBuilderPopup({
     const sellJumps = Math.max(0, Math.floor(safeNumber(anchorRow.SellJumps)));
     const totalRouteJumps = buyJumps + sellJumps;
     const totalIskPerJump = totalRouteJumps > 0 ? batch.totalProfit / totalRouteJumps : 0;
-    lines.push(`Buy Station: ${anchorRow.BuyStation}`);
-    lines.push(`Jumps to Buy Station: ${buyJumps}`);
-    lines.push(`Sell Station: ${anchorRow.SellStation}`);
-    lines.push(`Jumps Buy -> Sell: ${sellJumps}`);
+    lines.push(t("batchBuilderManifestBuyStation", { station: anchorRow.BuyStation }));
+    lines.push(t("batchBuilderManifestJumpsToBuyStation", { jumps: buyJumps }));
+    lines.push(t("batchBuilderManifestSellStation", { station: anchorRow.SellStation }));
+    lines.push(t("batchBuilderManifestJumpsBuyToSell", { jumps: sellJumps }));
     lines.push(
       `Cargo m3: ${
         cargoLimitM3 > 0 ? cargoLimitM3.toLocaleString() : t("batchBuilderCargoUnlimited")
       }`,
     );
-    lines.push(`Items: ${batch.lines.length}`);
-    lines.push(`Total volume: ${batch.totalVolume.toLocaleString(undefined, { maximumFractionDigits: 1 })} m3`);
-    lines.push(`Total capital: ${Math.round(batch.totalCapital).toLocaleString()} ISK`);
-    lines.push(`Total gross sell: ${Math.round(batch.totalGrossSell).toLocaleString()} ISK`);
-    lines.push(`Total profit: ${Math.round(batch.totalProfit).toLocaleString()} ISK`);
-    lines.push(`Total isk/jump: ${Math.round(totalIskPerJump).toLocaleString()} ISK`);
+    lines.push(t("batchBuilderManifestItems", { count: batch.lines.length }));
+    lines.push(
+      t("batchBuilderManifestTotalVolume", {
+        volume: batch.totalVolume.toLocaleString(undefined, { maximumFractionDigits: 1 }),
+      }),
+    );
+    lines.push(
+      t("batchBuilderManifestTotalCapital", {
+        isk: Math.round(batch.totalCapital).toLocaleString(),
+      }),
+    );
+    lines.push(
+      t("batchBuilderManifestTotalGrossSell", {
+        isk: Math.round(batch.totalGrossSell).toLocaleString(),
+      }),
+    );
+    lines.push(
+      t("batchBuilderManifestTotalProfit", {
+        isk: Math.round(batch.totalProfit).toLocaleString(),
+      }),
+    );
+    lines.push(
+      t("batchBuilderManifestTotalIskPerJump", {
+        isk: Math.round(totalIskPerJump).toLocaleString(),
+      }),
+    );
     lines.push("");
     for (const line of batch.lines) {
       const buyPrice = line.capital / line.units;
       const sellPrice = line.grossSell / line.units;
       lines.push(
-        `${line.row.TypeName} | qty ${line.units.toLocaleString()} | buy ${Math.round(buyPrice).toLocaleString()} ISK | sell ${Math.round(sellPrice).toLocaleString()} ISK | vol ${line.volume.toLocaleString(undefined, { maximumFractionDigits: 1 })} m3 | profit ${Math.round(line.profit).toLocaleString()} ISK`,
+        `${line.row.TypeName} | ${t("batchBuilderManifestItemQty", { qty: line.units.toLocaleString() })} | ${t("batchBuilderManifestItemBuy", { isk: Math.round(buyPrice).toLocaleString() })} | ${t("batchBuilderManifestItemSell", { isk: Math.round(sellPrice).toLocaleString() })} | ${t("batchBuilderManifestItemVol", { volume: line.volume.toLocaleString(undefined, { maximumFractionDigits: 1 }) })} | ${t("batchBuilderManifestItemProfit", { isk: Math.round(line.profit).toLocaleString() })}`,
       );
     }
     lines.push("");
