@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatISK } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
-import { buildBatch, routeLineKey, type BatchBuildResult } from "@/lib/batchMetrics";
+import {
+  buildBatch,
+  routeLineKey,
+  safeNumber,
+  type BatchBuildResult,
+} from "@/lib/batchMetrics";
 import { formatBatchLinesToMultibuyLines } from "@/lib/batchManifestFormat";
 import type { FlipResult } from "@/lib/types";
 import { Modal } from "./Modal";
@@ -40,6 +45,7 @@ export function BatchBuilderPopup({
         totalVolume: 0,
         totalProfit: 0,
         totalCapital: 0,
+        totalGrossSell: 0,
         remainingM3: cargoLimitM3 > 0 ? cargoLimitM3 : null,
         usedPercent: cargoLimitM3 > 0 ? 0 : null,
       };
@@ -52,7 +58,14 @@ export function BatchBuilderPopup({
     if (!anchorRow || batch.lines.length === 0) return;
     const lines: string[] = [];
     const multibuyLines = formatBatchLinesToMultibuyLines(batch.lines);
-    lines.push(`Route: ${anchorRow.BuyStation} -> ${anchorRow.SellStation}`);
+    const buyJumps = Math.max(0, Math.floor(safeNumber(anchorRow.BuyJumps)));
+    const sellJumps = Math.max(0, Math.floor(safeNumber(anchorRow.SellJumps)));
+    const totalRouteJumps = buyJumps + sellJumps;
+    const totalIskPerJump = totalRouteJumps > 0 ? batch.totalProfit / totalRouteJumps : 0;
+    lines.push(`Buy Station: ${anchorRow.BuyStation}`);
+    lines.push(`Jumps to Buy Station: ${buyJumps}`);
+    lines.push(`Sell Station: ${anchorRow.SellStation}`);
+    lines.push(`Jumps Buy -> Sell: ${sellJumps}`);
     lines.push(
       `Cargo m3: ${
         cargoLimitM3 > 0 ? cargoLimitM3.toLocaleString() : t("batchBuilderCargoUnlimited")
@@ -60,12 +73,16 @@ export function BatchBuilderPopup({
     );
     lines.push(`Items: ${batch.lines.length}`);
     lines.push(`Total volume: ${batch.totalVolume.toLocaleString(undefined, { maximumFractionDigits: 1 })} m3`);
-    lines.push(`Total profit: ${Math.round(batch.totalProfit).toLocaleString()} ISK`);
     lines.push(`Total capital: ${Math.round(batch.totalCapital).toLocaleString()} ISK`);
+    lines.push(`Total gross sell: ${Math.round(batch.totalGrossSell).toLocaleString()} ISK`);
+    lines.push(`Total profit: ${Math.round(batch.totalProfit).toLocaleString()} ISK`);
+    lines.push(`Total isk/jump: ${Math.round(totalIskPerJump).toLocaleString()} ISK`);
     lines.push("");
     for (const line of batch.lines) {
+      const buyPrice = line.capital / line.units;
+      const sellPrice = line.grossSell / line.units;
       lines.push(
-        `${line.row.TypeName} | qty ${line.units.toLocaleString()} | vol ${line.volume.toLocaleString(undefined, { maximumFractionDigits: 1 })} m3 | profit ${Math.round(line.profit).toLocaleString()} ISK`,
+        `${line.row.TypeName} | qty ${line.units.toLocaleString()} | buy ${Math.round(buyPrice).toLocaleString()} ISK | sell ${Math.round(sellPrice).toLocaleString()} ISK | vol ${line.volume.toLocaleString(undefined, { maximumFractionDigits: 1 })} m3 | profit ${Math.round(line.profit).toLocaleString()} ISK`,
       );
     }
     lines.push("");
