@@ -6,6 +6,8 @@ const requiredKeys = [
   "colBatchNumber",
   "colBatchProfit",
   "colBatchTotalCapital",
+  "colBatchIskPerJump",
+  "colBuyJumps",
   "batchBuilderTotalProfit",
   "batchBuilderTotalCapital",
 ] as const;

@@ -48,7 +48,12 @@ const CACHE_TTL_FALLBACK_MS = 20 * 60 * 1000;
 const COLUMN_PREFS_STORAGE_PREFIX = "eve-scan-columns:v1:";
 const ITEM_GROUPING_STORAGE_KEY = "eve-radius-group-by-item:v1";
 
-type SyntheticSortKey = "RouteSafety" | "BatchNumber" | "BatchProfit" | "BatchTotalCapital";
+type SyntheticSortKey =
+  | "RouteSafety"
+  | "BatchNumber"
+  | "BatchProfit"
+  | "BatchTotalCapital"
+  | "BatchIskPerJump";
 type SortKey = keyof FlipResult | SyntheticSortKey;
 type SortDir = "asc" | "desc";
 type RegionGroupSortMode = "period_profit" | "now_profit" | "trade_score";
@@ -234,6 +239,12 @@ const baseColumnDefs: ColumnDef[] = [
     numeric: true,
   },
   {
+    key: "BatchIskPerJump",
+    labelKey: "colBatchIskPerJump",
+    width: "min-w-[130px]",
+    numeric: true,
+  },
+  {
     key: "ExpectedProfit",
     labelKey: "colExpectedProfit",
     width: "min-w-[100px]",
@@ -243,6 +254,12 @@ const baseColumnDefs: ColumnDef[] = [
     key: "ProfitPerJump",
     labelKey: "colProfitPerJump",
     width: "min-w-[110px]",
+    numeric: true,
+  },
+  {
+    key: "BuyJumps",
+    labelKey: "colBuyJumps",
+    width: "min-w-[80px]",
     numeric: true,
   },
   {
@@ -706,10 +723,15 @@ function getCellValue(
   key: SortKey,
   batchMetricsByRow: Record<
     string,
-    { batchNumber: number; batchProfit: number; batchTotalCapital: number }
+    { batchNumber: number; batchProfit: number; batchTotalCapital: number; batchIskPerJump: number }
   >,
 ): unknown {
-  if (key === "BatchNumber" || key === "BatchProfit" || key === "BatchTotalCapital") {
+  if (
+    key === "BatchNumber" ||
+    key === "BatchProfit" ||
+    key === "BatchTotalCapital" ||
+    key === "BatchIskPerJump"
+  ) {
     return getBatchSyntheticValue(row, key, batchMetricsByRow);
   }
   if (key === "IskPerM3") {
@@ -731,12 +753,17 @@ function passesFilter(
   fval: string,
   batchMetricsByRow: Record<
     string,
-    { batchNumber: number; batchProfit: number; batchTotalCapital: number }
+    { batchNumber: number; batchProfit: number; batchTotalCapital: number; batchIskPerJump: number }
   >,
 ): boolean {
   if (!fval) return true;
   const cellVal = getCellValue(row, col.key, batchMetricsByRow);
-  if (col.key === "BatchNumber" || col.key === "BatchProfit" || col.key === "BatchTotalCapital") {
+  if (
+    col.key === "BatchNumber" ||
+    col.key === "BatchProfit" ||
+    col.key === "BatchTotalCapital" ||
+    col.key === "BatchIskPerJump"
+  ) {
     return passesBatchNumericFilter(cellVal as number | null, fval);
   }
   return col.numeric ? passesNumericFilter(cellVal as number, fval) : passesTextFilter(cellVal, fval);
@@ -749,11 +776,16 @@ function fmtCell(
   row: FlipResult,
   batchMetricsByRow: Record<
     string,
-    { batchNumber: number; batchProfit: number; batchTotalCapital: number }
+    { batchNumber: number; batchProfit: number; batchTotalCapital: number; batchIskPerJump: number }
   >,
 ): string {
   const val = getCellValue(row, col.key, batchMetricsByRow);
-  if (col.key === "BatchNumber" || col.key === "BatchProfit" || col.key === "BatchTotalCapital") {
+  if (
+    col.key === "BatchNumber" ||
+    col.key === "BatchProfit" ||
+    col.key === "BatchTotalCapital" ||
+    col.key === "BatchIskPerJump"
+  ) {
     return formatBatchSyntheticCell(col.key, val as number | null);
   }
   if (
@@ -1268,7 +1300,12 @@ export function ScanResultsTable({
 
       const av = getCellValue(a.row, sortKey, batchMetricsByRow);
       const bv = getCellValue(b.row, sortKey, batchMetricsByRow);
-      if (sortKey === "BatchNumber" || sortKey === "BatchProfit" || sortKey === "BatchTotalCapital") {
+      if (
+        sortKey === "BatchNumber" ||
+        sortKey === "BatchProfit" ||
+        sortKey === "BatchTotalCapital" ||
+        sortKey === "BatchIskPerJump"
+      ) {
         return compareBatchSyntheticValues(av as number | null, bv as number | null, sortDir);
       }
       if (typeof av === "number" || typeof bv === "number") {

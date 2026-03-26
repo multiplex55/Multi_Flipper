@@ -130,15 +130,50 @@ describe("batchMetrics", () => {
     expect(normalMeta.batchNumber).toBe(3);
     expect(normalMeta.batchProfit).toBe(340);
     expect(normalMeta.batchTotalCapital).toBe(1_660);
+    expect(normalMeta.batchIskPerJump).toBe(170);
 
     const invalidMeta = metadataFor(invalidVolume, metadataByRow);
     const nonPositiveMeta = metadataFor(nonPositiveProfit, metadataByRow);
     expect(invalidMeta.batchNumber).toBe(3);
     expect(nonPositiveMeta.batchNumber).toBe(3);
+    expect(invalidMeta.batchIskPerJump).toBe(normalMeta.batchIskPerJump);
+    expect(nonPositiveMeta.batchIskPerJump).toBe(normalMeta.batchIskPerJump);
 
     const batchFromNormal = buildBatch(normal, rows, 1_000);
     expect(batchFromNormal.lines.map((line) => line.row.TypeID)).toEqual([1, 5, 2]);
     const duplicateLine = batchFromNormal.lines.find((line) => line.row.TypeID === 5);
     expect(duplicateLine?.profit).toBe(120);
+  });
+
+  it("populates batchIskPerJump using stable route jumps fallback", () => {
+    const routeAnchor = makeRow({ TypeID: 10, TotalJumps: 8, ProfitPerUnit: 40, UnitsToBuy: 5 });
+    const sameRouteMissingJumps = makeRow({
+      TypeID: 11,
+      BuyLocationID: routeAnchor.BuyLocationID,
+      SellLocationID: routeAnchor.SellLocationID,
+      TotalJumps: undefined,
+      ProfitPerUnit: 20,
+      UnitsToBuy: 5,
+    });
+    const sameRouteZeroJumps = makeRow({
+      TypeID: 12,
+      BuyLocationID: routeAnchor.BuyLocationID,
+      SellLocationID: routeAnchor.SellLocationID,
+      TotalJumps: 0,
+      ProfitPerUnit: 10,
+      UnitsToBuy: 5,
+    });
+
+    const metadataByRow = buildRouteBatchMetadataByRow(
+      [routeAnchor, sameRouteMissingJumps, sameRouteZeroJumps],
+      1_000,
+    );
+
+    const anchorMeta = metadataFor(routeAnchor, metadataByRow);
+    const missingMeta = metadataFor(sameRouteMissingJumps, metadataByRow);
+    const zeroMeta = metadataFor(sameRouteZeroJumps, metadataByRow);
+    expect(anchorMeta.batchIskPerJump).toBe(43.75);
+    expect(missingMeta.batchIskPerJump).toBe(anchorMeta.batchIskPerJump);
+    expect(zeroMeta.batchIskPerJump).toBe(anchorMeta.batchIskPerJump);
   });
 });

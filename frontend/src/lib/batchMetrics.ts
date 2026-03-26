@@ -30,6 +30,7 @@ export type RouteBatchMetadata = {
   batchNumber: number;
   batchProfit: number;
   batchTotalCapital: number;
+  batchIskPerJump: number;
 };
 
 export function safeNumber(value: unknown): number {
@@ -223,10 +224,19 @@ export function buildRouteBatchMetadataByRow(
     seen.add(identityKey);
 
     const batch = buildBatch(row, rows, cargoLimitM3);
+    const anchorJumps = safeNumber(row.TotalJumps);
+    const routeJumps =
+      anchorJumps > 0
+        ? anchorJumps
+        : rows
+            .filter((candidate) => sameRoute(row, candidate))
+            .map((candidate) => safeNumber(candidate.TotalJumps))
+            .find((jumps) => jumps > 0) ?? 0;
     metadataByRow[identityKey] = {
       batchNumber: batch.lines.length,
       batchProfit: batch.totalProfit,
       batchTotalCapital: batch.totalCapital,
+      batchIskPerJump: routeJumps > 0 ? batch.totalProfit / routeJumps : 0,
     };
   }
 

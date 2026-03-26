@@ -2,7 +2,11 @@ import { formatISK } from "@/lib/format";
 import { rowBatchIdentityKey, type RouteBatchMetadata } from "@/lib/batchMetrics";
 import type { FlipResult } from "@/lib/types";
 
-export type BatchSyntheticKey = "BatchNumber" | "BatchProfit" | "BatchTotalCapital";
+export type BatchSyntheticKey =
+  | "BatchNumber"
+  | "BatchProfit"
+  | "BatchTotalCapital"
+  | "BatchIskPerJump";
 
 export type BatchMetadataByRow = Record<string, RouteBatchMetadata>;
 
@@ -15,6 +19,11 @@ export function getBatchSyntheticValue(
   if (!metadata || metadata.batchNumber <= 0) return null;
   if (key === "BatchNumber") return metadata.batchNumber;
   if (key === "BatchProfit") return metadata.batchProfit;
+  if (key === "BatchIskPerJump") {
+    const jumps = Number(row.TotalJumps);
+    if (!Number.isFinite(jumps) || jumps <= 0) return null;
+    return metadata.batchProfit / jumps;
+  }
   return metadata.batchTotalCapital;
 }
 
