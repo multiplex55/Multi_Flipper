@@ -75,6 +75,44 @@ describe("scan-table batch synthetic helpers", () => {
 
     expect(passesBatchNumericFilter(150_000, "100000")).toBe(true);
     expect(passesBatchNumericFilter(50_000, "100000")).toBe(false);
+    expect(passesBatchNumericFilter(80_000, "75000")).toBe(true);
+  });
+
+  it("computes and formats batch ISK/jump from row jumps", () => {
+    const row = makeRow({
+      TypeID: 101,
+      ProfitPerUnit: 40,
+      UnitsToBuy: 5,
+      TotalJumps: 4,
+    });
+    const metadata = buildRouteBatchMetadataByRow([row], 1_000);
+
+    const value = getBatchSyntheticValue(row, "BatchIskPerJump", metadata);
+    expect(value).toBe(50);
+    expect(formatBatchSyntheticCell("BatchIskPerJump", value)).toBe("50");
+  });
+
+  it("returns null batch ISK/jump when jumps are zero or missing", () => {
+    const zeroJumpsRow = makeRow({
+      TypeID: 201,
+      BuyLocationID: 920001,
+      SellLocationID: 920002,
+      TotalJumps: 0,
+    });
+    const missingJumpsRow = makeRow({
+      TypeID: 202,
+      BuyLocationID: 930001,
+      SellLocationID: 930002,
+      TotalJumps: undefined,
+    });
+    const metadata = buildRouteBatchMetadataByRow([zeroJumpsRow, missingJumpsRow], 1_000);
+
+    const zeroJumpsValue = getBatchSyntheticValue(zeroJumpsRow, "BatchIskPerJump", metadata);
+    const missingJumpsValue = getBatchSyntheticValue(missingJumpsRow, "BatchIskPerJump", metadata);
+    expect(zeroJumpsValue).toBeNull();
+    expect(missingJumpsValue).toBeNull();
+    expect(formatBatchSyntheticCell("BatchIskPerJump", zeroJumpsValue)).toBe("—");
+    expect(formatBatchSyntheticCell("BatchIskPerJump", missingJumpsValue)).toBe("—");
   });
 
   it("keeps popup batch totals in parity with synthetic row metadata for the same anchor", () => {
