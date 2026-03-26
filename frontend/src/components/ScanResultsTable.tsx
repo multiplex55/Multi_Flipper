@@ -916,6 +916,7 @@ export function ScanResultsTable({
   const [pinnedIds, setPinnedIds] = useState<Set<number>>(new Set());
   const [page, setPage] = useState(0);
   const [compactMode, setCompactMode] = useState(false);
+  const previousScanningRef = useRef(scanning);
   const [groupByItem, setGroupByItem] = useState<boolean>(() => {
     try {
       return localStorage.getItem(ITEM_GROUPING_STORAGE_KEY) === "1";
@@ -1006,6 +1007,14 @@ export function ScanResultsTable({
         : {},
     [columnProfile, results, cargoLimit],
   );
+
+  useEffect(() => {
+    const wasScanning = previousScanningRef.current;
+    if (wasScanning && !scanning && results.length > 0) {
+      setCompactMode(true);
+    }
+    previousScanningRef.current = scanning;
+  }, [results.length, scanning]);
 
   // Watchlist
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
