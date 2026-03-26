@@ -10,6 +10,17 @@ const requiredKeys = [
   "colBuyJumps",
   "batchBuilderTotalProfit",
   "batchBuilderTotalCapital",
+  "batchBuilderManifestBuyStation",
+  "batchBuilderManifestJumpsToBuyStation",
+  "batchBuilderManifestSellStation",
+  "batchBuilderManifestJumpsBuyToSell",
+  "batchBuilderManifestTotalGrossSell",
+  "batchBuilderManifestTotalIskPerJump",
+  "batchBuilderManifestItemQty",
+  "batchBuilderManifestItemBuy",
+  "batchBuilderManifestItemSell",
+  "batchBuilderManifestItemVol",
+  "batchBuilderManifestItemProfit",
 ] as const;
 
 describe("localization key sanity", () => {
