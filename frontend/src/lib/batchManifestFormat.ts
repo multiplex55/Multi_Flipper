@@ -11,7 +11,7 @@ function toIntegerQuantityString(units: number | string): string {
     return String(Math.trunc(units));
   }
 
-  const normalized = units.replaceAll(",", "").trim();
+  const normalized = units.replace(/,/g, "").trim();
   if (normalized.length === 0) return "0";
 
   const parsed = Number(normalized);
@@ -46,6 +46,6 @@ export function parseDetailedBatchLine(
   const match = line.match(/^(.*?)\s*\|\s*qty\s+([\d,]+)\b/i);
   if (!match) return null;
   const typeName = match[1];
-  const units = match[2].replaceAll(",", "");
+  const units = match[2].replace(/,/g, "");
   return { typeName, units };
 }
