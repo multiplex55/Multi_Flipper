@@ -3415,7 +3415,7 @@ interface DataRowProps {
   onRouteSafetyClick: (from: number, to: number, e: import("react").MouseEvent) => void;
   batchMetricsByRow: Record<
     string,
-    { batchNumber: number; batchProfit: number; batchTotalCapital: number }
+    { batchNumber: number; batchProfit: number; batchTotalCapital: number; batchIskPerJump: number }
   >;
 }
 
