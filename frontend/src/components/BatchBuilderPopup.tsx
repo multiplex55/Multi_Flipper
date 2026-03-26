@@ -50,6 +50,7 @@ export function BatchBuilderPopup({
   const copyManifest = useCallback(async () => {
     if (!anchorRow || batch.lines.length === 0) return;
     const lines: string[] = [];
+    const multibuyLines = batch.lines.map((line) => `${line.row.TypeName} ${line.units.toString()}`);
     lines.push(`Route: ${anchorRow.BuyStation} -> ${anchorRow.SellStation}`);
     lines.push(
       `Cargo m3: ${
@@ -66,6 +67,8 @@ export function BatchBuilderPopup({
         `${line.row.TypeName} | qty ${line.units.toLocaleString()} | vol ${line.volume.toLocaleString(undefined, { maximumFractionDigits: 1 })} m3 | profit ${Math.round(line.profit).toLocaleString()} ISK`,
       );
     }
+    lines.push("");
+    lines.push(...multibuyLines);
     await navigator.clipboard.writeText(lines.join("\n"));
     addToast(t("batchBuilderCopied"), "success", 2200);
   }, [anchorRow, batch, cargoLimitM3, t, addToast]);
@@ -195,4 +198,3 @@ export function BatchBuilderPopup({
     </Modal>
   );
 }
-
