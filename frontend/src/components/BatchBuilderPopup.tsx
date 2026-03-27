@@ -99,10 +99,15 @@ export function BatchBuilderPopup({
     );
     lines.push("");
     for (const line of batch.lines) {
-      const buyPrice = line.capital / line.units;
-      const sellPrice = line.grossSell / line.units;
+      const qty = line.units;
+      const buyTotal = line.capital;
+      const buyPer = line.capital / line.units;
+      const sellTotal = line.grossSell;
+      const sellPer = line.grossSell / line.units;
+      const vol = line.volume;
+      const profit = line.profit;
       lines.push(
-        `${line.row.TypeName} | ${t("batchBuilderManifestItemQty", { qty: line.units.toLocaleString() })} | ${t("batchBuilderManifestItemBuy", { isk: Math.round(buyPrice).toLocaleString() })} | ${t("batchBuilderManifestItemSell", { isk: Math.round(sellPrice).toLocaleString() })} | ${t("batchBuilderManifestItemVol", { volume: line.volume.toLocaleString(undefined, { maximumFractionDigits: 1 }) })} | ${t("batchBuilderManifestItemProfit", { isk: Math.round(line.profit).toLocaleString() })}`,
+        `${line.row.TypeName} | ${t("batchBuilderManifestItemQty", { qty: qty.toLocaleString() })} | ${t("batchBuilderManifestItemBuyTotal", { isk: Math.round(buyTotal).toLocaleString() })} | ${t("batchBuilderManifestItemBuyPer", { isk: Math.round(buyPer).toLocaleString() })} | ${t("batchBuilderManifestItemSellTotal", { isk: Math.round(sellTotal).toLocaleString() })} | ${t("batchBuilderManifestItemSellPer", { isk: Math.round(sellPer).toLocaleString() })} | ${t("batchBuilderManifestItemVol", { volume: vol.toLocaleString(undefined, { maximumFractionDigits: 1 }) })} | ${t("batchBuilderManifestItemProfit", { isk: Math.round(profit).toLocaleString() })}`,
       );
     }
     lines.push("");

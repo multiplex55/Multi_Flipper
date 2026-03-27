@@ -689,8 +689,10 @@ export const ru = {
     batchBuilderManifestTotalProfit: "Общая прибыль: {isk} ISK",
     batchBuilderManifestTotalIskPerJump: "Общий isk/прыжок: {isk} ISK",
     batchBuilderManifestItemQty: "кол-во {qty}",
-    batchBuilderManifestItemBuy: "покупка {isk} ISK",
-    batchBuilderManifestItemSell: "продажа {isk} ISK",
+    batchBuilderManifestItemBuyTotal: "покупка всего {isk} ISK",
+    batchBuilderManifestItemBuyPer: "покупка за шт. {isk} ISK",
+    batchBuilderManifestItemSellTotal: "продажа всего {isk} ISK",
+    batchBuilderManifestItemSellPer: "продажа за шт. {isk} ISK",
     batchBuilderManifestItemVol: "объем {volume} м3",
     batchBuilderManifestItemProfit: "прибыль {isk} ISK",
 
