@@ -144,9 +144,6 @@ func (s *Scanner) CreateBatchRoute(ctx context.Context, params BatchCreateRouteP
 		}
 
 		for _, buy := range buyLevels {
-			if params.FinalSellLocationID > 0 && buy.LocationID != params.FinalSellLocationID {
-				continue
-			}
 			maxUnitsByCargo := int64(math.Floor(params.RemainingCapacityM3 / itemType.Volume))
 			if maxUnitsByCargo <= 0 {
 				break
@@ -179,9 +176,9 @@ func (s *Scanner) CreateBatchRoute(ctx context.Context, params BatchCreateRouteP
 				ProfitTotalISK: float64(units) * profitPerUnit,
 				RouteJumps:     segmentA + segmentB,
 			})
-			break
 		}
 	}
+	lines = filterAdditionsByFinalSell(lines, params.FinalSellLocationID)
 	if len(lines) == 0 {
 		result.Diagnostics = append(result.Diagnostics, "no profitable additions found for selected destination")
 		return result, nil
@@ -193,26 +190,19 @@ func (s *Scanner) CreateBatchRoute(ctx context.Context, params BatchCreateRouteP
 		return lines[i].ProfitTotalISK > lines[j].ProfitTotalISK
 	})
 
-	var usedVolume float64
+	fitted := fitAdditionsToRemainingCargo(lines, params.RemainingCapacityM3)
+	if len(fitted) == 0 {
+		result.Diagnostics = append(result.Diagnostics, "no additions fit remaining cargo after capacity enforcement")
+		return result, nil
+	}
+
+	mergedLines := mergeBaseAndAdditions(nil, fitted)
 	option := BatchCreateRouteOption{
 		OptionID: fmt.Sprintf("batch-option-%d", 1),
-		Lines:    make([]BatchCreateRouteLine, 0, len(lines)),
+		Lines:    make([]BatchCreateRouteLine, 0, len(mergedLines)),
 	}
-	for _, line := range lines {
+	for _, line := range mergedLines {
 		lineVol := float64(line.Units) * line.UnitVolumeM3
-		if usedVolume+lineVol > params.RemainingCapacityM3 {
-			fitUnits := int64(math.Floor((params.RemainingCapacityM3 - usedVolume) / line.UnitVolumeM3))
-			if fitUnits <= 0 {
-				continue
-			}
-			scale := float64(fitUnits) / float64(line.Units)
-			line.Units = fitUnits
-			line.BuyTotalISK *= scale
-			line.SellTotalISK *= scale
-			line.ProfitTotalISK *= scale
-			lineVol = float64(line.Units) * line.UnitVolumeM3
-		}
-		usedVolume += lineVol
 		option.Lines = append(option.Lines, line)
 		option.AddedVolumeM3 += lineVol
 		option.TotalBuyISK += line.BuyTotalISK
@@ -224,8 +214,9 @@ func (s *Scanner) CreateBatchRoute(ctx context.Context, params BatchCreateRouteP
 		if option.TotalJumps > 0 {
 			option.ISKPerJump = option.TotalProfitISK / float64(option.TotalJumps)
 		}
-		result.Options = []BatchCreateRouteOption{option}
-		result.SelectedID = option.OptionID
+		ranked := rankRouteOptions([]BatchCreateRouteOption{option}, map[string]float64{option.OptionID: option.TotalProfitISK}, params.CargoLimitM3)
+		result.Options = ranked
+		result.SelectedID = ranked[0].OptionID
 		result.SelectedRank = 1
 		return result, nil
 	}
