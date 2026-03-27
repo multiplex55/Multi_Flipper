@@ -98,6 +98,13 @@ interface Props {
   columnProfile?: "default" | "region_eveguru";
   isLoggedIn?: boolean;
   cargoLimit?: number;
+  originSystemName?: string;
+  minRouteSecurity?: number;
+  includeStructures?: boolean;
+  routeMaxJumps?: number;
+  allowLowsec?: boolean;
+  allowNullsec?: boolean;
+  allowWormhole?: boolean;
 }
 
 type ColumnDef = {
@@ -883,6 +890,13 @@ export function ScanResultsTable({
   columnProfile = "default",
   isLoggedIn = false,
   cargoLimit = 0,
+  originSystemName,
+  minRouteSecurity,
+  includeStructures,
+  routeMaxJumps,
+  allowLowsec,
+  allowNullsec,
+  allowWormhole,
 }: Props) {
   const { t } = useI18n();
   const emptyReason: EmptyReason = scanCompletedWithZero
@@ -3386,6 +3400,16 @@ export function ScanResultsTable({
         anchorRow={batchPlanRow}
         rows={results}
         defaultCargoM3={cargoLimit}
+        originSystemName={originSystemName}
+        minRouteSecurity={minRouteSecurity}
+        includeStructures={includeStructures}
+        routeMaxJumps={routeMaxJumps}
+        allowLowsec={allowLowsec}
+        allowNullsec={allowNullsec}
+        allowWormhole={allowWormhole}
+        salesTaxPercent={salesTaxPercent}
+        buyBrokerFeePercent={buyBrokerFeePercent}
+        sellBrokerFeePercent={sellBrokerFeePercent}
       />
 
       {routeSafetyModal && (
