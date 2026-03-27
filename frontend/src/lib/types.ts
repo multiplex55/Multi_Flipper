@@ -308,6 +308,51 @@ export interface RouteAdditionOption {
   ranking_sort_key: string;
 }
 
+export interface RouteManifestSummary {
+  station_count: number;
+  item_count: number;
+  total_units: number;
+  total_volume_m3: number;
+  total_buy_isk: number;
+  total_sell_isk: number;
+  total_profit_isk: number;
+  total_jumps?: number;
+  isk_per_jump?: number;
+}
+
+export interface RouteStationManifestLine {
+  type_id: number;
+  type_name: string;
+  units: number;
+  unit_volume_m3: number;
+  volume_m3: number;
+  buy_total_isk: number;
+  buy_per_isk: number;
+  sell_total_isk: number;
+  sell_per_isk: number;
+  profit_isk: number;
+}
+
+export interface RouteStationManifest {
+  station_key: string;
+  buy_station_name: string;
+  jumps_to_buy_station: number;
+  jumps_buy_to_sell: number;
+  item_count: number;
+  total_units: number;
+  total_volume_m3: number;
+  total_buy_isk: number;
+  total_sell_isk: number;
+  total_profit_isk: number;
+  isk_per_jump: number;
+  lines: RouteStationManifestLine[];
+}
+
+export interface OrderedRouteManifest {
+  summary?: RouteManifestSummary;
+  stations: RouteStationManifest[];
+}
+
 export interface BatchCreateRouteRequest {
   origin_system_id: number;
   origin_system_name: string;

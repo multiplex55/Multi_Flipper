@@ -1,5 +1,5 @@
 import type { BatchLine } from "@/lib/batchMetrics";
-import type { BaseBatchManifest, RouteAdditionLine, RouteAdditionOption } from "@/lib/types";
+import type { OrderedRouteManifest } from "@/lib/types";
 
 type ManifestInputLine = {
   typeName: string;
@@ -52,15 +52,6 @@ export function parseDetailedBatchLine(
   return { typeName, units };
 }
 
-type ManifestSortableLine = {
-  type_id: number;
-  type_name: string;
-  units: number;
-  buy_total_isk: number;
-  sell_total_isk: number;
-  profit_total_isk: number;
-};
-
 type RouteMetadataHeaderInput = {
   corridor?: string;
   jumps?: number;
@@ -82,29 +73,6 @@ function formatVolume(value: number): string {
   return value.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 1 });
 }
 
-function sortManifestLinesStable<T extends ManifestSortableLine>(lines: T[]): T[] {
-  return lines
-    .map((line, index) => ({ line, index }))
-    .sort((a, b) => {
-      const nameCmp = a.line.type_name.localeCompare(b.line.type_name, "en", {
-        sensitivity: "base",
-        numeric: true,
-      });
-      if (nameCmp !== 0) return nameCmp;
-      if (a.line.type_id !== b.line.type_id) return a.line.type_id - b.line.type_id;
-      if (a.line.units !== b.line.units) return b.line.units - a.line.units;
-      if (a.line.profit_total_isk !== b.line.profit_total_isk) {
-        return b.line.profit_total_isk - a.line.profit_total_isk;
-      }
-      return a.index - b.index;
-    })
-    .map(({ line }) => line);
-}
-
-function formatSectionLine(line: ManifestSortableLine): string {
-  return `${line.type_name} x${formatQuantity(line.units)} | buy ${formatInteger(line.buy_total_isk)} ISK | sell ${formatInteger(line.sell_total_isk)} ISK | profit ${formatInteger(line.profit_total_isk)} ISK`;
-}
-
 export function formatRouteMetadataHeader(input?: RouteMetadataHeaderInput): string[] {
   if (!input) return [];
   const parts: string[] = [];
@@ -118,67 +86,47 @@ export function formatRouteMetadataHeader(input?: RouteMetadataHeaderInput): str
   return parts;
 }
 
-export function formatBaseSection(baseBatchManifest: BaseBatchManifest): string[] {
-  const lines: string[] = [];
-  lines.push("----- BASE ITEMS -----");
-  const sortedBaseLines = sortManifestLinesStable(baseBatchManifest.base_lines);
-  if (sortedBaseLines.length === 0) {
-    lines.push("(none)");
-    return lines;
-  }
-  for (const line of sortedBaseLines) lines.push(formatSectionLine(line));
-  return lines;
+function formatStationLine(line: OrderedRouteManifest["stations"][number]["lines"][number]): string {
+  return `${line.type_name} | qty ${formatQuantity(line.units)} | buy total ${formatInteger(line.buy_total_isk)} ISK | buy per ${formatInteger(line.buy_per_isk)} ISK | sell total ${formatInteger(line.sell_total_isk)} ISK | sell per ${formatInteger(line.sell_per_isk)} ISK | vol ${formatVolume(line.volume_m3)} m3 | profit ${formatInteger(line.profit_isk)} ISK`;
 }
 
-export function formatRouteAddedSection(addedLines: RouteAdditionLine[]): string[] {
-  const lines: string[] = [];
-  lines.push("----- ROUTE ADDITIONS -----");
-  const sortedAddedLines = sortManifestLinesStable(addedLines);
-  if (sortedAddedLines.length === 0) {
-    lines.push("(none)");
-    return lines;
-  }
-  for (const line of sortedAddedLines) lines.push(formatSectionLine(line));
-  return lines;
-}
-
-export function formatFinalMergedSummarySection(input: {
-  baseBatchManifest: BaseBatchManifest;
-  selectedOption: RouteAdditionOption;
-}): string[] {
-  const { baseBatchManifest, selectedOption } = input;
-  const totalVolume = baseBatchManifest.total_volume_m3 + selectedOption.added_volume_m3;
-  const totalBuy = baseBatchManifest.total_buy_isk + selectedOption.total_buy_isk;
-  const totalSell = baseBatchManifest.total_sell_isk + selectedOption.total_sell_isk;
-  const totalProfit = baseBatchManifest.total_profit_isk + selectedOption.total_profit_isk;
-  const totalUnits =
-    baseBatchManifest.base_lines.reduce((sum, line) => sum + line.units, 0) +
-    selectedOption.lines.reduce((sum, line) => sum + line.units, 0);
-  const totalLineCount = baseBatchManifest.base_line_count + selectedOption.line_count;
-  const remainingCapacity = Math.max(0, baseBatchManifest.cargo_limit_m3 - totalVolume);
-
-  return [
-    "----- MERGED SUMMARY -----",
-    `Lines: base ${formatQuantity(baseBatchManifest.base_line_count)} + added ${formatQuantity(selectedOption.line_count)} = ${formatQuantity(totalLineCount)}`,
-    `Units: ${formatQuantity(totalUnits)} | Volume: ${formatVolume(totalVolume)} m3 / ${formatVolume(baseBatchManifest.cargo_limit_m3)} m3 (remaining ${formatVolume(remainingCapacity)} m3)`,
-    `Totals: buy ${formatInteger(totalBuy)} ISK | sell ${formatInteger(totalSell)} ISK | profit ${formatInteger(totalProfit)} ISK`,
-  ];
-}
-
-export function formatMergedBatchManifestText(input: {
-  baseBatchManifest: BaseBatchManifest;
-  selectedOption: RouteAdditionOption;
+export function formatOrderedRouteManifestText(input: {
+  originLabel?: string;
   metadataHeader?: RouteMetadataHeaderInput;
+  manifest: OrderedRouteManifest;
 }): string {
   const output: string[] = [];
-  output.push(
-    `Origin: ${input.baseBatchManifest.origin_system_name} (${input.baseBatchManifest.origin_location_name})`,
-  );
+  if (input.originLabel?.trim()) output.push(`Origin: ${input.originLabel.trim()}`);
   output.push(...formatRouteMetadataHeader(input.metadataHeader));
-  output.push(...formatFinalMergedSummarySection(input));
-  output.push("");
-  output.push(...formatBaseSection(input.baseBatchManifest));
-  output.push("");
-  output.push(...formatRouteAddedSection(input.selectedOption.lines));
+  if (input.manifest.summary) {
+    const summary = input.manifest.summary;
+    output.push("----- ROUTE SUMMARY -----");
+    output.push(
+      `Stations: ${formatQuantity(summary.station_count)} | Items: ${formatQuantity(summary.item_count)} | Units: ${formatQuantity(summary.total_units)}`,
+    );
+    output.push(
+      `Totals: vol ${formatVolume(summary.total_volume_m3)} m3 | buy ${formatInteger(summary.total_buy_isk)} ISK | sell ${formatInteger(summary.total_sell_isk)} ISK | profit ${formatInteger(summary.total_profit_isk)} ISK`,
+    );
+    if ((summary.total_jumps ?? 0) > 0 || (summary.isk_per_jump ?? 0) > 0) {
+      output.push(
+        `Route: jumps ${formatQuantity(summary.total_jumps ?? 0)} | ISK/jump ${formatInteger(summary.isk_per_jump ?? 0)} ISK`,
+      );
+    }
+  }
+  for (const [index, station] of input.manifest.stations.entries()) {
+    if (output.length > 0) output.push("");
+    output.push(`----- STATION ${index + 1}: ${station.buy_station_name} -----`);
+    output.push(`Jumps to Buy Station: ${formatQuantity(station.jumps_to_buy_station)}`);
+    output.push(`Jumps Buy -> Sell: ${formatQuantity(station.jumps_buy_to_sell)}`);
+    output.push(
+      `Items: ${formatQuantity(station.item_count)} | Units: ${formatQuantity(station.total_units)} | Volume: ${formatVolume(station.total_volume_m3)} m3`,
+    );
+    output.push(
+      `Capital: ${formatInteger(station.total_buy_isk)} ISK | Gross Sell: ${formatInteger(station.total_sell_isk)} ISK | Profit: ${formatInteger(station.total_profit_isk)} ISK | ISK/jump: ${formatInteger(station.isk_per_jump)} ISK`,
+    );
+    const compact = station.lines.map((line) => `${line.type_name} ${formatQuantity(line.units)}`);
+    output.push(`Item list: ${compact.length > 0 ? compact.join(", ") : "(none)"}`);
+    for (const line of station.lines) output.push(formatStationLine(line));
+  }
   return output.join("\n");
 }
