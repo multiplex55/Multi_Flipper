@@ -106,6 +106,8 @@ export const en = {
     restrictToTargetMarket: "Target market only",
     restrictToTargetMarketHint: "When enabled, only buy orders within the target market system count as sell destinations. Disable to consider any buy order within sell radius (v1.5.3 behavior).",
     paramsSecurity: "Security",
+    routeMaxJumps: "RouteMaxJumps",
+    maxDetourJumpsPerNode: "MaxDetourJumpsPerNode",
     routeSecurity: "Route security",
     routeSecurityHint: "Route only through systems with at least this security (0 = all space)",
     routeSecurityAll: "All space",

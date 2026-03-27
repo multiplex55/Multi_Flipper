@@ -92,6 +92,8 @@ export const ru = {
     paramsBuyBrokerFee: "Брокер покупки %",
     paramsSellBrokerFee: "Брокер продажи %",
     paramsSecurity: "Безопасность",
+    routeMaxJumps: "RouteMaxJumps",
+    maxDetourJumpsPerNode: "MaxDetourJumpsPerNode",
     routeSecurity: "Безопасность маршрута",
     routeSecurityHint: "Маршрут только через системы с указанным минимумом security (0 = все пространство)",
     routeSecurityAll: "Все пространство",

@@ -102,6 +102,7 @@ interface Props {
   minRouteSecurity?: number;
   includeStructures?: boolean;
   routeMaxJumps?: number;
+  maxDetourJumpsPerNode?: number;
   allowLowsec?: boolean;
   allowNullsec?: boolean;
   allowWormhole?: boolean;
@@ -894,6 +895,7 @@ export function ScanResultsTable({
   minRouteSecurity,
   includeStructures,
   routeMaxJumps,
+  maxDetourJumpsPerNode,
   allowLowsec,
   allowNullsec,
   allowWormhole,
@@ -3404,6 +3406,7 @@ export function ScanResultsTable({
         minRouteSecurity={minRouteSecurity}
         includeStructures={includeStructures}
         routeMaxJumps={routeMaxJumps}
+        maxDetourJumpsPerNode={maxDetourJumpsPerNode}
         allowLowsec={allowLowsec}
         allowNullsec={allowNullsec}
         allowWormhole={allowWormhole}

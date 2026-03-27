@@ -263,6 +263,7 @@ function renderPopup({ anchorRow, rows }: { anchorRow: FlipResult | null; rows: 
           minRouteSecurity={0.45}
           includeStructures={false}
           routeMaxJumps={12}
+          maxDetourJumpsPerNode={3}
           salesTaxPercent={3}
           buyBrokerFeePercent={1}
           sellBrokerFeePercent={1}
@@ -376,6 +377,8 @@ describe("BatchBuilderPopup route creation", () => {
     expect(payload?.allow_lowsec).toBe(false);
     expect(payload?.allow_nullsec).toBe(false);
     expect(payload?.allow_wormhole).toBe(false);
+    expect(payload?.route_max_jumps).toBe(12);
+    expect(payload?.max_detour_jumps_per_node).toBe(3);
     expect(payload?.current_system_id).toBe(30000142);
     expect(payload?.current_location_id).toBe(60003760);
     expect(payload?.candidate_context?.source_tab).toBe("radius");

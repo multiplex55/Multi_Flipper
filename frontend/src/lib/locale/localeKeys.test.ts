@@ -8,6 +8,8 @@ const requiredKeys = [
   "colBatchTotalCapital",
   "colBatchIskPerJump",
   "colBuyJumps",
+  "routeMaxJumps",
+  "maxDetourJumpsPerNode",
   "batchBuilderTotalProfit",
   "batchBuilderTotalCapital",
   "batchBuilderManifestBuyStation",

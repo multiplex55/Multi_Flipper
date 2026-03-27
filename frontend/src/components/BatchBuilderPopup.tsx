@@ -41,6 +41,7 @@ interface BatchBuilderPopupProps {
   allowNullsec?: boolean;
   allowWormhole?: boolean;
   routeMaxJumps?: number;
+  maxDetourJumpsPerNode?: number;
   salesTaxPercent?: number;
   buyBrokerFeePercent?: number;
   sellBrokerFeePercent?: number;
@@ -95,6 +96,7 @@ export function BatchBuilderPopup({
   allowNullsec = false,
   allowWormhole = false,
   routeMaxJumps = 12,
+  maxDetourJumpsPerNode,
   salesTaxPercent = 0,
   buyBrokerFeePercent = 0,
   sellBrokerFeePercent = 0,
@@ -329,6 +331,10 @@ export function BatchBuilderPopup({
 
     const requestId = activeRequestRef.current + 1;
     activeRequestRef.current = requestId;
+    const normalizedRouteMaxJumps = Math.max(0, Math.floor(safeNumber(routeMaxJumps)));
+    const normalizedMaxDetourJumpsPerNode = Number.isFinite(maxDetourJumpsPerNode)
+      ? Math.max(0, Math.floor(safeNumber(maxDetourJumpsPerNode)))
+      : undefined;
 
     const request: BatchCreateRouteRequest = {
       origin_system_id: baseBatchManifest.origin_system_id,
@@ -345,7 +351,10 @@ export function BatchBuilderPopup({
       allow_lowsec: allowLowsec,
       allow_nullsec: allowNullsec,
       allow_wormhole: allowWormhole,
-      route_max_jumps: routeMaxJumps,
+      route_max_jumps: normalizedRouteMaxJumps,
+      ...(normalizedMaxDetourJumpsPerNode !== undefined
+        ? { max_detour_jumps_per_node: normalizedMaxDetourJumpsPerNode }
+        : {}),
       sales_tax_percent: salesTaxPercent,
       buy_broker_fee_percent: buyBrokerFeePercent,
       sell_broker_fee_percent: sellBrokerFeePercent,
@@ -438,6 +447,7 @@ export function BatchBuilderPopup({
     allowNullsec,
     allowWormhole,
     routeMaxJumps,
+    maxDetourJumpsPerNode,
     salesTaxPercent,
     buyBrokerFeePercent,
     sellBrokerFeePercent,
