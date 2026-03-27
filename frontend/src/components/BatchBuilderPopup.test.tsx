@@ -503,13 +503,16 @@ describe("BatchBuilderPopup route creation", () => {
     expect(writeText).toHaveBeenCalledTimes(1);
     const manifest = writeText.mock.calls[0][0];
     expect(manifest).toContain("Origin: Jita (Jita IV - Moon 4)");
-    expect(manifest).toContain("----- ROUTE SUMMARY -----");
-    expect(manifest).toContain("Stations: 1 | Items: 1 | Units: 40");
-    expect(manifest).toContain("Totals: vol 80 m3 | buy 200,000 ISK | sell 290,000 ISK | profit 90,000 ISK");
-    expect(manifest).toContain("----- STATION 1: Station 60003760 -----");
+    expect(manifest).toContain("Buy Station: Station 60003760");
     expect(manifest).toContain("Jumps to Buy Station: 0");
-    expect(manifest).toContain("Items: 1 | Units: 40 | Volume: 80 m3");
-    expect(manifest).toContain("Item list: Megacyte 40");
+    expect(manifest).toContain("Sell Station: Amarr VIII (Oris) - Emperor Family Academy");
+    expect(manifest).toContain("Cargo m3: 20,000 m3");
+    expect(manifest).toContain("Items: 1");
+    expect(manifest).toContain("Total volume: 80 m3");
+    expect(manifest).toContain("Total capital: 200,000 ISK");
+    expect(manifest).toContain("Total gross sell: 290,000 ISK");
+    expect(manifest).toContain("Total profit: 90,000 ISK");
+    expect(manifest).toContain("Total isk/jump: 9,000 ISK");
     expect(manifest).toContain(
       "Megacyte | qty 40 | buy total 200,000 ISK | buy per 5,000 ISK | sell total 290,000 ISK | sell per 7,250 ISK | vol 80 m3 | profit 90,000 ISK",
     );

@@ -123,17 +123,18 @@ export function formatOrderedRouteManifestText(input: {
     if (output.length > 0) output.push("");
     if (index > 0) output.push("------------------------");
     output.push(`Buy Station: ${station.buy_station_name}`);
-    output.push(`Stations: 1`);
+    output.push(`Jumps to Buy Station: ${formatQuantity(station.jumps_to_buy_station)}`);
+    output.push(`Sell Station: ${station.sell_station_name ?? resolveSellStation() ?? "Unknown Station"}`);
+    output.push(`Jumps Buy -> Sell: ${formatQuantity(station.jumps_buy_to_sell)}`);
+    output.push(
+      `Cargo m3: ${formatVolume(station.cargo_m3 ?? input.manifest.summary?.total_volume_m3 ?? 0)} m3`,
+    );
     output.push(`Items: ${formatQuantity(station.item_count)}`);
     output.push(`Total volume: ${formatVolume(station.total_volume_m3)} m3`);
     output.push(`Total capital: ${formatInteger(station.total_buy_isk)} ISK`);
     output.push(`Total gross sell: ${formatInteger(station.total_sell_isk)} ISK`);
     output.push(`Total profit: ${formatInteger(station.total_profit_isk)} ISK`);
-    output.push(`Total isk/jump: ${formatInteger(station.isk_per_jump)} ISK`);
-    output.push(`Jumps to buy station: ${formatQuantity(station.jumps_to_buy_station)}`);
-    output.push(`Jumps buy -> sell: ${formatQuantity(station.jumps_buy_to_sell)}`);
-    const compact = station.lines.map((line) => `${line.type_name} ${formatQuantity(line.units)}`);
-    output.push(`Item list: ${compact.length > 0 ? compact.join(", ") : "(none)"}`);
+    output.push(`Total isk/jump: ${formatInteger(station.isk_per_jump ?? 0)} ISK`);
     for (const line of station.lines) output.push(formatStationLine(line));
   }
   return output.join("\n");
