@@ -71,7 +71,7 @@ func TestBatchRouteCandidateLines_DetourZeroStrictPathOnly(t *testing.T) {
 		MaxDetourJumpsPerNode: 0,
 	}
 
-	lines, _ := scanner.buildBatchRouteCandidateLines(params, idx, path, 0, 1, 1)
+	lines, _ := scanner.buildBatchRouteCandidateLines(params, newBatchRoutePolicy(params), idx, path, 0, 1, 1)
 	if len(lines) == 0 {
 		t.Fatalf("expected strict-path candidates, got none")
 	}
@@ -97,7 +97,7 @@ func TestBatchRouteCandidateLines_DetourIncludesOffPathSystems(t *testing.T) {
 		MaxDetourJumpsPerNode: 1,
 	}
 
-	lines, _ := scanner.buildBatchRouteCandidateLines(params, idx, path, 0, 1, 1)
+	lines, _ := scanner.buildBatchRouteCandidateLines(params, newBatchRoutePolicy(params), idx, path, 0, 1, 1)
 	if len(lines) == 0 {
 		t.Fatalf("expected detour candidates, got none")
 	}
@@ -153,7 +153,7 @@ func TestBatchRouteCandidateLines_NoOptionsOnlyWhenNoProfitableReachableCandidat
 		MaxDetourJumpsPerNode: 1,
 	}
 
-	lines, stats := scanner.buildBatchRouteCandidateLines(params, idx, path, 0, 1, 1)
+	lines, stats := scanner.buildBatchRouteCandidateLines(params, newBatchRoutePolicy(params), idx, path, 0, 1, 1)
 	if len(lines) != 0 {
 		t.Fatalf("expected no profitable candidates, got %d", len(lines))
 	}

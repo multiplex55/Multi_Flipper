@@ -18,6 +18,8 @@ func testBatchCreateRouteRequest() BatchCreateRouteRequest {
 	return BatchCreateRouteRequest{
 		OriginSystemID:      30000142,
 		OriginLocationID:    60003760,
+		CurrentSystemID:     30000142,
+		CurrentLocationID:   60003760,
 		CargoLimitM3:        1000,
 		RemainingCapacityM3: 400,
 		IncludeStructures:   true,
@@ -39,6 +41,9 @@ func testBatchCreateRouteRequest() BatchCreateRouteRequest {
 			Primary:   "total_profit_isk",
 			Secondary: "isk_per_jump",
 		},
+		AllowLowsec:   true,
+		AllowNullsec:  false,
+		AllowWormhole: false,
 	}
 }
 
@@ -48,6 +53,12 @@ func TestHandleBatchCreateRoute_ValidRequestReturnsRankedOptions(t *testing.T) {
 	srv.batchCreateRoutePlanner = func(_ context.Context, params engine.BatchCreateRouteParams) (engine.BatchCreateRouteResult, error) {
 		if !params.IncludeStructures {
 			t.Fatalf("IncludeStructures = false, want true")
+		}
+		if !params.AllowLowsec || params.AllowNullsec || params.AllowWormhole {
+			t.Fatalf("allow flags = %+v, want lowsec-only", params)
+		}
+		if params.CurrentSystemID != 30000142 {
+			t.Fatalf("CurrentSystemID = %d, want 30000142", params.CurrentSystemID)
 		}
 		return engine.BatchCreateRouteResult{
 			Options: []engine.BatchCreateRouteOption{
@@ -100,6 +111,84 @@ func TestHandleBatchCreateRoute_ValidRequestReturnsRankedOptions(t *testing.T) {
 	}
 	if resp.SelectedOptionID != "batch-option-1" {
 		t.Fatalf("SelectedOptionID = %q, want batch-option-1", resp.SelectedOptionID)
+	}
+}
+
+func TestHandleBatchCreateRoute_MapsPolicyFlagsAndCurrentContext(t *testing.T) {
+	srv := NewServer(config.Default(), &esi.Client{}, nil, nil, nil)
+	srv.ready = true
+	captured := make([]engine.BatchCreateRouteParams, 0, 2)
+	srv.batchCreateRoutePlanner = func(_ context.Context, params engine.BatchCreateRouteParams) (engine.BatchCreateRouteResult, error) {
+		captured = append(captured, params)
+		return engine.BatchCreateRouteResult{}, nil
+	}
+
+	reqPayload := testBatchCreateRouteRequest()
+	reqPayload.AllowLowsec = false
+	reqPayload.AllowNullsec = true
+	reqPayload.AllowWormhole = true
+	reqPayload.CurrentSystemID = 30002187
+	reqPayload.CurrentLocationID = 60008494
+	body, _ := json.Marshal(reqPayload)
+	req := httptest.NewRequest(http.MethodPost, "/api/batch/create-route", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if len(captured) != 1 {
+		t.Fatalf("planner calls = %d, want 1", len(captured))
+	}
+	if captured[0].CurrentSystemID != 30002187 {
+		t.Fatalf("CurrentSystemID = %d, want 30002187", captured[0].CurrentSystemID)
+	}
+	if captured[0].AllowLowsec || !captured[0].AllowNullsec || !captured[0].AllowWormhole {
+		t.Fatalf("allow flags = %+v, want lowsec=false nullsec=true wormhole=true", captured[0])
+	}
+}
+
+func TestHandleBatchCreateRoute_FilterCombinationsProduceDistinctPlannerInputs(t *testing.T) {
+	srv := NewServer(config.Default(), &esi.Client{}, nil, nil, nil)
+	srv.ready = true
+	captured := make([]engine.BatchCreateRouteParams, 0, 2)
+	srv.batchCreateRoutePlanner = func(_ context.Context, params engine.BatchCreateRouteParams) (engine.BatchCreateRouteResult, error) {
+		captured = append(captured, params)
+		return engine.BatchCreateRouteResult{}, nil
+	}
+
+	base := testBatchCreateRouteRequest()
+	base.AllowLowsec = false
+	base.AllowNullsec = false
+	base.AllowWormhole = false
+	base.CurrentSystemID = base.OriginSystemID
+	body, _ := json.Marshal(base)
+	req := httptest.NewRequest(http.MethodPost, "/api/batch/create-route", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("first status = %d, want 200", rec.Code)
+	}
+
+	base.AllowLowsec = true
+	base.AllowNullsec = true
+	base.AllowWormhole = true
+	base.CurrentSystemID = 30002187
+	body, _ = json.Marshal(base)
+	req = httptest.NewRequest(http.MethodPost, "/api/batch/create-route", bytes.NewReader(body))
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("second status = %d, want 200", rec.Code)
+	}
+
+	if len(captured) != 2 {
+		t.Fatalf("planner calls = %d, want 2", len(captured))
+	}
+	if captured[0].AllowLowsec == captured[1].AllowLowsec &&
+		captured[0].AllowNullsec == captured[1].AllowNullsec &&
+		captured[0].AllowWormhole == captured[1].AllowWormhole &&
+		captured[0].CurrentSystemID == captured[1].CurrentSystemID {
+		t.Fatalf("expected distinct planner inputs, got identical params: %#v", captured)
 	}
 }
 

@@ -12,6 +12,7 @@ import (
 
 type BatchCreateRouteParams struct {
 	OriginSystemID        int32
+	CurrentSystemID       int32
 	BaseBuySystemID       int32
 	FinalSellSystemID     int32
 	FinalSellLocationID   int64
@@ -19,6 +20,9 @@ type BatchCreateRouteParams struct {
 	RemainingCapacityM3   float64
 	MinMargin             float64
 	MinRouteSecurity      float64
+	AllowLowsec           bool
+	AllowNullsec          bool
+	AllowWormhole         bool
 	IncludeStructures     bool
 	RouteMaxJumps         int
 	MaxDetourJumpsPerNode int
@@ -75,6 +79,22 @@ type batchRoutePruneStats struct {
 	missingTypeOrBook int
 }
 
+type batchRoutePolicy struct {
+	MinSecurity   float64
+	AllowLowsec   bool
+	AllowNullsec  bool
+	AllowWormhole bool
+}
+
+func newBatchRoutePolicy(params BatchCreateRouteParams) batchRoutePolicy {
+	return batchRoutePolicy{
+		MinSecurity:   params.MinRouteSecurity,
+		AllowLowsec:   params.AllowLowsec,
+		AllowNullsec:  params.AllowNullsec,
+		AllowWormhole: params.AllowWormhole,
+	}
+}
+
 func (s *Scanner) CreateBatchRoute(ctx context.Context, params BatchCreateRouteParams) (BatchCreateRouteResult, error) {
 	result := BatchCreateRouteResult{Diagnostics: make([]string, 0, 8)}
 	if ctx != nil && ctx.Err() != nil {
@@ -89,8 +109,14 @@ func (s *Scanner) CreateBatchRoute(ctx context.Context, params BatchCreateRouteP
 		return result, nil
 	}
 
-	segmentA := s.jumpsBetweenWithSecurity(params.OriginSystemID, params.BaseBuySystemID, params.MinRouteSecurity)
-	segmentB := s.jumpsBetweenWithSecurity(params.BaseBuySystemID, params.FinalSellSystemID, params.MinRouteSecurity)
+	routePolicy := newBatchRoutePolicy(params)
+	originSystemID := params.OriginSystemID
+	if params.CurrentSystemID > 0 {
+		originSystemID = params.CurrentSystemID
+	}
+
+	segmentA := s.jumpsBetweenWithRoutePolicy(originSystemID, params.BaseBuySystemID, routePolicy)
+	segmentB := s.jumpsBetweenWithRoutePolicy(params.BaseBuySystemID, params.FinalSellSystemID, routePolicy)
 	if segmentA == UnreachableJumps || segmentB == UnreachableJumps {
 		result.Diagnostics = append(result.Diagnostics, "route constraints make segment A or B unreachable")
 		return result, nil
@@ -100,7 +126,7 @@ func (s *Scanner) CreateBatchRoute(ctx context.Context, params BatchCreateRouteP
 		return result, nil
 	}
 
-	canonicalPath := s.SDE.Universe.GetPath(params.BaseBuySystemID, params.FinalSellSystemID, params.MinRouteSecurity)
+	canonicalPath := s.pathWithRoutePolicy(params.BaseBuySystemID, params.FinalSellSystemID, routePolicy)
 	if len(canonicalPath) == 0 {
 		result.Diagnostics = append(result.Diagnostics, "unable to resolve canonical route path for batch planning")
 		return result, nil
@@ -143,7 +169,7 @@ func (s *Scanner) CreateBatchRoute(ctx context.Context, params BatchCreateRouteP
 		SellSalesTaxPercent:  params.SellSalesTaxPercent,
 	})
 
-	lines, pruned := s.buildBatchRouteCandidateLines(params, idx, canonicalPath, segmentA, buyCostMult, sellRevenueMult)
+	lines, pruned := s.buildBatchRouteCandidateLines(params, routePolicy, idx, canonicalPath, segmentA, buyCostMult, sellRevenueMult)
 	if len(lines) == 0 {
 		result.Diagnostics = append(result.Diagnostics, "no profitable additions found for selected destination")
 		result.Diagnostics = append(result.Diagnostics, formatBatchRoutePruneDiagnostics(pruned)...)
@@ -171,6 +197,7 @@ func (s *Scanner) CreateBatchRoute(ctx context.Context, params BatchCreateRouteP
 
 func (s *Scanner) buildBatchRouteCandidateLines(
 	params BatchCreateRouteParams,
+	routePolicy batchRoutePolicy,
 	idx *orderIndex,
 	canonicalPath []int32,
 	originToBaseJumps int,
@@ -201,7 +228,7 @@ func (s *Scanner) buildBatchRouteCandidateLines(
 
 	nodeNeighborhoods := make(map[int]map[int32]int, len(canonicalPath))
 	for i, node := range canonicalPath {
-		nodeNeighborhoods[i] = expandBatchRouteNodeNeighborhood(s, node, maxDetour, params.MinRouteSecurity)
+		nodeNeighborhoods[i] = expandBatchRouteNodeNeighborhood(s, node, maxDetour, routePolicy)
 	}
 
 	lines := make([]BatchCreateRouteLine, 0, 128)
@@ -237,9 +264,9 @@ func (s *Scanner) buildBatchRouteCandidateLines(
 						continue
 					}
 
-					baseToBuy := s.jumpsBetweenWithSecurity(params.BaseBuySystemID, buySystemID, params.MinRouteSecurity)
-					buyToSell := s.jumpsBetweenWithSecurity(buySystemID, sellSystemID, params.MinRouteSecurity)
-					sellToFinal := s.jumpsBetweenWithSecurity(sellSystemID, params.FinalSellSystemID, params.MinRouteSecurity)
+					baseToBuy := s.jumpsBetweenWithRoutePolicy(params.BaseBuySystemID, buySystemID, routePolicy)
+					buyToSell := s.jumpsBetweenWithRoutePolicy(buySystemID, sellSystemID, routePolicy)
+					sellToFinal := s.jumpsBetweenWithRoutePolicy(sellSystemID, params.FinalSellSystemID, routePolicy)
 					if baseToBuy == UnreachableJumps || buyToSell == UnreachableJumps || sellToFinal == UnreachableJumps {
 						stats.unreachable++
 						continue
@@ -289,15 +316,9 @@ func (s *Scanner) buildBatchRouteCandidateLines(
 								stats.detourCap++
 								continue
 							}
-							if params.MinRouteSecurity > 0 {
-								if sec, ok := s.SDE.Universe.SystemSecurity[buySystemID]; !ok || sec < params.MinRouteSecurity {
-									stats.security++
-									continue
-								}
-								if sec, ok := s.SDE.Universe.SystemSecurity[sellSystemID]; !ok || sec < params.MinRouteSecurity {
-									stats.security++
-									continue
-								}
+							if !s.routePolicyAllowsSystem(routePolicy, buySystemID) || !s.routePolicyAllowsSystem(routePolicy, sellSystemID) {
+								stats.security++
+								continue
 							}
 
 							key := fmt.Sprintf("%d|%d|%d|%d|%d", typeID, buySystemID, sellSystemID, sell.LocationID, buy.LocationID)
@@ -345,14 +366,109 @@ func (s *Scanner) buildBatchRouteCandidateLines(
 	return lines, stats
 }
 
-func expandBatchRouteNodeNeighborhood(s *Scanner, nodeSystemID int32, maxDetourJumps int, minSecurity float64) map[int32]int {
+func expandBatchRouteNodeNeighborhood(s *Scanner, nodeSystemID int32, maxDetourJumps int, routePolicy batchRoutePolicy) map[int32]int {
 	if maxDetourJumps <= 0 {
 		return map[int32]int{nodeSystemID: 0}
 	}
-	if minSecurity > 0 {
-		return s.SDE.Universe.SystemsWithinRadiusMinSecurity(nodeSystemID, maxDetourJumps, minSecurity)
+	return s.systemsWithinRadiusWithRoutePolicy(nodeSystemID, maxDetourJumps, routePolicy)
+}
+
+func (s *Scanner) jumpsBetweenWithRoutePolicy(from, to int32, routePolicy batchRoutePolicy) int {
+	path := s.pathWithRoutePolicy(from, to, routePolicy)
+	if len(path) == 0 {
+		return UnreachableJumps
 	}
-	return s.SDE.Universe.SystemsWithinRadius(nodeSystemID, maxDetourJumps)
+	return len(path) - 1
+}
+
+func (s *Scanner) pathWithRoutePolicy(from, to int32, routePolicy batchRoutePolicy) []int32 {
+	if from == to {
+		if s.routePolicyAllowsSystem(routePolicy, from) {
+			return []int32{from}
+		}
+		return nil
+	}
+	if !s.routePolicyAllowsSystem(routePolicy, from) || !s.routePolicyAllowsSystem(routePolicy, to) {
+		return nil
+	}
+	parent := make(map[int32]int32, 256)
+	parent[from] = from
+	queue := []int32{from}
+	for head := 0; head < len(queue); head++ {
+		current := queue[head]
+		for _, neighbor := range s.SDE.Universe.Adj[current] {
+			if _, seen := parent[neighbor]; seen {
+				continue
+			}
+			if !s.routePolicyAllowsSystem(routePolicy, neighbor) {
+				continue
+			}
+			parent[neighbor] = current
+			if neighbor == to {
+				path := []int32{}
+				cur := to
+				for cur != from {
+					path = append(path, cur)
+					cur = parent[cur]
+				}
+				path = append(path, from)
+				for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
+					path[i], path[j] = path[j], path[i]
+				}
+				return path
+			}
+			queue = append(queue, neighbor)
+		}
+	}
+	return nil
+}
+
+func (s *Scanner) systemsWithinRadiusWithRoutePolicy(origin int32, maxJumps int, routePolicy batchRoutePolicy) map[int32]int {
+	if !s.routePolicyAllowsSystem(routePolicy, origin) {
+		return map[int32]int{}
+	}
+	result := map[int32]int{origin: 0}
+	queue := []int32{origin}
+	for head := 0; head < len(queue); head++ {
+		current := queue[head]
+		dist := result[current]
+		if dist >= maxJumps {
+			continue
+		}
+		for _, neighbor := range s.SDE.Universe.Adj[current] {
+			if !s.routePolicyAllowsSystem(routePolicy, neighbor) {
+				continue
+			}
+			if _, seen := result[neighbor]; seen {
+				continue
+			}
+			result[neighbor] = dist + 1
+			queue = append(queue, neighbor)
+		}
+	}
+	return result
+}
+
+func (s *Scanner) routePolicyAllowsSystem(routePolicy batchRoutePolicy, systemID int32) bool {
+	regionID := s.SDE.Universe.SystemRegion[systemID]
+	if regionID >= 11000001 && regionID <= 11000033 {
+		return routePolicy.AllowWormhole
+	}
+
+	sec, ok := s.SDE.Universe.SystemSecurity[systemID]
+	if !ok {
+		return false
+	}
+	if routePolicy.MinSecurity > 0 && sec < routePolicy.MinSecurity {
+		return false
+	}
+	if sec >= 0.45 {
+		return true
+	}
+	if sec > 0 {
+		return routePolicy.AllowLowsec
+	}
+	return routePolicy.AllowNullsec
 }
 
 func buildBatchRouteOptionsFromCandidates(lines []BatchCreateRouteLine, params BatchCreateRouteParams) []BatchCreateRouteOption {
