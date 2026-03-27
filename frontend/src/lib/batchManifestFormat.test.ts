@@ -244,6 +244,55 @@ describe("batch route manifest formatter", () => {
     expect(perimeterIndex).toBeLessThan(jitaIndex);
   });
 
+  it("does not include raw station ID labels when station names are provided", () => {
+    const text = formatOrderedRouteManifestText({
+      manifest: {
+        summary: {
+          station_count: 1,
+          item_count: 1,
+          total_units: 10,
+          total_volume_m3: 20,
+          total_buy_isk: 100_000,
+          total_sell_isk: 130_000,
+          total_profit_isk: 30_000,
+          total_jumps: 3,
+          isk_per_jump: 10_000,
+        },
+        stations: [
+          {
+            station_key: "id:60003760",
+            buy_station_name: "Jita IV - Moon 4 - Caldari Navy Assembly Plant",
+            jumps_to_buy_station: 0,
+            jumps_buy_to_sell: 3,
+            item_count: 1,
+            total_volume_m3: 20,
+            total_buy_isk: 100_000,
+            total_sell_isk: 130_000,
+            total_profit_isk: 30_000,
+            isk_per_jump: 10_000,
+            lines: [
+              {
+                type_id: 34,
+                type_name: "Tritanium",
+                units: 10,
+                unit_volume_m3: 2,
+                volume_m3: 20,
+                buy_total_isk: 100_000,
+                buy_per_isk: 10_000,
+                sell_total_isk: 130_000,
+                sell_per_isk: 13_000,
+                profit_isk: 30_000,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(text).toContain("Buy Station: Jita IV - Moon 4 - Caldari Navy Assembly Plant");
+    expect(text).not.toContain("Buy Station: Station 60003760");
+  });
+
   it("renders numeric totals and rounded per-unit values in station details", () => {
     const text = formatOrderedRouteManifestText({
       originLabel: "Jita (Jita IV - Moon 4)",

@@ -503,7 +503,7 @@ describe("BatchBuilderPopup route creation", () => {
     expect(writeText).toHaveBeenCalledTimes(1);
     const manifest = writeText.mock.calls[0][0];
     expect(manifest).toContain("Origin: Jita (Jita IV - Moon 4)");
-    expect(manifest).toContain("Buy Station: Station 60003760");
+    expect(manifest).toContain("Buy Station: Jita IV - Moon 4");
     expect(manifest).toContain("Jumps to Buy Station: 0");
     expect(manifest).toContain("Sell Station: Amarr VIII (Oris) - Emperor Family Academy");
     expect(manifest).toContain("Cargo m3: 20,000 m3");
@@ -516,6 +516,73 @@ describe("BatchBuilderPopup route creation", () => {
     expect(manifest).toContain(
       "Megacyte | qty 40 | buy total 200,000 ISK | buy per 5,000 ISK | sell total 290,000 ISK | sell per 7,250 ISK | vol 80 m3 | profit 90,000 ISK",
     );
+  });
+
+  it("resolves buy station via location map when exact row match is unavailable", async () => {
+    const response = makeRouteResponse();
+    response.ranked_options = [
+      {
+        ...response.ranked_options[0],
+        option_id: "map-fallback",
+        lines: [
+          {
+            ...response.ranked_options[0].lines[0],
+            type_id: 999999,
+            type_name: "Unmatched Item",
+            buy_location_id: 60003760,
+          },
+        ],
+      },
+    ];
+    response.selected_option_id = "";
+    response.selected_rank = 0;
+    batchCreateRouteMock.mockResolvedValue(response);
+
+    renderPopup({ anchorRow, rows });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(await screen.findByTestId("route-option-map-fallback"));
+    fireEvent.click(await screen.findByRole("button", { name: "Copy merged manifest" }));
+
+    const manifest = writeText.mock.calls.at(-1)?.[0] ?? "";
+    expect(manifest).toContain("Buy Station: Jita IV - Moon 4");
+    expect(manifest).not.toContain("Buy Station: Station 60003760");
+  });
+
+  it("falls back to Station <id> only when no station-name resolvers succeed", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const response = makeRouteResponse();
+    response.ranked_options = [
+      {
+        ...response.ranked_options[0],
+        option_id: "id-fallback",
+        lines: [
+          {
+            ...response.ranked_options[0].lines[0],
+            type_id: 888888,
+            type_name: "Unknown Hub Item",
+            buy_location_id: 70000001,
+          },
+        ],
+      },
+    ];
+    response.selected_option_id = "";
+    response.selected_rank = 0;
+    batchCreateRouteMock.mockResolvedValue(response);
+
+    renderPopup({ anchorRow, rows });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(await screen.findByTestId("route-option-id-fallback"));
+    fireEvent.click(await screen.findByRole("button", { name: "Copy merged manifest" }));
+
+    const manifest = writeText.mock.calls.at(-1)?.[0] ?? "";
+    expect(manifest).toContain("Buy Station: Station 70000001");
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[BatchBuilderPopup] copyMergedManifest used station ID fallback labels",
+      { station_ids: [70000001] },
+    );
+    warnSpy.mockRestore();
   });
 
   it("copy manifest remains base-only and unchanged without route selection", async () => {
