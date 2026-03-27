@@ -166,7 +166,10 @@ describe("batch route manifest formatter", () => {
     expect(text).toContain("Cargo m3:");
     expect(text).toContain("Tritanium 1000");
     expect(text).toContain("Tritanium 500");
+    expect(text).not.toMatch(/^Station:/m);
     expect(text).not.toContain("Item list:");
+    expect(text).not.toContain("----- ROUTE SUMMARY -----");
+    expect(text).not.toContain("----- MERGED SUMMARY -----");
   });
 
   it("renders station blocks in route visit order and supports station-name fallback keys", () => {
@@ -245,6 +248,8 @@ describe("batch route manifest formatter", () => {
     expect(perimeterIndex).toBeGreaterThan(-1);
     expect(jitaIndex).toBeGreaterThan(-1);
     expect(perimeterIndex).toBeLessThan(jitaIndex);
+    expect(text).not.toMatch(/^Station:\s*Perimeter - Tranquility$/m);
+    expect(text).not.toMatch(/^Station:\s*Jita IV - Moon 4$/m);
   });
 
   it("renders station autobuy lines after detailed rows in deterministic line order", () => {
@@ -301,6 +306,55 @@ describe("batch route manifest formatter", () => {
     );
     expect(text).toContain("\n\nPyerite 3000\nMexallon 750");
     expect(text).not.toContain("Item list:");
+  });
+
+  it("enforces required station field labels exactly and rejects legacy debug headings", () => {
+    const text = formatOrderedRouteManifestText({
+      originLabel: "Jita (Jita IV - Moon 4)",
+      metadataHeader: { corridor: "Jita -> Amarr", jumps: 4, iskPerJump: 3_750 },
+      manifest: {
+        stations: [
+          {
+            station_key: "id:60003760",
+            buy_station_name: "Jita IV - Moon 4",
+            jumps_to_buy_station: 0,
+            jumps_buy_to_sell: 4,
+            item_count: 1,
+            total_volume_m3: 20,
+            total_buy_isk: 40_000,
+            total_sell_isk: 55_000,
+            total_profit_isk: 15_000,
+            isk_per_jump: 3_750,
+            lines: [],
+          },
+        ],
+      },
+    });
+
+    const requiredLabels = [
+      "Buy Station:",
+      "Jumps to Buy Station:",
+      "Sell Station:",
+      "Jumps Buy -> Sell:",
+      "Cargo m3:",
+      "Items:",
+      "Total volume:",
+      "Total capital:",
+      "Total gross sell:",
+      "Total profit:",
+      "Total isk/jump:",
+    ];
+
+    for (const label of requiredLabels) {
+      const matches = text.match(new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "gm"));
+      expect(matches?.length ?? 0).toBe(1);
+    }
+
+    expect(text).not.toMatch(/^Station:/m);
+    expect(text).not.toContain("Item list:");
+    expect(text).not.toContain("----- ROUTE SUMMARY -----");
+    expect(text).not.toContain("----- MERGED SUMMARY -----");
+    expect(text).not.toContain("Route: jumps");
   });
 
   it("does not include raw station ID labels when station names are provided", () => {
@@ -454,6 +508,130 @@ describe("batch route manifest formatter", () => {
     expect(text).toContain("Total gross sell:");
     expect(text).toContain("Total profit:");
     expect(text).toContain("Total isk/jump:");
+  });
+
+  it("renders a canonical two-station layout with strict ordering", () => {
+    const text = formatOrderedRouteManifestText({
+      originLabel: "Jita (Jita IV - Moon 4)",
+      metadataHeader: { corridor: "Jita -> Amarr", jumps: 7, iskPerJump: 9_286 },
+      manifest: {
+        summary: {
+          station_count: 2,
+          item_count: 2,
+          total_units: 150,
+          total_volume_m3: 100,
+          total_buy_isk: 300_000,
+          total_sell_isk: 430_000,
+          total_profit_isk: 130_000,
+          total_jumps: 7,
+          isk_per_jump: 18_571,
+        },
+        stations: [
+          {
+            station_key: "id:60003760",
+            buy_station_name: "Jita IV - Moon 4",
+            sell_station_name: "Amarr VIII (Oris) - Emperor Family Academy",
+            jumps_to_buy_station: 0,
+            jumps_buy_to_sell: 4,
+            cargo_m3: 100,
+            item_count: 1,
+            total_volume_m3: 40,
+            total_buy_isk: 120_000,
+            total_sell_isk: 180_000,
+            total_profit_isk: 60_000,
+            isk_per_jump: 15_000,
+            lines: [
+              {
+                type_id: 34,
+                type_name: "Tritanium",
+                units: 100,
+                unit_volume_m3: 0.4,
+                volume_m3: 40,
+                buy_total_isk: 120_000,
+                buy_per_isk: 1_200,
+                sell_total_isk: 180_000,
+                sell_per_isk: 1_800,
+                profit_isk: 60_000,
+              },
+            ],
+          },
+          {
+            station_key: "id:60008494",
+            buy_station_name: "Amarr VIII (Oris) - Emperor Family Academy",
+            sell_station_name: "Dodixie IX - Moon 20",
+            jumps_to_buy_station: 3,
+            jumps_buy_to_sell: 0,
+            cargo_m3: 100,
+            item_count: 1,
+            total_volume_m3: 60,
+            total_buy_isk: 180_000,
+            total_sell_isk: 250_000,
+            total_profit_isk: 70_000,
+            isk_per_jump: 23_333,
+            lines: [
+              {
+                type_id: 35,
+                type_name: "Pyerite",
+                units: 50,
+                unit_volume_m3: 1.2,
+                volume_m3: 60,
+                buy_total_isk: 180_000,
+                buy_per_isk: 3_600,
+                sell_total_isk: 250_000,
+                sell_per_isk: 5_000,
+                profit_isk: 70_000,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(text).toBe(
+      [
+        "Origin: Jita (Jita IV - Moon 4)",
+        "Sell Station: Amarr",
+        "Cargo m3: 100 m3",
+        "Stations: 2",
+        "Items: 2",
+        "Total volume: 100 m3",
+        "Total capital: 300,000 ISK",
+        "Total gross sell: 430,000 ISK",
+        "Total profit: 130,000 ISK",
+        "Total isk/jump: 18,571 ISK",
+        "",
+        "Buy Station: Jita IV - Moon 4",
+        "Jumps to Buy Station: 0",
+        "Sell Station: Amarr VIII (Oris) - Emperor Family Academy",
+        "Jumps Buy -> Sell: 4",
+        "Cargo m3: 100 m3",
+        "Items: 1",
+        "Total volume: 40 m3",
+        "Total capital: 120,000 ISK",
+        "Total gross sell: 180,000 ISK",
+        "Total profit: 60,000 ISK",
+        "Total isk/jump: 15,000 ISK",
+        "Tritanium | qty 100 | buy total 120,000 ISK | buy per 1,200 ISK | sell total 180,000 ISK | sell per 1,800 ISK | vol 40 m3 | profit 60,000 ISK",
+        "",
+        "Tritanium 100",
+        "",
+        "------------------------",
+        "Buy Station: Amarr VIII (Oris) - Emperor Family Academy",
+        "Jumps to Buy Station: 3",
+        "Sell Station: Dodixie IX - Moon 20",
+        "Jumps Buy -> Sell: 0",
+        "Cargo m3: 100 m3",
+        "Items: 1",
+        "Total volume: 60 m3",
+        "Total capital: 180,000 ISK",
+        "Total gross sell: 250,000 ISK",
+        "Total profit: 70,000 ISK",
+        "Total isk/jump: 23,333 ISK",
+        "Pyerite | qty 50 | buy total 180,000 ISK | buy per 3,600 ISK | sell total 250,000 ISK | sell per 5,000 ISK | vol 60 m3 | profit 70,000 ISK",
+        "",
+        "Pyerite 50",
+      ].join("\n"),
+    );
   });
 
   it("omits top-level summary fields when manifest summary is absent and still renders stations", () => {
