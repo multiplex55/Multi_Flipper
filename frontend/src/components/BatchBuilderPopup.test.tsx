@@ -190,6 +190,65 @@ function makeRouteResponse(): BatchCreateRouteResponse {
   };
 }
 
+function makeDuplicateTotalsRouteResponse(): BatchCreateRouteResponse {
+  const response = makeRouteResponse();
+  response.ranked_options = [
+    {
+      option_id: "dup-opt",
+      rank: 1,
+      lines: [
+        {
+          type_id: 777,
+          type_name: "Isogen",
+          units: 100,
+          unit_volume_m3: 2,
+          buy_system_id: 30000142,
+          buy_location_id: 60003760,
+          sell_system_id: 30002187,
+          sell_location_id: 60008494,
+          buy_total_isk: 120000,
+          sell_total_isk: 180000,
+          profit_total_isk: 60000,
+          route_jumps: 7,
+        },
+        {
+          type_id: 777,
+          type_name: "Isogen",
+          units: 80,
+          unit_volume_m3: 2,
+          buy_system_id: 30000142,
+          buy_location_id: 60003760,
+          sell_system_id: 30002187,
+          sell_location_id: 60008494,
+          buy_total_isk: 96000,
+          sell_total_isk: 140000,
+          profit_total_isk: 44000,
+          route_jumps: 7,
+        },
+      ],
+      line_count: 2,
+      added_volume_m3: 360,
+      utilization_pct: 78.2,
+      total_buy_isk: 216000,
+      total_sell_isk: 320000,
+      total_profit_isk: 104000,
+      total_jumps: 7,
+      isk_per_jump: 14857.14,
+      ranking_inputs: {
+        total_profit_isk: 104000,
+        total_jumps: 7,
+        isk_per_jump: 14857.14,
+        utilization_pct: 78.2,
+      },
+      ranking_tie_break_values: [78.2, 777],
+      ranking_sort_key: "A",
+    },
+  ];
+  response.selected_option_id = "";
+  response.selected_rank = 0;
+  return response;
+}
+
 function renderPopup({ anchorRow, rows }: { anchorRow: FlipResult | null; rows: FlipResult[] }) {
   return render(
     <I18nProvider>
@@ -292,6 +351,19 @@ describe("BatchBuilderPopup route creation", () => {
     ]);
   });
 
+  it("shows empty options UX when API returns no ranked options", async () => {
+    const response = makeRouteResponse();
+    response.ranked_options = [];
+    response.selected_option_id = "";
+    response.selected_rank = 0;
+    batchCreateRouteMock.mockResolvedValue(response);
+
+    renderPopup({ anchorRow, rows });
+    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+
+    expect(await screen.findByText("No route options returned for remaining cargo.")).toBeInTheDocument();
+  });
+
   it("selecting a route updates merged totals", async () => {
     batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
 
@@ -300,10 +372,27 @@ describe("BatchBuilderPopup route creation", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
 
     const secondOption = await screen.findByTestId("route-option-rank-2");
+    expect(screen.getByRole("button", { name: "Copy merged manifest" })).toBeDisabled();
     fireEvent.click(secondOption);
 
     expect(secondOption).toHaveTextContent("Merged volume: 15,580");
     expect(secondOption).toHaveTextContent("Jump segments: 10");
+    expect(screen.getByRole("button", { name: "Copy merged manifest" })).toBeEnabled();
+  });
+
+  it("uses option totals for duplicate added lines in merged display", async () => {
+    batchCreateRouteMock.mockResolvedValue(makeDuplicateTotalsRouteResponse());
+
+    renderPopup({ anchorRow, rows });
+    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+
+    const option = await screen.findByTestId("route-option-dup-opt");
+    fireEvent.click(option);
+
+    expect(option).toHaveTextContent("Added items: 2");
+    expect(option).toHaveTextContent("Merged capital: 846 K");
+    expect(option).toHaveTextContent("Merged gross: 1.66 M");
+    expect(option).toHaveTextContent("Merged profit: 1.6 M");
   });
 
   it("copy merged manifest writes expected sections", async () => {
@@ -327,5 +416,24 @@ describe("BatchBuilderPopup route creation", () => {
     expect(manifest).toContain(
       "Totals: buy 830,000 ISK | sell 1,630,000 ISK | profit 1,590,000 ISK",
     );
+  });
+
+  it("copy manifest remains base-only and unchanged without route selection", async () => {
+    batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
+
+    renderPopup({ anchorRow, rows });
+    fireEvent.click(await screen.findByRole("button", { name: "Copy manifest" }));
+
+    expect(writeText).toHaveBeenCalledTimes(1);
+    const baseManifest = writeText.mock.calls[0][0];
+    expect(baseManifest).toContain("Buy Station: Jita IV - Moon 4");
+    expect(baseManifest).toContain("Sell Station: Amarr VIII (Oris) - Emperor Family Academy");
+    expect(baseManifest).toContain("Total profit: 1,500,000 ISK");
+    expect(baseManifest).not.toContain("----- MERGED SUMMARY -----");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    await screen.findByTestId("route-option-rank-1");
+
+    expect(screen.getByRole("button", { name: "Copy merged manifest" })).toBeDisabled();
   });
 });

@@ -1,6 +1,10 @@
 package engine
 
-import "testing"
+import (
+	"testing"
+
+	"eve-flipper/internal/esi"
+)
 
 func TestRankRouteOptions_DeterministicUnderExactTies(t *testing.T) {
 	options := []BatchCreateRouteOption{
@@ -113,5 +117,34 @@ func TestFilterAdditionsByFinalSell_NoProfitableAdditionsReturnsEmpty(t *testing
 	filtered := filterAdditionsByFinalSell(lines, 9999)
 	if len(filtered) != 0 {
 		t.Fatalf("len(filtered) = %d, want 0", len(filtered))
+	}
+}
+
+func TestFitAdditionsToRemainingCargo_AdditionsFoundButNoneFitCargo(t *testing.T) {
+	lines := []BatchCreateRouteLine{
+		{TypeID: 10, Units: 5, UnitVolumeM3: 20, ProfitTotalISK: 100},
+		{TypeID: 20, Units: 1, UnitVolumeM3: 12, ProfitTotalISK: 50},
+	}
+
+	fitted := fitAdditionsToRemainingCargo(lines, 10)
+	if len(fitted) != 0 {
+		t.Fatalf("len(fitted) = %d, want 0 when no line can fit remaining cargo", len(fitted))
+	}
+}
+
+func TestBuildOrderIndexWithFilters_StructureOnlyCandidatesExcluded(t *testing.T) {
+	sellOrders := []esi.MarketOrder{
+		{SystemID: 1, TypeID: 100, Price: 10, VolumeRemain: 50, LocationID: 1_000_000_000_123},
+	}
+	buyOrders := []esi.MarketOrder{
+		{SystemID: 2, TypeID: 100, Price: 30, VolumeRemain: 50, LocationID: 1_000_000_000_456},
+	}
+
+	idx := buildOrderIndexWithFilters(sellOrders, buyOrders, false)
+	if got := len(idx.cheapestSell[1]); got != 0 {
+		t.Fatalf("cheapestSell candidates = %d, want 0 when structure-only candidates are excluded", got)
+	}
+	if got := len(idx.highestBuy[2][100]); got != 0 {
+		t.Fatalf("highestBuy levels = %d, want 0 when structure-only candidates are excluded", got)
 	}
 }

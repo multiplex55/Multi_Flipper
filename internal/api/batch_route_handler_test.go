@@ -116,6 +116,46 @@ func TestHandleBatchCreateRoute_InvalidRequestReturns400(t *testing.T) {
 	}
 }
 
+func TestHandleBatchCreateRoute_MissingOriginReturns400(t *testing.T) {
+	srv := NewServer(config.Default(), &esi.Client{}, nil, nil, nil)
+	srv.ready = true
+
+	reqPayload := testBatchCreateRouteRequest()
+	reqPayload.OriginSystemID = 0
+	reqPayload.OriginLocationID = 0
+	body, _ := json.Marshal(reqPayload)
+	req := httptest.NewRequest(http.MethodPost, "/api/batch/create-route", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "missing origin") {
+		t.Fatalf("body = %q, want missing origin", rec.Body.String())
+	}
+}
+
+func TestHandleBatchCreateRoute_MissingFinalSellReturns400(t *testing.T) {
+	srv := NewServer(config.Default(), &esi.Client{}, nil, nil, nil)
+	srv.ready = true
+
+	reqPayload := testBatchCreateRouteRequest()
+	reqPayload.BaseBatch.BaseSellSystemID = 0
+	reqPayload.BaseBatch.BaseSellLocationID = 0
+	body, _ := json.Marshal(reqPayload)
+	req := httptest.NewRequest(http.MethodPost, "/api/batch/create-route", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "missing final sell location/system") {
+		t.Fatalf("body = %q, want missing final sell location/system", rec.Body.String())
+	}
+}
+
 func TestHandleBatchCreateRoute_NoRemainingCargoReturnsEmptyOptions(t *testing.T) {
 	srv := NewServer(config.Default(), &esi.Client{}, nil, nil, nil)
 	srv.ready = true
@@ -198,5 +238,37 @@ func TestHandleBatchCreateRoute_IncludeExcludeStructuresBehavior(t *testing.T) {
 	}
 	if len(excludeResp.Diagnostics) == 0 {
 		t.Fatalf("exclude diagnostics empty, want structure exclusion message")
+	}
+}
+
+func TestHandleBatchCreateRoute_StaleSnapshotFallbackDiagnosticsPassedThrough(t *testing.T) {
+	srv := NewServer(config.Default(), &esi.Client{}, nil, nil, nil)
+	srv.ready = true
+	srv.batchCreateRoutePlanner = func(_ context.Context, _ engine.BatchCreateRouteParams) (engine.BatchCreateRouteResult, error) {
+		return engine.BatchCreateRouteResult{
+			Options: []engine.BatchCreateRouteOption{
+				{OptionID: "fallback-cache", AddedVolumeM3: 42, TotalProfitISK: 1000},
+			},
+			Diagnostics:  []string{"market snapshot stale; served deterministic fallback from cache"},
+			SelectedID:   "fallback-cache",
+			SelectedRank: 1,
+		}, nil
+	}
+
+	reqPayload := testBatchCreateRouteRequest()
+	body, _ := json.Marshal(reqPayload)
+	req := httptest.NewRequest(http.MethodPost, "/api/batch/create-route", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var resp BatchCreateRouteResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Diagnostics) == 0 || !strings.Contains(resp.Diagnostics[0], "stale") {
+		t.Fatalf("diagnostics = %v, want stale fallback diagnostic", resp.Diagnostics)
 	}
 }

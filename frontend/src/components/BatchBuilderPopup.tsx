@@ -364,11 +364,9 @@ export function BatchBuilderPopup({
         setRouteError(t("batchBuilderRouteNoOptions"));
         return;
       }
-      const chosen = options.find((opt) => opt.option_id === response.selected_option_id) ?? options[0];
-      const merged = buildMergedManifest(baseBatchManifest, chosen);
-      setSelectedOptionId(chosen.option_id);
-      setMergedManifest(merged);
-      setRouteState("selected");
+      setSelectedOptionId(null);
+      setMergedManifest(null);
+      setRouteState("results");
       setLastProgress(t("batchBuilderRouteSearchComplete", { count: options.length }));
     } catch (error) {
       const isAbort = controller.signal.aborted;
