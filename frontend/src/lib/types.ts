@@ -595,6 +595,7 @@ export interface ScanParams {
   exclude_rigs_with_ship?: boolean;
   route_min_hops?: number;
   route_max_hops?: number;
+  max_detour_jumps_per_node?: number;
   route_target_system_name?: string;
   route_min_isk_per_jump?: number;
   route_allow_empty_hops?: boolean;

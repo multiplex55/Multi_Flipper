@@ -705,6 +705,24 @@ export function ParametersPanel({
                         <NumberInput value={params.shipping_cost_per_m3_jump ?? 0} onChange={(v) => set("shipping_cost_per_m3_jump", v)} min={0} max={1000000} step={0.1} />
                       </Field>
                     </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Field label={t("routeMaxJumps")}>
+                        <NumberInput
+                          value={params.route_max_hops ?? 0}
+                          onChange={(v) => set("route_max_hops", Math.max(0, Math.round(v)))}
+                          min={0}
+                        />
+                      </Field>
+                      <Field label={t("maxDetourJumpsPerNode")}>
+                        <NumberInput
+                          value={params.max_detour_jumps_per_node ?? 0}
+                          onChange={(v) =>
+                            set("max_detour_jumps_per_node", Math.max(0, Math.round(v)))
+                          }
+                          min={0}
+                        />
+                      </Field>
+                    </div>
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
                       <Field label={t("minS2BPerDay")} hint={t("minS2BPerDayHint")}>
                         <NumberInput value={params.min_s2b_per_day ?? 0} onChange={(v) => set("min_s2b_per_day", v)} min={0} max={999999999} step={0.1} />
@@ -1006,6 +1024,24 @@ export function ParametersPanel({
                     <option value="0.5">{t("routeSecurityMin05")}</option>
                     <option value="0.7">{t("routeSecurityMin07")}</option>
                   </select>
+                </Field>
+
+                <Field label={t("routeMaxJumps")}>
+                  <NumberInput
+                    value={params.route_max_hops ?? 0}
+                    onChange={(v) => set("route_max_hops", Math.max(0, Math.round(v)))}
+                    min={0}
+                  />
+                </Field>
+
+                <Field label={t("maxDetourJumpsPerNode")}>
+                  <NumberInput
+                    value={params.max_detour_jumps_per_node ?? 0}
+                    onChange={(v) =>
+                      set("max_detour_jumps_per_node", Math.max(0, Math.round(v)))
+                    }
+                    min={0}
+                  />
                 </Field>
 
                 {tab === "radius" && (

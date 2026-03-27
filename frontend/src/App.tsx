@@ -333,6 +333,7 @@ function App() {
     exclude_rigs_with_ship: true,
     route_min_hops: 2,
     route_max_hops: 5,
+    max_detour_jumps_per_node: 0,
     route_target_system_name: "",
     route_min_isk_per_jump: 0,
     route_allow_empty_hops: false,
@@ -1747,6 +1748,7 @@ function App() {
               minRouteSecurity={params.min_route_security}
               includeStructures={params.include_structures}
               routeMaxJumps={params.route_max_hops}
+              maxDetourJumpsPerNode={params.max_detour_jumps_per_node}
               allowLowsec={(params.min_route_security ?? 0.45) < 0.45}
               allowNullsec={(params.min_route_security ?? 0.45) <= 0}
               allowWormhole={false}
@@ -1828,6 +1830,7 @@ function App() {
               minRouteSecurity={params.min_route_security}
               includeStructures={params.include_structures}
               routeMaxJumps={params.route_max_hops}
+              maxDetourJumpsPerNode={params.max_detour_jumps_per_node}
               allowLowsec={(params.min_route_security ?? 0.45) < 0.45}
               allowNullsec={(params.min_route_security ?? 0.45) <= 0}
               allowWormhole={false}
@@ -2066,6 +2069,7 @@ function App() {
                 "include_structures",
                 "route_min_hops",
                 "route_max_hops",
+                "max_detour_jumps_per_node",
                 "route_target_system_name",
                 "route_min_isk_per_jump",
                 "route_allow_empty_hops",
