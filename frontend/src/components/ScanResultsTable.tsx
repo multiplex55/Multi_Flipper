@@ -3410,6 +3410,8 @@ export function ScanResultsTable({
         salesTaxPercent={salesTaxPercent}
         buyBrokerFeePercent={buyBrokerFeePercent}
         sellBrokerFeePercent={sellBrokerFeePercent}
+        cacheMeta={cacheMeta}
+        scanSourceTab={tradeStateTab === "region" ? "region" : "radius"}
       />
 
       {routeSafetyModal && (

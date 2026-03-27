@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"fmt"
 	"math"
 	"sort"
 )
@@ -47,6 +48,77 @@ func fitAdditionsToRemainingCargo(lines []BatchCreateRouteLine, remainingCapacit
 		fitted = append(fitted, line)
 	}
 	return fitted
+}
+
+func mergeBatchRouteCandidatePools(
+	marketLines []BatchCreateRouteLine,
+	cacheLines []BatchCreateRouteLine,
+	baseLines []BatchCreateRouteLine,
+) []BatchCreateRouteLine {
+	seenBase := make(map[string]bool, len(baseLines))
+	for _, line := range baseLines {
+		seenBase[batchRouteTupleKey(line)] = true
+	}
+
+	mergedByTuple := make(map[string]BatchCreateRouteLine, len(marketLines)+len(cacheLines))
+	for _, pool := range [][]BatchCreateRouteLine{marketLines, cacheLines} {
+		for _, line := range pool {
+			if line.Units <= 0 || line.UnitVolumeM3 <= 0 || line.ProfitTotalISK <= 0 {
+				continue
+			}
+			key := batchRouteTupleKey(line)
+			if seenBase[key] {
+				continue
+			}
+			if existing, ok := mergedByTuple[key]; ok {
+				existing.Units += line.Units
+				existing.BuyTotalISK += line.BuyTotalISK
+				existing.SellTotalISK += line.SellTotalISK
+				existing.ProfitTotalISK += line.ProfitTotalISK
+				if existing.RouteJumps == 0 || (line.RouteJumps > 0 && line.RouteJumps < existing.RouteJumps) {
+					existing.RouteJumps = line.RouteJumps
+				}
+				mergedByTuple[key] = existing
+				continue
+			}
+			mergedByTuple[key] = line
+		}
+	}
+
+	merged := make([]BatchCreateRouteLine, 0, len(mergedByTuple))
+	for _, line := range mergedByTuple {
+		merged = append(merged, line)
+	}
+	sort.SliceStable(merged, func(i, j int) bool {
+		return batchRouteLineLess(merged[i], merged[j])
+	})
+	return merged
+}
+
+func batchRouteTupleKey(line BatchCreateRouteLine) string {
+	return fmt.Sprintf("%d|%d|%d|%d|%d", line.TypeID, line.BuySystemID, line.BuyLocationID, line.SellSystemID, line.SellLocationID)
+}
+
+func batchRouteLineLess(left, right BatchCreateRouteLine) bool {
+	if left.ProfitTotalISK != right.ProfitTotalISK {
+		return left.ProfitTotalISK > right.ProfitTotalISK
+	}
+	if left.RouteJumps != right.RouteJumps {
+		return left.RouteJumps < right.RouteJumps
+	}
+	if left.TypeID != right.TypeID {
+		return left.TypeID < right.TypeID
+	}
+	if left.BuySystemID != right.BuySystemID {
+		return left.BuySystemID < right.BuySystemID
+	}
+	if left.BuyLocationID != right.BuyLocationID {
+		return left.BuyLocationID < right.BuyLocationID
+	}
+	if left.SellSystemID != right.SellSystemID {
+		return left.SellSystemID < right.SellSystemID
+	}
+	return left.SellLocationID < right.SellLocationID
 }
 
 func mergeBaseAndAdditions(baseLines, additionLines []BatchCreateRouteLine) []BatchCreateRouteLine {

@@ -361,3 +361,50 @@ func TestHandleBatchCreateRoute_StaleSnapshotFallbackDiagnosticsPassedThrough(t 
 		t.Fatalf("diagnostics = %v, want stale fallback diagnostic", resp.Diagnostics)
 	}
 }
+
+func TestHandleBatchCreateRoute_MapsCandidateSnapshotToPlanner(t *testing.T) {
+	srv := NewServer(config.Default(), &esi.Client{}, nil, nil, nil)
+	srv.ready = true
+	captured := engine.BatchCreateRouteParams{}
+	srv.batchCreateRoutePlanner = func(_ context.Context, params engine.BatchCreateRouteParams) (engine.BatchCreateRouteResult, error) {
+		captured = params
+		return engine.BatchCreateRouteResult{}, nil
+	}
+
+	reqPayload := testBatchCreateRouteRequest()
+	reqPayload.CandidateContext = &BatchRouteCandidateContext{
+		SourceTab:     "radius",
+		CacheRevision: 77,
+	}
+	reqPayload.CandidateSnapshot = []BatchRouteCandidateLine{
+		{
+			TypeID:         35,
+			TypeName:       "Pyerite",
+			Units:          120,
+			UnitVolumeM3:   0.01,
+			BuySystemID:    30000142,
+			BuyLocationID:  60003760,
+			SellSystemID:   30002187,
+			SellLocationID: 60008494,
+			BuyPriceISK:    6.0,
+			SellPriceISK:   7.2,
+		},
+	}
+	body, _ := json.Marshal(reqPayload)
+	req := httptest.NewRequest(http.MethodPost, "/api/batch/create-route", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if !captured.CandidateContextSeen {
+		t.Fatalf("expected candidate context flag to be true")
+	}
+	if len(captured.CandidateLines) != 1 {
+		t.Fatalf("candidate lines = %d, want 1", len(captured.CandidateLines))
+	}
+	if captured.CandidateLines[0].TypeID != 35 {
+		t.Fatalf("candidate type = %d, want 35", captured.CandidateLines[0].TypeID)
+	}
+}

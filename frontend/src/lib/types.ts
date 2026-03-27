@@ -327,6 +327,24 @@ export interface BatchCreateRouteRequest {
   sales_tax_percent: number;
   buy_broker_fee_percent: number;
   sell_broker_fee_percent: number;
+  candidate_context?: {
+    source_tab?: "radius" | "region" | "contracts";
+    cache_revision?: number;
+    cache_next_expiry?: string;
+    cache_stale?: boolean;
+  };
+  candidate_snapshot?: Array<{
+    type_id: number;
+    type_name: string;
+    units: number;
+    unit_volume_m3: number;
+    buy_system_id: number;
+    buy_location_id: number;
+    sell_system_id: number;
+    sell_location_id: number;
+    buy_price_isk: number;
+    sell_price_isk: number;
+  }>;
   deterministic_sort: {
     primary: "total_profit_isk" | "isk_per_jump" | "utilization_pct";
     secondary: "total_jumps" | "total_profit_isk" | "isk_per_jump";
@@ -356,6 +374,7 @@ export interface BatchCreateRouteResponse {
   request: BatchCreateRouteRequest;
   merged_manifest: MergedBatchManifest;
   ranked_options: RouteAdditionOption[];
+  diagnostics?: string[];
   selected_option_id: string;
   selected_rank: number;
   deterministic_sort_applied: boolean;

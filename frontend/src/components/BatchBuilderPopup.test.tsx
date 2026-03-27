@@ -266,6 +266,17 @@ function renderPopup({ anchorRow, rows }: { anchorRow: FlipResult | null; rows: 
           salesTaxPercent={3}
           buyBrokerFeePercent={1}
           sellBrokerFeePercent={1}
+          cacheMeta={{
+            current_revision: 99,
+            next_expiry_at: "2026-03-27T00:30:00Z",
+            stale: false,
+            last_refresh_at: "2026-03-27T00:00:00Z",
+            min_ttl_sec: 60,
+            max_ttl_sec: 300,
+            regions: 1,
+            entries: 10,
+          }}
+          scanSourceTab="radius"
         />
       </ToastProvider>
     </I18nProvider>,
@@ -349,6 +360,39 @@ describe("BatchBuilderPopup route creation", () => {
       "route-option-rank-1",
       "route-option-rank-2",
     ]);
+  });
+
+  it("includes radius cache context and candidate snapshot in request payload", async () => {
+    batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
+    renderPopup({ anchorRow, rows });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    await screen.findByTestId("route-option-rank-1");
+
+    expect(batchCreateRouteMock).toHaveBeenCalledTimes(1);
+    const [payload] = batchCreateRouteMock.mock.calls[0] ?? [];
+    expect(payload?.candidate_context?.source_tab).toBe("radius");
+    expect(payload?.candidate_context?.cache_revision).toBe(99);
+    expect(payload?.candidate_snapshot?.length).toBeGreaterThan(0);
+    expect(payload?.candidate_snapshot?.[0]).toMatchObject({
+      type_id: expect.any(Number),
+      buy_system_id: expect.any(Number),
+      sell_system_id: expect.any(Number),
+    });
+  });
+
+  it("surfaces fallback diagnostics from planner responses", async () => {
+    const response = makeRouteResponse();
+    response.diagnostics = ["radius cache unavailable or stale; falling back to market-only candidates"];
+    batchCreateRouteMock.mockResolvedValue(response);
+
+    renderPopup({ anchorRow, rows });
+    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+
+    const diagnostics = await screen.findByTestId("route-diagnostics");
+    expect(diagnostics).toHaveTextContent(
+      "radius cache unavailable or stale; falling back to market-only candidates",
+    );
   });
 
   it("shows empty options UX when API returns no ranked options", async () => {
