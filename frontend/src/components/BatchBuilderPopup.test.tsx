@@ -259,11 +259,11 @@ describe("BatchBuilderPopup route creation", () => {
   });
 
   it("shows searching spinner/progress while request is pending", async () => {
-    let resolver: ((value: BatchCreateRouteResponse) => void) | null = null;
+    const pending: { resolve?: (value: BatchCreateRouteResponse) => void } = {};
     batchCreateRouteMock.mockImplementation(
       () =>
-        new Promise((resolve) => {
-          resolver = resolve;
+        new Promise<BatchCreateRouteResponse>((resolve) => {
+          pending.resolve = resolve;
         }),
     );
 
@@ -273,7 +273,8 @@ describe("BatchBuilderPopup route creation", () => {
 
     expect(await screen.findByRole("status")).toHaveTextContent("Searching route additions...");
 
-    resolver?.(makeRouteResponse());
+    expect(pending.resolve).toBeDefined();
+    pending.resolve!(makeRouteResponse());
     await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
   });
 
