@@ -75,6 +75,11 @@ function hasStationName(name: string | null | undefined): name is string {
   return (name ?? "").trim().length > 0;
 }
 
+function toKnownJumpCount(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return Math.max(0, Math.floor(value));
+}
+
 function buildMergedManifest(
   baseBatch: BaseBatchManifest,
   option: RouteAdditionOption,
@@ -413,15 +418,8 @@ export function BatchBuilderPopup({
       const stationKey = primaryKey || `name:${fallbackKey}`;
       if (!stations.has(stationKey)) {
         stationOrder.push(stationKey);
-        const jumpsToBuy = Math.max(0, Math.floor(safeNumber(matchedRow?.BuyJumps)));
-        const jumpsBuyToSell = Math.max(
-          0,
-          Math.floor(
-            safeNumber(
-              matchedRow?.SellJumps ?? matchedSellRow?.SellJumps ?? safeNumber(line.route_jumps),
-            ),
-          ),
-        );
+        const jumpsToBuy = toKnownJumpCount(matchedRow?.BuyJumps);
+        const jumpsBuyToSell = toKnownJumpCount(matchedRow?.SellJumps ?? matchedSellRow?.SellJumps);
         stations.set(stationKey, {
           station_key: stationKey,
           buy_station_name: stationName,
@@ -464,8 +462,18 @@ export function BatchBuilderPopup({
       station.total_buy_isk += buyTotal;
       station.total_sell_isk += sellTotal;
       station.total_profit_isk += profit;
-      const stationJumps = station.jumps_to_buy_station + station.jumps_buy_to_sell;
-      station.isk_per_jump = stationJumps > 0 ? station.total_profit_isk / stationJumps : 0;
+      const jumpsToBuy = station.jumps_to_buy_station;
+      const jumpsBuyToSell = station.jumps_buy_to_sell;
+      const hasKnownSegments = jumpsToBuy != null && jumpsBuyToSell != null;
+      if (!hasKnownSegments) {
+        station.isk_per_jump = null;
+        continue;
+      }
+      const stationJumps = jumpsToBuy + jumpsBuyToSell;
+      station.isk_per_jump =
+        stationJumps > 0 && Number.isFinite(station.total_profit_isk)
+          ? station.total_profit_isk / stationJumps
+          : null;
     }
 
     if (fallbackToIdStationIds.size > 0) {
@@ -492,7 +500,10 @@ export function BatchBuilderPopup({
         total_sell_isk: orderedStations.reduce((sum, station) => sum + station.total_sell_isk, 0),
         total_profit_isk: orderedStations.reduce((sum, station) => sum + station.total_profit_isk, 0),
         total_jumps: selectedOption.total_jumps,
-        isk_per_jump: selectedOption.isk_per_jump,
+        isk_per_jump:
+          selectedOption.total_jumps > 0 && Number.isFinite(selectedOption.isk_per_jump)
+            ? selectedOption.isk_per_jump
+            : null,
       },
       stations: orderedStations,
     };

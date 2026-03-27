@@ -504,7 +504,8 @@ describe("BatchBuilderPopup route creation", () => {
     const manifest = writeText.mock.calls[0][0];
     expect(manifest).toContain("Origin: Jita (Jita IV - Moon 4)");
     expect(manifest).toContain("Buy Station: Jita IV - Moon 4");
-    expect(manifest).toContain("Jumps to Buy Station: 0");
+    expect(manifest).toContain("Jumps to Buy Station: N/A");
+    expect(manifest).toContain("Jumps Buy -> Sell: 0");
     expect(manifest).toContain("Sell Station: Amarr VIII (Oris) - Emperor Family Academy");
     expect(manifest).toContain("Cargo m3: 20,000 m3");
     expect(manifest).toContain("Items: 1");
@@ -520,6 +521,73 @@ describe("BatchBuilderPopup route creation", () => {
       "Megacyte | qty 40 | buy total 200,000 ISK | buy per 5,000 ISK | sell total 290,000 ISK | sell per 7,250 ISK | vol 80 m3 | profit 90,000 ISK\n\nMegacyte 40",
     );
     expect(manifest).not.toContain("Item list:");
+  });
+
+  it("copy merged manifest does not print zero placeholders for unknown jump metadata", async () => {
+    const response = makeRouteResponse();
+    const rowsWithoutJumpMetadata = rows.map((row) => ({
+      ...row,
+      BuyJumps: undefined,
+      SellJumps: undefined,
+    }));
+    response.ranked_options = [
+      {
+        ...response.ranked_options[0],
+        option_id: "unknown-jumps",
+        lines: [
+          {
+            ...response.ranked_options[0].lines[0],
+            type_id: 1999,
+            type_name: "Unknown Jump Item",
+          },
+        ],
+      },
+    ];
+    response.selected_option_id = "";
+    response.selected_rank = 0;
+    batchCreateRouteMock.mockResolvedValue(response);
+
+    renderPopup({ anchorRow: rowsWithoutJumpMetadata[0], rows: rowsWithoutJumpMetadata });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(await screen.findByTestId("route-option-unknown-jumps"));
+    fireEvent.click(await screen.findByRole("button", { name: "Copy merged manifest" }));
+
+    const manifest = writeText.mock.calls[writeText.mock.calls.length - 1][0];
+    expect(manifest).toContain("Jumps to Buy Station: N/A");
+    expect(manifest).toContain("Jumps Buy -> Sell: N/A");
+    expect(manifest).not.toContain("Jumps to Buy Station: 0");
+    expect(manifest).not.toContain("Jumps Buy -> Sell: 0");
+  });
+
+  it("copy merged manifest keeps true zero jump values when row metadata explicitly has zero jumps", async () => {
+    const response = makeRouteResponse();
+    response.ranked_options = [
+      {
+        ...response.ranked_options[0],
+        option_id: "true-zero-jumps",
+        lines: [
+          {
+            ...response.ranked_options[0].lines[0],
+            type_id: anchorRow.TypeID,
+            type_name: anchorRow.TypeName,
+          },
+        ],
+      },
+    ];
+    response.selected_option_id = "";
+    response.selected_rank = 0;
+    batchCreateRouteMock.mockResolvedValue(response);
+
+    renderPopup({ anchorRow, rows });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(await screen.findByTestId("route-option-true-zero-jumps"));
+    fireEvent.click(await screen.findByRole("button", { name: "Copy merged manifest" }));
+
+    const manifest = writeText.mock.calls[writeText.mock.calls.length - 1][0];
+    expect(manifest).toContain("Jumps to Buy Station: 0");
+    expect(manifest).toContain("Jumps Buy -> Sell: 0");
   });
 
   it("resolves buy station via location map when exact row match is unavailable", async () => {

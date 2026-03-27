@@ -73,6 +73,16 @@ function formatVolume(value: number): string {
   return value.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 1 });
 }
 
+function formatOptionalQuantity(value?: number | null): string {
+  if (value == null || !Number.isFinite(value)) return "N/A";
+  return formatQuantity(value);
+}
+
+function formatOptionalInteger(value?: number | null): string {
+  if (value == null || !Number.isFinite(value)) return "N/A";
+  return formatInteger(value);
+}
+
 export function formatRouteMetadataHeader(input?: RouteMetadataHeaderInput): string[] {
   if (!input) return [];
   const parts: string[] = [];
@@ -117,15 +127,15 @@ export function formatOrderedRouteManifestText(input: {
     output.push(`Total capital: ${formatInteger(summary.total_buy_isk)} ISK`);
     output.push(`Total gross sell: ${formatInteger(summary.total_sell_isk)} ISK`);
     output.push(`Total profit: ${formatInteger(summary.total_profit_isk)} ISK`);
-    output.push(`Total isk/jump: ${formatInteger(summary.isk_per_jump ?? 0)} ISK`);
+    output.push(`Total isk/jump: ${formatOptionalInteger(summary.isk_per_jump)} ISK`);
   }
   for (const [index, station] of input.manifest.stations.entries()) {
     if (output.length > 0) output.push("");
     if (index > 0) output.push("------------------------");
     output.push(`Buy Station: ${station.buy_station_name}`);
-    output.push(`Jumps to Buy Station: ${formatQuantity(station.jumps_to_buy_station)}`);
+    output.push(`Jumps to Buy Station: ${formatOptionalQuantity(station.jumps_to_buy_station)}`);
     output.push(`Sell Station: ${station.sell_station_name ?? resolveSellStation() ?? "Unknown Station"}`);
-    output.push(`Jumps Buy -> Sell: ${formatQuantity(station.jumps_buy_to_sell)}`);
+    output.push(`Jumps Buy -> Sell: ${formatOptionalQuantity(station.jumps_buy_to_sell)}`);
     output.push(
       `Cargo m3: ${formatVolume(station.cargo_m3 ?? input.manifest.summary?.total_volume_m3 ?? 0)} m3`,
     );
@@ -134,7 +144,7 @@ export function formatOrderedRouteManifestText(input: {
     output.push(`Total capital: ${formatInteger(station.total_buy_isk)} ISK`);
     output.push(`Total gross sell: ${formatInteger(station.total_sell_isk)} ISK`);
     output.push(`Total profit: ${formatInteger(station.total_profit_isk)} ISK`);
-    output.push(`Total isk/jump: ${formatInteger(station.isk_per_jump ?? 0)} ISK`);
+    output.push(`Total isk/jump: ${formatOptionalInteger(station.isk_per_jump)} ISK`);
     for (const line of station.lines) output.push(formatStationLine(line));
     if (station.lines.length > 0) {
       output.push("");
