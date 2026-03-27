@@ -491,7 +491,7 @@ describe("BatchBuilderPopup route creation", () => {
     expect(option).toHaveTextContent("Merged profit: 1.6 M");
   });
 
-  it("copy merged manifest writes station blocks and station-local item lines", async () => {
+  it("copy merged manifest writes export-contract station blocks and station-local item lines", async () => {
     batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
 
     renderPopup({ anchorRow, rows });
@@ -514,13 +514,39 @@ describe("BatchBuilderPopup route creation", () => {
     expect(manifest).toContain("Total gross sell: 290,000 ISK");
     expect(manifest).toContain("Total profit: 90,000 ISK");
     expect(manifest).toContain("Total isk/jump: 9,000 ISK");
+    const requiredLabels = [
+      "Buy Station:",
+      "Jumps to Buy Station:",
+      "Sell Station:",
+      "Jumps Buy -> Sell:",
+      "Cargo m3:",
+      "Items:",
+      "Total volume:",
+      "Total capital:",
+      "Total gross sell:",
+      "Total profit:",
+      "Total isk/jump:",
+    ];
+    for (const label of requiredLabels) {
+      const matches = manifest.match(
+        new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "gm"),
+      );
+      expect(matches?.length ?? 0).toBeGreaterThanOrEqual(1);
+    }
     expect(manifest).toContain(
       "Megacyte | qty 40 | buy total 200,000 ISK | buy per 5,000 ISK | sell total 290,000 ISK | sell per 7,250 ISK | vol 80 m3 | profit 90,000 ISK",
     );
     expect(manifest).toContain(
       "Megacyte | qty 40 | buy total 200,000 ISK | buy per 5,000 ISK | sell total 290,000 ISK | sell per 7,250 ISK | vol 80 m3 | profit 90,000 ISK\n\nMegacyte 40",
     );
+    const detailRowIndex = manifest.indexOf("Megacyte | qty 40");
+    const autobuyRowIndex = manifest.indexOf("\nMegacyte 40");
+    expect(detailRowIndex).toBeGreaterThanOrEqual(0);
+    expect(autobuyRowIndex).toBeGreaterThan(detailRowIndex);
+    expect(manifest).not.toMatch(/^Station:/m);
     expect(manifest).not.toContain("Item list:");
+    expect(manifest).not.toContain("----- ROUTE SUMMARY -----");
+    expect(manifest).not.toContain("----- MERGED SUMMARY -----");
   });
 
   it("copy merged manifest does not print zero placeholders for unknown jump metadata", async () => {
