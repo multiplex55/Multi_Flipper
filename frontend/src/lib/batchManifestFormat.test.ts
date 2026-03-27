@@ -6,24 +6,27 @@ import {
 } from "@/lib/batchManifestFormat";
 
 describe("batchManifestFormat", () => {
-  it("parses a detailed line and removes grouping commas from quantity", () => {
-    const parsed = parseDetailedBatchLine("Zydrine | qty 15,000 | vol 150.5 m3 | profit 123 ISK");
+  it("parses a detailed line with extended columns and removes grouping commas from quantity", () => {
+    const parsed = parseDetailedBatchLine(
+      "Zydrine | qty 15,000 | buy total 1,500,000 ISK | buy per 100 ISK | sell total 1,800,000 ISK | sell per 120 ISK | vol 150.5 m3 | profit 123 ISK",
+    );
 
     expect(parsed).toEqual({ typeName: "Zydrine", units: "15000" });
     expect(formatBatchLinesToMultibuyText(parsed ? [parsed] : [])).toBe("Zydrine 15000");
   });
 
-  it("transforms a multi-line detailed sample line-for-line", () => {
+  it("transforms mixed header and detailed lines into multibuy lines in order", () => {
     const input = [
       "Route: Jita -> Amarr",
       "Cargo m3: 72,000",
+      "Buy Station: Jita IV - Moon 4",
       "Items: 2",
       "Total volume: 4,200 m3",
       "Total profit: 9,999,999 ISK",
       "Total capital: 5,555,555 ISK",
       "",
-      "Pyerite | qty 1,500 | vol 15 m3 | profit 450,000 ISK",
-      "Heavy Water (Isotope-Grade) | qty 1 | vol 0.4 m3 | profit 1,000 ISK",
+      "Pyerite | qty 1,500 | buy total 30,000 ISK | buy per 20 ISK | sell total 480,000 ISK | sell per 320 ISK | vol 15 m3 | profit 450,000 ISK",
+      "Heavy Water (Isotope-Grade) | qty 1 | buy total 50 ISK | buy per 50 ISK | sell total 1,050 ISK | sell per 1,050 ISK | vol 0.4 m3 | profit 1,000 ISK",
     ];
 
     const parsed = input.map((line) => parseDetailedBatchLine(line)).filter((line) => line != null);

@@ -43,9 +43,10 @@ export function formatBatchLinesToMultibuyText(
 export function parseDetailedBatchLine(
   line: string,
 ): { typeName: string; units: string } | null {
-  const match = line.match(/^(.*?)\s*\|\s*qty\s+([\d,]+)\b/i);
+  const match = line.match(/^([^|]+?)\s*\|\s*qty\s+([\d,]+)\b/i);
   if (!match) return null;
-  const typeName = match[1];
+  const typeName = match[1].trim();
+  if (!typeName) return null;
   const units = match[2].replace(/,/g, "");
   return { typeName, units };
 }

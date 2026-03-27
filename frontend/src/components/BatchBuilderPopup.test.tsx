@@ -109,11 +109,15 @@ describe("BatchBuilderPopup copy manifest", () => {
     expect(manifest).toContain("Total profit: 1,500,000 ISK");
     expect(manifest).toContain("Total isk/jump: 0 ISK");
     expect(manifest).toContain(
-      "Anchor Paste | qty 1,500 | buy 100 ISK | sell 120 ISK | vol 1,500 m3 | profit 150,000 ISK",
+      "Anchor Paste | qty 1,500 | buy total 150,000 ISK | buy per 100 ISK | sell total 180,000 ISK | sell per 120 ISK | vol 1,500 m3 | profit 150,000 ISK",
     );
     expect(manifest).toContain(
-      "Dense Isogen | qty 2,000 | buy 115 ISK | sell 430 ISK | vol 4,000 m3 | profit 600,000 ISK",
+      "Dense Isogen | qty 2,000 | buy total 230,000 ISK | buy per 115 ISK | sell total 860,000 ISK | sell per 430 ISK | vol 4,000 m3 | profit 600,000 ISK",
     );
+    expect(manifest).toContain("buy total 150,000 ISK");
+    expect(manifest).toContain("buy per 100 ISK");
+    expect(manifest).toContain("sell total 180,000 ISK");
+    expect(manifest).toContain("sell per 120 ISK");
     expect(manifest).toContain("\n\nAnchor Paste 1500\nDense Isogen 2000\nMedium Mexallon 2500");
   });
 
