@@ -527,8 +527,8 @@ describe("BatchBuilderPopup route creation", () => {
     const response = makeRouteResponse();
     const rowsWithoutJumpMetadata = rows.map((row) => ({
       ...row,
-      BuyJumps: undefined,
-      SellJumps: undefined,
+      BuyJumps: Number.NaN,
+      SellJumps: Number.NaN,
     }));
     response.ranked_options = [
       {

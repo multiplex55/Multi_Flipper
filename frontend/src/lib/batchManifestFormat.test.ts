@@ -520,7 +520,7 @@ describe("batch route manifest formatter", () => {
           total_sell_isk: 55_000,
           total_profit_isk: 15_000,
           total_jumps: 0,
-          isk_per_jump: null,
+          isk_per_jump: undefined,
         },
         stations: [
           {

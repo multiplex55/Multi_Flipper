@@ -503,7 +503,7 @@ export function BatchBuilderPopup({
         isk_per_jump:
           selectedOption.total_jumps > 0 && Number.isFinite(selectedOption.isk_per_jump)
             ? selectedOption.isk_per_jump
-            : null,
+            : undefined,
       },
       stations: orderedStations,
     };
