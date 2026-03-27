@@ -19,6 +19,7 @@ function makeRequest(overrides: Partial<BatchCreateRouteRequest> = {}): BatchCre
     allow_nullsec: false,
     allow_wormhole: false,
     route_max_jumps: 12,
+    max_detour_jumps_per_node: 2,
     sales_tax_percent: 2.25,
     buy_broker_fee_percent: 3,
     sell_broker_fee_percent: 3,
@@ -117,6 +118,41 @@ describe("batchRouteModels", () => {
     );
 
     expect(errors).toContain("empty base lines");
+  });
+
+
+  it("preserves advanced routing and cache context fields during normalization", () => {
+    const normalized = normalizeBatchCreateRouteRequest(
+      makeRequest({
+        current_system_id: 30002187,
+        current_location_id: 60008494,
+        min_route_security: 0.6,
+        allow_lowsec: true,
+        allow_nullsec: true,
+        allow_wormhole: true,
+        max_detour_jumps_per_node: 3,
+        candidate_context: {
+          source_tab: "radius",
+          cache_revision: 42,
+          cache_next_expiry: "2026-03-27T12:00:00Z",
+          cache_stale: false,
+        },
+      }),
+    );
+
+    expect(normalized.current_system_id).toBe(30002187);
+    expect(normalized.current_location_id).toBe(60008494);
+    expect(normalized.min_route_security).toBe(0.6);
+    expect(normalized.allow_lowsec).toBe(true);
+    expect(normalized.allow_nullsec).toBe(true);
+    expect(normalized.allow_wormhole).toBe(true);
+    expect(normalized.max_detour_jumps_per_node).toBe(3);
+    expect(normalized.candidate_context).toMatchObject({
+      source_tab: "radius",
+      cache_revision: 42,
+      cache_next_expiry: "2026-03-27T12:00:00Z",
+      cache_stale: false,
+    });
   });
 
   it("defaults remaining capacity to cargo limit when omitted as zero", () => {
