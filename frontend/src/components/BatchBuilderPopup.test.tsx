@@ -544,7 +544,8 @@ describe("BatchBuilderPopup route creation", () => {
     fireEvent.click(await screen.findByTestId("route-option-map-fallback"));
     fireEvent.click(await screen.findByRole("button", { name: "Copy merged manifest" }));
 
-    const manifest = writeText.mock.calls.at(-1)?.[0] ?? "";
+    const latestManifestCall = writeText.mock.calls[writeText.mock.calls.length - 1];
+    const manifest = latestManifestCall?.[0] ?? "";
     expect(manifest).toContain("Buy Station: Jita IV - Moon 4");
     expect(manifest).not.toContain("Buy Station: Station 60003760");
   });
@@ -576,7 +577,8 @@ describe("BatchBuilderPopup route creation", () => {
     fireEvent.click(await screen.findByTestId("route-option-id-fallback"));
     fireEvent.click(await screen.findByRole("button", { name: "Copy merged manifest" }));
 
-    const manifest = writeText.mock.calls.at(-1)?.[0] ?? "";
+    const latestManifestCall = writeText.mock.calls[writeText.mock.calls.length - 1];
+    const manifest = latestManifestCall?.[0] ?? "";
     expect(manifest).toContain("Buy Station: Station 70000001");
     expect(warnSpy).toHaveBeenCalledWith(
       "[BatchBuilderPopup] copyMergedManifest used station ID fallback labels",
