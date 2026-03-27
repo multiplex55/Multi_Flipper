@@ -164,6 +164,9 @@ describe("batch route manifest formatter", () => {
     expect(text).toContain("------------------------");
     expect(text).toContain("Items: 1");
     expect(text).toContain("Cargo m3:");
+    expect(text).toContain("Tritanium 1000");
+    expect(text).toContain("Tritanium 500");
+    expect(text).not.toContain("Item list:");
   });
 
   it("renders station blocks in route visit order and supports station-name fallback keys", () => {
@@ -242,6 +245,62 @@ describe("batch route manifest formatter", () => {
     expect(perimeterIndex).toBeGreaterThan(-1);
     expect(jitaIndex).toBeGreaterThan(-1);
     expect(perimeterIndex).toBeLessThan(jitaIndex);
+  });
+
+  it("renders station autobuy lines after detailed rows in deterministic line order", () => {
+    const text = formatOrderedRouteManifestText({
+      manifest: {
+        stations: [
+          {
+            station_key: "id:60003760",
+            buy_station_name: "Jita IV - Moon 4",
+            jumps_to_buy_station: 0,
+            jumps_buy_to_sell: 3,
+            item_count: 2,
+            total_volume_m3: 6,
+            total_buy_isk: 33_000,
+            total_sell_isk: 46_500,
+            total_profit_isk: 13_500,
+            isk_per_jump: 4_500,
+            lines: [
+              {
+                type_id: 35,
+                type_name: "Pyerite",
+                units: 3000,
+                unit_volume_m3: 0.01,
+                volume_m3: 30,
+                buy_total_isk: 18_000,
+                buy_per_isk: 6,
+                sell_total_isk: 27_000,
+                sell_per_isk: 9,
+                profit_isk: 9_000,
+              },
+              {
+                type_id: 36,
+                type_name: "Mexallon",
+                units: 750,
+                unit_volume_m3: 0.01,
+                volume_m3: 7.5,
+                buy_total_isk: 15_000,
+                buy_per_isk: 20,
+                sell_total_isk: 19_500,
+                sell_per_isk: 26,
+                profit_isk: 4_500,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(text).toContain(
+      "Pyerite | qty 3,000 | buy total 18,000 ISK | buy per 6 ISK | sell total 27,000 ISK | sell per 9 ISK | vol 30 m3 | profit 9,000 ISK",
+    );
+    expect(text).toContain(
+      "Mexallon | qty 750 | buy total 15,000 ISK | buy per 20 ISK | sell total 19,500 ISK | sell per 26 ISK | vol 7.5 m3 | profit 4,500 ISK",
+    );
+    expect(text).toContain("\n\nPyerite 3000\nMexallon 750");
+    expect(text).not.toContain("Item list:");
   });
 
   it("does not include raw station ID labels when station names are provided", () => {

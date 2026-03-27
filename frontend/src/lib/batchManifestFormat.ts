@@ -136,6 +136,14 @@ export function formatOrderedRouteManifestText(input: {
     output.push(`Total profit: ${formatInteger(station.total_profit_isk)} ISK`);
     output.push(`Total isk/jump: ${formatInteger(station.isk_per_jump ?? 0)} ISK`);
     for (const line of station.lines) output.push(formatStationLine(line));
+    if (station.lines.length > 0) {
+      output.push("");
+      output.push(
+        ...formatBatchLinesToMultibuyLines(
+          station.lines.map((line) => ({ typeName: line.type_name, units: line.units })),
+        ),
+      );
+    }
   }
   return output.join("\n");
 }
