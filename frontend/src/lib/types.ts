@@ -313,6 +313,8 @@ export interface BatchCreateRouteRequest {
   origin_system_name: string;
   origin_location_id: number;
   origin_location_name: string;
+  current_system_id?: number;
+  current_location_id?: number;
   base_batch: BaseBatchManifest;
   cargo_limit_m3: number;
   remaining_capacity_m3: number;

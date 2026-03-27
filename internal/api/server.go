@@ -3198,6 +3198,7 @@ func (s *Server) handleBatchCreateRoute(w http.ResponseWriter, r *http.Request) 
 
 	params := engine.BatchCreateRouteParams{
 		OriginSystemID:        req.OriginSystemID,
+		CurrentSystemID:       req.CurrentSystemID,
 		BaseBuySystemID:       req.BaseBatch.BaseBuySystemID,
 		FinalSellSystemID:     req.BaseBatch.BaseSellSystemID,
 		FinalSellLocationID:   req.BaseBatch.BaseSellLocationID,
@@ -3205,6 +3206,9 @@ func (s *Server) handleBatchCreateRoute(w http.ResponseWriter, r *http.Request) 
 		RemainingCapacityM3:   req.RemainingCapacityM3,
 		MinMargin:             0,
 		MinRouteSecurity:      req.MinRouteSecurity,
+		AllowLowsec:           req.AllowLowsec,
+		AllowNullsec:          req.AllowNullsec,
+		AllowWormhole:         req.AllowWormhole,
 		IncludeStructures:     req.IncludeStructures,
 		RouteMaxJumps:         req.RouteMaxJumps,
 		MaxDetourJumpsPerNode: req.MaxDetourJumpsPerNode,

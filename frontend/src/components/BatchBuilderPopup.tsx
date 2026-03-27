@@ -32,6 +32,8 @@ interface BatchBuilderPopupProps {
   originSystemId?: number;
   originLocationId?: number;
   originLocationName?: string;
+  currentSystemId?: number;
+  currentLocationId?: number;
   minRouteSecurity?: number;
   includeStructures?: boolean;
   allowLowsec?: boolean;
@@ -82,6 +84,8 @@ export function BatchBuilderPopup({
   originSystemId,
   originLocationId,
   originLocationName,
+  currentSystemId,
+  currentLocationId,
   minRouteSecurity = 0.45,
   includeStructures = false,
   allowLowsec = false,
@@ -324,6 +328,8 @@ export function BatchBuilderPopup({
       origin_system_name: baseBatchManifest.origin_system_name,
       origin_location_id: baseBatchManifest.origin_location_id,
       origin_location_name: baseBatchManifest.origin_location_name,
+      current_system_id: currentSystemId ?? baseBatchManifest.origin_system_id,
+      current_location_id: currentLocationId ?? baseBatchManifest.origin_location_id,
       base_batch: baseBatchManifest,
       cargo_limit_m3: baseBatchManifest.cargo_limit_m3,
       remaining_capacity_m3: baseBatchManifest.remaining_capacity_m3,
@@ -390,6 +396,8 @@ export function BatchBuilderPopup({
     salesTaxPercent,
     buyBrokerFeePercent,
     sellBrokerFeePercent,
+    currentSystemId,
+    currentLocationId,
     t,
     addToast,
   ]);

@@ -7,9 +7,11 @@ import (
 
 func validBatchCreateRouteRequest() BatchCreateRouteRequest {
 	return BatchCreateRouteRequest{
-		OriginSystemID:   30000142,
-		OriginSystemName: "Jita",
-		OriginLocationID: 60003760,
+		OriginSystemID:    30000142,
+		OriginSystemName:  "Jita",
+		OriginLocationID:  60003760,
+		CurrentSystemID:   30000142,
+		CurrentLocationID: 60003760,
 		BaseBatch: BaseBatchManifest{
 			BaseBuySystemID:    30000142,
 			BaseBuyLocationID:  60003760,
@@ -91,6 +93,21 @@ func TestBatchCreateRouteRequestValidate(t *testing.T) {
 }
 
 func TestBatchCreateRouteRequestApplyDefaults(t *testing.T) {
+	t.Run("defaults_current_context_to_origin", func(t *testing.T) {
+		req := validBatchCreateRouteRequest()
+		req.CurrentSystemID = 0
+		req.CurrentLocationID = 0
+
+		req.ApplyDefaults()
+
+		if req.CurrentSystemID != req.OriginSystemID {
+			t.Fatalf("CurrentSystemID = %d, want %d", req.CurrentSystemID, req.OriginSystemID)
+		}
+		if req.CurrentLocationID != req.OriginLocationID {
+			t.Fatalf("CurrentLocationID = %d, want %d", req.CurrentLocationID, req.OriginLocationID)
+		}
+	})
+
 	t.Run("sets_remaining_capacity_to_cargo_when_zero", func(t *testing.T) {
 		req := validBatchCreateRouteRequest()
 		req.CargoLimitM3 = 24000
@@ -115,6 +132,21 @@ func TestBatchCreateRouteRequestApplyDefaults(t *testing.T) {
 		}
 		if req.DeterministicSort.Primary != "total_profit_isk" || req.DeterministicSort.Secondary != "isk_per_jump" {
 			t.Fatalf("DeterministicSort = %+v, want defaults", req.DeterministicSort)
+		}
+	})
+
+	t.Run("preserves_explicit_current_context", func(t *testing.T) {
+		req := validBatchCreateRouteRequest()
+		req.CurrentSystemID = 30002187
+		req.CurrentLocationID = 60008494
+
+		req.ApplyDefaults()
+
+		if req.CurrentSystemID != 30002187 {
+			t.Fatalf("CurrentSystemID = %d, want 30002187", req.CurrentSystemID)
+		}
+		if req.CurrentLocationID != 60008494 {
+			t.Fatalf("CurrentLocationID = %d, want 60008494", req.CurrentLocationID)
 		}
 	})
 }

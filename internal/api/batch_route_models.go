@@ -101,6 +101,8 @@ type BatchCreateRouteRequest struct {
 	OriginSystemName      string                  `json:"origin_system_name"`
 	OriginLocationID      int64                   `json:"origin_location_id"`
 	OriginLocationName    string                  `json:"origin_location_name"`
+	CurrentSystemID       int32                   `json:"current_system_id"`
+	CurrentLocationID     int64                   `json:"current_location_id"`
 	BaseBatch             BaseBatchManifest       `json:"base_batch"`
 	CargoLimitM3          float64                 `json:"cargo_limit_m3"`
 	RemainingCapacityM3   float64                 `json:"remaining_capacity_m3"`
@@ -147,6 +149,12 @@ type BatchCreateRouteResponse struct {
 }
 
 func (r *BatchCreateRouteRequest) ApplyDefaults() {
+	if r.CurrentSystemID <= 0 {
+		r.CurrentSystemID = r.OriginSystemID
+	}
+	if r.CurrentLocationID <= 0 {
+		r.CurrentLocationID = r.OriginLocationID
+	}
 	if r.RemainingCapacityM3 == 0 && r.CargoLimitM3 > 0 {
 		r.RemainingCapacityM3 = r.CargoLimitM3
 	}
