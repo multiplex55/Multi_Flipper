@@ -56,8 +56,8 @@ function normalizeStationName(name: string | null | undefined): string {
   return (name ?? "").trim().toLocaleLowerCase().replace(/\s+/g, " ");
 }
 
-function formatStationFallback(line: { buy_location_id: number }, matchedRow?: FlipResult): string {
-  if (matchedRow?.BuyStation?.trim()) return matchedRow.BuyStation.trim();
+function formatStationFallback(line: { buy_location_id: number }, resolvedStationName?: string): string {
+  if (resolvedStationName?.trim()) return resolvedStationName.trim();
   if (line.buy_location_id > 0) return `Station ${line.buy_location_id}`;
   return "Unknown Station";
 }
@@ -69,6 +69,10 @@ function formatSellStationFallback(
   if (matchedRow?.SellStation?.trim()) return matchedRow.SellStation.trim();
   if (line.sell_location_id > 0) return `Station ${line.sell_location_id}`;
   return "Unknown Station";
+}
+
+function hasStationName(name: string | null | undefined): name is string {
+  return (name ?? "").trim().length > 0;
 }
 
 function buildMergedManifest(
@@ -317,6 +321,25 @@ export function BatchBuilderPopup({
     const selectedOption = routeOptions.find((option) => option.option_id === selectedOptionId);
     if (!selectedOption) return;
     const routeRows = rows.filter((row) => row.TypeID > 0);
+    const buyLocationNameById = new Map<number, string>();
+    const locationNameMetaById = new Map<number, string>();
+    for (const row of routeRows) {
+      const buyLocationId = safeNumber(row.BuyLocationID);
+      if (buyLocationId > 0 && hasStationName(row.BuyStation)) {
+        const trimmedName = row.BuyStation.trim();
+        if (!buyLocationNameById.has(buyLocationId)) {
+          buyLocationNameById.set(buyLocationId, trimmedName);
+        }
+        if (!locationNameMetaById.has(buyLocationId)) {
+          locationNameMetaById.set(buyLocationId, trimmedName);
+        }
+      }
+      const sellLocationId = safeNumber(row.SellLocationID);
+      if (sellLocationId > 0 && hasStationName(row.SellStation) && !locationNameMetaById.has(sellLocationId)) {
+        locationNameMetaById.set(sellLocationId, row.SellStation.trim());
+      }
+    }
+
     const findRowForLine = (line: (typeof selectedOption.lines)[number]): FlipResult | undefined => {
       const exact = routeRows.find((row) => {
         if (row.TypeID !== line.type_id) return false;
@@ -330,6 +353,50 @@ export function BatchBuilderPopup({
       return routeRows.find((row) => row.TypeID === line.type_id);
     };
 
+    const resolveBuyStationName = (
+      line: (typeof selectedOption.lines)[number],
+      matchedRow?: FlipResult,
+    ): { stationName: string; usedIdFallback: boolean } => {
+      if (hasStationName(matchedRow?.BuyStation)) {
+        return { stationName: matchedRow.BuyStation.trim(), usedIdFallback: false };
+      }
+
+      const buyLocationId = safeNumber(line.buy_location_id);
+      if (buyLocationId > 0) {
+        const rowMappedName = buyLocationNameById.get(buyLocationId);
+        if (hasStationName(rowMappedName)) {
+          return { stationName: rowMappedName, usedIdFallback: false };
+        }
+
+        if (
+          buyLocationId === safeNumber(baseBatchManifest.base_buy_location_id) &&
+          hasStationName(anchorRow?.BuyStation)
+        ) {
+          return { stationName: anchorRow.BuyStation.trim(), usedIdFallback: false };
+        }
+        if (
+          buyLocationId === safeNumber(baseBatchManifest.origin_location_id) &&
+          hasStationName(baseBatchManifest.origin_location_name)
+        ) {
+          return { stationName: baseBatchManifest.origin_location_name.trim(), usedIdFallback: false };
+        }
+        if (
+          buyLocationId === safeNumber(baseBatchManifest.base_sell_location_id) &&
+          hasStationName(anchorRow?.SellStation)
+        ) {
+          return { stationName: anchorRow.SellStation.trim(), usedIdFallback: false };
+        }
+
+        const metaMappedName = locationNameMetaById.get(buyLocationId);
+        if (hasStationName(metaMappedName)) {
+          return { stationName: metaMappedName, usedIdFallback: false };
+        }
+      }
+
+      return { stationName: formatStationFallback(line), usedIdFallback: true };
+    };
+
+    const fallbackToIdStationIds = new Set<number>();
     const stationOrder: string[] = [];
     const stations = new Map<string, OrderedRouteManifest["stations"][number]>();
     for (const line of selectedOption.lines) {
@@ -337,7 +404,10 @@ export function BatchBuilderPopup({
       const matchedSellRow =
         matchedRow ??
         routeRows.find((row) => safeNumber(row.SellLocationID) === line.sell_location_id);
-      const stationName = formatStationFallback(line, matchedRow);
+      const { stationName, usedIdFallback } = resolveBuyStationName(line, matchedRow);
+      if (usedIdFallback && line.buy_location_id > 0) {
+        fallbackToIdStationIds.add(line.buy_location_id);
+      }
       const primaryKey = line.buy_location_id > 0 ? `id:${line.buy_location_id}` : "";
       const fallbackKey = normalizeStationName(stationName);
       const stationKey = primaryKey || `name:${fallbackKey}`;
@@ -398,6 +468,13 @@ export function BatchBuilderPopup({
       station.isk_per_jump = stationJumps > 0 ? station.total_profit_isk / stationJumps : 0;
     }
 
+    if (fallbackToIdStationIds.size > 0) {
+      const ids = Array.from(fallbackToIdStationIds).sort((a, b) => a - b);
+      console.warn("[BatchBuilderPopup] copyMergedManifest used station ID fallback labels", {
+        station_ids: ids,
+      });
+    }
+
     const orderedStations = stationOrder
       .map((key) => stations.get(key))
       .filter((station): station is OrderedRouteManifest["stations"][number] => station != null);
@@ -427,7 +504,7 @@ export function BatchBuilderPopup({
     });
     await navigator.clipboard.writeText(manifest);
     addToast(t("batchBuilderCopiedMerged"), "success", 2200);
-  }, [baseBatchManifest, mergedManifest, addToast, t, routeOptions, selectedOptionId, rows]);
+  }, [baseBatchManifest, mergedManifest, addToast, t, routeOptions, selectedOptionId, rows, anchorRow]);
 
   const startBatchCreateRoute = useCallback(async () => {
     if (!baseBatchManifest) {
