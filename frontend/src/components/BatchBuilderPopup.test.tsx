@@ -371,8 +371,17 @@ describe("BatchBuilderPopup route creation", () => {
 
     expect(batchCreateRouteMock).toHaveBeenCalledTimes(1);
     const [payload] = batchCreateRouteMock.mock.calls[0] ?? [];
+    expect(payload?.min_route_security).toBe(0.45);
+    expect(payload?.include_structures).toBe(false);
+    expect(payload?.allow_lowsec).toBe(false);
+    expect(payload?.allow_nullsec).toBe(false);
+    expect(payload?.allow_wormhole).toBe(false);
+    expect(payload?.current_system_id).toBe(30000142);
+    expect(payload?.current_location_id).toBe(60003760);
     expect(payload?.candidate_context?.source_tab).toBe("radius");
     expect(payload?.candidate_context?.cache_revision).toBe(99);
+    expect(payload?.candidate_context?.cache_next_expiry).toBe("2026-03-27T00:30:00Z");
+    expect(payload?.candidate_context?.cache_stale).toBe(false);
     expect(payload?.candidate_snapshot?.length).toBeGreaterThan(0);
     expect(payload?.candidate_snapshot?.[0]).toMatchObject({
       type_id: expect.any(Number),
@@ -393,6 +402,36 @@ describe("BatchBuilderPopup route creation", () => {
     expect(diagnostics).toHaveTextContent(
       "radius cache unavailable or stale; falling back to market-only candidates",
     );
+  });
+
+
+  it("does not show empty-options message when API returns route options", async () => {
+    const response = makeRouteResponse();
+    response.diagnostics = ["diagnostic should not force empty state"]; 
+    batchCreateRouteMock.mockResolvedValue(response);
+
+    renderPopup({ anchorRow, rows });
+    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+
+    await screen.findByTestId("route-option-rank-1");
+    expect(screen.queryByText("No route options returned for remaining cargo.")).not.toBeInTheDocument();
+  });
+
+  it("renders ranked route option details from multi-option planner output", async () => {
+    batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
+
+    renderPopup({ anchorRow, rows });
+    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+
+    const first = await screen.findByTestId("route-option-rank-1");
+    const second = await screen.findByTestId("route-option-rank-2");
+
+    expect(first).toHaveTextContent("#1");
+    expect(first).toHaveTextContent("Added profit: 40 K");
+    expect(first).toHaveTextContent("Jump segments: 8");
+    expect(second).toHaveTextContent("#2");
+    expect(second).toHaveTextContent("Added items: 1");
+    expect(second).toHaveTextContent("Jump segments: 10");
   });
 
   it("shows empty options UX when API returns no ranked options", async () => {

@@ -324,6 +324,7 @@ export interface BatchCreateRouteRequest {
   allow_nullsec: boolean;
   allow_wormhole: boolean;
   route_max_jumps: number;
+  max_detour_jumps_per_node?: number;
   sales_tax_percent: number;
   buy_broker_fee_percent: number;
   sell_broker_fee_percent: number;

@@ -114,6 +114,102 @@ func TestHandleBatchCreateRoute_ValidRequestReturnsRankedOptions(t *testing.T) {
 	}
 }
 
+func TestHandleBatchCreateRoute_MultiOptionPlannerOutputMappedToSelectionAndRanks(t *testing.T) {
+	srv := NewServer(config.Default(), &esi.Client{}, nil, nil, nil)
+	srv.ready = true
+	srv.batchCreateRoutePlanner = func(_ context.Context, _ engine.BatchCreateRouteParams) (engine.BatchCreateRouteResult, error) {
+		return engine.BatchCreateRouteResult{
+			Options: []engine.BatchCreateRouteOption{
+				{
+					OptionID:       "batch-option-2",
+					AddedVolumeM3:  80,
+					TotalBuyISK:    300,
+					TotalSellISK:   450,
+					TotalProfitISK: 120,
+					TotalJumps:     12,
+					ISKPerJump:     10,
+					Lines:          []engine.BatchCreateRouteLine{{TypeID: 36, TypeName: "Mexallon", Units: 20, UnitVolumeM3: 2, RouteJumps: 12}},
+				},
+				{
+					OptionID:       "batch-option-1",
+					AddedVolumeM3:  40,
+					TotalBuyISK:    250,
+					TotalSellISK:   410,
+					TotalProfitISK: 140,
+					TotalJumps:     8,
+					ISKPerJump:     17.5,
+					Lines:          []engine.BatchCreateRouteLine{{TypeID: 35, TypeName: "Pyerite", Units: 40, UnitVolumeM3: 1, RouteJumps: 8}},
+				},
+			},
+			SelectedID:   "batch-option-1",
+			SelectedRank: 2,
+		}, nil
+	}
+
+	reqPayload := testBatchCreateRouteRequest()
+	body, _ := json.Marshal(reqPayload)
+	req := httptest.NewRequest(http.MethodPost, "/api/batch/create-route", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var resp BatchCreateRouteResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.RankedOptions) != 2 {
+		t.Fatalf("ranked options = %d, want 2", len(resp.RankedOptions))
+	}
+	if resp.RankedOptions[0].OptionID != "batch-option-2" || resp.RankedOptions[0].Rank != 1 {
+		t.Fatalf("ranked[0] = %+v, want option 2 rank 1", resp.RankedOptions[0])
+	}
+	if resp.RankedOptions[1].OptionID != "batch-option-1" || resp.RankedOptions[1].Rank != 2 {
+		t.Fatalf("ranked[1] = %+v, want option 1 rank 2", resp.RankedOptions[1])
+	}
+	if resp.SelectedOptionID != "batch-option-1" || resp.SelectedRank != 2 {
+		t.Fatalf("selected = (%q,%d), want (batch-option-1,2)", resp.SelectedOptionID, resp.SelectedRank)
+	}
+}
+
+func TestHandleBatchCreateRoute_FilterPruneDiagnosticsAreReturned(t *testing.T) {
+	srv := NewServer(config.Default(), &esi.Client{}, nil, nil, nil)
+	srv.ready = true
+	srv.batchCreateRoutePlanner = func(_ context.Context, _ engine.BatchCreateRouteParams) (engine.BatchCreateRouteResult, error) {
+		return engine.BatchCreateRouteResult{
+			Options: nil,
+			Diagnostics: []string{
+				"no profitable additions found for selected destination",
+				"pruned by filters: security=3 detour_cap=2 margin=1 unreachable=4",
+			},
+		}, nil
+	}
+
+	reqPayload := testBatchCreateRouteRequest()
+	body, _ := json.Marshal(reqPayload)
+	req := httptest.NewRequest(http.MethodPost, "/api/batch/create-route", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var resp BatchCreateRouteResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.RankedOptions) != 0 {
+		t.Fatalf("ranked options = %d, want 0", len(resp.RankedOptions))
+	}
+	if len(resp.Diagnostics) < 2 {
+		t.Fatalf("diagnostics = %v, want prune detail diagnostics", resp.Diagnostics)
+	}
+	if !strings.Contains(strings.Join(resp.Diagnostics, " | "), "pruned by filters") {
+		t.Fatalf("diagnostics = %v, want filter-prune message", resp.Diagnostics)
+	}
+}
+
 func TestHandleBatchCreateRoute_MapsPolicyFlagsAndCurrentContext(t *testing.T) {
 	srv := NewServer(config.Default(), &esi.Client{}, nil, nil, nil)
 	srv.ready = true
