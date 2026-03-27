@@ -62,6 +62,15 @@ function formatStationFallback(line: { buy_location_id: number }, matchedRow?: F
   return "Unknown Station";
 }
 
+function formatSellStationFallback(
+  line: { sell_location_id: number },
+  matchedRow?: FlipResult,
+): string {
+  if (matchedRow?.SellStation?.trim()) return matchedRow.SellStation.trim();
+  if (line.sell_location_id > 0) return `Station ${line.sell_location_id}`;
+  return "Unknown Station";
+}
+
 function buildMergedManifest(
   baseBatch: BaseBatchManifest,
   option: RouteAdditionOption,
@@ -325,6 +334,9 @@ export function BatchBuilderPopup({
     const stations = new Map<string, OrderedRouteManifest["stations"][number]>();
     for (const line of selectedOption.lines) {
       const matchedRow = findRowForLine(line);
+      const matchedSellRow =
+        matchedRow ??
+        routeRows.find((row) => safeNumber(row.SellLocationID) === line.sell_location_id);
       const stationName = formatStationFallback(line, matchedRow);
       const primaryKey = line.buy_location_id > 0 ? `id:${line.buy_location_id}` : "";
       const fallbackKey = normalizeStationName(stationName);
@@ -332,14 +344,22 @@ export function BatchBuilderPopup({
       if (!stations.has(stationKey)) {
         stationOrder.push(stationKey);
         const jumpsToBuy = Math.max(0, Math.floor(safeNumber(matchedRow?.BuyJumps)));
-        const jumpsBuyToSell = Math.max(0, Math.floor(safeNumber(matchedRow?.SellJumps)));
+        const jumpsBuyToSell = Math.max(
+          0,
+          Math.floor(
+            safeNumber(
+              matchedRow?.SellJumps ?? matchedSellRow?.SellJumps ?? safeNumber(line.route_jumps),
+            ),
+          ),
+        );
         stations.set(stationKey, {
           station_key: stationKey,
           buy_station_name: stationName,
+          sell_station_name: formatSellStationFallback(line, matchedSellRow),
+          cargo_m3: mergedManifest.cargo_limit_m3,
           jumps_to_buy_station: jumpsToBuy,
           jumps_buy_to_sell: jumpsBuyToSell,
           item_count: 0,
-          total_units: 0,
           total_volume_m3: 0,
           total_buy_isk: 0,
           total_sell_isk: 0,
@@ -370,7 +390,6 @@ export function BatchBuilderPopup({
         profit_isk: profit,
       });
       station.item_count += 1;
-      station.total_units += units;
       station.total_volume_m3 += volumeM3;
       station.total_buy_isk += buyTotal;
       station.total_sell_isk += sellTotal;
@@ -386,7 +405,11 @@ export function BatchBuilderPopup({
       summary: {
         station_count: orderedStations.length,
         item_count: orderedStations.reduce((sum, station) => sum + station.item_count, 0),
-        total_units: orderedStations.reduce((sum, station) => sum + station.total_units, 0),
+        total_units: orderedStations.reduce(
+          (sum, station) =>
+            sum + station.lines.reduce((lineSum, line) => lineSum + line.units, 0),
+          0,
+        ),
         total_volume_m3: orderedStations.reduce((sum, station) => sum + station.total_volume_m3, 0),
         total_buy_isk: orderedStations.reduce((sum, station) => sum + station.total_buy_isk, 0),
         total_sell_isk: orderedStations.reduce((sum, station) => sum + station.total_sell_isk, 0),

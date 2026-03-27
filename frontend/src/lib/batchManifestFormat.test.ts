@@ -109,7 +109,6 @@ describe("batch route manifest formatter", () => {
           jumps_to_buy_station: 0,
           jumps_buy_to_sell: 4,
           item_count: 1,
-          total_units: 1_000,
           total_volume_m3: 10,
           total_buy_isk: 8_000,
           total_sell_isk: 10_500,
@@ -136,7 +135,6 @@ describe("batch route manifest formatter", () => {
           jumps_to_buy_station: 2,
           jumps_buy_to_sell: 2,
           item_count: 1,
-          total_units: 500,
           total_volume_m3: 5,
           total_buy_isk: 6_200,
           total_sell_isk: 8_100,
@@ -164,8 +162,8 @@ describe("batch route manifest formatter", () => {
     expect(text).toContain("Buy Station: Jita IV - Moon 4");
     expect(text).toContain("Buy Station: Amarr VIII (Oris) - Emperor Family Academy");
     expect(text).toContain("------------------------");
-    expect(text).toContain("Item list: Tritanium 1,000");
-    expect(text).toContain("Item list: Tritanium 500");
+    expect(text).toContain("Items: 1");
+    expect(text).toContain("Cargo m3:");
   });
 
   it("renders station blocks in route visit order and supports station-name fallback keys", () => {
@@ -189,7 +187,6 @@ describe("batch route manifest formatter", () => {
             jumps_to_buy_station: 1,
             jumps_buy_to_sell: 5,
             item_count: 1,
-            total_units: 40,
             total_volume_m3: 80,
             total_buy_isk: 300_000,
             total_sell_isk: 420_000,
@@ -216,7 +213,6 @@ describe("batch route manifest formatter", () => {
             jumps_to_buy_station: 0,
             jumps_buy_to_sell: 3,
             item_count: 1,
-            total_units: 20,
             total_volume_m3: 40,
             total_buy_isk: 150_000,
             total_sell_isk: 180_000,
@@ -275,7 +271,6 @@ describe("batch route manifest formatter", () => {
             jumps_to_buy_station: 0,
             jumps_buy_to_sell: 7,
             item_count: 1,
-            total_units: 33,
             total_volume_m3: 66,
             total_buy_isk: 100_001,
             total_sell_isk: 150_002,
@@ -317,6 +312,42 @@ describe("batch route manifest formatter", () => {
     );
   });
 
+  it("renders every required station field label in each station block", () => {
+    const text = formatOrderedRouteManifestText({
+      manifest: {
+        stations: [
+          {
+            station_key: "id:1",
+            buy_station_name: "Jita IV - Moon 4",
+            sell_station_name: "Amarr VIII (Oris) - Emperor Family Academy",
+            cargo_m3: 12_000,
+            jumps_to_buy_station: 1,
+            jumps_buy_to_sell: 5,
+            item_count: 1,
+            total_volume_m3: 80,
+            total_buy_isk: 300_000,
+            total_sell_isk: 420_000,
+            total_profit_isk: 120_000,
+            isk_per_jump: 20_000,
+            lines: [],
+          },
+        ],
+      },
+    });
+
+    expect(text).toContain("Buy Station:");
+    expect(text).toContain("Jumps to Buy Station:");
+    expect(text).toContain("Sell Station:");
+    expect(text).toContain("Jumps Buy -> Sell:");
+    expect(text).toContain("Cargo m3:");
+    expect(text).toContain("Items:");
+    expect(text).toContain("Total volume:");
+    expect(text).toContain("Total capital:");
+    expect(text).toContain("Total gross sell:");
+    expect(text).toContain("Total profit:");
+    expect(text).toContain("Total isk/jump:");
+  });
+
   it("omits top-level summary fields when manifest summary is absent and still renders stations", () => {
     const text = formatOrderedRouteManifestText({
       originLabel: "Jita",
@@ -329,7 +360,6 @@ describe("batch route manifest formatter", () => {
             jumps_to_buy_station: 0,
             jumps_buy_to_sell: 4,
             item_count: 1,
-            total_units: 10,
             total_volume_m3: 20,
             total_buy_isk: 40_000,
             total_sell_isk: 55_000,
@@ -356,9 +386,9 @@ describe("batch route manifest formatter", () => {
 
     expect(text).toContain("Origin: Jita");
     expect(text).toContain("Buy Station: Jita IV - Moon 4");
+    expect(text).toContain("Sell Station: Dodixie");
+    expect(text).toContain("Cargo m3: 0 m3");
     expect(text).toContain("Total capital: 40,000 ISK");
-    expect(text).not.toContain("Sell Station:");
-    expect(text).not.toContain("Cargo m3:");
     expect(text).not.toContain("----- ROUTE SUMMARY -----");
     expect(text).not.toContain("Route: jumps");
   });
