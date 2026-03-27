@@ -516,6 +516,10 @@ describe("BatchBuilderPopup route creation", () => {
     expect(manifest).toContain(
       "Megacyte | qty 40 | buy total 200,000 ISK | buy per 5,000 ISK | sell total 290,000 ISK | sell per 7,250 ISK | vol 80 m3 | profit 90,000 ISK",
     );
+    expect(manifest).toContain(
+      "Megacyte | qty 40 | buy total 200,000 ISK | buy per 5,000 ISK | sell total 290,000 ISK | sell per 7,250 ISK | vol 80 m3 | profit 90,000 ISK\n\nMegacyte 40",
+    );
+    expect(manifest).not.toContain("Item list:");
   });
 
   it("resolves buy station via location map when exact row match is unavailable", async () => {
