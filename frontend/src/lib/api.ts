@@ -3,6 +3,8 @@ import type {
   AppConfig,
   AppStatus,
   AuthStatus,
+  BatchCreateRouteRequest,
+  BatchCreateRouteResponse,
   CharacterInfo,
   CharacterRoles,
   ContractDetails,
@@ -411,6 +413,19 @@ export async function findRoutes(
     signal,
     "Route search failed"
   );
+}
+
+export async function batchCreateRoute(
+  request: BatchCreateRouteRequest,
+  signal?: AbortSignal,
+): Promise<BatchCreateRouteResponse> {
+  const res = await apiFetch(`${BASE}/api/batch/create-route`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+    signal,
+  });
+  return handleResponse<BatchCreateRouteResponse>(res);
 }
 
 // --- Watchlist ---
