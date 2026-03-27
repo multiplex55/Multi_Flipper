@@ -97,23 +97,24 @@ type DeterministicSortConfig struct {
 }
 
 type BatchCreateRouteRequest struct {
-	OriginSystemID       int32                   `json:"origin_system_id"`
-	OriginSystemName     string                  `json:"origin_system_name"`
-	OriginLocationID     int64                   `json:"origin_location_id"`
-	OriginLocationName   string                  `json:"origin_location_name"`
-	BaseBatch            BaseBatchManifest       `json:"base_batch"`
-	CargoLimitM3         float64                 `json:"cargo_limit_m3"`
-	RemainingCapacityM3  float64                 `json:"remaining_capacity_m3"`
-	MinRouteSecurity     float64                 `json:"min_route_security"`
-	IncludeStructures    bool                    `json:"include_structures"`
-	AllowLowsec          bool                    `json:"allow_lowsec"`
-	AllowNullsec         bool                    `json:"allow_nullsec"`
-	AllowWormhole        bool                    `json:"allow_wormhole"`
-	RouteMaxJumps        int                     `json:"route_max_jumps"`
-	SalesTaxPercent      float64                 `json:"sales_tax_percent"`
-	BuyBrokerFeePercent  float64                 `json:"buy_broker_fee_percent"`
-	SellBrokerFeePercent float64                 `json:"sell_broker_fee_percent"`
-	DeterministicSort    DeterministicSortConfig `json:"deterministic_sort"`
+	OriginSystemID        int32                   `json:"origin_system_id"`
+	OriginSystemName      string                  `json:"origin_system_name"`
+	OriginLocationID      int64                   `json:"origin_location_id"`
+	OriginLocationName    string                  `json:"origin_location_name"`
+	BaseBatch             BaseBatchManifest       `json:"base_batch"`
+	CargoLimitM3          float64                 `json:"cargo_limit_m3"`
+	RemainingCapacityM3   float64                 `json:"remaining_capacity_m3"`
+	MinRouteSecurity      float64                 `json:"min_route_security"`
+	IncludeStructures     bool                    `json:"include_structures"`
+	AllowLowsec           bool                    `json:"allow_lowsec"`
+	AllowNullsec          bool                    `json:"allow_nullsec"`
+	AllowWormhole         bool                    `json:"allow_wormhole"`
+	RouteMaxJumps         int                     `json:"route_max_jumps"`
+	MaxDetourJumpsPerNode int                     `json:"max_detour_jumps_per_node"`
+	SalesTaxPercent       float64                 `json:"sales_tax_percent"`
+	BuyBrokerFeePercent   float64                 `json:"buy_broker_fee_percent"`
+	SellBrokerFeePercent  float64                 `json:"sell_broker_fee_percent"`
+	DeterministicSort     DeterministicSortConfig `json:"deterministic_sort"`
 }
 
 type MergedBatchManifest struct {
