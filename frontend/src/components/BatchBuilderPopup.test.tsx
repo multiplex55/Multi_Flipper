@@ -318,9 +318,14 @@ describe("BatchBuilderPopup route creation", () => {
     expect(writeText).toHaveBeenCalledTimes(1);
     const manifest = writeText.mock.calls[0][0];
     expect(manifest).toContain("Origin: Jita (Jita IV - Moon 4)");
-    expect(manifest).toContain("Base lines:");
-    expect(manifest).toContain("Added lines:");
-    expect(manifest).toContain("Megacyte 40");
-    expect(manifest).toContain("Totals: vol 15,580 m3 | capital 830,000 ISK | gross 1,630,000 ISK | profit 1,590,000 ISK");
+    expect(manifest).toContain("Corridor: Jita -> Amarr");
+    expect(manifest).toContain("Route jumps: 10");
+    expect(manifest).toContain("ISK/jump: 9,000 ISK");
+    expect(manifest).toContain("----- BASE ITEMS -----");
+    expect(manifest).toContain("----- ROUTE ADDITIONS -----");
+    expect(manifest).toContain("Megacyte x40");
+    expect(manifest).toContain(
+      "Totals: buy 830,000 ISK | sell 1,630,000 ISK | profit 1,590,000 ISK",
+    );
   });
 });

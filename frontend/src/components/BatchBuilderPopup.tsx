@@ -8,7 +8,10 @@ import {
   safeNumber,
   type BatchBuildResult,
 } from "@/lib/batchMetrics";
-import { formatBatchLinesToMultibuyLines } from "@/lib/batchManifestFormat";
+import {
+  formatBatchLinesToMultibuyLines,
+  formatMergedBatchManifestText,
+} from "@/lib/batchManifestFormat";
 import type {
   BaseBatchManifest,
   BatchCreateRouteRequest,
@@ -278,33 +281,24 @@ export function BatchBuilderPopup({
 
   const copyMergedManifest = useCallback(async () => {
     if (!baseBatchManifest || !mergedManifest) return;
-    const lines: string[] = [];
-    lines.push(`Origin: ${baseBatchManifest.origin_system_name} (${baseBatchManifest.origin_location_name})`);
-    lines.push(`Base route: ${anchorRow?.BuySystemName ?? ""} -> ${anchorRow?.SellSystemName ?? ""}`);
-    lines.push(`Base lines: ${baseBatchManifest.base_line_count}`);
-    lines.push(`Added lines: ${mergedManifest.added_lines.length}`);
-    lines.push(`Total lines: ${mergedManifest.total_line_count}`);
-    lines.push(
-      `Totals: vol ${mergedManifest.total_volume_m3.toLocaleString(undefined, { maximumFractionDigits: 1 })} m3 | capital ${Math.round(mergedManifest.total_buy_isk).toLocaleString()} ISK | gross ${Math.round(mergedManifest.total_sell_isk).toLocaleString()} ISK | profit ${Math.round(mergedManifest.total_profit_isk).toLocaleString()} ISK`,
-    );
-    lines.push("");
-    lines.push("Base lines:");
-    for (const line of baseBatchManifest.base_lines) {
-      lines.push(
-        `${line.type_name} ${line.units} | buy ${Math.round(line.buy_total_isk).toLocaleString()} | sell ${Math.round(line.sell_total_isk).toLocaleString()} | profit ${Math.round(line.profit_total_isk).toLocaleString()}`,
-      );
-    }
-    lines.push("");
-    lines.push("Added lines:");
-    for (const line of mergedManifest.added_lines) {
-      lines.push(
-        `${line.type_name} ${line.units} | buy ${Math.round(line.buy_total_isk).toLocaleString()} | sell ${Math.round(line.sell_total_isk).toLocaleString()} | profit ${Math.round(line.profit_total_isk).toLocaleString()} | jumps ${line.route_jumps}`,
-      );
-    }
-
-    await navigator.clipboard.writeText(lines.join("\n"));
+    const selectedOption = routeOptions.find((option) => option.option_id === selectedOptionId);
+    if (!selectedOption) return;
+    const corridor =
+      anchorRow?.BuySystemName && anchorRow?.SellSystemName
+        ? `${anchorRow.BuySystemName} -> ${anchorRow.SellSystemName}`
+        : undefined;
+    const manifest = formatMergedBatchManifestText({
+      baseBatchManifest,
+      selectedOption,
+      metadataHeader: {
+        corridor,
+        jumps: selectedOption.total_jumps,
+        iskPerJump: selectedOption.isk_per_jump,
+      },
+    });
+    await navigator.clipboard.writeText(manifest);
     addToast(t("batchBuilderCopiedMerged"), "success", 2200);
-  }, [baseBatchManifest, mergedManifest, addToast, t, anchorRow]);
+  }, [baseBatchManifest, mergedManifest, addToast, t, anchorRow, routeOptions, selectedOptionId]);
 
   const startBatchCreateRoute = useCallback(async () => {
     if (!baseBatchManifest) {
