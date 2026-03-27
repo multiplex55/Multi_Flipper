@@ -17,8 +17,10 @@ const requiredKeys = [
   "batchBuilderManifestTotalGrossSell",
   "batchBuilderManifestTotalIskPerJump",
   "batchBuilderManifestItemQty",
-  "batchBuilderManifestItemBuy",
-  "batchBuilderManifestItemSell",
+  "batchBuilderManifestItemBuyTotal",
+  "batchBuilderManifestItemBuyPer",
+  "batchBuilderManifestItemSellTotal",
+  "batchBuilderManifestItemSellPer",
   "batchBuilderManifestItemVol",
   "batchBuilderManifestItemProfit",
 ] as const;

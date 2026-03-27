@@ -689,8 +689,10 @@ export const en = {
     batchBuilderManifestTotalProfit: "Total profit: {isk} ISK",
     batchBuilderManifestTotalIskPerJump: "Total isk/jump: {isk} ISK",
     batchBuilderManifestItemQty: "qty {qty}",
-    batchBuilderManifestItemBuy: "buy {isk} ISK",
-    batchBuilderManifestItemSell: "sell {isk} ISK",
+    batchBuilderManifestItemBuyTotal: "buy total {isk} ISK",
+    batchBuilderManifestItemBuyPer: "buy per {isk} ISK",
+    batchBuilderManifestItemSellTotal: "sell total {isk} ISK",
+    batchBuilderManifestItemSellPer: "sell per {isk} ISK",
     batchBuilderManifestItemVol: "vol {volume} m3",
     batchBuilderManifestItemProfit: "profit {isk} ISK",
 
