@@ -249,7 +249,17 @@ function makeDuplicateTotalsRouteResponse(): BatchCreateRouteResponse {
   return response;
 }
 
-function renderPopup({ anchorRow, rows }: { anchorRow: FlipResult | null; rows: FlipResult[] }) {
+function renderPopup({
+  anchorRow,
+  rows,
+  routeMaxJumps = 12,
+  maxDetourJumpsPerNode = 3,
+}: {
+  anchorRow: FlipResult | null;
+  rows: FlipResult[];
+  routeMaxJumps?: number;
+  maxDetourJumpsPerNode?: number;
+}) {
   return render(
     <I18nProvider>
       <ToastProvider>
@@ -262,8 +272,8 @@ function renderPopup({ anchorRow, rows }: { anchorRow: FlipResult | null; rows: 
           originSystemName="Jita"
           minRouteSecurity={0.45}
           includeStructures={false}
-          routeMaxJumps={12}
-          maxDetourJumpsPerNode={3}
+          routeMaxJumps={routeMaxJumps}
+          maxDetourJumpsPerNode={maxDetourJumpsPerNode}
           salesTaxPercent={3}
           buyBrokerFeePercent={1}
           sellBrokerFeePercent={1}
@@ -363,9 +373,9 @@ describe("BatchBuilderPopup route creation", () => {
     ]);
   });
 
-  it("includes radius cache context and candidate snapshot in request payload", async () => {
+  it("includes scan params, routing limits, and candidate snapshot in request payload", async () => {
     batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
-    renderPopup({ anchorRow, rows });
+    renderPopup({ anchorRow, rows, routeMaxJumps: 17, maxDetourJumpsPerNode: 5 });
 
     fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
     await screen.findByTestId("route-option-rank-1");
@@ -377,8 +387,8 @@ describe("BatchBuilderPopup route creation", () => {
     expect(payload?.allow_lowsec).toBe(false);
     expect(payload?.allow_nullsec).toBe(false);
     expect(payload?.allow_wormhole).toBe(false);
-    expect(payload?.route_max_jumps).toBe(12);
-    expect(payload?.max_detour_jumps_per_node).toBe(3);
+    expect(payload?.route_max_jumps).toBe(17);
+    expect(payload?.max_detour_jumps_per_node).toBe(5);
     expect(payload?.current_system_id).toBe(30000142);
     expect(payload?.current_location_id).toBe(60003760);
     expect(payload?.candidate_context?.source_tab).toBe("radius");
@@ -481,7 +491,7 @@ describe("BatchBuilderPopup route creation", () => {
     expect(option).toHaveTextContent("Merged profit: 1.6 M");
   });
 
-  it("copy merged manifest writes expected sections", async () => {
+  it("copy merged manifest writes station blocks and station-local item lines", async () => {
     batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
 
     renderPopup({ anchorRow, rows });
@@ -493,14 +503,15 @@ describe("BatchBuilderPopup route creation", () => {
     expect(writeText).toHaveBeenCalledTimes(1);
     const manifest = writeText.mock.calls[0][0];
     expect(manifest).toContain("Origin: Jita (Jita IV - Moon 4)");
-    expect(manifest).toContain("Corridor: Jita -> Amarr");
-    expect(manifest).toContain("Route jumps: 10");
-    expect(manifest).toContain("ISK/jump: 9,000 ISK");
-    expect(manifest).toContain("----- BASE ITEMS -----");
-    expect(manifest).toContain("----- ROUTE ADDITIONS -----");
-    expect(manifest).toContain("Megacyte x40");
+    expect(manifest).toContain("----- ROUTE SUMMARY -----");
+    expect(manifest).toContain("Stations: 1 | Items: 1 | Units: 40");
+    expect(manifest).toContain("Totals: vol 80 m3 | buy 200,000 ISK | sell 290,000 ISK | profit 90,000 ISK");
+    expect(manifest).toContain("----- STATION 1: Station 60003760 -----");
+    expect(manifest).toContain("Jumps to Buy Station: 0");
+    expect(manifest).toContain("Items: 1 | Units: 40 | Volume: 80 m3");
+    expect(manifest).toContain("Item list: Megacyte 40");
     expect(manifest).toContain(
-      "Totals: buy 830,000 ISK | sell 1,630,000 ISK | profit 1,590,000 ISK",
+      "Megacyte | qty 40 | buy total 200,000 ISK | buy per 5,000 ISK | sell total 290,000 ISK | sell per 7,250 ISK | vol 80 m3 | profit 90,000 ISK",
     );
   });
 
