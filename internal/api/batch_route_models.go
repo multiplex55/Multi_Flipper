@@ -7,6 +7,7 @@ import (
 
 var (
 	errBatchRouteMissingOrigin          = errors.New("missing origin")
+	errBatchRouteMissingBaseBuy         = errors.New("missing base buy location/system")
 	errBatchRouteMissingFinalSell       = errors.New("missing final sell location/system")
 	errBatchRouteNegativeCargo          = errors.New("negative cargo/remaining cargo")
 	errBatchRouteEmptyBaseLines         = errors.New("empty base lines")
@@ -137,6 +138,7 @@ type BatchCreateRouteResponse struct {
 	Request                  BatchCreateRouteRequest `json:"request"`
 	MergedManifest           MergedBatchManifest     `json:"merged_manifest"`
 	RankedOptions            []RouteAdditionOption   `json:"ranked_options"`
+	Diagnostics              []string                `json:"diagnostics,omitempty"`
 	SelectedOptionID         string                  `json:"selected_option_id"`
 	SelectedRank             int                     `json:"selected_rank"`
 	DeterministicSortApplied bool                    `json:"deterministic_sort_applied"`
@@ -147,11 +149,23 @@ func (r *BatchCreateRouteRequest) ApplyDefaults() {
 	if r.RemainingCapacityM3 == 0 && r.CargoLimitM3 > 0 {
 		r.RemainingCapacityM3 = r.CargoLimitM3
 	}
+	if r.RouteMaxJumps <= 0 {
+		r.RouteMaxJumps = 50
+	}
+	if r.DeterministicSort.Primary == "" {
+		r.DeterministicSort.Primary = "total_profit_isk"
+	}
+	if r.DeterministicSort.Secondary == "" {
+		r.DeterministicSort.Secondary = "isk_per_jump"
+	}
 }
 
 func (r BatchCreateRouteRequest) Validate() error {
 	if r.OriginSystemID <= 0 || r.OriginLocationID <= 0 {
 		return errBatchRouteMissingOrigin
+	}
+	if r.BaseBatch.BaseBuySystemID <= 0 || r.BaseBatch.BaseBuyLocationID <= 0 {
+		return errBatchRouteMissingBaseBuy
 	}
 	if r.CargoLimitM3 < 0 || r.RemainingCapacityM3 < 0 {
 		return errBatchRouteNegativeCargo

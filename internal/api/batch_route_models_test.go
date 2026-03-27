@@ -11,6 +11,8 @@ func validBatchCreateRouteRequest() BatchCreateRouteRequest {
 		OriginSystemName: "Jita",
 		OriginLocationID: 60003760,
 		BaseBatch: BaseBatchManifest{
+			BaseBuySystemID:    30000142,
+			BaseBuyLocationID:  60003760,
 			BaseSellSystemID:   30002187,
 			BaseSellLocationID: 60008494,
 			BaseLines: []BaseBatchLine{
@@ -44,6 +46,16 @@ func TestBatchCreateRouteRequestValidate(t *testing.T) {
 		err := req.Validate()
 		if !errors.Is(err, errBatchRouteMissingFinalSell) {
 			t.Fatalf("Validate error = %v, want %v", err, errBatchRouteMissingFinalSell)
+		}
+	})
+
+	t.Run("missing_base_buy_location_or_system", func(t *testing.T) {
+		req := validBatchCreateRouteRequest()
+		req.BaseBatch.BaseBuySystemID = 0
+
+		err := req.Validate()
+		if !errors.Is(err, errBatchRouteMissingBaseBuy) {
+			t.Fatalf("Validate error = %v, want %v", err, errBatchRouteMissingBaseBuy)
 		}
 	})
 
@@ -88,6 +100,21 @@ func TestBatchCreateRouteRequestApplyDefaults(t *testing.T) {
 
 		if req.RemainingCapacityM3 != 24000 {
 			t.Fatalf("RemainingCapacityM3 = %v, want 24000", req.RemainingCapacityM3)
+		}
+	})
+
+	t.Run("sets_sort_and_jumps_defaults", func(t *testing.T) {
+		req := validBatchCreateRouteRequest()
+		req.RouteMaxJumps = 0
+		req.DeterministicSort = DeterministicSortConfig{}
+
+		req.ApplyDefaults()
+
+		if req.RouteMaxJumps != 50 {
+			t.Fatalf("RouteMaxJumps = %d, want 50", req.RouteMaxJumps)
+		}
+		if req.DeterministicSort.Primary != "total_profit_isk" || req.DeterministicSort.Secondary != "isk_per_jump" {
+			t.Fatalf("DeterministicSort = %+v, want defaults", req.DeterministicSort)
 		}
 	})
 }

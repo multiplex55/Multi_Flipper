@@ -91,6 +91,8 @@ type Server struct {
 
 	updateSkipMu     sync.RWMutex
 	updateSkipByUser map[string]string
+
+	batchCreateRoutePlanner func(context.Context, engine.BatchCreateRouteParams) (engine.BatchCreateRouteResult, error)
 }
 
 // ssoStateEntry holds metadata for a pending SSO login flow.
@@ -654,6 +656,15 @@ func NewServer(cfg *config.Config, esiClient *esi.Client, database *db.DB, ssoCo
 	if s.wikiRAG != nil {
 		s.wikiRAG.Start(defaultStationAIWikiRepo)
 	}
+	s.batchCreateRoutePlanner = func(ctx context.Context, params engine.BatchCreateRouteParams) (engine.BatchCreateRouteResult, error) {
+		s.mu.RLock()
+		scanner := s.scanner
+		s.mu.RUnlock()
+		if scanner == nil {
+			return engine.BatchCreateRouteResult{}, errors.New("scanner unavailable")
+		}
+		return scanner.CreateBatchRoute(ctx, params)
+	}
 	return s
 }
 
@@ -720,6 +731,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/scan/regional-day", s.handleScanRegionalDay)
 	mux.HandleFunc("POST /api/scan/contracts", s.handleScanContracts)
 	mux.HandleFunc("POST /api/route/find", s.handleRouteFind)
+	mux.HandleFunc("POST /api/batch/create-route", s.handleBatchCreateRoute)
 	mux.HandleFunc("GET /api/watchlist", s.handleGetWatchlist)
 	mux.HandleFunc("POST /api/watchlist", s.handleAddWatchlist)
 	mux.HandleFunc("DELETE /api/watchlist/{typeID}", s.handleDeleteWatchlist)
@@ -3155,6 +3167,165 @@ func (s *Server) handleRouteFind(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprintf(w, "%s\n", line)
 	flusher.Flush()
+}
+
+func (s *Server) handleBatchCreateRoute(w http.ResponseWriter, r *http.Request) {
+	if !s.isReady() {
+		writeError(w, http.StatusServiceUnavailable, "SDE not loaded yet")
+		return
+	}
+
+	var req BatchCreateRouteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	req.ApplyDefaults()
+	if req.CargoLimitM3 <= 0 && req.BaseBatch.CargoLimitM3 > 0 {
+		req.CargoLimitM3 = req.BaseBatch.CargoLimitM3
+	}
+	if req.RemainingCapacityM3 <= 0 && req.BaseBatch.RemainingCapacityM3 > 0 {
+		req.RemainingCapacityM3 = req.BaseBatch.RemainingCapacityM3
+	}
+	if req.RemainingCapacityM3 > req.CargoLimitM3 && req.CargoLimitM3 > 0 {
+		req.RemainingCapacityM3 = req.CargoLimitM3
+	}
+	if err := req.Validate(); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	params := engine.BatchCreateRouteParams{
+		OriginSystemID:       req.OriginSystemID,
+		BaseBuySystemID:      req.BaseBatch.BaseBuySystemID,
+		FinalSellSystemID:    req.BaseBatch.BaseSellSystemID,
+		FinalSellLocationID:  req.BaseBatch.BaseSellLocationID,
+		CargoLimitM3:         req.CargoLimitM3,
+		RemainingCapacityM3:  req.RemainingCapacityM3,
+		MinMargin:            0,
+		MinRouteSecurity:     req.MinRouteSecurity,
+		IncludeStructures:    req.IncludeStructures,
+		RouteMaxJumps:        req.RouteMaxJumps,
+		SplitTradeFees:       true,
+		SalesTaxPercent:      req.SalesTaxPercent,
+		BuyBrokerFeePercent:  req.BuyBrokerFeePercent,
+		SellBrokerFeePercent: req.SellBrokerFeePercent,
+		BuySalesTaxPercent:   0,
+		SellSalesTaxPercent:  req.SalesTaxPercent,
+	}
+	if !params.SplitTradeFees {
+		params.BrokerFeePercent = req.BuyBrokerFeePercent
+	}
+
+	planner := s.batchCreateRoutePlanner
+	if planner == nil {
+		writeError(w, http.StatusInternalServerError, "batch route planner unavailable")
+		return
+	}
+
+	planResult, err := planner(r.Context(), params)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	ranked := make([]RouteAdditionOption, 0, len(planResult.Options))
+	addedLines := make([]RouteAdditionLine, 0)
+	for idx, opt := range planResult.Options {
+		lines := make([]RouteAdditionLine, 0, len(opt.Lines))
+		for _, line := range opt.Lines {
+			apiLine := RouteAdditionLine{
+				TypeID:         line.TypeID,
+				TypeName:       line.TypeName,
+				Units:          line.Units,
+				UnitVolumeM3:   line.UnitVolumeM3,
+				BuySystemID:    line.BuySystemID,
+				BuyLocationID:  line.BuyLocationID,
+				SellSystemID:   line.SellSystemID,
+				SellLocationID: line.SellLocationID,
+				BuyTotalISK:    line.BuyTotalISK,
+				SellTotalISK:   line.SellTotalISK,
+				ProfitTotalISK: line.ProfitTotalISK,
+				RouteJumps:     line.RouteJumps,
+			}
+			lines = append(lines, apiLine)
+			if idx == 0 {
+				addedLines = append(addedLines, apiLine)
+			}
+		}
+		utilization := 0.0
+		if req.CargoLimitM3 > 0 {
+			utilization = ((req.CargoLimitM3 - req.RemainingCapacityM3 + opt.AddedVolumeM3) / req.CargoLimitM3) * 100
+		}
+		ranked = append(ranked, RouteAdditionOption{
+			OptionID:       opt.OptionID,
+			Rank:           idx + 1,
+			Lines:          lines,
+			LineCount:      len(lines),
+			AddedVolumeM3:  opt.AddedVolumeM3,
+			UtilizationPct: utilization,
+			TotalBuyISK:    opt.TotalBuyISK,
+			TotalSellISK:   opt.TotalSellISK,
+			TotalProfitISK: opt.TotalProfitISK,
+			TotalJumps:     opt.TotalJumps,
+			ISKPerJump:     opt.ISKPerJump,
+			RankingInputs: RouteOptionRankingInputs{
+				TotalProfitISK: opt.TotalProfitISK,
+				TotalJumps:     opt.TotalJumps,
+				ISKPerJump:     opt.ISKPerJump,
+				UtilizationPct: utilization,
+			},
+			RankingSortKey: fmt.Sprintf("profit:%.2f|isk_per_jump:%.2f", opt.TotalProfitISK, opt.ISKPerJump),
+		})
+	}
+
+	totalUnits := req.BaseBatch.TotalUnits
+	totalVolume := req.BaseBatch.TotalVolumeM3
+	totalBuy := req.BaseBatch.TotalBuyISK
+	totalSell := req.BaseBatch.TotalSellISK
+	totalProfit := req.BaseBatch.TotalProfitISK
+	for _, line := range addedLines {
+		totalUnits += line.Units
+		totalVolume += float64(line.Units) * line.UnitVolumeM3
+		totalBuy += line.BuyTotalISK
+		totalSell += line.SellTotalISK
+		totalProfit += line.ProfitTotalISK
+	}
+	merged := MergedBatchManifest{
+		OriginSystemID:      req.OriginSystemID,
+		OriginLocationID:    req.OriginLocationID,
+		FinalSellSystemID:   req.BaseBatch.BaseSellSystemID,
+		FinalSellLocationID: req.BaseBatch.BaseSellLocationID,
+		BaseLines:           req.BaseBatch.BaseLines,
+		AddedLines:          addedLines,
+		TotalLineCount:      len(req.BaseBatch.BaseLines) + len(addedLines),
+		TotalUnits:          totalUnits,
+		TotalVolumeM3:       totalVolume,
+		CargoLimitM3:        req.CargoLimitM3,
+		RemainingCapacityM3: req.CargoLimitM3 - totalVolume,
+		TotalBuyISK:         totalBuy,
+		TotalSellISK:        totalSell,
+		TotalProfitISK:      totalProfit,
+	}
+	if merged.RemainingCapacityM3 < 0 {
+		merged.RemainingCapacityM3 = 0
+	}
+	if req.CargoLimitM3 > 0 {
+		merged.UtilizationPct = (merged.TotalVolumeM3 / req.CargoLimitM3) * 100
+	}
+
+	resp := BatchCreateRouteResponse{
+		Request:                  req,
+		MergedManifest:           merged,
+		RankedOptions:            ranked,
+		Diagnostics:              planResult.Diagnostics,
+		SelectedOptionID:         planResult.SelectedID,
+		SelectedRank:             planResult.SelectedRank,
+		DeterministicSortApplied: true,
+		SortSignature:            req.SortSignature(),
+	}
+	writeJSON(w, resp)
 }
 
 // --- Watchlist ---
