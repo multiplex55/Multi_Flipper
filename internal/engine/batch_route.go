@@ -33,6 +33,22 @@ type BatchCreateRouteParams struct {
 	BuySalesTaxPercent    float64
 	SellSalesTaxPercent   float64
 	BrokerFeePercent      float64
+	BaseLines             []BatchCreateRouteLine
+	CandidateLines        []BatchRouteCandidateOpportunity
+	CandidateContextSeen  bool
+}
+
+type BatchRouteCandidateOpportunity struct {
+	TypeID         int32
+	TypeName       string
+	Units          int64
+	UnitVolumeM3   float64
+	BuySystemID    int32
+	BuyLocationID  int64
+	SellSystemID   int32
+	SellLocationID int64
+	BuyPriceISK    float64
+	SellPriceISK   float64
 }
 
 type BatchCreateRouteLine struct {
@@ -169,7 +185,12 @@ func (s *Scanner) CreateBatchRoute(ctx context.Context, params BatchCreateRouteP
 		SellSalesTaxPercent:  params.SellSalesTaxPercent,
 	})
 
-	lines, pruned := s.buildBatchRouteCandidateLines(params, routePolicy, idx, canonicalPath, segmentA, buyCostMult, sellRevenueMult)
+	marketLines, pruned := s.buildBatchRouteCandidateLines(params, routePolicy, idx, canonicalPath, segmentA, buyCostMult, sellRevenueMult)
+	cacheLines := s.buildBatchRouteCacheCandidateLines(params, routePolicy, canonicalPath, segmentA, buyCostMult, sellRevenueMult)
+	lines := mergeBatchRouteCandidatePools(marketLines, cacheLines, params.BaseLines)
+	if params.CandidateContextSeen && len(params.CandidateLines) == 0 {
+		result.Diagnostics = append(result.Diagnostics, "radius cache unavailable or stale; falling back to market-only candidates")
+	}
 	if len(lines) == 0 {
 		result.Diagnostics = append(result.Diagnostics, "no profitable additions found for selected destination")
 		result.Diagnostics = append(result.Diagnostics, formatBatchRoutePruneDiagnostics(pruned)...)
@@ -193,6 +214,108 @@ func (s *Scanner) CreateBatchRoute(ctx context.Context, params BatchCreateRouteP
 	result.SelectedID = ranked[0].OptionID
 	result.SelectedRank = 1
 	return result, nil
+}
+
+func (s *Scanner) buildBatchRouteCacheCandidateLines(
+	params BatchCreateRouteParams,
+	routePolicy batchRoutePolicy,
+	canonicalPath []int32,
+	originToBaseJumps int,
+	buyCostMult float64,
+	sellRevenueMult float64,
+) []BatchCreateRouteLine {
+	if len(params.CandidateLines) == 0 || len(canonicalPath) == 0 {
+		return nil
+	}
+	maxDetour := params.MaxDetourJumpsPerNode
+	if maxDetour < 0 {
+		maxDetour = 0
+	}
+	lines := make([]BatchCreateRouteLine, 0, len(params.CandidateLines))
+	for _, candidate := range params.CandidateLines {
+		if candidate.TypeID <= 0 || candidate.Units <= 0 || candidate.UnitVolumeM3 <= 0 {
+			continue
+		}
+		if candidate.BuySystemID <= 0 || candidate.SellSystemID <= 0 {
+			continue
+		}
+		if params.FinalSellLocationID > 0 && candidate.SellLocationID != params.FinalSellLocationID {
+			continue
+		}
+		if !s.routePolicyAllowsSystem(routePolicy, candidate.BuySystemID) || !s.routePolicyAllowsSystem(routePolicy, candidate.SellSystemID) {
+			continue
+		}
+		if !systemWithinDetourOfCanonical(s, candidate.BuySystemID, canonicalPath, maxDetour, routePolicy) {
+			continue
+		}
+		if !systemWithinDetourOfCanonical(s, candidate.SellSystemID, canonicalPath, maxDetour, routePolicy) {
+			continue
+		}
+		baseToBuy := s.jumpsBetweenWithRoutePolicy(params.BaseBuySystemID, candidate.BuySystemID, routePolicy)
+		buyToSell := s.jumpsBetweenWithRoutePolicy(candidate.BuySystemID, candidate.SellSystemID, routePolicy)
+		sellToFinal := s.jumpsBetweenWithRoutePolicy(candidate.SellSystemID, params.FinalSellSystemID, routePolicy)
+		if baseToBuy == UnreachableJumps || buyToSell == UnreachableJumps || sellToFinal == UnreachableJumps {
+			continue
+		}
+		routeJumps := originToBaseJumps + baseToBuy + buyToSell + sellToFinal
+		if params.RouteMaxJumps > 0 && routeJumps > params.RouteMaxJumps {
+			continue
+		}
+		maxUnitsByCargo := int64(math.Floor(params.RemainingCapacityM3 / candidate.UnitVolumeM3))
+		if maxUnitsByCargo <= 0 {
+			continue
+		}
+		units := min64(candidate.Units, maxUnitsByCargo)
+		if units <= 0 {
+			continue
+		}
+		effectiveBuy := candidate.BuyPriceISK * buyCostMult
+		effectiveSell := candidate.SellPriceISK * sellRevenueMult
+		profitPerUnit := effectiveSell - effectiveBuy
+		if profitPerUnit <= 0 || effectiveBuy <= 0 {
+			continue
+		}
+		margin := (profitPerUnit / effectiveBuy) * 100
+		if margin < params.MinMargin {
+			continue
+		}
+		lines = append(lines, BatchCreateRouteLine{
+			TypeID:         candidate.TypeID,
+			TypeName:       candidate.TypeName,
+			Units:          units,
+			UnitVolumeM3:   candidate.UnitVolumeM3,
+			BuySystemID:    candidate.BuySystemID,
+			BuyLocationID:  candidate.BuyLocationID,
+			SellSystemID:   candidate.SellSystemID,
+			SellLocationID: candidate.SellLocationID,
+			BuyTotalISK:    float64(units) * candidate.BuyPriceISK,
+			SellTotalISK:   float64(units) * candidate.SellPriceISK,
+			ProfitTotalISK: float64(units) * profitPerUnit,
+			RouteJumps:     routeJumps,
+		})
+	}
+	return lines
+}
+
+func systemWithinDetourOfCanonical(s *Scanner, systemID int32, canonicalPath []int32, maxDetour int, routePolicy batchRoutePolicy) bool {
+	if len(canonicalPath) == 0 {
+		return false
+	}
+	if maxDetour <= 0 {
+		for _, node := range canonicalPath {
+			if node == systemID {
+				return true
+			}
+		}
+		return false
+	}
+	for _, node := range canonicalPath {
+		jumps := s.jumpsBetweenWithRoutePolicy(node, systemID, routePolicy)
+		if jumps != UnreachableJumps && jumps <= maxDetour {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Scanner) buildBatchRouteCandidateLines(
@@ -485,7 +608,7 @@ func buildBatchRouteOptionsFromCandidates(lines []BatchCreateRouteLine, params B
 			id: "max-total-profit",
 			sort: func(i, j BatchCreateRouteLine) bool {
 				if i.ProfitTotalISK == j.ProfitTotalISK {
-					return i.TypeID < j.TypeID
+					return batchRouteLineLess(i, j)
 				}
 				return i.ProfitTotalISK > j.ProfitTotalISK
 			},
@@ -502,7 +625,7 @@ func buildBatchRouteOptionsFromCandidates(lines []BatchCreateRouteLine, params B
 					right = j.ProfitTotalISK / float64(j.RouteJumps)
 				}
 				if left == right {
-					return i.TypeID < j.TypeID
+					return batchRouteLineLess(i, j)
 				}
 				return left > right
 			},
@@ -514,7 +637,7 @@ func buildBatchRouteOptionsFromCandidates(lines []BatchCreateRouteLine, params B
 				rightVol := float64(j.Units) * j.UnitVolumeM3
 				if leftVol == rightVol {
 					if i.ProfitTotalISK == j.ProfitTotalISK {
-						return i.TypeID < j.TypeID
+						return batchRouteLineLess(i, j)
 					}
 					return i.ProfitTotalISK > j.ProfitTotalISK
 				}

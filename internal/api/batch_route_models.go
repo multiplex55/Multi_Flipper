@@ -97,26 +97,48 @@ type DeterministicSortConfig struct {
 }
 
 type BatchCreateRouteRequest struct {
-	OriginSystemID        int32                   `json:"origin_system_id"`
-	OriginSystemName      string                  `json:"origin_system_name"`
-	OriginLocationID      int64                   `json:"origin_location_id"`
-	OriginLocationName    string                  `json:"origin_location_name"`
-	CurrentSystemID       int32                   `json:"current_system_id"`
-	CurrentLocationID     int64                   `json:"current_location_id"`
-	BaseBatch             BaseBatchManifest       `json:"base_batch"`
-	CargoLimitM3          float64                 `json:"cargo_limit_m3"`
-	RemainingCapacityM3   float64                 `json:"remaining_capacity_m3"`
-	MinRouteSecurity      float64                 `json:"min_route_security"`
-	IncludeStructures     bool                    `json:"include_structures"`
-	AllowLowsec           bool                    `json:"allow_lowsec"`
-	AllowNullsec          bool                    `json:"allow_nullsec"`
-	AllowWormhole         bool                    `json:"allow_wormhole"`
-	RouteMaxJumps         int                     `json:"route_max_jumps"`
-	MaxDetourJumpsPerNode int                     `json:"max_detour_jumps_per_node"`
-	SalesTaxPercent       float64                 `json:"sales_tax_percent"`
-	BuyBrokerFeePercent   float64                 `json:"buy_broker_fee_percent"`
-	SellBrokerFeePercent  float64                 `json:"sell_broker_fee_percent"`
-	DeterministicSort     DeterministicSortConfig `json:"deterministic_sort"`
+	OriginSystemID        int32                       `json:"origin_system_id"`
+	OriginSystemName      string                      `json:"origin_system_name"`
+	OriginLocationID      int64                       `json:"origin_location_id"`
+	OriginLocationName    string                      `json:"origin_location_name"`
+	CurrentSystemID       int32                       `json:"current_system_id"`
+	CurrentLocationID     int64                       `json:"current_location_id"`
+	BaseBatch             BaseBatchManifest           `json:"base_batch"`
+	CargoLimitM3          float64                     `json:"cargo_limit_m3"`
+	RemainingCapacityM3   float64                     `json:"remaining_capacity_m3"`
+	MinRouteSecurity      float64                     `json:"min_route_security"`
+	IncludeStructures     bool                        `json:"include_structures"`
+	AllowLowsec           bool                        `json:"allow_lowsec"`
+	AllowNullsec          bool                        `json:"allow_nullsec"`
+	AllowWormhole         bool                        `json:"allow_wormhole"`
+	RouteMaxJumps         int                         `json:"route_max_jumps"`
+	MaxDetourJumpsPerNode int                         `json:"max_detour_jumps_per_node"`
+	SalesTaxPercent       float64                     `json:"sales_tax_percent"`
+	BuyBrokerFeePercent   float64                     `json:"buy_broker_fee_percent"`
+	SellBrokerFeePercent  float64                     `json:"sell_broker_fee_percent"`
+	DeterministicSort     DeterministicSortConfig     `json:"deterministic_sort"`
+	CandidateContext      *BatchRouteCandidateContext `json:"candidate_context,omitempty"`
+	CandidateSnapshot     []BatchRouteCandidateLine   `json:"candidate_snapshot,omitempty"`
+}
+
+type BatchRouteCandidateContext struct {
+	SourceTab       string `json:"source_tab,omitempty"`
+	CacheRevision   int64  `json:"cache_revision,omitempty"`
+	CacheNextExpiry string `json:"cache_next_expiry,omitempty"`
+	CacheStale      bool   `json:"cache_stale,omitempty"`
+}
+
+type BatchRouteCandidateLine struct {
+	TypeID         int32   `json:"type_id"`
+	TypeName       string  `json:"type_name"`
+	Units          int64   `json:"units"`
+	UnitVolumeM3   float64 `json:"unit_volume_m3"`
+	BuySystemID    int32   `json:"buy_system_id"`
+	BuyLocationID  int64   `json:"buy_location_id"`
+	SellSystemID   int32   `json:"sell_system_id"`
+	SellLocationID int64   `json:"sell_location_id"`
+	BuyPriceISK    float64 `json:"buy_price_isk"`
+	SellPriceISK   float64 `json:"sell_price_isk"`
 }
 
 type MergedBatchManifest struct {

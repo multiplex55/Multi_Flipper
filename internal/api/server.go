@@ -3219,6 +3219,45 @@ func (s *Server) handleBatchCreateRoute(w http.ResponseWriter, r *http.Request) 
 		BuySalesTaxPercent:    0,
 		SellSalesTaxPercent:   req.SalesTaxPercent,
 	}
+	if len(req.BaseBatch.BaseLines) > 0 {
+		params.BaseLines = make([]engine.BatchCreateRouteLine, 0, len(req.BaseBatch.BaseLines))
+		for _, line := range req.BaseBatch.BaseLines {
+			params.BaseLines = append(params.BaseLines, engine.BatchCreateRouteLine{
+				TypeID:         line.TypeID,
+				TypeName:       line.TypeName,
+				Units:          line.Units,
+				UnitVolumeM3:   line.UnitVolumeM3,
+				BuySystemID:    line.BuySystemID,
+				BuyLocationID:  line.BuyLocationID,
+				SellSystemID:   line.SellSystemID,
+				SellLocationID: line.SellLocationID,
+				BuyTotalISK:    line.BuyTotalISK,
+				SellTotalISK:   line.SellTotalISK,
+				ProfitTotalISK: line.ProfitTotalISK,
+				RouteJumps:     line.Jumps,
+			})
+		}
+	}
+	if req.CandidateContext != nil {
+		params.CandidateContextSeen = true
+	}
+	if len(req.CandidateSnapshot) > 0 {
+		params.CandidateLines = make([]engine.BatchRouteCandidateOpportunity, 0, len(req.CandidateSnapshot))
+		for _, candidate := range req.CandidateSnapshot {
+			params.CandidateLines = append(params.CandidateLines, engine.BatchRouteCandidateOpportunity{
+				TypeID:         candidate.TypeID,
+				TypeName:       candidate.TypeName,
+				Units:          candidate.Units,
+				UnitVolumeM3:   candidate.UnitVolumeM3,
+				BuySystemID:    candidate.BuySystemID,
+				BuyLocationID:  candidate.BuyLocationID,
+				SellSystemID:   candidate.SellSystemID,
+				SellLocationID: candidate.SellLocationID,
+				BuyPriceISK:    candidate.BuyPriceISK,
+				SellPriceISK:   candidate.SellPriceISK,
+			})
+		}
+	}
 	if !params.SplitTradeFees {
 		params.BrokerFeePercent = req.BuyBrokerFeePercent
 	}

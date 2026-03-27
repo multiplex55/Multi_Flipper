@@ -161,3 +161,30 @@ func TestBatchRouteCandidateLines_NoOptionsOnlyWhenNoProfitableReachableCandidat
 		t.Fatalf("expected non-profitable prune reason to be tracked")
 	}
 }
+
+func TestMergeBatchRouteCandidatePools_DedupesAndExcludesBaseLines(t *testing.T) {
+	market := []BatchCreateRouteLine{
+		{TypeID: 34, TypeName: "Tritanium", Units: 100, UnitVolumeM3: 0.01, BuySystemID: 1, BuyLocationID: 11, SellSystemID: 2, SellLocationID: 22, BuyTotalISK: 400, SellTotalISK: 500, ProfitTotalISK: 100, RouteJumps: 5},
+	}
+	cache := []BatchCreateRouteLine{
+		{TypeID: 34, TypeName: "Tritanium", Units: 50, UnitVolumeM3: 0.01, BuySystemID: 1, BuyLocationID: 11, SellSystemID: 2, SellLocationID: 22, BuyTotalISK: 210, SellTotalISK: 300, ProfitTotalISK: 90, RouteJumps: 4},
+		{TypeID: 35, TypeName: "Pyerite", Units: 10, UnitVolumeM3: 0.01, BuySystemID: 1, BuyLocationID: 15, SellSystemID: 2, SellLocationID: 25, BuyTotalISK: 100, SellTotalISK: 180, ProfitTotalISK: 80, RouteJumps: 6},
+	}
+	base := []BatchCreateRouteLine{
+		{TypeID: 35, TypeName: "Pyerite", Units: 5, UnitVolumeM3: 0.01, BuySystemID: 1, BuyLocationID: 15, SellSystemID: 2, SellLocationID: 25},
+	}
+
+	merged := mergeBatchRouteCandidatePools(market, cache, base)
+	if len(merged) != 1 {
+		t.Fatalf("merged lines = %d, want 1", len(merged))
+	}
+	if merged[0].TypeID != 34 {
+		t.Fatalf("merged line type = %d, want 34", merged[0].TypeID)
+	}
+	if merged[0].Units != 150 {
+		t.Fatalf("merged units = %d, want 150", merged[0].Units)
+	}
+	if merged[0].RouteJumps != 4 {
+		t.Fatalf("merged route jumps = %d, want 4", merged[0].RouteJumps)
+	}
+}

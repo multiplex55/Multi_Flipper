@@ -18,6 +18,7 @@ import type {
   MergedBatchManifest,
   FlipResult,
   RouteAdditionOption,
+  StationCacheMeta,
 } from "@/lib/types";
 import { Modal } from "./Modal";
 import { useGlobalToast } from "./Toast";
@@ -43,6 +44,8 @@ interface BatchBuilderPopupProps {
   salesTaxPercent?: number;
   buyBrokerFeePercent?: number;
   sellBrokerFeePercent?: number;
+  cacheMeta?: StationCacheMeta | null;
+  scanSourceTab?: "radius" | "region" | "contracts";
 }
 
 type RouteState = "idle" | "searching" | "results" | "selected";
@@ -95,6 +98,8 @@ export function BatchBuilderPopup({
   salesTaxPercent = 0,
   buyBrokerFeePercent = 0,
   sellBrokerFeePercent = 0,
+  cacheMeta = null,
+  scanSourceTab = "radius",
 }: BatchBuilderPopupProps) {
   const { t } = useI18n();
   const { addToast } = useGlobalToast();
@@ -107,6 +112,7 @@ export function BatchBuilderPopup({
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [mergedManifest, setMergedManifest] = useState<MergedBatchManifest | null>(null);
   const [lastProgress, setLastProgress] = useState<string>("");
+  const [routeDiagnostics, setRouteDiagnostics] = useState<string[]>([]);
   const activeRequestRef = useRef(0);
   const activeAbortRef = useRef<AbortController | null>(null);
 
@@ -119,6 +125,7 @@ export function BatchBuilderPopup({
     setSelectedOptionId(null);
     setMergedManifest(null);
     setLastProgress("");
+    setRouteDiagnostics([]);
   }, [open, defaultCargoM3]);
 
   const batch = useMemo(() => {
@@ -342,6 +349,38 @@ export function BatchBuilderPopup({
       sales_tax_percent: salesTaxPercent,
       buy_broker_fee_percent: buyBrokerFeePercent,
       sell_broker_fee_percent: sellBrokerFeePercent,
+      candidate_context: {
+        source_tab: scanSourceTab,
+        cache_revision: cacheMeta?.current_revision,
+        cache_next_expiry: cacheMeta?.next_expiry_at,
+        cache_stale: cacheMeta?.stale ?? false,
+      },
+      candidate_snapshot:
+        scanSourceTab === "radius"
+          ? rows
+              .filter(
+                (row) => row.TypeID > 0 && (row.BuyLocationID ?? 0) > 0 && (row.SellLocationID ?? 0) > 0,
+              )
+              .map((row) => ({
+                type_id: row.TypeID,
+                type_name: row.TypeName,
+                units: Math.max(0, Math.floor(safeNumber(row.UnitsToBuy))),
+                unit_volume_m3: safeNumber(row.Volume),
+                buy_system_id: row.BuySystemID,
+                buy_location_id: row.BuyLocationID ?? 0,
+                sell_system_id: row.SellSystemID,
+                sell_location_id: row.SellLocationID ?? 0,
+                buy_price_isk:
+                  safeNumber(row.ExpectedBuyPrice) > 0
+                    ? safeNumber(row.ExpectedBuyPrice)
+                    : safeNumber(row.BuyPrice),
+                sell_price_isk:
+                  safeNumber(row.ExpectedSellPrice) > 0
+                    ? safeNumber(row.ExpectedSellPrice)
+                    : safeNumber(row.SellPrice),
+              }))
+              .filter((candidate) => candidate.units > 0 && candidate.unit_volume_m3 > 0)
+          : undefined,
       deterministic_sort: {
         primary: "isk_per_jump",
         secondary: "total_profit_isk",
@@ -355,6 +394,7 @@ export function BatchBuilderPopup({
     setSelectedOptionId(null);
     setMergedManifest(null);
     setLastProgress(t("batchBuilderRouteSearchingProgress"));
+    setRouteDiagnostics([]);
 
     try {
       const response = await batchCreateRoute(request, controller.signal);
@@ -364,6 +404,11 @@ export function BatchBuilderPopup({
         return;
       }
       const options = response.ranked_options ?? [];
+      const diagnostics = response.diagnostics ?? [];
+      setRouteDiagnostics(diagnostics);
+      if (diagnostics.some((entry) => /fallback|stale|market-only|unavailable/i.test(entry))) {
+        addToast(diagnostics[0], "warning", 3500);
+      }
       setRouteOptions(options);
       if (options.length === 0) {
         setRouteState("results");
@@ -398,6 +443,9 @@ export function BatchBuilderPopup({
     sellBrokerFeePercent,
     currentSystemId,
     currentLocationId,
+    cacheMeta,
+    scanSourceTab,
+    rows,
     t,
     addToast,
   ]);
@@ -493,6 +541,13 @@ export function BatchBuilderPopup({
 
         {routeError && routeState !== "idle" && routeState !== "searching" && (
           <div className="border border-red-500/40 rounded-sm p-2 text-xs text-red-300">{routeError}</div>
+        )}
+        {routeDiagnostics.length > 0 && (
+          <div className="border border-amber-500/40 rounded-sm p-2 text-xs text-amber-200" data-testid="route-diagnostics">
+            {routeDiagnostics.map((entry, idx) => (
+              <p key={`${idx}-${entry}`}>{entry}</p>
+            ))}
+          </div>
         )}
 
         {routeOptions.length > 0 && (
