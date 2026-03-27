@@ -155,6 +155,27 @@ describe("batchRouteModels", () => {
     });
   });
 
+
+  it("keeps max_detour_jumps_per_node continuity for undefined, zero, and positive values", () => {
+    const withoutDetour = normalizeBatchCreateRouteRequest(
+      makeRequest({ max_detour_jumps_per_node: undefined }),
+    );
+    const zeroDetour = normalizeBatchCreateRouteRequest(
+      makeRequest({ max_detour_jumps_per_node: 0 }),
+    );
+    const positiveDetour = normalizeBatchCreateRouteRequest(
+      makeRequest({ max_detour_jumps_per_node: 4 }),
+    );
+
+    expect(withoutDetour.max_detour_jumps_per_node).toBeUndefined();
+    expect(zeroDetour.max_detour_jumps_per_node).toBe(0);
+    expect(positiveDetour.max_detour_jumps_per_node).toBe(4);
+
+    expect(validateBatchCreateRouteRequest(withoutDetour)).toEqual([]);
+    expect(validateBatchCreateRouteRequest(zeroDetour)).toEqual([]);
+    expect(validateBatchCreateRouteRequest(positiveDetour)).toEqual([]);
+  });
+
   it("defaults remaining capacity to cargo limit when omitted as zero", () => {
     const normalized = normalizeBatchCreateRouteRequest(
       makeRequest({ cargo_limit_m3: 12000, remaining_capacity_m3: 0 }),

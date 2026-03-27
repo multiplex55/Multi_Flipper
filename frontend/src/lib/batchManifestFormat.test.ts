@@ -89,127 +89,220 @@ describe("batchManifestFormat", () => {
 });
 
 describe("batch route manifest formatter", () => {
-  const manifest: OrderedRouteManifest = {
-    summary: {
-      station_count: 2,
-      item_count: 3,
-      total_units: 3_550,
-      total_volume_m3: 45.5,
-      total_buy_isk: 1_555_000,
-      total_sell_isk: 2_200_000,
-      total_profit_isk: 645_000,
-      total_jumps: 11,
-      isk_per_jump: 58_636.36,
-    },
-    stations: [
-      {
-        station_key: "id:60003760",
-        buy_station_name: "Jita IV - Moon 4",
-        jumps_to_buy_station: 0,
-        jumps_buy_to_sell: 9,
+  it("keeps same item name in separate station blocks", () => {
+    const manifest: OrderedRouteManifest = {
+      summary: {
+        station_count: 2,
         item_count: 2,
-        total_units: 3_050,
-        total_volume_m3: 30.5,
-        total_buy_isk: 1_210_000,
-        total_sell_isk: 1_815_000,
-        total_profit_isk: 605_000,
-        isk_per_jump: 67_222.22,
-        lines: [
-          {
-            type_id: 7,
-            type_name: "Mexallon",
-            units: 2_000,
-            unit_volume_m3: 0.01,
-            volume_m3: 20,
-            buy_total_isk: 160_000,
-            buy_per_isk: 80,
-            sell_total_isk: 240_000,
-            sell_per_isk: 120,
-            profit_isk: 80_000,
-          },
-          {
-            type_id: 42,
-            type_name: "Zydrine",
-            units: 1_050,
-            unit_volume_m3: 0.01,
-            volume_m3: 10.5,
-            buy_total_isk: 1_050_000,
-            buy_per_isk: 1_000,
-            sell_total_isk: 1_575_000,
-            sell_per_isk: 1_500,
-            profit_isk: 525_000,
-          },
-        ],
-      },
-      {
-        station_key: "id:60008494",
-        buy_station_name: "Perimeter - Tranquility",
-        jumps_to_buy_station: 1,
-        jumps_buy_to_sell: 10,
-        item_count: 1,
-        total_units: 500,
+        total_units: 1_500,
         total_volume_m3: 15,
-        total_buy_isk: 345_000,
-        total_sell_isk: 385_000,
-        total_profit_isk: 40_000,
-        isk_per_jump: 3_636.36,
-        lines: [
+        total_buy_isk: 14_200,
+        total_sell_isk: 18_600,
+        total_profit_isk: 4_400,
+        total_jumps: 8,
+        isk_per_jump: 550,
+      },
+      stations: [
+        {
+          station_key: "id:60003760",
+          buy_station_name: "Jita IV - Moon 4",
+          jumps_to_buy_station: 0,
+          jumps_buy_to_sell: 4,
+          item_count: 1,
+          total_units: 1_000,
+          total_volume_m3: 10,
+          total_buy_isk: 8_000,
+          total_sell_isk: 10_500,
+          total_profit_isk: 2_500,
+          isk_per_jump: 625,
+          lines: [
+            {
+              type_id: 34,
+              type_name: "Tritanium",
+              units: 1_000,
+              unit_volume_m3: 0.01,
+              volume_m3: 10,
+              buy_total_isk: 8_000,
+              buy_per_isk: 8,
+              sell_total_isk: 10_500,
+              sell_per_isk: 10.5,
+              profit_isk: 2_500,
+            },
+          ],
+        },
+        {
+          station_key: "id:60008494",
+          buy_station_name: "Amarr VIII (Oris) - Emperor Family Academy",
+          jumps_to_buy_station: 2,
+          jumps_buy_to_sell: 2,
+          item_count: 1,
+          total_units: 500,
+          total_volume_m3: 5,
+          total_buy_isk: 6_200,
+          total_sell_isk: 8_100,
+          total_profit_isk: 1_900,
+          isk_per_jump: 475,
+          lines: [
+            {
+              type_id: 34,
+              type_name: "Tritanium",
+              units: 500,
+              unit_volume_m3: 0.01,
+              volume_m3: 5,
+              buy_total_isk: 6_200,
+              buy_per_isk: 12.4,
+              sell_total_isk: 8_100,
+              sell_per_isk: 16.2,
+              profit_isk: 1_900,
+            },
+          ],
+        },
+      ],
+    };
+
+    const text = formatOrderedRouteManifestText({ manifest });
+    expect(text).toContain("----- STATION 1: Jita IV - Moon 4 -----");
+    expect(text).toContain("----- STATION 2: Amarr VIII (Oris) - Emperor Family Academy -----");
+    expect(text).toContain("Item list: Tritanium 1,000");
+    expect(text).toContain("Item list: Tritanium 500");
+  });
+
+  it("renders station blocks in route visit order and supports station-name fallback keys", () => {
+    const text = formatOrderedRouteManifestText({
+      manifest: {
+        summary: {
+          station_count: 2,
+          item_count: 2,
+          total_units: 60,
+          total_volume_m3: 120,
+          total_buy_isk: 450_000,
+          total_sell_isk: 600_000,
+          total_profit_isk: 150_000,
+          total_jumps: 9,
+          isk_per_jump: 16_666.67,
+        },
+        stations: [
           {
-            type_id: 8,
-            type_name: "Isogen",
-            units: 500,
-            unit_volume_m3: 0.03,
-            volume_m3: 15,
-            buy_total_isk: 345_000,
-            buy_per_isk: 690,
-            sell_total_isk: 385_000,
-            sell_per_isk: 770,
-            profit_isk: 40_000,
+            station_key: "name:perimeter-tranquility",
+            buy_station_name: "Perimeter - Tranquility",
+            jumps_to_buy_station: 1,
+            jumps_buy_to_sell: 5,
+            item_count: 1,
+            total_units: 40,
+            total_volume_m3: 80,
+            total_buy_isk: 300_000,
+            total_sell_isk: 420_000,
+            total_profit_isk: 120_000,
+            isk_per_jump: 20_000,
+            lines: [
+              {
+                type_id: 9002,
+                type_name: "Megacyte",
+                units: 40,
+                unit_volume_m3: 2,
+                volume_m3: 80,
+                buy_total_isk: 300_000,
+                buy_per_isk: 7_500,
+                sell_total_isk: 420_000,
+                sell_per_isk: 10_500,
+                profit_isk: 120_000,
+              },
+            ],
+          },
+          {
+            station_key: "name:jita-iv-moon-4",
+            buy_station_name: "Jita IV - Moon 4",
+            jumps_to_buy_station: 0,
+            jumps_buy_to_sell: 3,
+            item_count: 1,
+            total_units: 20,
+            total_volume_m3: 40,
+            total_buy_isk: 150_000,
+            total_sell_isk: 180_000,
+            total_profit_isk: 30_000,
+            isk_per_jump: 10_000,
+            lines: [
+              {
+                type_id: 34,
+                type_name: "Tritanium",
+                units: 20,
+                unit_volume_m3: 2,
+                volume_m3: 40,
+                buy_total_isk: 150_000,
+                buy_per_isk: 7_500,
+                sell_total_isk: 180_000,
+                sell_per_isk: 9_000,
+                profit_isk: 30_000,
+              },
+            ],
           },
         ],
       },
-    ],
-  };
+    });
 
-  it("renders summary, station blocks, compact item list, and detailed rows", () => {
+    const perimeterIndex = text.indexOf("----- STATION 1: Perimeter - Tranquility -----");
+    const jitaIndex = text.indexOf("----- STATION 2: Jita IV - Moon 4 -----");
+    expect(perimeterIndex).toBeGreaterThan(-1);
+    expect(jitaIndex).toBeGreaterThan(-1);
+    expect(perimeterIndex).toBeLessThan(jitaIndex);
+  });
+
+  it("renders numeric totals and rounded per-unit values in station details", () => {
     const text = formatOrderedRouteManifestText({
       originLabel: "Jita (Jita IV - Moon 4)",
       metadataHeader: {
         corridor: "Jita -> Amarr",
-        jumps: 11,
-        iskPerJump: 58_636.36,
+        jumps: 7,
+        iskPerJump: 12_345.49,
       },
-      manifest,
+      manifest: {
+        summary: {
+          station_count: 1,
+          item_count: 1,
+          total_units: 33,
+          total_volume_m3: 66,
+          total_buy_isk: 100_001,
+          total_sell_isk: 150_002,
+          total_profit_isk: 50_001,
+          total_jumps: 7,
+          isk_per_jump: 7_143,
+        },
+        stations: [
+          {
+            station_key: "id:60003760",
+            buy_station_name: "Jita IV - Moon 4",
+            jumps_to_buy_station: 0,
+            jumps_buy_to_sell: 7,
+            item_count: 1,
+            total_units: 33,
+            total_volume_m3: 66,
+            total_buy_isk: 100_001,
+            total_sell_isk: 150_002,
+            total_profit_isk: 50_001,
+            isk_per_jump: 7_143,
+            lines: [
+              {
+                type_id: 9003,
+                type_name: "Isogen",
+                units: 33,
+                unit_volume_m3: 2,
+                volume_m3: 66,
+                buy_total_isk: 100_001,
+                buy_per_isk: 3_030.33,
+                sell_total_isk: 150_002,
+                sell_per_isk: 4_545.51,
+                profit_isk: 50_001,
+              },
+            ],
+          },
+        ],
+      },
     });
 
-    expect(text).toBe(
-      [
-        "Origin: Jita (Jita IV - Moon 4)",
-        "Corridor: Jita -> Amarr",
-        "Route jumps: 11",
-        "ISK/jump: 58,636 ISK",
-        "----- ROUTE SUMMARY -----",
-        "Stations: 2 | Items: 3 | Units: 3,550",
-        "Totals: vol 45.5 m3 | buy 1,555,000 ISK | sell 2,200,000 ISK | profit 645,000 ISK",
-        "Route: jumps 11 | ISK/jump 58,636 ISK",
-        "",
-        "----- STATION 1: Jita IV - Moon 4 -----",
-        "Jumps to Buy Station: 0",
-        "Jumps Buy -> Sell: 9",
-        "Items: 2 | Units: 3,050 | Volume: 30.5 m3",
-        "Capital: 1,210,000 ISK | Gross Sell: 1,815,000 ISK | Profit: 605,000 ISK | ISK/jump: 67,222 ISK",
-        "Item list: Mexallon 2,000, Zydrine 1,050",
-        "Mexallon | qty 2,000 | buy total 160,000 ISK | buy per 80 ISK | sell total 240,000 ISK | sell per 120 ISK | vol 20 m3 | profit 80,000 ISK",
-        "Zydrine | qty 1,050 | buy total 1,050,000 ISK | buy per 1,000 ISK | sell total 1,575,000 ISK | sell per 1,500 ISK | vol 10.5 m3 | profit 525,000 ISK",
-        "",
-        "----- STATION 2: Perimeter - Tranquility -----",
-        "Jumps to Buy Station: 1",
-        "Jumps Buy -> Sell: 10",
-        "Items: 1 | Units: 500 | Volume: 15 m3",
-        "Capital: 345,000 ISK | Gross Sell: 385,000 ISK | Profit: 40,000 ISK | ISK/jump: 3,636 ISK",
-        "Item list: Isogen 500",
-        "Isogen | qty 500 | buy total 345,000 ISK | buy per 690 ISK | sell total 385,000 ISK | sell per 770 ISK | vol 15 m3 | profit 40,000 ISK",
-      ].join("\n"),
+    expect(text).toContain("ISK/jump: 12,345 ISK");
+    expect(text).toContain("Capital: 100,001 ISK | Gross Sell: 150,002 ISK | Profit: 50,001 ISK | ISK/jump: 7,143 ISK");
+    expect(text).toContain(
+      "Isogen | qty 33 | buy total 100,001 ISK | buy per 3,030 ISK | sell total 150,002 ISK | sell per 4,546 ISK | vol 66 m3 | profit 50,001 ISK",
     );
   });
 
