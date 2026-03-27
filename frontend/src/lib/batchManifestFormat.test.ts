@@ -507,4 +507,69 @@ describe("batch route manifest formatter", () => {
       "ISK/jump: 10,501 ISK",
     ]);
   });
+
+  it("renders unknown jump metadata as N/A instead of coercing to zero", () => {
+    const text = formatOrderedRouteManifestText({
+      manifest: {
+        summary: {
+          station_count: 1,
+          item_count: 1,
+          total_units: 10,
+          total_volume_m3: 20,
+          total_buy_isk: 40_000,
+          total_sell_isk: 55_000,
+          total_profit_isk: 15_000,
+          total_jumps: 0,
+          isk_per_jump: undefined,
+        },
+        stations: [
+          {
+            station_key: "id:60003760",
+            buy_station_name: "Jita IV - Moon 4",
+            jumps_to_buy_station: null,
+            jumps_buy_to_sell: null,
+            item_count: 1,
+            total_volume_m3: 20,
+            total_buy_isk: 40_000,
+            total_sell_isk: 55_000,
+            total_profit_isk: 15_000,
+            isk_per_jump: null,
+            lines: [],
+          },
+        ],
+      },
+    });
+
+    expect(text).toContain("Jumps to Buy Station: N/A");
+    expect(text).toContain("Jumps Buy -> Sell: N/A");
+    expect(text).toContain("Total isk/jump: N/A ISK");
+    expect(text).not.toContain("Jumps to Buy Station: 0");
+    expect(text).not.toContain("Jumps Buy -> Sell: 0");
+  });
+
+  it("keeps true zero jump values renderable", () => {
+    const text = formatOrderedRouteManifestText({
+      manifest: {
+        stations: [
+          {
+            station_key: "id:60003760",
+            buy_station_name: "Jita IV - Moon 4",
+            jumps_to_buy_station: 0,
+            jumps_buy_to_sell: 0,
+            item_count: 0,
+            total_volume_m3: 0,
+            total_buy_isk: 0,
+            total_sell_isk: 0,
+            total_profit_isk: 0,
+            isk_per_jump: 0,
+            lines: [],
+          },
+        ],
+      },
+    });
+
+    expect(text).toContain("Jumps to Buy Station: 0");
+    expect(text).toContain("Jumps Buy -> Sell: 0");
+    expect(text).toContain("Total isk/jump: 0 ISK");
+  });
 });

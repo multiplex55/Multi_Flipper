@@ -338,14 +338,14 @@ export interface RouteStationManifest {
   buy_station_name: string;
   sell_station_name?: string;
   cargo_m3?: number;
-  jumps_to_buy_station: number;
-  jumps_buy_to_sell: number;
+  jumps_to_buy_station?: number | null;
+  jumps_buy_to_sell?: number | null;
   item_count: number;
   total_volume_m3: number;
   total_buy_isk: number;
   total_sell_isk: number;
   total_profit_isk: number;
-  isk_per_jump?: number;
+  isk_per_jump?: number | null;
   lines: RouteStationManifestLine[];
 }
 
