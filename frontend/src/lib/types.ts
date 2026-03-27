@@ -234,6 +234,132 @@ export type NdjsonRouteMessage =
   | { type: "result"; data: RouteResult[]; count: number }
   | { type: "error"; message: string };
 
+export interface BaseBatchLine {
+  type_id: number;
+  type_name: string;
+  units: number;
+  unit_volume_m3: number;
+  buy_system_id: number;
+  buy_location_id: number;
+  sell_system_id: number;
+  sell_location_id: number;
+  buy_price_isk: number;
+  sell_price_isk: number;
+  buy_total_isk: number;
+  sell_total_isk: number;
+  profit_total_isk: number;
+  jumps: number;
+}
+
+export interface BaseBatchManifest {
+  origin_system_id: number;
+  origin_system_name: string;
+  origin_location_id: number;
+  origin_location_name: string;
+  base_buy_system_id: number;
+  base_buy_location_id: number;
+  base_sell_system_id: number;
+  base_sell_location_id: number;
+  base_lines: BaseBatchLine[];
+  base_line_count: number;
+  total_units: number;
+  total_volume_m3: number;
+  total_buy_isk: number;
+  total_sell_isk: number;
+  total_profit_isk: number;
+  cargo_limit_m3: number;
+  remaining_capacity_m3: number;
+}
+
+export interface RouteAdditionLine {
+  type_id: number;
+  type_name: string;
+  units: number;
+  unit_volume_m3: number;
+  buy_system_id: number;
+  buy_location_id: number;
+  sell_system_id: number;
+  sell_location_id: number;
+  buy_total_isk: number;
+  sell_total_isk: number;
+  profit_total_isk: number;
+  route_jumps: number;
+}
+
+export interface RouteAdditionOption {
+  option_id: string;
+  rank: number;
+  lines: RouteAdditionLine[];
+  line_count: number;
+  added_volume_m3: number;
+  utilization_pct: number;
+  total_buy_isk: number;
+  total_sell_isk: number;
+  total_profit_isk: number;
+  total_jumps: number;
+  isk_per_jump: number;
+  ranking_inputs: {
+    total_profit_isk: number;
+    total_jumps: number;
+    isk_per_jump: number;
+    utilization_pct: number;
+  };
+  ranking_tie_break_values: number[];
+  ranking_sort_key: string;
+}
+
+export interface BatchCreateRouteRequest {
+  origin_system_id: number;
+  origin_system_name: string;
+  origin_location_id: number;
+  origin_location_name: string;
+  base_batch: BaseBatchManifest;
+  cargo_limit_m3: number;
+  remaining_capacity_m3: number;
+  min_route_security: number;
+  include_structures: boolean;
+  allow_lowsec: boolean;
+  allow_nullsec: boolean;
+  allow_wormhole: boolean;
+  route_max_jumps: number;
+  sales_tax_percent: number;
+  buy_broker_fee_percent: number;
+  sell_broker_fee_percent: number;
+  deterministic_sort: {
+    primary: "total_profit_isk" | "isk_per_jump" | "utilization_pct";
+    secondary: "total_jumps" | "total_profit_isk" | "isk_per_jump";
+    tie_break_order: string[];
+  };
+}
+
+export interface MergedBatchManifest {
+  origin_system_id: number;
+  origin_location_id: number;
+  final_sell_system_id: number;
+  final_sell_location_id: number;
+  base_lines: BaseBatchLine[];
+  added_lines: RouteAdditionLine[];
+  total_line_count: number;
+  total_units: number;
+  total_volume_m3: number;
+  cargo_limit_m3: number;
+  remaining_capacity_m3: number;
+  utilization_pct: number;
+  total_buy_isk: number;
+  total_sell_isk: number;
+  total_profit_isk: number;
+}
+
+export interface BatchCreateRouteResponse {
+  request: BatchCreateRouteRequest;
+  merged_manifest: MergedBatchManifest;
+  ranked_options: RouteAdditionOption[];
+  selected_option_id: string;
+  selected_rank: number;
+  deterministic_sort_applied: boolean;
+  sort_signature: string;
+}
+
 export interface WatchlistItem {
   type_id: number;
   type_name: string;
