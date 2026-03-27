@@ -95,35 +95,43 @@ export function formatOrderedRouteManifestText(input: {
   metadataHeader?: RouteMetadataHeaderInput;
   manifest: OrderedRouteManifest;
 }): string {
+  const resolveSellStation = (): string | null => {
+    const corridor = input.metadataHeader?.corridor?.trim();
+    if (!corridor) return null;
+    const segments = corridor.split("->");
+    if (segments.length < 2) return null;
+    const sellStation = segments[segments.length - 1]?.trim();
+    return sellStation ? sellStation : null;
+  };
+
   const output: string[] = [];
   if (input.originLabel?.trim()) output.push(`Origin: ${input.originLabel.trim()}`);
-  output.push(...formatRouteMetadataHeader(input.metadataHeader));
   if (input.manifest.summary) {
     const summary = input.manifest.summary;
-    output.push("----- ROUTE SUMMARY -----");
-    output.push(
-      `Stations: ${formatQuantity(summary.station_count)} | Items: ${formatQuantity(summary.item_count)} | Units: ${formatQuantity(summary.total_units)}`,
-    );
-    output.push(
-      `Totals: vol ${formatVolume(summary.total_volume_m3)} m3 | buy ${formatInteger(summary.total_buy_isk)} ISK | sell ${formatInteger(summary.total_sell_isk)} ISK | profit ${formatInteger(summary.total_profit_isk)} ISK`,
-    );
-    if ((summary.total_jumps ?? 0) > 0 || (summary.isk_per_jump ?? 0) > 0) {
-      output.push(
-        `Route: jumps ${formatQuantity(summary.total_jumps ?? 0)} | ISK/jump ${formatInteger(summary.isk_per_jump ?? 0)} ISK`,
-      );
-    }
+    const sellStation = resolveSellStation();
+    if (sellStation) output.push(`Sell Station: ${sellStation}`);
+    output.push(`Cargo m3: ${formatVolume(summary.total_volume_m3)} m3`);
+    output.push(`Stations: ${formatQuantity(summary.station_count)}`);
+    output.push(`Items: ${formatQuantity(summary.item_count)}`);
+    output.push(`Total volume: ${formatVolume(summary.total_volume_m3)} m3`);
+    output.push(`Total capital: ${formatInteger(summary.total_buy_isk)} ISK`);
+    output.push(`Total gross sell: ${formatInteger(summary.total_sell_isk)} ISK`);
+    output.push(`Total profit: ${formatInteger(summary.total_profit_isk)} ISK`);
+    output.push(`Total isk/jump: ${formatInteger(summary.isk_per_jump ?? 0)} ISK`);
   }
   for (const [index, station] of input.manifest.stations.entries()) {
     if (output.length > 0) output.push("");
-    output.push(`----- STATION ${index + 1}: ${station.buy_station_name} -----`);
-    output.push(`Jumps to Buy Station: ${formatQuantity(station.jumps_to_buy_station)}`);
-    output.push(`Jumps Buy -> Sell: ${formatQuantity(station.jumps_buy_to_sell)}`);
-    output.push(
-      `Items: ${formatQuantity(station.item_count)} | Units: ${formatQuantity(station.total_units)} | Volume: ${formatVolume(station.total_volume_m3)} m3`,
-    );
-    output.push(
-      `Capital: ${formatInteger(station.total_buy_isk)} ISK | Gross Sell: ${formatInteger(station.total_sell_isk)} ISK | Profit: ${formatInteger(station.total_profit_isk)} ISK | ISK/jump: ${formatInteger(station.isk_per_jump)} ISK`,
-    );
+    if (index > 0) output.push("------------------------");
+    output.push(`Buy Station: ${station.buy_station_name}`);
+    output.push(`Stations: 1`);
+    output.push(`Items: ${formatQuantity(station.item_count)}`);
+    output.push(`Total volume: ${formatVolume(station.total_volume_m3)} m3`);
+    output.push(`Total capital: ${formatInteger(station.total_buy_isk)} ISK`);
+    output.push(`Total gross sell: ${formatInteger(station.total_sell_isk)} ISK`);
+    output.push(`Total profit: ${formatInteger(station.total_profit_isk)} ISK`);
+    output.push(`Total isk/jump: ${formatInteger(station.isk_per_jump)} ISK`);
+    output.push(`Jumps to buy station: ${formatQuantity(station.jumps_to_buy_station)}`);
+    output.push(`Jumps buy -> sell: ${formatQuantity(station.jumps_buy_to_sell)}`);
     const compact = station.lines.map((line) => `${line.type_name} ${formatQuantity(line.units)}`);
     output.push(`Item list: ${compact.length > 0 ? compact.join(", ") : "(none)"}`);
     for (const line of station.lines) output.push(formatStationLine(line));

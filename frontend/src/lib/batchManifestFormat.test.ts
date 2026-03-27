@@ -161,8 +161,9 @@ describe("batch route manifest formatter", () => {
     };
 
     const text = formatOrderedRouteManifestText({ manifest });
-    expect(text).toContain("----- STATION 1: Jita IV - Moon 4 -----");
-    expect(text).toContain("----- STATION 2: Amarr VIII (Oris) - Emperor Family Academy -----");
+    expect(text).toContain("Buy Station: Jita IV - Moon 4");
+    expect(text).toContain("Buy Station: Amarr VIII (Oris) - Emperor Family Academy");
+    expect(text).toContain("------------------------");
     expect(text).toContain("Item list: Tritanium 1,000");
     expect(text).toContain("Item list: Tritanium 500");
   });
@@ -240,8 +241,8 @@ describe("batch route manifest formatter", () => {
       },
     });
 
-    const perimeterIndex = text.indexOf("----- STATION 1: Perimeter - Tranquility -----");
-    const jitaIndex = text.indexOf("----- STATION 2: Jita IV - Moon 4 -----");
+    const perimeterIndex = text.indexOf("Buy Station: Perimeter - Tranquility");
+    const jitaIndex = text.indexOf("Buy Station: Jita IV - Moon 4");
     expect(perimeterIndex).toBeGreaterThan(-1);
     expect(jitaIndex).toBeGreaterThan(-1);
     expect(perimeterIndex).toBeLessThan(jitaIndex);
@@ -299,11 +300,67 @@ describe("batch route manifest formatter", () => {
       },
     });
 
-    expect(text).toContain("ISK/jump: 12,345 ISK");
-    expect(text).toContain("Capital: 100,001 ISK | Gross Sell: 150,002 ISK | Profit: 50,001 ISK | ISK/jump: 7,143 ISK");
+    expect(text).toContain("Origin: Jita (Jita IV - Moon 4)");
+    expect(text).toContain("Sell Station: Amarr");
+    expect(text).toContain("Cargo m3: 66 m3");
+    expect(text).toContain("Stations: 1");
+    expect(text).toContain("Items: 1");
+    expect(text).toContain("Total volume: 66 m3");
+    expect(text).toContain("Total capital: 100,001 ISK");
+    expect(text).toContain("Total gross sell: 150,002 ISK");
+    expect(text).toContain("Total profit: 50,001 ISK");
+    expect(text).toContain("Total isk/jump: 7,143 ISK");
+    expect(text).not.toContain("----- ROUTE SUMMARY -----");
+    expect(text).not.toContain("Route: jumps");
     expect(text).toContain(
       "Isogen | qty 33 | buy total 100,001 ISK | buy per 3,030 ISK | sell total 150,002 ISK | sell per 4,546 ISK | vol 66 m3 | profit 50,001 ISK",
     );
+  });
+
+  it("omits top-level summary fields when manifest summary is absent and still renders stations", () => {
+    const text = formatOrderedRouteManifestText({
+      originLabel: "Jita",
+      metadataHeader: { corridor: "Jita -> Dodixie", jumps: 4, iskPerJump: 3_200 },
+      manifest: {
+        stations: [
+          {
+            station_key: "id:60003760",
+            buy_station_name: "Jita IV - Moon 4",
+            jumps_to_buy_station: 0,
+            jumps_buy_to_sell: 4,
+            item_count: 1,
+            total_units: 10,
+            total_volume_m3: 20,
+            total_buy_isk: 40_000,
+            total_sell_isk: 55_000,
+            total_profit_isk: 15_000,
+            isk_per_jump: 3_750,
+            lines: [
+              {
+                type_id: 34,
+                type_name: "Tritanium",
+                units: 10,
+                unit_volume_m3: 2,
+                volume_m3: 20,
+                buy_total_isk: 40_000,
+                buy_per_isk: 4_000,
+                sell_total_isk: 55_000,
+                sell_per_isk: 5_500,
+                profit_isk: 15_000,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(text).toContain("Origin: Jita");
+    expect(text).toContain("Buy Station: Jita IV - Moon 4");
+    expect(text).toContain("Total capital: 40,000 ISK");
+    expect(text).not.toContain("Sell Station:");
+    expect(text).not.toContain("Cargo m3:");
+    expect(text).not.toContain("----- ROUTE SUMMARY -----");
+    expect(text).not.toContain("Route: jumps");
   });
 
   it("still formats metadata header independently", () => {
