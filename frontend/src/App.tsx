@@ -1743,6 +1743,13 @@ function App() {
               sellSalesTaxPercent={params.sell_sales_tax_percent}
               isLoggedIn={authStatus.logged_in}
               cargoLimit={params.cargo_capacity}
+              originSystemName={params.system_name}
+              minRouteSecurity={params.min_route_security}
+              includeStructures={params.include_structures}
+              routeMaxJumps={params.route_max_hops}
+              allowLowsec={(params.min_route_security ?? 0.45) < 0.45}
+              allowNullsec={(params.min_route_security ?? 0.45) <= 0}
+              allowWormhole={false}
             />
           </div>
           <div
@@ -1817,6 +1824,13 @@ function App() {
               showRegions
               columnProfile="region_eveguru"
               cargoLimit={params.cargo_capacity}
+              originSystemName={params.system_name}
+              minRouteSecurity={params.min_route_security}
+              includeStructures={params.include_structures}
+              routeMaxJumps={params.route_max_hops}
+              allowLowsec={(params.min_route_security ?? 0.45) < 0.45}
+              allowNullsec={(params.min_route_security ?? 0.45) <= 0}
+              allowWormhole={false}
             />
           </div>
           <div
