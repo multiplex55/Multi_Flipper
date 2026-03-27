@@ -1,15 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
-  formatBaseSection,
   formatBatchLinesToMultibuyLines,
   formatBatchLinesToMultibuyText,
-  formatFinalMergedSummarySection,
-  formatMergedBatchManifestText,
-  formatRouteAddedSection,
+  formatOrderedRouteManifestText,
   formatRouteMetadataHeader,
   parseDetailedBatchLine,
 } from "@/lib/batchManifestFormat";
-import type { BaseBatchManifest, RouteAdditionOption } from "@/lib/types";
+import type { OrderedRouteManifest } from "@/lib/types";
 
 describe("batchManifestFormat", () => {
   it("parses a detailed line with extended columns and removes grouping commas from quantity", () => {
@@ -92,166 +89,134 @@ describe("batchManifestFormat", () => {
 });
 
 describe("batch route manifest formatter", () => {
-  const baseBatchManifest: BaseBatchManifest = {
-    origin_system_id: 30000142,
-    origin_system_name: "Jita",
-    origin_location_id: 60003760,
-    origin_location_name: "Jita IV - Moon 4",
-    base_buy_system_id: 30000142,
-    base_buy_location_id: 60003760,
-    base_sell_system_id: 30002187,
-    base_sell_location_id: 60008494,
-    base_lines: [
-      {
-        type_id: 42,
-        type_name: "Zydrine",
-        units: 1050,
-        unit_volume_m3: 0.01,
-        buy_system_id: 30000142,
-        buy_location_id: 60003760,
-        sell_system_id: 30002187,
-        sell_location_id: 60008494,
-        buy_price_isk: 1000,
-        sell_price_isk: 1500,
-        buy_total_isk: 1_050_000,
-        sell_total_isk: 1_575_000,
-        profit_total_isk: 525_000,
-        jumps: 9,
-      },
-      {
-        type_id: 7,
-        type_name: "Mexallon",
-        units: 2000,
-        unit_volume_m3: 0.01,
-        buy_system_id: 30000142,
-        buy_location_id: 60003760,
-        sell_system_id: 30002187,
-        sell_location_id: 60008494,
-        buy_price_isk: 80,
-        sell_price_isk: 120,
-        buy_total_isk: 160_000,
-        sell_total_isk: 240_000,
-        profit_total_isk: 80_000,
-        jumps: 9,
-      },
-    ],
-    base_line_count: 2,
-    total_units: 3050,
-    total_volume_m3: 1250.2,
-    total_buy_isk: 1_210_000,
-    total_sell_isk: 1_815_000,
-    total_profit_isk: 605_000,
-    cargo_limit_m3: 5000,
-    remaining_capacity_m3: 3749.8,
-  };
-
-  const selectedOption: RouteAdditionOption = {
-    option_id: "opt-1",
-    rank: 1,
-    lines: [
-      {
-        type_id: 8,
-        type_name: "Isogen",
-        units: 500,
-        unit_volume_m3: 0.01,
-        buy_system_id: 30000142,
-        buy_location_id: 60003760,
-        sell_system_id: 30002187,
-        sell_location_id: 60008494,
-        buy_total_isk: 350_500,
-        sell_total_isk: 500_900,
-        profit_total_isk: 150_400,
-        route_jumps: 11,
-      },
-      {
-        type_id: 8,
-        type_name: "Isogen",
-        units: 120,
-        unit_volume_m3: 0.01,
-        buy_system_id: 30000142,
-        buy_location_id: 60003760,
-        sell_system_id: 30002187,
-        sell_location_id: 60008494,
-        buy_total_isk: 84_120,
-        sell_total_isk: 120_360,
-        profit_total_isk: 36_240,
-        route_jumps: 11,
-      },
-    ],
-    line_count: 2,
-    added_volume_m3: 215.3,
-    utilization_pct: 29.3,
-    total_buy_isk: 434_620,
-    total_sell_isk: 621_260,
-    total_profit_isk: 186_640,
-    total_jumps: 11,
-    isk_per_jump: 16_967.27,
-    ranking_inputs: {
-      total_profit_isk: 186_640,
+  const manifest: OrderedRouteManifest = {
+    summary: {
+      station_count: 2,
+      item_count: 3,
+      total_units: 3_550,
+      total_volume_m3: 45.5,
+      total_buy_isk: 1_555_000,
+      total_sell_isk: 2_200_000,
+      total_profit_isk: 645_000,
       total_jumps: 11,
-      isk_per_jump: 16_967.27,
-      utilization_pct: 29.3,
+      isk_per_jump: 58_636.36,
     },
-    ranking_tie_break_values: [29.3, 8],
-    ranking_sort_key: "A",
+    stations: [
+      {
+        station_key: "id:60003760",
+        buy_station_name: "Jita IV - Moon 4",
+        jumps_to_buy_station: 0,
+        jumps_buy_to_sell: 9,
+        item_count: 2,
+        total_units: 3_050,
+        total_volume_m3: 30.5,
+        total_buy_isk: 1_210_000,
+        total_sell_isk: 1_815_000,
+        total_profit_isk: 605_000,
+        isk_per_jump: 67_222.22,
+        lines: [
+          {
+            type_id: 7,
+            type_name: "Mexallon",
+            units: 2_000,
+            unit_volume_m3: 0.01,
+            volume_m3: 20,
+            buy_total_isk: 160_000,
+            buy_per_isk: 80,
+            sell_total_isk: 240_000,
+            sell_per_isk: 120,
+            profit_isk: 80_000,
+          },
+          {
+            type_id: 42,
+            type_name: "Zydrine",
+            units: 1_050,
+            unit_volume_m3: 0.01,
+            volume_m3: 10.5,
+            buy_total_isk: 1_050_000,
+            buy_per_isk: 1_000,
+            sell_total_isk: 1_575_000,
+            sell_per_isk: 1_500,
+            profit_isk: 525_000,
+          },
+        ],
+      },
+      {
+        station_key: "id:60008494",
+        buy_station_name: "Perimeter - Tranquility",
+        jumps_to_buy_station: 1,
+        jumps_buy_to_sell: 10,
+        item_count: 1,
+        total_units: 500,
+        total_volume_m3: 15,
+        total_buy_isk: 345_000,
+        total_sell_isk: 385_000,
+        total_profit_isk: 40_000,
+        isk_per_jump: 3_636.36,
+        lines: [
+          {
+            type_id: 8,
+            type_name: "Isogen",
+            units: 500,
+            unit_volume_m3: 0.03,
+            volume_m3: 15,
+            buy_total_isk: 345_000,
+            buy_per_isk: 690,
+            sell_total_isk: 385_000,
+            sell_per_isk: 770,
+            profit_isk: 40_000,
+          },
+        ],
+      },
+    ],
   };
 
-  it("renders expected multiline layout with header, summary, base block and additions block", () => {
-    const manifest = formatMergedBatchManifestText({
-      baseBatchManifest,
-      selectedOption,
+  it("renders summary, station blocks, compact item list, and detailed rows", () => {
+    const text = formatOrderedRouteManifestText({
+      originLabel: "Jita (Jita IV - Moon 4)",
       metadataHeader: {
         corridor: "Jita -> Amarr",
-        jumps: selectedOption.total_jumps,
-        iskPerJump: selectedOption.isk_per_jump,
+        jumps: 11,
+        iskPerJump: 58_636.36,
       },
+      manifest,
     });
 
-    expect(manifest).toBe(
+    expect(text).toBe(
       [
         "Origin: Jita (Jita IV - Moon 4)",
         "Corridor: Jita -> Amarr",
         "Route jumps: 11",
-        "ISK/jump: 16,967 ISK",
-        "----- MERGED SUMMARY -----",
-        "Lines: base 2 + added 2 = 4",
-        "Units: 3,670 | Volume: 1,465.5 m3 / 5,000 m3 (remaining 3,534.5 m3)",
-        "Totals: buy 1,644,620 ISK | sell 2,436,260 ISK | profit 791,640 ISK",
+        "ISK/jump: 58,636 ISK",
+        "----- ROUTE SUMMARY -----",
+        "Stations: 2 | Items: 3 | Units: 3,550",
+        "Totals: vol 45.5 m3 | buy 1,555,000 ISK | sell 2,200,000 ISK | profit 645,000 ISK",
+        "Route: jumps 11 | ISK/jump 58,636 ISK",
         "",
-        "----- BASE ITEMS -----",
-        "Mexallon x2,000 | buy 160,000 ISK | sell 240,000 ISK | profit 80,000 ISK",
-        "Zydrine x1,050 | buy 1,050,000 ISK | sell 1,575,000 ISK | profit 525,000 ISK",
+        "----- STATION 1: Jita IV - Moon 4 -----",
+        "Jumps to Buy Station: 0",
+        "Jumps Buy -> Sell: 9",
+        "Items: 2 | Units: 3,050 | Volume: 30.5 m3",
+        "Capital: 1,210,000 ISK | Gross Sell: 1,815,000 ISK | Profit: 605,000 ISK | ISK/jump: 67,222 ISK",
+        "Item list: Mexallon 2,000, Zydrine 1,050",
+        "Mexallon | qty 2,000 | buy total 160,000 ISK | buy per 80 ISK | sell total 240,000 ISK | sell per 120 ISK | vol 20 m3 | profit 80,000 ISK",
+        "Zydrine | qty 1,050 | buy total 1,050,000 ISK | buy per 1,000 ISK | sell total 1,575,000 ISK | sell per 1,500 ISK | vol 10.5 m3 | profit 525,000 ISK",
         "",
-        "----- ROUTE ADDITIONS -----",
-        "Isogen x500 | buy 350,500 ISK | sell 500,900 ISK | profit 150,400 ISK",
-        "Isogen x120 | buy 84,120 ISK | sell 120,360 ISK | profit 36,240 ISK",
+        "----- STATION 2: Perimeter - Tranquility -----",
+        "Jumps to Buy Station: 1",
+        "Jumps Buy -> Sell: 10",
+        "Items: 1 | Units: 500 | Volume: 15 m3",
+        "Capital: 345,000 ISK | Gross Sell: 385,000 ISK | Profit: 40,000 ISK | ISK/jump: 3,636 ISK",
+        "Item list: Isogen 500",
+        "Isogen | qty 500 | buy total 345,000 ISK | buy per 690 ISK | sell total 385,000 ISK | sell per 770 ISK | vol 15 m3 | profit 40,000 ISK",
       ].join("\n"),
     );
   });
 
-  it("computes merged ISK and jump summary math consistently", () => {
+  it("still formats metadata header independently", () => {
     expect(formatRouteMetadataHeader({ jumps: 9, iskPerJump: 10_500.99 })).toEqual([
       "Route jumps: 9",
       "ISK/jump: 10,501 ISK",
     ]);
-    expect(
-      formatFinalMergedSummarySection({
-        baseBatchManifest,
-        selectedOption,
-      }),
-    ).toContain("Totals: buy 1,644,620 ISK | sell 2,436,260 ISK | profit 791,640 ISK");
-  });
-
-  it("keeps duplicate item names as separate lines in deterministic order", () => {
-    expect(formatRouteAddedSection(selectedOption.lines)).toEqual([
-      "----- ROUTE ADDITIONS -----",
-      "Isogen x500 | buy 350,500 ISK | sell 500,900 ISK | profit 150,400 ISK",
-      "Isogen x120 | buy 84,120 ISK | sell 120,360 ISK | profit 36,240 ISK",
-    ]);
-    expect(formatBaseSection(baseBatchManifest)[1]).toContain("Mexallon");
-  });
-
-  it("shows a guard line when there are zero additions", () => {
-    expect(formatRouteAddedSection([])).toEqual(["----- ROUTE ADDITIONS -----", "(none)"]);
   });
 });

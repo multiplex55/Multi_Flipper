@@ -10,13 +10,14 @@ import {
 } from "@/lib/batchMetrics";
 import {
   formatBatchLinesToMultibuyLines,
-  formatMergedBatchManifestText,
+  formatOrderedRouteManifestText,
 } from "@/lib/batchManifestFormat";
 import type {
   BaseBatchManifest,
   BatchCreateRouteRequest,
   MergedBatchManifest,
   FlipResult,
+  OrderedRouteManifest,
   RouteAdditionOption,
   StationCacheMeta,
 } from "@/lib/types";
@@ -50,6 +51,16 @@ interface BatchBuilderPopupProps {
 }
 
 type RouteState = "idle" | "searching" | "results" | "selected";
+
+function normalizeStationName(name: string | null | undefined): string {
+  return (name ?? "").trim().toLocaleLowerCase().replace(/\s+/g, " ");
+}
+
+function formatStationFallback(line: { buy_location_id: number }, matchedRow?: FlipResult): string {
+  if (matchedRow?.BuyStation?.trim()) return matchedRow.BuyStation.trim();
+  if (line.buy_location_id > 0) return `Station ${line.buy_location_id}`;
+  return "Unknown Station";
+}
 
 function buildMergedManifest(
   baseBatch: BaseBatchManifest,
@@ -296,22 +307,104 @@ export function BatchBuilderPopup({
     if (!baseBatchManifest || !mergedManifest) return;
     const selectedOption = routeOptions.find((option) => option.option_id === selectedOptionId);
     if (!selectedOption) return;
-    const corridor =
-      anchorRow?.BuySystemName && anchorRow?.SellSystemName
-        ? `${anchorRow.BuySystemName} -> ${anchorRow.SellSystemName}`
-        : undefined;
-    const manifest = formatMergedBatchManifestText({
-      baseBatchManifest,
-      selectedOption,
-      metadataHeader: {
-        corridor,
-        jumps: selectedOption.total_jumps,
-        iskPerJump: selectedOption.isk_per_jump,
+    const routeRows = rows.filter((row) => row.TypeID > 0);
+    const findRowForLine = (line: (typeof selectedOption.lines)[number]): FlipResult | undefined => {
+      const exact = routeRows.find((row) => {
+        if (row.TypeID !== line.type_id) return false;
+        const rowBuyLocationId = safeNumber(row.BuyLocationID);
+        const rowSellLocationId = safeNumber(row.SellLocationID);
+        if (line.buy_location_id > 0 && rowBuyLocationId !== line.buy_location_id) return false;
+        if (line.sell_location_id > 0 && rowSellLocationId !== line.sell_location_id) return false;
+        return true;
+      });
+      if (exact) return exact;
+      return routeRows.find((row) => row.TypeID === line.type_id);
+    };
+
+    const stationOrder: string[] = [];
+    const stations = new Map<string, OrderedRouteManifest["stations"][number]>();
+    for (const line of selectedOption.lines) {
+      const matchedRow = findRowForLine(line);
+      const stationName = formatStationFallback(line, matchedRow);
+      const primaryKey = line.buy_location_id > 0 ? `id:${line.buy_location_id}` : "";
+      const fallbackKey = normalizeStationName(stationName);
+      const stationKey = primaryKey || `name:${fallbackKey}`;
+      if (!stations.has(stationKey)) {
+        stationOrder.push(stationKey);
+        const jumpsToBuy = Math.max(0, Math.floor(safeNumber(matchedRow?.BuyJumps)));
+        const jumpsBuyToSell = Math.max(0, Math.floor(safeNumber(matchedRow?.SellJumps)));
+        stations.set(stationKey, {
+          station_key: stationKey,
+          buy_station_name: stationName,
+          jumps_to_buy_station: jumpsToBuy,
+          jumps_buy_to_sell: jumpsBuyToSell,
+          item_count: 0,
+          total_units: 0,
+          total_volume_m3: 0,
+          total_buy_isk: 0,
+          total_sell_isk: 0,
+          total_profit_isk: 0,
+          isk_per_jump: 0,
+          lines: [],
+        });
+      }
+
+      const station = stations.get(stationKey);
+      if (!station) continue;
+      const units = Math.max(0, Math.floor(safeNumber(line.units)));
+      const unitVolumeM3 = safeNumber(line.unit_volume_m3);
+      const volumeM3 = unitVolumeM3 * units;
+      const buyTotal = safeNumber(line.buy_total_isk);
+      const sellTotal = safeNumber(line.sell_total_isk);
+      const profit = safeNumber(line.profit_total_isk);
+      station.lines.push({
+        type_id: line.type_id,
+        type_name: line.type_name,
+        units,
+        unit_volume_m3: unitVolumeM3,
+        volume_m3: volumeM3,
+        buy_total_isk: buyTotal,
+        buy_per_isk: units > 0 ? buyTotal / units : 0,
+        sell_total_isk: sellTotal,
+        sell_per_isk: units > 0 ? sellTotal / units : 0,
+        profit_isk: profit,
+      });
+      station.item_count += 1;
+      station.total_units += units;
+      station.total_volume_m3 += volumeM3;
+      station.total_buy_isk += buyTotal;
+      station.total_sell_isk += sellTotal;
+      station.total_profit_isk += profit;
+      const stationJumps = station.jumps_to_buy_station + station.jumps_buy_to_sell;
+      station.isk_per_jump = stationJumps > 0 ? station.total_profit_isk / stationJumps : 0;
+    }
+
+    const orderedStations = stationOrder
+      .map((key) => stations.get(key))
+      .filter((station): station is OrderedRouteManifest["stations"][number] => station != null);
+    const orderedManifest: OrderedRouteManifest = {
+      summary: {
+        station_count: orderedStations.length,
+        item_count: orderedStations.reduce((sum, station) => sum + station.item_count, 0),
+        total_units: orderedStations.reduce((sum, station) => sum + station.total_units, 0),
+        total_volume_m3: orderedStations.reduce((sum, station) => sum + station.total_volume_m3, 0),
+        total_buy_isk: orderedStations.reduce((sum, station) => sum + station.total_buy_isk, 0),
+        total_sell_isk: orderedStations.reduce((sum, station) => sum + station.total_sell_isk, 0),
+        total_profit_isk: orderedStations.reduce((sum, station) => sum + station.total_profit_isk, 0),
+        total_jumps: selectedOption.total_jumps,
+        isk_per_jump: selectedOption.isk_per_jump,
       },
+      stations: orderedStations,
+    };
+
+    const manifest = formatOrderedRouteManifestText({
+      originLabel: `${baseBatchManifest.origin_system_name} (${baseBatchManifest.origin_location_name})`,
+      metadataHeader: undefined,
+      manifest: orderedManifest,
     });
     await navigator.clipboard.writeText(manifest);
     addToast(t("batchBuilderCopiedMerged"), "success", 2200);
-  }, [baseBatchManifest, mergedManifest, addToast, t, anchorRow, routeOptions, selectedOptionId]);
+  }, [baseBatchManifest, mergedManifest, addToast, t, routeOptions, selectedOptionId, rows]);
 
   const startBatchCreateRoute = useCallback(async () => {
     if (!baseBatchManifest) {
