@@ -11,6 +11,10 @@ import { computeHopMetrics, computeRouteMetrics } from "@/lib/routeMetrics";
 import { adaptRouteResultToOrderedRouteManifest } from "@/lib/routeManifestAdapter";
 import { formatOrderedRouteManifestText } from "@/lib/batchManifestFormat";
 import {
+  formatRouteManifestValidationIssues,
+  validateOrderedRouteManifest,
+} from "@/lib/routeManifestValidation";
+import {
   TabSettingsPanel,
   SettingsCheckbox,
   SettingsField,
@@ -472,6 +476,29 @@ function RouteDetailPopup({
 
   const handleCopyRoute = async () => {
     const adapted = adaptRouteResultToOrderedRouteManifest(route);
+    const validation = validateOrderedRouteManifest(adapted.manifest);
+    const allIssues = [...validation.errors, ...validation.warnings];
+
+    if (allIssues.length > 0) {
+      const issueText = formatRouteManifestValidationIssues(allIssues);
+      if (import.meta.env.DEV || import.meta.env.MODE === "test") {
+        if (validation.errors.length > 0) {
+          throw new Error(`Route manifest validation failed before copy:
+${issueText}`);
+        }
+        console.warn(`Route manifest validation warnings before copy:
+${issueText}`);
+      } else {
+        console.warn(`Route manifest validation issues before copy:
+${issueText}`);
+      }
+    }
+
+    if (!validation.isUsable) {
+      addToast(t("errorSomethingWentWrong"), "error", 2200);
+      return;
+    }
+
     const routeText = formatOrderedRouteManifestText({ manifest: adapted.manifest });
     try {
       await navigator.clipboard.writeText(routeText);
