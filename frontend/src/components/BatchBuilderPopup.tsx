@@ -537,6 +537,7 @@ export function BatchBuilderPopup({
       originLabel: `${baseBatchManifest.origin_system_name} (${baseBatchManifest.origin_location_name})`,
       metadataHeader: undefined,
       manifest: orderedManifest,
+      t,
     });
     const baseManifestItems = combinedLines.map((line) => {
       const units = Math.max(0, Math.floor(safeNumber(line.units)));
