@@ -1,14 +1,18 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"eve-flipper/internal/auth"
 	"eve-flipper/internal/config"
+	"eve-flipper/internal/engine"
 	"eve-flipper/internal/esi"
 )
 
@@ -176,5 +180,170 @@ func TestAuthRevisionBumpAndStatusPayload(t *testing.T) {
 	}
 	if revision != 2 {
 		t.Fatalf("payload auth_revision = %d, want 2", revision)
+	}
+}
+
+type testStationStore struct {
+	mu       sync.RWMutex
+	stations map[int64]string
+}
+
+func (s *testStationStore) GetStation(locationID int64) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	name, ok := s.stations[locationID]
+	return name, ok
+}
+
+func (s *testStationStore) SetStation(locationID int64, name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.stations[locationID] = name
+}
+
+func TestHandleAuthPortfolio_ResolvesTopStationLocationName(t *testing.T) {
+	database := openAPITestDB(t)
+
+	const (
+		userID      = "user-portfolio-station"
+		characterID = int64(90000001)
+		locationID  = int64(60003760)
+	)
+	sessions := auth.NewSessionStore(database.SqlDB())
+	if err := sessions.SaveAndActivateForUser(userID, &auth.Session{
+		CharacterID:   characterID,
+		CharacterName: "Station Trader",
+		AccessToken:   "token",
+		RefreshToken:  "refresh",
+		ExpiresAt:     time.Now().Add(2 * time.Hour),
+	}); err != nil {
+		t.Fatalf("SaveAndActivateForUser: %v", err)
+	}
+
+	store := &testStationStore{stations: map[int64]string{
+		locationID: "Jita IV - Moon 4 - Caldari Navy Assembly Plant",
+	}}
+	esiClient := esi.NewClient(store)
+	srv := &Server{
+		cfg:      config.Default(),
+		db:       database,
+		esi:      esiClient,
+		sessions: sessions,
+	}
+
+	now := time.Now().UTC()
+	srv.setWalletTxnCache(characterID, []esi.WalletTransaction{
+		{
+			TransactionID: 1001,
+			Date:          now.Add(-12 * time.Hour).Format(time.RFC3339),
+			TypeID:        34,
+			LocationID:    locationID,
+			UnitPrice:     5.0,
+			Quantity:      100,
+			IsBuy:         true,
+		},
+		{
+			TransactionID: 1002,
+			Date:          now.Add(-6 * time.Hour).Format(time.RFC3339),
+			TypeID:        34,
+			LocationID:    locationID,
+			UnitPrice:     6.0,
+			Quantity:      100,
+			IsBuy:         false,
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/portfolio?character_id=90000001&days=30", nil)
+	req = req.WithContext(context.WithValue(req.Context(), userIDContextKey, userID))
+	rec := httptest.NewRecorder()
+
+	srv.handleAuthPortfolio(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var out engine.PortfolioPnL
+	if err := json.NewDecoder(rec.Body).Decode(&out); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(out.TopStations) == 0 {
+		t.Fatalf("top_stations empty")
+	}
+	if out.TopStations[0].LocationName != store.stations[locationID] {
+		t.Fatalf("top_stations[0].location_name = %q, want %q", out.TopStations[0].LocationName, store.stations[locationID])
+	}
+}
+
+func TestHandleAuthPortfolio_FillsMissingOrIDLikeLocationNameFromResolver(t *testing.T) {
+	database := openAPITestDB(t)
+
+	const (
+		userID      = "user-portfolio-station-fallback"
+		characterID = int64(90000002)
+		locationID  = int64(60008494)
+	)
+	sessions := auth.NewSessionStore(database.SqlDB())
+	if err := sessions.SaveAndActivateForUser(userID, &auth.Session{
+		CharacterID:   characterID,
+		CharacterName: "Fallback Trader",
+		AccessToken:   "token",
+		RefreshToken:  "refresh",
+		ExpiresAt:     time.Now().Add(2 * time.Hour),
+	}); err != nil {
+		t.Fatalf("SaveAndActivateForUser: %v", err)
+	}
+
+	store := &testStationStore{stations: map[int64]string{
+		locationID: "Amarr VIII (Oris) - Emperor Family Academy",
+	}}
+	esiClient := esi.NewClient(store)
+	srv := &Server{
+		cfg:      config.Default(),
+		db:       database,
+		esi:      esiClient,
+		sessions: sessions,
+	}
+
+	now := time.Now().UTC()
+	srv.setWalletTxnCache(characterID, []esi.WalletTransaction{
+		{
+			TransactionID: 2001,
+			Date:          now.Add(-10 * time.Hour).Format(time.RFC3339),
+			TypeID:        35,
+			LocationID:    locationID,
+			LocationName:  "   ",
+			UnitPrice:     10.0,
+			Quantity:      50,
+			IsBuy:         true,
+		},
+		{
+			TransactionID: 2002,
+			Date:          now.Add(-8 * time.Hour).Format(time.RFC3339),
+			TypeID:        35,
+			LocationID:    locationID,
+			LocationName:  "#60008494",
+			UnitPrice:     12.0,
+			Quantity:      50,
+			IsBuy:         false,
+		},
+	})
+
+	req := requestWithUserID(http.MethodGet, "/api/auth/portfolio?character_id=90000002&days=30", nil, userID)
+	rec := httptest.NewRecorder()
+
+	srv.handleAuthPortfolio(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+
+	var out engine.PortfolioPnL
+	if err := json.NewDecoder(rec.Body).Decode(&out); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(out.TopStations) == 0 {
+		t.Fatalf("top_stations empty")
+	}
+	if out.TopStations[0].LocationName != store.stations[locationID] {
+		t.Fatalf("top_stations[0].location_name = %q, want %q", out.TopStations[0].LocationName, store.stations[locationID])
 	}
 }
