@@ -798,6 +798,7 @@ export const ru = {
 
     // Watchlist
     tabWatchlist: "Избранное",
+    tabBanlist: "Банлист",
     addToWatchlist: "В избранное",
     removeFromWatchlist: "Убрать из избранного",
     trackItem: "Отслеживать",
@@ -869,6 +870,17 @@ export const ru = {
     watchlistEnableAlerts: "Включить алерты",
     watchlistCooldownPeriod: "Период охлаждения",
     watchlistCooldownHint: "Минимальное время между повторными алертами (1 час)",
+    banlistAddItem: "Добавить предмет",
+    banlistSearchPlaceholder: "Поиск известных предметов...",
+    banlistNoSearchResults: "Подходящие предметы не найдены",
+    banlistCurrent: "Заблокированные предметы",
+    banlistClearAll: "Очистить всё",
+    banlistEmpty: "Банлист пуст",
+    banlistRemove: "Убрать",
+    banlistItemAdded: "Предмет добавлен в банлист",
+    banlistItemRemoved: "Предмет удалён из банлиста",
+    banlistCleared: "Банлист очищен",
+    banlistSelectionRemoved: "Заблокированный предмет удалён из выбранного маршрута",
 
     // Copy / Export
     copyRoute: "Копировать маршрут",

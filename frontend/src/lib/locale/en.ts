@@ -798,6 +798,7 @@ export const en = {
 
     // Watchlist
     tabWatchlist: "Watchlist",
+    tabBanlist: "Banlist",
     addToWatchlist: "Add to watchlist",
     removeFromWatchlist: "Remove from watchlist",
     trackItem: "Track",
@@ -869,6 +870,17 @@ export const en = {
     watchlistEnableAlerts: "Enable Alerts",
     watchlistCooldownPeriod: "Cooldown Period",
     watchlistCooldownHint: "Minimum time between repeat alerts (1 hour)",
+    banlistAddItem: "Add item",
+    banlistSearchPlaceholder: "Search known items...",
+    banlistNoSearchResults: "No eligible items found",
+    banlistCurrent: "Banned items",
+    banlistClearAll: "Clear all",
+    banlistEmpty: "No banned items yet",
+    banlistRemove: "Remove",
+    banlistItemAdded: "Item added to banlist",
+    banlistItemRemoved: "Item removed from banlist",
+    banlistCleared: "Banlist cleared",
+    banlistSelectionRemoved: "A banned item was removed from selected route",
 
     // Copy / Export
     copyRoute: "Copy route",

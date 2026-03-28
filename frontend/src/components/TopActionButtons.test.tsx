@@ -11,12 +11,15 @@ describe("TopActionButtons", () => {
     render(
       <TopActionButtons
         watchlistLabel="Watchlist"
+        banlistLabel="Banlist"
         verifierLabel="Batch Price Verify"
         onOpenWatchlist={vi.fn()}
+        onOpenBanlist={vi.fn()}
       />,
     );
 
     expect(screen.getByRole("button", { name: "Watchlist" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Banlist" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Batch Price Verify" })).toBeInTheDocument();
   });
 
@@ -24,8 +27,10 @@ describe("TopActionButtons", () => {
     render(
       <TopActionButtons
         watchlistLabel="Watchlist"
+        banlistLabel="Banlist"
         verifierLabel="Batch Price Verify"
         onOpenWatchlist={vi.fn()}
+        onOpenBanlist={vi.fn()}
       />,
     );
 
@@ -41,8 +46,10 @@ describe("TopActionButtons", () => {
     render(
       <TopActionButtons
         watchlistLabel="Watchlist"
+        banlistLabel="Banlist"
         verifierLabel="Batch Price Verify"
         onOpenWatchlist={vi.fn()}
+        onOpenBanlist={vi.fn()}
         verifierOpen
         initialManifestText={manifest}
         onOpenVerifier={vi.fn()}
@@ -59,8 +66,10 @@ describe("TopActionButtons", () => {
     render(
       <TopActionButtons
         watchlistLabel="Watchlist"
+        banlistLabel="Banlist"
         verifierLabel="Batch Price Verify"
         onOpenWatchlist={vi.fn()}
+        onOpenBanlist={vi.fn()}
       />,
     );
 
@@ -80,13 +89,30 @@ describe("TopActionButtons", () => {
     render(
       <TopActionButtons
         watchlistLabel="Watchlist"
+        banlistLabel="Banlist"
         verifierLabel="Batch Price Verify"
         onOpenWatchlist={onOpenWatchlist}
+        onOpenBanlist={vi.fn()}
       />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Watchlist" }));
 
     expect(onOpenWatchlist).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves Banlist click behavior", () => {
+    const onOpenBanlist = vi.fn();
+    render(
+      <TopActionButtons
+        watchlistLabel="Watchlist"
+        banlistLabel="Banlist"
+        verifierLabel="Batch Price Verify"
+        onOpenWatchlist={vi.fn()}
+        onOpenBanlist={onOpenBanlist}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Banlist" }));
+    expect(onOpenBanlist).toHaveBeenCalledTimes(1);
   });
 });

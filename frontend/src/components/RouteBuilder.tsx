@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { findRoutes, setWaypointInGame } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import type { RouteResult, RouteHop, ScanParams } from "@/lib/types";
+import type { BanlistState } from "@/lib/banlist";
+import { filterBannedItems } from "@/lib/banlist";
 import { ExecutionPlannerPopup } from "./ExecutionPlannerPopup";
 import { useGlobalToast } from "./Toast";
 import { handleEveUIError } from "@/lib/handleEveUIError";
@@ -22,6 +24,7 @@ interface Props {
   /** Results loaded externally (e.g. from history) */
   loadedResults?: RouteResult[] | null;
   isLoggedIn?: boolean;
+  banlist?: BanlistState;
 }
 
 function formatISK(v: number): string {
@@ -35,8 +38,9 @@ function formatISKFull(v: number): string {
   return v.toLocaleString("en-US", { maximumFractionDigits: 0 });
 }
 
-export function RouteBuilder({ params, onChange, loadedResults, isLoggedIn = false }: Props) {
+export function RouteBuilder({ params, onChange, loadedResults, isLoggedIn = false, banlist }: Props) {
   const { t } = useI18n();
+  const { addToast } = useGlobalToast();
   const [minHops, setMinHops] = useState<number | "">(params.route_min_hops ?? 2);
   const [maxHops, setMaxHops] = useState<number | "">(params.route_max_hops ?? 5);
   const [targetSystemName, setTargetSystemName] = useState(params.route_target_system_name ?? "");
@@ -147,8 +151,18 @@ export function RouteBuilder({ params, onChange, loadedResults, isLoggedIn = fal
     }
   };
 
+  const filteredResults = useMemo(() => {
+    if (!banlist || banlist.entries.length === 0) return results;
+    return results
+      .map((route) => ({
+        ...route,
+        Hops: filterBannedItems(route.Hops ?? [], banlist, (hop) => hop.TypeID),
+      }))
+      .filter((route) => (route.Hops?.length ?? 0) > 0);
+  }, [results, banlist]);
+
   const sortedResults = useMemo(() => {
-    if (results.length === 0) return results;
+    if (filteredResults.length === 0) return filteredResults;
     const getter: Record<SortKey, (r: RouteResult) => number> = {
       hops: (r) => r.HopCount,
       profit: (r) => r.TotalProfit,
@@ -157,8 +171,16 @@ export function RouteBuilder({ params, onChange, loadedResults, isLoggedIn = fal
     };
     const get = getter[sortKey];
     const mul = sortDir === "asc" ? 1 : -1;
-    return [...results].sort((a, b) => (get(a) - get(b)) * mul);
-  }, [results, sortKey, sortDir]);
+    return [...filteredResults].sort((a, b) => (get(a) - get(b)) * mul);
+  }, [filteredResults, sortKey, sortDir]);
+
+  useEffect(() => {
+    if (!selectedRoute || !banlist || banlist.entries.length === 0) return;
+    const keptHops = filterBannedItems(selectedRoute.Hops ?? [], banlist, (hop) => hop.TypeID);
+    if (keptHops.length === (selectedRoute.Hops?.length ?? 0)) return;
+    setSelectedRoute(null);
+    addToast(t("banlistSelectionRemoved"), "warning", 2400);
+  }, [selectedRoute, banlist, addToast, t]);
 
   const handleSearch = useCallback(async () => {
     if (scanning) {
@@ -279,9 +301,9 @@ export function RouteBuilder({ params, onChange, loadedResults, isLoggedIn = fal
               {progress && <span className="text-[10px] text-eve-dim">{progress}</span>}
             </div>
           </div>
-          {results.length > 0 && (
+          {filteredResults.length > 0 && (
             <div className="mt-2 text-xs text-eve-dim">
-              {t("routeFound", { count: results.length })}
+              {t("routeFound", { count: filteredResults.length })}
             </div>
           )}
         </TabSettingsPanel>
