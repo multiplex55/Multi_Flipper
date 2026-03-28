@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildOrderedRouteManifestFromRouteResult,
   formatBatchLinesToMultibuyLines,
   formatBatchLinesToMultibuyText,
   formatOrderedRouteManifestText,
   formatRouteMetadataHeader,
   parseDetailedBatchLine,
 } from "@/lib/batchManifestFormat";
-import type { OrderedRouteManifest } from "@/lib/types";
+import type { OrderedRouteManifest, RouteResult } from "@/lib/types";
 
 describe("batchManifestFormat", () => {
   it("parses a detailed line with extended columns and removes grouping commas from quantity", () => {
@@ -749,5 +750,202 @@ describe("batch route manifest formatter", () => {
     expect(text).toContain("Jumps to Buy Station: 0");
     expect(text).toContain("Jumps Buy -> Sell: 0");
     expect(text).toContain("Total isk/jump: 0 ISK");
+  });
+});
+
+describe("route copy formatter parity", () => {
+  it("uses the same manifest formatter output for route copy single-hop", () => {
+    const route: RouteResult = {
+      Hops: [
+        {
+          SystemName: "Jita",
+          StationName: "Jita IV - Moon 4",
+          SystemID: 30000142,
+          DestSystemName: "Perimeter",
+          DestStationName: "Tranquility Trading Tower",
+          DestSystemID: 30000144,
+          TypeName: "Tritanium",
+          TypeID: 34,
+          BuyPrice: 4,
+          SellPrice: 6.5,
+          Units: 1_000,
+          Profit: 2_500,
+          Jumps: 1,
+        },
+      ],
+      TotalProfit: 2_500,
+      TotalJumps: 1,
+      ProfitPerJump: 2_500,
+      HopCount: 1,
+    };
+
+    const manifestFromRoute = buildOrderedRouteManifestFromRouteResult(route);
+    const routeText = formatOrderedRouteManifestText({ manifest: manifestFromRoute });
+    const expected = [
+      "Cargo m3: 0 m3",
+      "Stations: 1",
+      "Items: 1",
+      "Total volume: 0 m3",
+      "Total capital: 4,000 ISK",
+      "Total gross sell: 6,500 ISK",
+      "Total profit: 2,500 ISK",
+      "Total isk/jump: 2,500 ISK",
+      "",
+      "Buy Station: Jita IV - Moon 4 (Jita)",
+      "Jumps to Buy Station: 0",
+      "Sell Station: Tranquility Trading Tower (Perimeter)",
+      "Jumps Buy -> Sell: 1",
+      "Cargo m3: 0 m3",
+      "Items: 1",
+      "Total volume: 0 m3",
+      "Total capital: 4,000 ISK",
+      "Total gross sell: 6,500 ISK",
+      "Total profit: 2,500 ISK",
+      "Total isk/jump: 2,500 ISK",
+      "Tritanium | qty 1,000 | buy total 4,000 ISK | buy per 4 ISK | sell total 6,500 ISK | sell per 7 ISK | vol 0 m3 | profit 2,500 ISK",
+      "",
+      "Tritanium 1000",
+    ].join("\n");
+
+    expect(routeText).toBe(expected);
+    expect(routeText).toContain("Buy Station: Jita IV - Moon 4 (Jita)");
+    expect(routeText).toContain("Sell Station: Tranquility Trading Tower (Perimeter)");
+  });
+
+  it("formats multi-hop routes and preserves buy/sell station labels per hop", () => {
+    const route: RouteResult = {
+      Hops: [
+        {
+          SystemName: "Jita",
+          StationName: "Jita IV - Moon 4",
+          SystemID: 30000142,
+          DestSystemName: "Perimeter",
+          DestStationName: "TTT",
+          DestSystemID: 30000144,
+          TypeName: "Tritanium",
+          TypeID: 34,
+          BuyPrice: 5,
+          SellPrice: 8,
+          Units: 500,
+          Profit: 1_500,
+          Jumps: 1,
+        },
+        {
+          SystemName: "Amarr",
+          StationName: "Amarr VIII (Oris) - Emperor Family Academy",
+          SystemID: 30002187,
+          EmptyJumps: 2,
+          DestSystemName: "Dodixie",
+          DestStationName: "Dodixie IX - Moon 20",
+          DestSystemID: 30002659,
+          TypeName: "Pyerite",
+          TypeID: 35,
+          BuyPrice: 12,
+          SellPrice: 16,
+          Units: 700,
+          Profit: 2_800,
+          Jumps: 9,
+        },
+      ],
+      TotalProfit: 4_300,
+      TotalJumps: 12,
+      ProfitPerJump: 358.33,
+      HopCount: 2,
+    };
+
+    const text = formatOrderedRouteManifestText({
+      manifest: buildOrderedRouteManifestFromRouteResult(route),
+    });
+
+    expect(text).toContain("Buy Station: Jita IV - Moon 4 (Jita)");
+    expect(text).toContain("Sell Station: TTT (Perimeter)");
+    expect(text).toContain("Buy Station: Amarr VIII (Oris) - Emperor Family Academy (Amarr)");
+    expect(text).toContain("Sell Station: Dodixie IX - Moon 20 (Dodixie)");
+    expect(text).toContain("Jumps Buy -> Sell: 11");
+    expect(text).toContain("------------------------");
+  });
+
+  it("falls back for missing station metadata while preserving manifest structure", () => {
+    const route: RouteResult = {
+      Hops: [
+        {
+          SystemName: "",
+          StationName: "",
+          SystemID: 10,
+          DestSystemName: "Rens",
+          DestStationName: "",
+          DestSystemID: 20,
+          TypeName: "Mexallon",
+          TypeID: 36,
+          BuyPrice: 10,
+          SellPrice: 11,
+          Units: 10,
+          Profit: 10,
+          Jumps: 3,
+        },
+      ],
+      TotalProfit: 10,
+      TotalJumps: 3,
+      ProfitPerJump: 3.33,
+      HopCount: 1,
+    };
+
+    const text = formatOrderedRouteManifestText({
+      manifest: buildOrderedRouteManifestFromRouteResult(route),
+    });
+
+    expect(text).toContain("Buy Station: Unknown Station (Unknown System)");
+    expect(text).toContain("Sell Station: Unknown Station (Rens)");
+    expect(text).toContain("Mexallon 10");
+  });
+
+  it("returns an empty manifest for empty routes and can be rejected by route copy UX", () => {
+    const route: RouteResult = {
+      Hops: [],
+      TotalProfit: 0,
+      TotalJumps: 0,
+      ProfitPerJump: 0,
+      HopCount: 0,
+    };
+    const manifest = buildOrderedRouteManifestFromRouteResult(route);
+    const text = formatOrderedRouteManifestText({ manifest });
+
+    expect(manifest.stations).toEqual([]);
+    expect(text).toContain("Stations: 0");
+    expect(text).toContain("Items: 0");
+  });
+
+  it("guards against formatter drift by asserting route-copy output equals shared manifest output", () => {
+    const route: RouteResult = {
+      Hops: [
+        {
+          SystemName: "Hek",
+          StationName: "Boundless Creation Factory",
+          SystemID: 1,
+          DestSystemName: "Rens",
+          DestStationName: "Brutor Tribe Treasury",
+          DestSystemID: 2,
+          TypeName: "Nocxium",
+          TypeID: 38,
+          BuyPrice: 900,
+          SellPrice: 1_200,
+          Units: 80,
+          Profit: 24_000,
+          Jumps: 4,
+        },
+      ],
+      TotalProfit: 24_000,
+      TotalJumps: 4,
+      ProfitPerJump: 6_000,
+      HopCount: 1,
+    };
+
+    const sharedManifest = buildOrderedRouteManifestFromRouteResult(route);
+    const manifestOutput = formatOrderedRouteManifestText({ manifest: sharedManifest });
+    const routeCopyOutput = formatOrderedRouteManifestText({
+      manifest: buildOrderedRouteManifestFromRouteResult(route),
+    });
+
+    expect(routeCopyOutput).toBe(manifestOutput);
   });
 });

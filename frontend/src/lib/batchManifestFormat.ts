@@ -1,5 +1,5 @@
 import type { BatchLine } from "@/lib/batchMetrics";
-import type { OrderedRouteManifest } from "@/lib/types";
+import type { OrderedRouteManifest, RouteResult } from "@/lib/types";
 
 type ManifestInputLine = {
   typeName: string;
@@ -230,6 +230,7 @@ export function formatOrderedRouteManifestText(input: {
   originLabel?: string;
   metadataHeader?: RouteMetadataHeaderInput;
   manifest: OrderedRouteManifest;
+  t?: (key: BaseManifestTranslationKey, vars?: Record<string, string | number>) => string;
 }): string {
   const resolveSellStation = (): string | null => {
     const corridor = input.metadataHeader?.corridor?.trim();
@@ -258,10 +259,32 @@ export function formatOrderedRouteManifestText(input: {
   for (const [index, station] of input.manifest.stations.entries()) {
     if (output.length > 0) output.push("");
     if (index > 0) output.push("------------------------");
-    output.push(`Buy Station: ${station.buy_station_name}`);
-    output.push(`Jumps to Buy Station: ${formatOptionalQuantity(station.jumps_to_buy_station)}`);
-    output.push(`Sell Station: ${station.sell_station_name ?? resolveSellStation() ?? "Unknown Station"}`);
-    output.push(`Jumps Buy -> Sell: ${formatOptionalQuantity(station.jumps_buy_to_sell)}`);
+    const translate = input.t;
+    const formatLabel = (
+      key: BaseManifestTranslationKey,
+      fallbackLabel: string,
+      vars: Record<string, string | number>,
+    ) => (translate ? translate(key, vars) : `${fallbackLabel}: ${Object.values(vars)[0]}`);
+    output.push(
+      formatLabel("batchBuilderManifestBuyStation", "Buy Station", {
+        station: station.buy_station_name,
+      }),
+    );
+    output.push(
+      formatLabel("batchBuilderManifestJumpsToBuyStation", "Jumps to Buy Station", {
+        jumps: formatOptionalQuantity(station.jumps_to_buy_station),
+      }),
+    );
+    output.push(
+      formatLabel("batchBuilderManifestSellStation", "Sell Station", {
+        station: station.sell_station_name ?? resolveSellStation() ?? "Unknown Station",
+      }),
+    );
+    output.push(
+      formatLabel("batchBuilderManifestJumpsBuyToSell", "Jumps Buy -> Sell", {
+        jumps: formatOptionalQuantity(station.jumps_buy_to_sell),
+      }),
+    );
     output.push(
       `Cargo m3: ${formatVolume(station.cargo_m3 ?? input.manifest.summary?.total_volume_m3 ?? 0)} m3`,
     );
@@ -282,4 +305,75 @@ export function formatOrderedRouteManifestText(input: {
     }
   }
   return output.join("\n");
+}
+
+function withStationSystemLabel(stationName?: string, systemName?: string): string {
+  const cleanedStation = stationName?.trim();
+  const cleanedSystem = systemName?.trim();
+  if (cleanedStation && cleanedSystem) return `${cleanedStation} (${cleanedSystem})`;
+  if (cleanedStation) return `${cleanedStation} (Unknown System)`;
+  if (cleanedSystem) return `Unknown Station (${cleanedSystem})`;
+  return "Unknown Station (Unknown System)";
+}
+
+export function buildOrderedRouteManifestFromRouteResult(route: RouteResult): OrderedRouteManifest {
+  const stations: OrderedRouteManifest["stations"] = route.Hops.map((hop, index) => {
+    const units = Math.max(0, Math.trunc(hop.Units));
+    const buyPer = Number.isFinite(hop.BuyPrice) ? hop.BuyPrice : 0;
+    const sellPer = Number.isFinite(hop.SellPrice) ? hop.SellPrice : 0;
+    const buyTotal = units * buyPer;
+    const sellTotal = units * sellPer;
+    const profit = Number.isFinite(hop.Profit) ? hop.Profit : sellTotal - buyTotal;
+    const emptyJumps = hop.EmptyJumps ?? 0;
+    return {
+      station_key: `route-hop:${index}:${hop.SystemID}:${hop.DestSystemID}:${hop.TypeID}`,
+      buy_station_name: withStationSystemLabel(hop.StationName, hop.SystemName),
+      sell_station_name: withStationSystemLabel(hop.DestStationName, hop.DestSystemName),
+      jumps_to_buy_station: index === 0 ? 0 : null,
+      jumps_buy_to_sell: Math.max(0, hop.Jumps + emptyJumps),
+      item_count: 1,
+      total_volume_m3: 0,
+      total_buy_isk: buyTotal,
+      total_sell_isk: sellTotal,
+      total_profit_isk: profit,
+      isk_per_jump: hop.Jumps + emptyJumps > 0 ? profit / (hop.Jumps + emptyJumps) : null,
+      lines: [
+        {
+          type_id: hop.TypeID,
+          type_name: hop.TypeName || "Unknown Item",
+          units,
+          unit_volume_m3: 0,
+          volume_m3: 0,
+          buy_total_isk: buyTotal,
+          buy_per_isk: buyPer,
+          sell_total_isk: sellTotal,
+          sell_per_isk: sellPer,
+          profit_isk: profit,
+        },
+      ],
+    };
+  });
+
+  const totalBuy = stations.reduce((sum, station) => sum + station.total_buy_isk, 0);
+  const totalSell = stations.reduce((sum, station) => sum + station.total_sell_isk, 0);
+  const totalProfit = stations.reduce((sum, station) => sum + station.total_profit_isk, 0);
+  const totalJumps = route.TotalJumps;
+
+  return {
+    summary: {
+      station_count: stations.length,
+      item_count: stations.reduce((sum, station) => sum + station.item_count, 0),
+      total_units: stations.reduce(
+        (sum, station) => sum + station.lines.reduce((lineSum, line) => lineSum + line.units, 0),
+        0,
+      ),
+      total_volume_m3: 0,
+      total_buy_isk: totalBuy,
+      total_sell_isk: totalSell,
+      total_profit_isk: totalProfit,
+      total_jumps: totalJumps,
+      isk_per_jump: totalJumps > 0 ? totalProfit / totalJumps : 0,
+    },
+    stations,
+  };
 }

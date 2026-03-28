@@ -12,6 +12,10 @@ import {
   SettingsGrid,
   SettingsNumberInput,
 } from "./TabSettingsPanel";
+import {
+  buildOrderedRouteManifestFromRouteResult,
+  formatOrderedRouteManifestText,
+} from "@/lib/batchManifestFormat";
 
 type SortKey = "hops" | "profit" | "jumps" | "ppj";
 type SortDir = "asc" | "desc";
@@ -427,25 +431,13 @@ function RouteDetailPopup({
   };
 
   const handleCopyRoute = async () => {
-    const lines = ["=== EVE Flipper Route ==="];
-    route.Hops.forEach((hop, i) => {
-      const emptyJumps = hop.EmptyJumps ?? 0;
-      const totalHopJumps = hop.Jumps + emptyJumps;
-      lines.push(`[${i + 1}] ${hop.StationName || hop.SystemName}`);
-      lines.push(`    Buy: ${hop.TypeName} x${hop.Units} @ ${formatISKFull(hop.BuyPrice)} ISK`);
-      if (emptyJumps > 0) {
-        lines.push(`    Empty move: ${emptyJumps} jumps`);
-      }
-      lines.push(`    → ${hop.DestSystemName} (${totalHopJumps} jumps, trade ${hop.Jumps})`);
-      lines.push(`    Sell: @ ${formatISKFull(hop.SellPrice)} ISK → Profit: ${formatISK(hop.Profit)}`);
-      lines.push("");
-    });
-    if (route.TargetSystemName) {
-      lines.push(`Target: ${route.TargetSystemName} (${route.TargetJumps ?? 0} jumps)`);
-    }
-    lines.push(`Total: ${formatISKFull(route.TotalProfit)} ISK / ${route.TotalJumps} jumps / ${formatISK(route.ProfitPerJump)} ISK/jump`);
     try {
-      await navigator.clipboard.writeText(lines.join("\n"));
+      if (!Array.isArray(route.Hops) || route.Hops.length === 0) {
+        throw new Error("route_has_no_hops");
+      }
+      const manifest = buildOrderedRouteManifestFromRouteResult(route);
+      const text = formatOrderedRouteManifestText({ manifest, t });
+      await navigator.clipboard.writeText(text);
       addToast(t("copied"), "success", 1400);
     } catch {
       addToast(t("errorSomethingWentWrong"), "error", 2200);
