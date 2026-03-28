@@ -1,5 +1,11 @@
 import { type CSSProperties, useMemo, useState } from "react";
-import { compareManifestToExport, type ComparisonRow, type ComparisonOptions } from "@/features/batchVerifier/compare";
+import {
+  compareManifestToExport,
+  type ComparisonRow,
+  type ComparisonOptions,
+  type ComparisonResult,
+} from "@/features/batchVerifier/compare";
+import { formatDoNotBuyList, formatSummaryReport } from "@/features/batchVerifier/formatting";
 import {
   parseBatchManifest,
   parseExportOrder,
@@ -13,6 +19,7 @@ type EvaluationResult = {
   unexpected: ComparisonRow[];
   diagnostics: ParseDiagnostic[];
   modeLabel: string;
+  comparison: ComparisonResult;
 };
 
 type ToleranceMode = "strict" | "allow_slippage";
@@ -38,32 +45,6 @@ function decisionForRow(state: ComparisonRow["state"]): string {
   if (state === "do_not_buy") return "Do not buy";
   if (state === "missing_from_export") return "Missing";
   return "Unexpected";
-}
-
-function buildSummaryText(result: EvaluationResult): string {
-  const lines = [
-    `Mode: ${result.modeLabel}`,
-    `Buy these: ${result.buyThese.length}`,
-    `Do not buy these: ${result.doNotBuyThese.length}`,
-    `Missing / unavailable: ${result.missing.length}`,
-    `Unexpected extras: ${result.unexpected.length}`,
-  ];
-
-  if (result.doNotBuyThese.length > 0) {
-    lines.push("", "Do not buy list:");
-    for (const row of result.doNotBuyThese) {
-      lines.push(`- ${row.name} (${decisionForRow(row.state)}: ${row.reason})`);
-    }
-  }
-
-  return lines.join("\n");
-}
-
-function buildDoNotBuyText(result: EvaluationResult): string {
-  if (result.doNotBuyThese.length === 0) {
-    return "No do-not-buy items.";
-  }
-  return result.doNotBuyThese.map((row) => row.name).join("\n");
 }
 
 async function copyToClipboard(text: string): Promise<boolean> {
@@ -148,8 +129,11 @@ export function BatchBuyVerifier() {
 
   const hasInput = manifestText.trim().length > 0 || exportText.trim().length > 0;
 
-  const summaryText = useMemo(() => (result ? buildSummaryText(result) : ""), [result]);
-  const doNotBuyText = useMemo(() => (result ? buildDoNotBuyText(result) : ""), [result]);
+  const summaryText = useMemo(
+    () => (result ? formatSummaryReport(result.comparison, { modeLabel: result.modeLabel }) : ""),
+    [result],
+  );
+  const doNotBuyText = useMemo(() => (result ? formatDoNotBuyList(result.comparison) : ""), [result]);
 
   const slippageValue = useMemo(() => {
     if (slippageValueInput.trim() === "") return Number.NaN;
@@ -212,6 +196,7 @@ export function BatchBuyVerifier() {
       unexpected: comparison.unexpected,
       diagnostics: [...manifestParsed.errors, ...exportParsed.errors],
       modeLabel: modeSummaryLabel,
+      comparison,
     });
     setCopyStatus("");
   };
