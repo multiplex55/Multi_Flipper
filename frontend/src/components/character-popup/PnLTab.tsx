@@ -9,9 +9,10 @@ interface PnLTabProps {
   formatIsk: (v: number) => string;
   characterScope: CharacterScope;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+  onAddToWatchlist: (typeId: number, typeName: string) => Promise<void>;
 }
 
-export function PnLTab({ formatIsk, characterScope, t }: PnLTabProps) {
+export function PnLTab({ formatIsk, characterScope, t, onAddToWatchlist }: PnLTabProps) {
   const [period, setPeriod] = useState<PnLPeriod>(30);
   const [data, setData] = useState<PortfolioPnL | null>(null);
   const [loading, setLoading] = useState(false);
@@ -21,6 +22,19 @@ export function PnLTab({ formatIsk, characterScope, t }: PnLTabProps) {
   const [chartMode, setChartMode] = useState<"daily" | "cumulative" | "drawdown">("daily");
   const [itemView, setItemView] = useState<"profit" | "loss">("profit");
   const [bottomView, setBottomView] = useState<"items" | "stations">("items");
+  const [watchlistPending, setWatchlistPending] = useState<Record<number, boolean>>({});
+
+  const handleAddWatchlist = async (typeId: number, typeName: string) => {
+    if (watchlistPending[typeId]) return;
+    setWatchlistPending((prev) => ({ ...prev, [typeId]: true }));
+    try {
+      await onAddToWatchlist(typeId, typeName);
+    } catch {
+      // parent callback is responsible for user feedback
+    } finally {
+      setWatchlistPending((prev) => ({ ...prev, [typeId]: false }));
+    }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -308,6 +322,8 @@ export function PnLTab({ formatIsk, characterScope, t }: PnLTabProps) {
             items={itemView === "profit" ? profitItems : lossItems}
             formatIsk={formatIsk}
             t={t}
+            watchlistPending={watchlistPending}
+            onAddToWatchlist={handleAddWatchlist}
           />
         ) : (
           <PnLStationsTable
@@ -551,10 +567,14 @@ function PnLItemsTable({
   items,
   formatIsk,
   t,
+  watchlistPending,
+  onAddToWatchlist,
 }: {
   items: ItemPnL[];
   formatIsk: (v: number) => string;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+  watchlistPending: Record<number, boolean>;
+  onAddToWatchlist: (typeId: number, typeName: string) => Promise<void>;
 }) {
   if (items.length === 0) {
     return <div className="text-center text-eve-dim text-xs py-4">{t("pnlNoData")}</div>;
@@ -573,6 +593,7 @@ function PnLItemsTable({
             <th className="px-3 py-2 text-right">{t("pnlItemBought")}</th>
             <th className="px-3 py-2 text-right">{t("pnlItemSold")}</th>
             <th className="px-3 py-2 text-right">{t("pnlItemTxns")}</th>
+            <th className="px-3 py-2 text-right">{t("addToWatchlist")}</th>
           </tr>
         </thead>
         <tbody>
@@ -616,6 +637,17 @@ function PnLItemsTable({
                 </td>
                 <td className="px-3 py-2 text-right text-eve-dim">
                   {item.transactions}
+                </td>
+                <td className="px-3 py-2 text-right">
+                  <button
+                    type="button"
+                    onClick={() => { void onAddToWatchlist(item.type_id, item.type_name || `Type #${item.type_id}`); }}
+                    disabled={Boolean(watchlistPending[item.type_id])}
+                    aria-label={`${t("addToWatchlist")}: ${item.type_name || `Type #${item.type_id}`}`}
+                    className="px-2 py-1 text-[10px] rounded-sm border border-eve-border bg-eve-dark/70 text-eve-dim hover:text-eve-accent hover:border-eve-accent/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {watchlistPending[item.type_id] ? "…" : t("addToWatchlist")}
+                  </button>
                 </td>
               </tr>
             );
@@ -800,4 +832,3 @@ function PnLOpenPositionsTable({
 }
 
 // --- Optimizer Tab ---
-

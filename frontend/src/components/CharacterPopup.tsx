@@ -7,6 +7,7 @@ import {
 } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import type { AuthCharacter, CharacterInfo, CharacterRoles } from "../lib/types";
+import { useGlobalToast } from "./Toast";
 import {
   CombinedOrdersTab,
   OptimizerTab,
@@ -16,6 +17,7 @@ import {
   TabBtn,
   TransactionsTab,
 } from "./character-popup/CharacterPopupTabs";
+import { addToWatchlistWithToast } from "./character-popup/watchlistActions";
 
 interface CharacterPopupProps {
   open: boolean;
@@ -42,6 +44,7 @@ export function CharacterPopup({
   onAuthRefresh,
 }: CharacterPopupProps) {
   const { t } = useI18n();
+  const { addToast } = useGlobalToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<CharacterInfo | null>(null);
@@ -165,6 +168,15 @@ export function CharacterPopup({
       return next;
     });
   }, []);
+
+  const handleAddToWatchlist = useCallback(async (typeId: number, typeName: string) => {
+    await addToWatchlistWithToast({
+      typeId,
+      typeName,
+      t,
+      addToast,
+    });
+  }, [t, addToast]);
 
   const formatIsk = (value: number) => {
     if (value >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
@@ -351,7 +363,12 @@ export function CharacterPopup({
                 <TransactionsTab transactions={data.transactions ?? []} formatIsk={formatIsk} formatDate={formatDate} t={t} />
               )}
               {tab === "pnl" && (
-                <PnLTab formatIsk={formatIsk} characterScope={selectedScope} t={t} />
+                <PnLTab
+                  formatIsk={formatIsk}
+                  characterScope={selectedScope}
+                  t={t}
+                  onAddToWatchlist={handleAddToWatchlist}
+                />
               )}
               {tab === "risk" && (
                 <RiskTab
@@ -363,7 +380,12 @@ export function CharacterPopup({
                 />
               )}
               {tab === "optimizer" && (
-                <OptimizerTab formatIsk={formatIsk} characterScope={selectedScope} t={t} />
+                <OptimizerTab
+                  formatIsk={formatIsk}
+                  characterScope={selectedScope}
+                  t={t}
+                  onAddToWatchlist={handleAddToWatchlist}
+                />
               )}
             </>
           )}
@@ -372,5 +394,4 @@ export function CharacterPopup({
     </Modal>
   );
 }
-
 

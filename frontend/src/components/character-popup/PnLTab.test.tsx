@@ -1,20 +1,30 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PnLTab } from "@/components/character-popup/PnLTab";
-import type { PortfolioPnL } from "@/lib/types";
+import { addToWatchlistWithToast } from "@/components/character-popup/watchlistActions";
+import type { ItemPnL, PortfolioPnL } from "@/lib/types";
 
 const getPortfolioPnLMock = vi.fn();
+const addToWatchlistMock = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   getPortfolioPnL: (...args: unknown[]) => getPortfolioPnLMock(...args),
+  addToWatchlist: (...args: unknown[]) => addToWatchlistMock(...args),
 }));
 
 afterEach(() => {
   cleanup();
   getPortfolioPnLMock.mockReset();
+  addToWatchlistMock.mockReset();
 });
 
-function makePortfolioResponse(topStations: PortfolioPnL["top_stations"]): PortfolioPnL {
+function makePortfolioResponse({
+  topStations = [],
+  topItems = [],
+}: {
+  topStations?: PortfolioPnL["top_stations"];
+  topItems?: ItemPnL[];
+} = {}): PortfolioPnL {
   return {
     daily_pnl: [
       {
@@ -61,7 +71,7 @@ function makePortfolioResponse(topStations: PortfolioPnL["top_stations"]): Portf
       total_fees: 0,
       total_taxes: 0,
     },
-    top_items: [],
+    top_items: topItems,
     top_stations: topStations,
     ledger: [],
     open_positions: [],
@@ -88,24 +98,26 @@ function makePortfolioResponse(topStations: PortfolioPnL["top_stations"]): Portf
 describe("PnLTab station table", () => {
   it("renders resolved station names and only falls back to #id when unavailable", async () => {
     getPortfolioPnLMock.mockResolvedValue(
-      makePortfolioResponse([
-        {
-          location_id: 60003760,
-          location_name: "Jita IV - Moon 4 - Caldari Navy Assembly Plant",
-          total_bought: 1000,
-          total_sold: 1200,
-          net_pnl: 200,
-          transactions: 2,
-        },
-        {
-          location_id: 60008494,
-          location_name: "",
-          total_bought: 500,
-          total_sold: 450,
-          net_pnl: -50,
-          transactions: 1,
-        },
-      ]),
+      makePortfolioResponse({
+        topStations: [
+          {
+            location_id: 60003760,
+            location_name: "Jita IV - Moon 4 - Caldari Navy Assembly Plant",
+            total_bought: 1000,
+            total_sold: 1200,
+            net_pnl: 200,
+            transactions: 2,
+          },
+          {
+            location_id: 60008494,
+            location_name: "",
+            total_bought: 500,
+            total_sold: 450,
+            net_pnl: -50,
+            transactions: 1,
+          },
+        ],
+      }),
     );
 
     render(
@@ -113,6 +125,7 @@ describe("PnLTab station table", () => {
         formatIsk={(v) => v.toFixed(0)}
         characterScope={90000001}
         t={(key) => key}
+        onAddToWatchlist={vi.fn(async () => undefined)}
       />,
     );
 
@@ -120,5 +133,93 @@ describe("PnLTab station table", () => {
 
     expect(await screen.findByText("Jita IV - Moon 4 - Caldari Navy Assembly Plant")).toBeInTheDocument();
     expect(screen.getByText("#60008494")).toBeInTheDocument();
+  });
+});
+
+describe("PnLTab watchlist action", () => {
+  it("calls onAddToWatchlist with expected type_id/type_name and disables button while pending", async () => {
+    getPortfolioPnLMock.mockResolvedValue(
+      makePortfolioResponse({
+        topItems: [
+          {
+            type_id: 34,
+            type_name: "Tritanium",
+            total_bought: 1000,
+            total_sold: 1300,
+            net_pnl: 300,
+            margin_percent: 10,
+            qty_bought: 500,
+            qty_sold: 480,
+            avg_buy_price: 2,
+            avg_sell_price: 2.7,
+            transactions: 2,
+          },
+        ],
+      }),
+    );
+
+    let resolveRequest: (() => void) | undefined;
+    const onAddToWatchlist = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveRequest = resolve;
+        }),
+    );
+
+    render(
+      <PnLTab
+        formatIsk={(v) => v.toFixed(0)}
+        characterScope={90000001}
+        t={(key) => key}
+        onAddToWatchlist={onAddToWatchlist}
+      />,
+    );
+
+    const button = await screen.findByRole("button", { name: "addToWatchlist: Tritanium" });
+    fireEvent.click(button);
+
+    expect(onAddToWatchlist).toHaveBeenCalledWith(34, "Tritanium");
+    expect(button).toBeDisabled();
+
+    if (resolveRequest) {
+      resolveRequest();
+    }
+    await waitFor(() => expect(button).not.toBeDisabled());
+  });
+});
+
+describe("addToWatchlistWithToast", () => {
+  it("shows duplicate-safe success message when item already exists", async () => {
+    addToWatchlistMock.mockResolvedValue({ inserted: false, items: [] });
+    const addToast = vi.fn(() => 1);
+    const t = (key: string) => key;
+
+    await addToWatchlistWithToast({
+      typeId: 34,
+      typeName: "Tritanium",
+      t: t as any,
+      addToast,
+    });
+
+    expect(addToWatchlistMock).toHaveBeenCalledWith(34, "Tritanium");
+    expect(addToast).toHaveBeenCalledWith("watchlistAlready", "success", 2200);
+  });
+
+  it("shows error toast when API rejects and does not emit success toast", async () => {
+    addToWatchlistMock.mockRejectedValue(new Error("boom"));
+    const addToast = vi.fn(() => 1);
+    const t = (key: string) => key;
+
+    await expect(
+      addToWatchlistWithToast({
+        typeId: 35,
+        typeName: "Pyerite",
+        t: t as any,
+        addToast,
+      }),
+    ).rejects.toThrow("watchlist-add-failed");
+
+    expect(addToast).toHaveBeenCalledWith("watchlistError", "error", 3000);
+    expect(addToast).not.toHaveBeenCalledWith("watchlistItemAdded", "success", 2200);
   });
 });
