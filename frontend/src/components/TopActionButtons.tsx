@@ -7,6 +7,10 @@ type TopActionButtonsProps = {
   verifierLabel: string;
   onOpenWatchlist: () => void;
   onTrackAction?: (action: string) => void;
+  verifierOpen?: boolean;
+  initialManifestText?: string;
+  onOpenVerifier?: () => void;
+  onCloseVerifier?: () => void;
 };
 
 export function TopActionButtons({
@@ -14,9 +18,14 @@ export function TopActionButtons({
   verifierLabel,
   onOpenWatchlist,
   onTrackAction,
+  verifierOpen,
+  initialManifestText,
+  onOpenVerifier,
+  onCloseVerifier,
 }: TopActionButtonsProps) {
   const [showVerifier, setShowVerifier] = useState(false);
   const verifierTriggerRef = useRef<HTMLButtonElement>(null);
+  const verifierModalOpen = verifierOpen ?? showVerifier;
 
   const openWatchlist = () => {
     onTrackAction?.("watchlist_open_clicked");
@@ -25,11 +34,13 @@ export function TopActionButtons({
 
   const openVerifier = () => {
     onTrackAction?.("batch_price_verify_open_clicked");
-    setShowVerifier(true);
+    onOpenVerifier?.();
+    if (verifierOpen == null) setShowVerifier(true);
   };
 
   const closeVerifier = () => {
-    setShowVerifier(false);
+    onCloseVerifier?.();
+    if (verifierOpen == null) setShowVerifier(false);
     requestAnimationFrame(() => {
       verifierTriggerRef.current?.focus();
     });
@@ -59,13 +70,13 @@ export function TopActionButtons({
       </button>
 
       <Modal
-        open={showVerifier}
+        open={verifierModalOpen}
         onClose={closeVerifier}
         title={verifierLabel}
         width="max-w-6xl"
       >
         <div className="p-3 sm:p-4">
-          <BatchBuyVerifier />
+          <BatchBuyVerifier initialManifestText={initialManifestText} />
         </div>
       </Modal>
     </>

@@ -9,7 +9,7 @@ import {
   type BatchBuildResult,
 } from "@/lib/batchMetrics";
 import {
-  formatBatchLinesToMultibuyLines,
+  formatBaseBatchManifestText,
   formatOrderedRouteManifestText,
 } from "@/lib/batchManifestFormat";
 import type {
@@ -48,6 +48,7 @@ interface BatchBuilderPopupProps {
   sellBrokerFeePercent?: number;
   cacheMeta?: StationCacheMeta | null;
   scanSourceTab?: "radius" | "region" | "contracts";
+  onOpenPriceValidation?: (manifestText: string) => void;
 }
 
 type RouteState = "idle" | "searching" | "results" | "selected";
@@ -131,6 +132,7 @@ export function BatchBuilderPopup({
   sellBrokerFeePercent = 0,
   cacheMeta = null,
   scanSourceTab = "radius",
+  onOpenPriceValidation,
 }: BatchBuilderPopupProps) {
   const { t } = useI18n();
   const { addToast } = useGlobalToast();
@@ -259,67 +261,39 @@ export function BatchBuilderPopup({
     return null;
   }, [anchorRow, baseBatchManifest, t]);
 
-  const copyManifest = useCallback(async () => {
-    if (!anchorRow || batch.lines.length === 0) return;
-    const lines: string[] = [];
-    const multibuyLines = formatBatchLinesToMultibuyLines(batch.lines);
+  const getBaseManifestText = useCallback((): string => {
+    if (!anchorRow || batch.lines.length === 0) return "";
     const buyJumps = Math.max(0, Math.floor(safeNumber(anchorRow.BuyJumps)));
     const sellJumps = Math.max(0, Math.floor(safeNumber(anchorRow.SellJumps)));
-    const totalRouteJumps = buyJumps + sellJumps;
-    const totalIskPerJump = totalRouteJumps > 0 ? batch.totalProfit / totalRouteJumps : 0;
-    lines.push(t("batchBuilderManifestBuyStation", { station: anchorRow.BuyStation }));
-    lines.push(t("batchBuilderManifestJumpsToBuyStation", { jumps: buyJumps }));
-    lines.push(t("batchBuilderManifestSellStation", { station: anchorRow.SellStation }));
-    lines.push(t("batchBuilderManifestJumpsBuyToSell", { jumps: sellJumps }));
-    lines.push(
-      `Cargo m3: ${
-        cargoLimitM3 > 0 ? cargoLimitM3.toLocaleString() : t("batchBuilderCargoUnlimited")
-      }`,
-    );
-    lines.push(t("batchBuilderManifestItems", { count: batch.lines.length }));
-    lines.push(
-      t("batchBuilderManifestTotalVolume", {
-        volume: batch.totalVolume.toLocaleString(undefined, { maximumFractionDigits: 1 }),
-      }),
-    );
-    lines.push(
-      t("batchBuilderManifestTotalCapital", {
-        isk: Math.round(batch.totalCapital).toLocaleString(),
-      }),
-    );
-    lines.push(
-      t("batchBuilderManifestTotalGrossSell", {
-        isk: Math.round(batch.totalGrossSell).toLocaleString(),
-      }),
-    );
-    lines.push(
-      t("batchBuilderManifestTotalProfit", {
-        isk: Math.round(batch.totalProfit).toLocaleString(),
-      }),
-    );
-    lines.push(
-      t("batchBuilderManifestTotalIskPerJump", {
-        isk: Math.round(totalIskPerJump).toLocaleString(),
-      }),
-    );
-    lines.push("");
-    for (const line of batch.lines) {
-      const qty = line.units;
-      const buyTotal = line.capital;
-      const buyPer = line.capital / line.units;
-      const sellTotal = line.grossSell;
-      const sellPer = line.grossSell / line.units;
-      const vol = line.volume;
-      const profit = line.profit;
-      lines.push(
-        `${line.row.TypeName} | ${t("batchBuilderManifestItemQty", { qty: qty.toLocaleString() })} | ${t("batchBuilderManifestItemBuyTotal", { isk: Math.round(buyTotal).toLocaleString() })} | ${t("batchBuilderManifestItemBuyPer", { isk: Math.round(buyPer).toLocaleString() })} | ${t("batchBuilderManifestItemSellTotal", { isk: Math.round(sellTotal).toLocaleString() })} | ${t("batchBuilderManifestItemSellPer", { isk: Math.round(sellPer).toLocaleString() })} | ${t("batchBuilderManifestItemVol", { volume: vol.toLocaleString(undefined, { maximumFractionDigits: 1 }) })} | ${t("batchBuilderManifestItemProfit", { isk: Math.round(profit).toLocaleString() })}`,
-      );
-    }
-    lines.push("");
-    lines.push(...multibuyLines);
-    await navigator.clipboard.writeText(lines.join("\n"));
+    return formatBaseBatchManifestText({
+      buyStation: anchorRow.BuyStation,
+      sellStation: anchorRow.SellStation,
+      buyJumps,
+      sellJumps,
+      cargoLimitM3,
+      cargoUnlimitedLabel: t("batchBuilderCargoUnlimited"),
+      itemCount: batch.lines.length,
+      totalVolume: batch.totalVolume,
+      totalCapital: batch.totalCapital,
+      totalGrossSell: batch.totalGrossSell,
+      totalProfit: batch.totalProfit,
+      lines: batch.lines,
+      t,
+    });
+  }, [anchorRow, batch, cargoLimitM3, t]);
+
+  const copyManifest = useCallback(async () => {
+    const manifest = getBaseManifestText();
+    if (!manifest) return;
+    await navigator.clipboard.writeText(manifest);
     addToast(t("batchBuilderCopied"), "success", 2200);
-  }, [anchorRow, batch, cargoLimitM3, t, addToast]);
+  }, [getBaseManifestText, t, addToast]);
+
+  const openPriceValidation = useCallback(() => {
+    const manifest = getBaseManifestText();
+    if (!manifest) return;
+    onOpenPriceValidation?.(manifest);
+  }, [getBaseManifestText, onOpenPriceValidation]);
 
   const copyMergedManifest = useCallback(async () => {
     if (!baseBatchManifest || !mergedManifest) return;
@@ -711,6 +685,14 @@ export function BatchBuilderPopup({
             className="px-3 py-1.5 rounded-sm border border-eve-accent/70 text-eve-accent hover:bg-eve-accent/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold uppercase tracking-wider"
           >
             {t("batchBuilderCopyManifest")}
+          </button>
+          <button
+            type="button"
+            onClick={openPriceValidation}
+            disabled={batch.lines.length === 0}
+            className="px-3 py-1.5 rounded-sm border border-purple-400/70 text-purple-300 hover:bg-purple-400/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold uppercase tracking-wider"
+          >
+            {t("batchBuilderOpenPriceValidation")}
           </button>
 
           <button

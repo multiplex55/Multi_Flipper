@@ -106,6 +106,7 @@ interface Props {
   allowLowsec?: boolean;
   allowNullsec?: boolean;
   allowWormhole?: boolean;
+  onOpenPriceValidation?: (manifestText: string) => void;
 }
 
 type ColumnDef = {
@@ -899,6 +900,7 @@ export function ScanResultsTable({
   allowLowsec,
   allowNullsec,
   allowWormhole,
+  onOpenPriceValidation,
 }: Props) {
   const { t } = useI18n();
   const emptyReason: EmptyReason = scanCompletedWithZero
@@ -3410,6 +3412,7 @@ export function ScanResultsTable({
         allowLowsec={allowLowsec}
         allowNullsec={allowNullsec}
         allowWormhole={allowWormhole}
+        onOpenPriceValidation={onOpenPriceValidation}
         salesTaxPercent={salesTaxPercent}
         buyBrokerFeePercent={buyBrokerFeePercent}
         sellBrokerFeePercent={sellBrokerFeePercent}

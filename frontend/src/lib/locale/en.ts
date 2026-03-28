@@ -669,6 +669,7 @@ export const en = {
     batchBuilderNoCandidates:
       "No profitable candidates found for this route with the current data.",
     batchBuilderCopyManifest: "Copy manifest",
+    batchBuilderOpenPriceValidation: "Open Price Validation",
     batchBuilderBatchCreateRoute: "Batch Create Route",
     batchBuilderCopyMergedManifest: "Copy merged manifest",
     batchBuilderCopied: "Batch manifest copied",

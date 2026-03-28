@@ -41,6 +41,102 @@ export function formatBatchLinesToMultibuyText(
   return formatBatchLinesToMultibuyLines(lines).join("\n");
 }
 
+type BaseManifestTranslationKey =
+  | "batchBuilderManifestBuyStation"
+  | "batchBuilderManifestJumpsToBuyStation"
+  | "batchBuilderManifestSellStation"
+  | "batchBuilderManifestJumpsBuyToSell"
+  | "batchBuilderManifestItems"
+  | "batchBuilderManifestTotalVolume"
+  | "batchBuilderManifestTotalCapital"
+  | "batchBuilderManifestTotalGrossSell"
+  | "batchBuilderManifestTotalProfit"
+  | "batchBuilderManifestTotalIskPerJump"
+  | "batchBuilderManifestItemQty"
+  | "batchBuilderManifestItemBuyTotal"
+  | "batchBuilderManifestItemBuyPer"
+  | "batchBuilderManifestItemSellTotal"
+  | "batchBuilderManifestItemSellPer"
+  | "batchBuilderManifestItemVol"
+  | "batchBuilderManifestItemProfit";
+
+type BaseBatchManifestTextInput = {
+  buyStation: string;
+  sellStation: string;
+  buyJumps: number;
+  sellJumps: number;
+  cargoLimitM3: number;
+  cargoUnlimitedLabel: string;
+  itemCount: number;
+  totalVolume: number;
+  totalCapital: number;
+  totalGrossSell: number;
+  totalProfit: number;
+  lines: BatchLine[];
+  t: (key: BaseManifestTranslationKey, vars?: Record<string, string | number>) => string;
+};
+
+export function formatBaseBatchManifestText(input: BaseBatchManifestTextInput): string {
+  const lines: string[] = [];
+  const multibuyLines = formatBatchLinesToMultibuyLines(input.lines);
+  const totalRouteJumps = input.buyJumps + input.sellJumps;
+  const totalIskPerJump = totalRouteJumps > 0 ? input.totalProfit / totalRouteJumps : 0;
+
+  lines.push(input.t("batchBuilderManifestBuyStation", { station: input.buyStation }));
+  lines.push(input.t("batchBuilderManifestJumpsToBuyStation", { jumps: input.buyJumps }));
+  lines.push(input.t("batchBuilderManifestSellStation", { station: input.sellStation }));
+  lines.push(input.t("batchBuilderManifestJumpsBuyToSell", { jumps: input.sellJumps }));
+  lines.push(
+    `Cargo m3: ${
+      input.cargoLimitM3 > 0 ? input.cargoLimitM3.toLocaleString() : input.cargoUnlimitedLabel
+    }`,
+  );
+  lines.push(input.t("batchBuilderManifestItems", { count: input.itemCount }));
+  lines.push(
+    input.t("batchBuilderManifestTotalVolume", {
+      volume: input.totalVolume.toLocaleString(undefined, { maximumFractionDigits: 1 }),
+    }),
+  );
+  lines.push(
+    input.t("batchBuilderManifestTotalCapital", {
+      isk: Math.round(input.totalCapital).toLocaleString(),
+    }),
+  );
+  lines.push(
+    input.t("batchBuilderManifestTotalGrossSell", {
+      isk: Math.round(input.totalGrossSell).toLocaleString(),
+    }),
+  );
+  lines.push(
+    input.t("batchBuilderManifestTotalProfit", {
+      isk: Math.round(input.totalProfit).toLocaleString(),
+    }),
+  );
+  lines.push(
+    input.t("batchBuilderManifestTotalIskPerJump", {
+      isk: Math.round(totalIskPerJump).toLocaleString(),
+    }),
+  );
+  lines.push("");
+
+  for (const line of input.lines) {
+    const qty = line.units;
+    const buyTotal = line.capital;
+    const buyPer = line.capital / line.units;
+    const sellTotal = line.grossSell;
+    const sellPer = line.grossSell / line.units;
+    const vol = line.volume;
+    const profit = line.profit;
+    lines.push(
+      `${line.row.TypeName} | ${input.t("batchBuilderManifestItemQty", { qty: qty.toLocaleString() })} | ${input.t("batchBuilderManifestItemBuyTotal", { isk: Math.round(buyTotal).toLocaleString() })} | ${input.t("batchBuilderManifestItemBuyPer", { isk: Math.round(buyPer).toLocaleString() })} | ${input.t("batchBuilderManifestItemSellTotal", { isk: Math.round(sellTotal).toLocaleString() })} | ${input.t("batchBuilderManifestItemSellPer", { isk: Math.round(sellPer).toLocaleString() })} | ${input.t("batchBuilderManifestItemVol", { volume: vol.toLocaleString(undefined, { maximumFractionDigits: 1 }) })} | ${input.t("batchBuilderManifestItemProfit", { isk: Math.round(profit).toLocaleString() })}`,
+    );
+  }
+
+  lines.push("");
+  lines.push(...multibuyLines);
+  return lines.join("\n");
+}
+
 export function parseDetailedBatchLine(
   line: string,
 ): { typeName: string; units: string } | null {

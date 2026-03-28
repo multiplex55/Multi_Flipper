@@ -254,11 +254,13 @@ function renderPopup({
   rows,
   routeMaxJumps = 12,
   maxDetourJumpsPerNode = 3,
+  onOpenPriceValidation,
 }: {
   anchorRow: FlipResult | null;
   rows: FlipResult[];
   routeMaxJumps?: number;
   maxDetourJumpsPerNode?: number;
+  onOpenPriceValidation?: (manifestText: string) => void;
 }) {
   return render(
     <I18nProvider>
@@ -288,6 +290,7 @@ function renderPopup({
             entries: 10,
           }}
           scanSourceTab="radius"
+          onOpenPriceValidation={onOpenPriceValidation}
         />
       </ToastProvider>
     </I18nProvider>,
@@ -702,5 +705,22 @@ describe("BatchBuilderPopup route creation", () => {
     await screen.findByTestId("route-option-rank-1");
 
     expect(screen.getByRole("button", { name: "Copy merged manifest" })).toBeDisabled();
+  });
+
+  it("renders Open Price Validation button and emits deterministic manifest payload", async () => {
+    const onOpenPriceValidation = vi.fn();
+    renderPopup({ anchorRow, rows, onOpenPriceValidation });
+
+    const trigger = await screen.findByRole("button", { name: "Open Price Validation" });
+    expect(trigger).toBeInTheDocument();
+
+    fireEvent.click(trigger);
+
+    expect(onOpenPriceValidation).toHaveBeenCalledTimes(1);
+    const manifest = onOpenPriceValidation.mock.calls[0]?.[0] as string;
+    expect(manifest).toContain("Buy Station: Jita IV - Moon 4");
+    expect(manifest).toContain("Sell Station: Amarr VIII (Oris) - Emperor Family Academy");
+    expect(manifest).not.toContain("Export Order");
+    expect(manifest).toContain("Anchor Paste 1500");
   });
 });

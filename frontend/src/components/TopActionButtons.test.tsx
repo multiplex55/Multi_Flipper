@@ -36,6 +36,25 @@ describe("TopActionButtons", () => {
     expect(screen.getByLabelText("Export Order")).toBeInTheDocument();
   });
 
+  it("opens with prefilled manifest when controlled by builder path", () => {
+    const manifest = "Tritanium 10";
+    render(
+      <TopActionButtons
+        watchlistLabel="Watchlist"
+        verifierLabel="Batch Price Verify"
+        onOpenWatchlist={vi.fn()}
+        verifierOpen
+        initialManifestText={manifest}
+        onOpenVerifier={vi.fn()}
+        onCloseVerifier={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("dialog", { name: "Batch Price Verify" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Batch Buy Manifest")).toHaveValue(manifest);
+    expect(screen.getByLabelText("Export Order")).toHaveValue("");
+  });
+
   it("modal close returns focus to trigger button", async () => {
     render(
       <TopActionButtons

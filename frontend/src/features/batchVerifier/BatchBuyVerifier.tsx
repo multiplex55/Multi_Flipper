@@ -1,4 +1,4 @@
-import { type CSSProperties, useMemo, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useState } from "react";
 import {
   compareManifestToExport,
   type ComparisonRow,
@@ -149,7 +149,11 @@ function ParseDiagnostics({ diagnostics }: { diagnostics: ParseDiagnostic[] }) {
   );
 }
 
-export function BatchBuyVerifier() {
+type BatchBuyVerifierProps = {
+  initialManifestText?: string;
+};
+
+export function BatchBuyVerifier({ initialManifestText }: BatchBuyVerifierProps) {
   const [manifestText, setManifestText] = useState("");
   const [exportText, setExportText] = useState("");
   const [result, setResult] = useState<EvaluationResult | null>(null);
@@ -159,6 +163,14 @@ export function BatchBuyVerifier() {
   const [slippageValueInput, setSlippageValueInput] = useState<string>("0");
   const [priceDiffAlertPercentInput, setPriceDiffAlertPercentInput] = useState<string>("10");
   const [quantityHandling, setQuantityHandling] = useState<QuantityHandling>("require_exact");
+
+  useEffect(() => {
+    if (initialManifestText == null) return;
+    setManifestText(initialManifestText);
+    setExportText("");
+    setResult(null);
+    setCopyStatus("");
+  }, [initialManifestText]);
 
   const hasInput = manifestText.trim().length > 0 || exportText.trim().length > 0;
 

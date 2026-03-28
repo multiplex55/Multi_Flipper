@@ -305,6 +305,8 @@ function App() {
     "visible" | "fading" | "hidden"
   >("visible");
   const showBootSplash = bootSplashState !== "hidden";
+  const [showVerifierModal, setShowVerifierModal] = useState(false);
+  const [verifierInitialManifestText, setVerifierInitialManifestText] = useState("");
 
   const [params, setParams] = useState<ScanParams>({
     system_name: "Jita",
@@ -1385,6 +1387,13 @@ function App() {
               watchlistLabel={t("tabWatchlist")}
               verifierLabel={t("batchPriceVerify")}
               onOpenWatchlist={() => setShowWatchlist(true)}
+              verifierOpen={showVerifierModal}
+              initialManifestText={verifierInitialManifestText}
+              onOpenVerifier={() => {
+                setVerifierInitialManifestText("");
+                setShowVerifierModal(true);
+              }}
+              onCloseVerifier={() => setShowVerifierModal(false)}
             />
             {/* History button */}
             <button
@@ -1806,6 +1815,10 @@ function App() {
               allowLowsec={(params.min_route_security ?? 0.45) < 0.45}
               allowNullsec={(params.min_route_security ?? 0.45) <= 0}
               allowWormhole={false}
+              onOpenPriceValidation={(manifestText) => {
+                setVerifierInitialManifestText(manifestText);
+                setShowVerifierModal(true);
+              }}
             />
           </div>
           <div
@@ -1888,6 +1901,10 @@ function App() {
               allowLowsec={(params.min_route_security ?? 0.45) < 0.45}
               allowNullsec={(params.min_route_security ?? 0.45) <= 0}
               allowWormhole={false}
+              onOpenPriceValidation={(manifestText) => {
+                setVerifierInitialManifestText(manifestText);
+                setShowVerifierModal(true);
+              }}
             />
           </div>
           <div
