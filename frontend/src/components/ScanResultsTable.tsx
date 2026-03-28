@@ -924,7 +924,7 @@ export function ScanResultsTable({
   );
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(() => tradeStateTab === "radius");
   const [showColumnPanel, setShowColumnPanel] = useState(false);
   const [columnOrder, setColumnOrder] = useState<SortKey[]>(() =>
     allColumnDefs.map((col) => col.key),

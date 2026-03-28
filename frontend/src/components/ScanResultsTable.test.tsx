@@ -138,3 +138,23 @@ describe("ScanResultsTable compact mode defaults", () => {
     expect(screen.queryByTitle("Comfy rows")).not.toBeInTheDocument();
   });
 });
+
+describe("ScanResultsTable filter visibility defaults", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("shows column filters by default in radius mode and allows toggling", async () => {
+    const row = makeRow();
+    renderTable({ scanning: false, results: [row] });
+
+    // Radius mode default: filter header row is visible immediately.
+    expect(screen.getAllByPlaceholderText("Filter...").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByTitle("Clear filters"));
+    expect(screen.queryByPlaceholderText("Filter...")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle("Filter..."));
+    expect(screen.getAllByPlaceholderText("Filter...").length).toBeGreaterThan(0);
+  });
+});

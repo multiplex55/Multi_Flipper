@@ -127,6 +127,8 @@ export const ru = {
     // Buttons
     scan: "Сканировать",
     stop: "Остановить",
+    scanAndRefresh: "Сканировать и обновить",
+    scanAndRefreshProcessing: "Обновляю кэш и сканирую...",
 
     // Table
     colItem: "Предмет",

@@ -33,6 +33,7 @@ import {
   scanContracts,
   testAlertChannels,
   getWatchlist,
+  rebootStationCache,
 } from "./lib/api";
 import { useI18n } from "./lib/i18n";
 import { formatISK } from "./lib/format";
@@ -419,6 +420,7 @@ function App() {
   >(null);
 
   const [scanning, setScanning] = useState(false);
+  const [scanAndRefreshing, setScanAndRefreshing] = useState(false);
   const [progress, setProgress] = useState("");
   const [regionRestorePrompt, setRegionRestorePrompt] = useState<{
     ts: number;
@@ -1125,6 +1127,17 @@ function App() {
     }
   }, [scanning, tab, params, t, addToast, alertChannels]);
 
+  const handleScanAndRefresh = useCallback(async () => {
+    if (scanning || scanAndRefreshing) return;
+    setScanAndRefreshing(true);
+    try {
+      await rebootStationCache();
+      await handleScan();
+    } finally {
+      setScanAndRefreshing(false);
+    }
+  }, [handleScan, scanning, scanAndRefreshing]);
+
   // Auto-refresh: when enabled and radius cache expires, re-trigger scan automatically
   useEffect(() => {
     if (!autoRefreshRadius || tab !== "radius") return;
@@ -1745,25 +1758,39 @@ function App() {
             tab !== "demand" &&
             tab !== "plex" && (
               <div className="shrink-0 border-l border-eve-border px-1.5 sm:px-2 py-1 flex items-center">
-                <button
-                  data-scan-button
-                  onClick={handleScan}
-                  disabled={
-                    tab === "region"
-                      ? !params.target_market_system?.trim()
-                      : !params.system_name
-                  }
-                  title="Ctrl+S"
-                  className={`px-3 sm:px-4 py-1.5 rounded-sm text-[10px] sm:text-xs font-semibold uppercase tracking-wider transition-all
-                  ${
-                    scanning
-                      ? "bg-eve-error/80 text-white hover:bg-eve-error"
-                      : "bg-eve-accent text-eve-dark hover:bg-eve-accent-hover shadow-eve-glow"
-                  }
-                  disabled:bg-eve-input disabled:text-eve-dim disabled:cursor-not-allowed disabled:shadow-none`}
-                >
-                  {scanning ? t("stop") : t("scan")}
-                </button>
+                <div className="inline-flex items-center gap-1.5">
+                  <button
+                    data-scan-button
+                    onClick={handleScan}
+                    disabled={
+                      (tab === "region"
+                        ? !params.target_market_system?.trim()
+                        : !params.system_name) || scanAndRefreshing
+                    }
+                    title="Ctrl+S"
+                    className={`px-3 sm:px-4 py-1.5 rounded-sm text-[10px] sm:text-xs font-semibold uppercase tracking-wider transition-all
+                    ${
+                      scanning
+                        ? "bg-eve-error/80 text-white hover:bg-eve-error"
+                        : "bg-eve-accent text-eve-dark hover:bg-eve-accent-hover shadow-eve-glow"
+                    }
+                    disabled:bg-eve-input disabled:text-eve-dim disabled:cursor-not-allowed disabled:shadow-none`}
+                  >
+                    {scanning ? t("stop") : t("scan")}
+                  </button>
+                  <button
+                    data-scan-refresh-button
+                    onClick={handleScanAndRefresh}
+                    disabled={
+                      (tab === "region"
+                        ? !params.target_market_system?.trim()
+                        : !params.system_name) || scanning || scanAndRefreshing
+                    }
+                    className="px-3 sm:px-4 py-1.5 rounded-sm text-[10px] sm:text-xs font-semibold uppercase tracking-wider transition-all bg-eve-dark text-eve-text border border-eve-border hover:border-eve-border-light disabled:bg-eve-input disabled:text-eve-dim disabled:cursor-not-allowed"
+                  >
+                    {scanAndRefreshing ? t("scanAndRefreshProcessing") : t("scanAndRefresh")}
+                  </button>
+                </div>
               </div>
             )}
         </div>
