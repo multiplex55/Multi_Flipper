@@ -262,7 +262,7 @@ export function BatchBuilderPopup({
   }, [anchorRow, baseBatchManifest, t]);
 
   const getBaseManifestText = useCallback((): string => {
-    if (!anchorRow || batch.lines.length === 0) return;
+    if (!anchorRow || batch.lines.length === 0) return "";
     const buyJumps = Math.max(0, Math.floor(safeNumber(anchorRow.BuyJumps)));
     const sellJumps = Math.max(0, Math.floor(safeNumber(anchorRow.SellJumps)));
     return formatBaseBatchManifestText({

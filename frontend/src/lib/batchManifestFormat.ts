@@ -41,6 +41,25 @@ export function formatBatchLinesToMultibuyText(
   return formatBatchLinesToMultibuyLines(lines).join("\n");
 }
 
+type BaseManifestTranslationKey =
+  | "batchBuilderManifestBuyStation"
+  | "batchBuilderManifestJumpsToBuyStation"
+  | "batchBuilderManifestSellStation"
+  | "batchBuilderManifestJumpsBuyToSell"
+  | "batchBuilderManifestItems"
+  | "batchBuilderManifestTotalVolume"
+  | "batchBuilderManifestTotalCapital"
+  | "batchBuilderManifestTotalGrossSell"
+  | "batchBuilderManifestTotalProfit"
+  | "batchBuilderManifestTotalIskPerJump"
+  | "batchBuilderManifestItemQty"
+  | "batchBuilderManifestItemBuyTotal"
+  | "batchBuilderManifestItemBuyPer"
+  | "batchBuilderManifestItemSellTotal"
+  | "batchBuilderManifestItemSellPer"
+  | "batchBuilderManifestItemVol"
+  | "batchBuilderManifestItemProfit";
+
 type BaseBatchManifestTextInput = {
   buyStation: string;
   sellStation: string;
@@ -54,7 +73,7 @@ type BaseBatchManifestTextInput = {
   totalGrossSell: number;
   totalProfit: number;
   lines: BatchLine[];
-  t: (key: string, vars?: Record<string, string | number>) => string;
+  t: (key: BaseManifestTranslationKey, vars?: Record<string, string | number>) => string;
 };
 
 export function formatBaseBatchManifestText(input: BaseBatchManifestTextInput): string {
