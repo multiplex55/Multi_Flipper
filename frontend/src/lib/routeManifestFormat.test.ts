@@ -8,6 +8,7 @@ describe("route copy manifest formatter", () => {
       {
         TypeID: 34,
         TypeName: "Tritanium",
+        StationName: "Jita IV - Moon 4",
         SystemName: "Jita",
         DestSystemName: "Amarr",
         BuyPrice: 10,
@@ -22,6 +23,7 @@ describe("route copy manifest formatter", () => {
       {
         TypeID: 35,
         TypeName: "Pyerite",
+        StationName: "Amarr VIII (Oris) - Emperor Family Academy",
         SystemName: "Amarr",
         DestSystemName: "Dodixie",
         BuyPrice: 30,
@@ -49,10 +51,10 @@ describe("route copy manifest formatter", () => {
     expect(lines[0]).toBe("Route: Jita -> Amarr -> Dodixie -> Rens");
     expect(lines[5]).toBe("---");
     expect(lines[6]).toBe("Hop 1");
-    expect(lines).toContain("From: Jita");
+    expect(lines).toContain("From: Jita IV - Moon 4");
     expect(lines).toContain("To: Amarr");
     expect(lines).toContain("Hop 2");
-    expect(lines).toContain("From: Amarr");
+    expect(lines).toContain("From: Amarr VIII (Oris) - Emperor Family Academy");
     expect(lines).toContain("To: Dodixie");
   });
 
