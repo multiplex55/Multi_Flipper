@@ -55,5 +55,7 @@ describe("routeModels", () => {
     expect(filtered[0].Hops).toHaveLength(1);
     expect(filtered[0].Hops[0].Items).toHaveLength(1);
     expect(filtered[0].Hops[0].Items?.[0].TypeID).toBe(35);
+    expect(filtered[0].TotalProfit).toBe(150);
+    expect(filtered[0].ProfitPerJump).toBe(150);
   });
 });

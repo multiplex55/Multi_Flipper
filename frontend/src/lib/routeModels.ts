@@ -1,5 +1,6 @@
 import type { RouteHop, RouteHopItem, RouteResult } from "@/lib/types";
 import type { BanlistState } from "@/lib/banlist";
+import { applyRouteMetrics, computeHopMetrics } from "@/lib/routeMetrics";
 
 function normalizeHopItem(item: Partial<RouteHopItem>): RouteHopItem | null {
   const typeId = Number(item.TypeID ?? 0);
@@ -21,6 +22,10 @@ function normalizeHopItem(item: Partial<RouteHopItem>): RouteHopItem | null {
     SellValue: sellValue,
     Profit: profit,
     MarginPercent: Number.isFinite(Number(item.MarginPercent)) ? Number(item.MarginPercent) : marginPercent,
+    Fees: Number.isFinite(Number(item.Fees)) ? Number(item.Fees) : undefined,
+    Taxes: Number.isFinite(Number(item.Taxes)) ? Number(item.Taxes) : undefined,
+    TransactionCosts: Number.isFinite(Number(item.TransactionCosts)) ? Number(item.TransactionCosts) : undefined,
+    AttributableCosts: Number.isFinite(Number(item.AttributableCosts)) ? Number(item.AttributableCosts) : undefined,
   };
 }
 
@@ -35,12 +40,14 @@ export function normalizeRouteHop(hop: RouteHop): RouteHop {
     BuyPrice: hop.BuyPrice,
     SellPrice: hop.SellPrice,
     Profit: hop.Profit,
+    Fees: hop.Fees,
+    Taxes: hop.Taxes,
+    TransactionCosts: hop.TransactionCosts,
+    AttributableCosts: hop.AttributableCosts,
   });
   const items = normalizedItems.length > 0 ? normalizedItems : legacy ? [legacy] : [];
   const primary = items[0] ?? legacy;
-  const buyCost = items.reduce((sum, item) => sum + (item.BuyCost ?? item.Units * item.BuyPrice), 0);
-  const sellValue = items.reduce((sum, item) => sum + (item.SellValue ?? item.Units * item.SellPrice), 0);
-  const profit = items.reduce((sum, item) => sum + item.Profit, 0);
+  const hopMetrics = computeHopMetrics({ ...hop, Items: items });
 
   return {
     ...hop,
@@ -50,14 +57,14 @@ export function normalizeRouteHop(hop: RouteHop): RouteHop {
     Units: primary?.Units ?? hop.Units,
     BuyPrice: primary?.BuyPrice ?? hop.BuyPrice,
     SellPrice: primary?.SellPrice ?? hop.SellPrice,
-    BuyCost: buyCost > 0 ? buyCost : hop.BuyCost,
-    SellValue: sellValue > 0 ? sellValue : hop.SellValue,
-    Profit: profit > 0 ? profit : hop.Profit,
+    BuyCost: hopMetrics.buyCost,
+    SellValue: hopMetrics.sellValue,
+    Profit: hopMetrics.realProfit,
   };
 }
 
 export function normalizeRouteResults(results: RouteResult[]): RouteResult[] {
-  return (results ?? []).map((route) => ({
+  return (results ?? []).map((route) => applyRouteMetrics({
     ...route,
     Hops: (route.Hops ?? []).map(normalizeRouteHop),
   }));
@@ -66,7 +73,7 @@ export function normalizeRouteResults(results: RouteResult[]): RouteResult[] {
 export function filterRouteResultsByBanlistItems(results: RouteResult[], banlist?: BanlistState): RouteResult[] {
   if (!banlist || banlist.entries.length === 0) return normalizeRouteResults(results);
   return normalizeRouteResults(results)
-    .map((route) => ({
+    .map((route) => applyRouteMetrics({
       ...route,
       Hops: (route.Hops ?? [])
         .map((hop) => ({

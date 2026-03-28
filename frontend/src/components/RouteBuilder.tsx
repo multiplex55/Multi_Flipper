@@ -7,6 +7,7 @@ import { filterRouteResultsByBanlistItems, normalizeRouteHop, normalizeRouteResu
 import { ExecutionPlannerPopup } from "./ExecutionPlannerPopup";
 import { useGlobalToast } from "./Toast";
 import { handleEveUIError } from "@/lib/handleEveUIError";
+import { computeHopMetrics, computeRouteMetrics } from "@/lib/routeMetrics";
 import {
   TabSettingsPanel,
   SettingsCheckbox,
@@ -36,6 +37,10 @@ function formatISK(v: number): string {
 
 function formatISKFull(v: number): string {
   return v.toLocaleString("en-US", { maximumFractionDigits: 0 });
+}
+
+function formatPercent(v: number): string {
+  return `${v.toFixed(2)}%`;
 }
 
 export function RouteBuilder({ params, onChange, loadedResults, isLoggedIn = false, banlist }: Props) {
@@ -425,6 +430,7 @@ function RouteDetailPopup({
   const [execPlanHop, setExecPlanHop] = useState<RouteHop | null>(null);
   const [expandedHopKeys, setExpandedHopKeys] = useState<Record<string, boolean>>({});
   const [selectedItemsByHop, setSelectedItemsByHop] = useState<Record<string, Record<number, number>>>({});
+  const routeMetrics = useMemo(() => computeRouteMetrics(route), [route]);
 
   const hopItems = useCallback((hop: RouteHop) => normalizeRouteHop(hop).Items ?? [], []);
 
@@ -463,8 +469,10 @@ function RouteDetailPopup({
   };
 
   const handleCopyRoute = async () => {
+    const metrics = computeRouteMetrics(route);
     const lines = ["=== EVE Flipper Route ==="];
     route.Hops.forEach((hop, i) => {
+      const hopMetrics = computeHopMetrics(hop);
       const emptyJumps = hop.EmptyJumps ?? 0;
       const totalHopJumps = hop.Jumps + emptyJumps;
       lines.push(`[${i + 1}] ${hop.StationName || hop.SystemName}`);
@@ -473,13 +481,14 @@ function RouteDetailPopup({
         lines.push(`    Empty move: ${emptyJumps} jumps`);
       }
       lines.push(`    → ${hop.DestSystemName} (${totalHopJumps} jumps, trade ${hop.Jumps})`);
-      lines.push(`    Sell: @ ${formatISKFull(hop.SellPrice)} ISK → Profit: ${formatISK(hop.Profit)}`);
+      lines.push(`    Sell: @ ${formatISKFull(hop.SellPrice)} ISK → Real Profit: ${formatISKFull(hopMetrics.realProfit)} ISK (${formatISK(hopMetrics.iskPerJump)} ISK/jump)`);
       lines.push("");
     });
     if (route.TargetSystemName) {
       lines.push(`Target: ${route.TargetSystemName} (${route.TargetJumps ?? 0} jumps)`);
     }
-    lines.push(`Total: ${formatISKFull(route.TotalProfit)} ISK / ${route.TotalJumps} jumps / ${formatISK(route.ProfitPerJump)} ISK/jump`);
+    lines.push(`Total Real Profit: ${formatISKFull(metrics.totalRealProfit)} ISK`);
+    lines.push(`Total: ${metrics.totalJumps} jumps / ${formatISK(metrics.iskPerJump)} ISK/jump / Avg Hop ISK/jump ${formatISK(metrics.averageIskPerJump)}`);
     try {
       await navigator.clipboard.writeText(lines.join("\n"));
       addToast(t("copied"), "success", 1400);
@@ -529,7 +538,27 @@ function RouteDetailPopup({
                   });
                 const subBuy = selectedMetrics.reduce((sum, item) => sum + item.buyCost, 0);
                 const subSell = selectedMetrics.reduce((sum, item) => sum + item.sellValue, 0);
-                const subProfit = selectedMetrics.reduce((sum, item) => sum + item.profit, 0);
+                const subAttributableCosts = selectedMetrics.reduce((sum, item) => (
+                  sum + Number(item.Fees ?? 0) + Number(item.Taxes ?? 0) + Number(item.TransactionCosts ?? 0) + Number(item.AttributableCosts ?? 0)
+                ), 0);
+                const subProfit = selectedMetrics.reduce((sum, item) => sum + item.profit, 0) - subAttributableCosts;
+                const selectedHopMetrics = computeHopMetrics({
+                  ...hop,
+                  Items: selectedMetrics.map((item) => ({
+                    TypeID: item.TypeID,
+                    TypeName: item.TypeName,
+                    Units: item.qty,
+                    BuyPrice: item.BuyPrice,
+                    SellPrice: item.SellPrice,
+                    BuyCost: item.buyCost,
+                    SellValue: item.sellValue,
+                    Profit: item.profit,
+                    Fees: item.Fees,
+                    Taxes: item.Taxes,
+                    TransactionCosts: item.TransactionCosts,
+                    AttributableCosts: item.AttributableCosts,
+                  })),
+                });
                 const expanded = expandedHopKeys[key] ?? false;
                 return (
                   <>
@@ -588,7 +617,17 @@ function RouteDetailPopup({
                     <span className="text-eve-dim">{t("routeSell")}:</span>
                     <span className="font-mono text-eve-text">@ {formatISKFull(hop.SellPrice)} ISK</span>
                     <span className="text-eve-dim">→</span>
-                    <span className="font-mono text-green-400">+{formatISKFull(hop.Profit)} ISK</span>
+                    <span className={`font-mono ${selectedHopMetrics.realProfit >= 0 ? "text-green-400" : "text-red-400"}`}>
+                      {selectedHopMetrics.realProfit >= 0 ? "+" : ""}{formatISKFull(selectedHopMetrics.realProfit)} ISK
+                    </span>
+                    <span className="font-mono text-yellow-400">
+                      ({formatISKFull(selectedHopMetrics.iskPerJump)} ISK/{t("routeJumpsUnit")})
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px] text-eve-dim">
+                    <span title="Real Profit per hop = realized sell value - buy cost - fees/taxes/transaction costs attributable to that hop.">
+                      Real Profit per hop formula
+                    </span>
                   </div>
                   <button
                     type="button"
@@ -624,7 +663,7 @@ function RouteDetailPopup({
                         );
                       })}
                       <div className="pt-1 mt-1 border-t border-eve-border/50 text-[11px] font-mono text-eve-dim">
-                        Subtotal: buy {formatISKFull(subBuy)} / sell {formatISKFull(subSell)} / profit {formatISKFull(subProfit)}
+                        Subtotal: buy {formatISKFull(subBuy)} / sell {formatISKFull(subSell)} / attributable costs {formatISKFull(subAttributableCosts)} / real profit {formatISKFull(subProfit)}
                       </div>
                     </div>
                   )}
@@ -652,11 +691,16 @@ function RouteDetailPopup({
 
         {/* Summary + actions footer */}
         <div className="px-4 py-3 border-t border-eve-border bg-eve-dark/30 space-y-3">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <RouteMetricChip label={t("routeTotalProfit")} value={`${formatISKFull(route.TotalProfit)} ISK`} tone="profit" />
-            <RouteMetricChip label={t("routeTotalJumps")} value={String(route.TotalJumps)} tone="dim" />
-            <RouteMetricChip label={`ISK/${t("routeJumpsUnit")}`} value={formatISK(route.ProfitPerJump)} tone="ppj" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2" data-testid="route-summary-metrics">
+            <RouteMetricChip label={t("routeTotalProfit")} value={`${formatISKFull(routeMetrics.totalRealProfit)} ISK`} tone="profit" title="Total route real profit = sum of hop real profits." />
+            <RouteMetricChip label={t("routeTotalJumps")} value={String(routeMetrics.totalJumps)} tone="dim" />
+            <RouteMetricChip label={`ISK/${t("routeJumpsUnit")}`} value={formatISK(routeMetrics.iskPerJump)} tone="ppj" title="ISK/Jump = route real profit / total jumps." />
             <RouteMetricChip label={t("routeHopsCol")} value={String(route.HopCount)} tone="dim" />
+            <RouteMetricChip label="Profit margin %" value={formatPercent(routeMetrics.profitMarginPercent)} tone="dim" title="Profit margin % = route real profit / total buy cost." />
+            <RouteMetricChip label="Avg ISK/Jump (hops)" value={formatISK(routeMetrics.averageIskPerJump)} tone="ppj" title="Average ISK/Jump per route = mean of hop-level ISK/jump." />
+            <RouteMetricChip label="Hop profit range" value={formatISKFull(routeMetrics.profitVolatilityRange)} tone="dim" title="Profit volatility/range = max hop real profit - min hop real profit." />
+            <RouteMetricChip label="Break-even jumps" value={routeMetrics.breakEvenJumps == null ? "—" : formatISKFull(routeMetrics.breakEvenJumps)} tone="dim" title="Estimated break-even jumps = total buy cost / ISK per jump." />
+            <RouteMetricChip label="Top route item" value={routeMetrics.topRouteItem ? `${routeMetrics.topRouteItem.typeName} (${formatISKFull(routeMetrics.topRouteItem.realProfit)})` : "—"} tone="dim" />
             {route.TargetSystemName && (
               <RouteMetricChip
                 label={t("routeTargetTail")}
@@ -736,14 +780,16 @@ function RouteMetricChip({
   label,
   value,
   tone,
+  title,
 }: {
   label: string;
   value: string;
   tone: "profit" | "ppj" | "dim";
+  title?: string;
 }) {
   const valueClass = tone === "profit" ? "text-green-400" : tone === "ppj" ? "text-yellow-400" : "text-eve-text";
   return (
-    <div className="border border-eve-border/60 bg-eve-dark/70 px-2 py-1.5 rounded-sm">
+    <div className="border border-eve-border/60 bg-eve-dark/70 px-2 py-1.5 rounded-sm" title={title}>
       <div className="text-[10px] uppercase tracking-wide text-eve-dim">{label}</div>
       <div className={`text-xs font-mono font-semibold ${valueClass}`}>{value}</div>
     </div>

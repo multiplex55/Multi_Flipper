@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { RouteBuilder } from "@/components/RouteBuilder";
 
@@ -66,5 +66,9 @@ describe("RouteBuilder banlist filtering", () => {
 
     expect(screen.getByText(/found:1/i)).toBeInTheDocument();
     expect(screen.getByText(/Jita/)).toBeInTheDocument();
+    expect(screen.getAllByText(/^4$/)).toHaveLength(2);
+
+    fireEvent.doubleClick(screen.getAllByTitle("Jita → Amarr")[0]);
+    expect(screen.getAllByText("4 ISK").length).toBeGreaterThan(0);
   });
 });

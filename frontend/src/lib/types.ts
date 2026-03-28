@@ -220,6 +220,10 @@ export interface RouteHop {
   Profit: number;
   Jumps: number;
   RegionID?: number;
+  Fees?: number;
+  Taxes?: number;
+  TransactionCosts?: number;
+  AttributableCosts?: number;
 }
 
 export interface RouteHopItem {
@@ -232,6 +236,10 @@ export interface RouteHopItem {
   SellValue?: number;
   Profit: number;
   MarginPercent?: number;
+  Fees?: number;
+  Taxes?: number;
+  TransactionCosts?: number;
+  AttributableCosts?: number;
 }
 
 export interface RouteResult {
