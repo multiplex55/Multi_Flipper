@@ -127,6 +127,8 @@ export const en = {
     // Buttons
     scan: "Scan",
     stop: "Stop",
+    scanAndRefresh: "Scan and Refresh",
+    scanAndRefreshProcessing: "Refreshing and scanning...",
 
     // Table
     colItem: "Item",
