@@ -5,16 +5,19 @@ import { addToWatchlistWithToast } from "@/components/character-popup/watchlistA
 import type { ItemPnL, PortfolioPnL } from "@/lib/types";
 
 const getPortfolioPnLMock = vi.fn();
+const getWatchlistMock = vi.fn();
 const addToWatchlistMock = vi.fn();
 
 vi.mock("@/lib/api", () => ({
   getPortfolioPnL: (...args: unknown[]) => getPortfolioPnLMock(...args),
+  getWatchlist: (...args: unknown[]) => getWatchlistMock(...args),
   addToWatchlist: (...args: unknown[]) => addToWatchlistMock(...args),
 }));
 
 afterEach(() => {
   cleanup();
   getPortfolioPnLMock.mockReset();
+  getWatchlistMock.mockReset();
   addToWatchlistMock.mockReset();
 });
 
@@ -97,6 +100,7 @@ function makePortfolioResponse({
 
 describe("PnLTab station table", () => {
   it("renders resolved station names and only falls back to #id when unavailable", async () => {
+    getWatchlistMock.mockResolvedValue([]);
     getPortfolioPnLMock.mockResolvedValue(
       makePortfolioResponse({
         topStations: [
@@ -137,7 +141,53 @@ describe("PnLTab station table", () => {
 });
 
 describe("PnLTab watchlist action", () => {
-  it("calls onAddToWatchlist with expected type_id/type_name and disables button while pending", async () => {
+  it("shows tracked indicator and disables add action for already watched items", async () => {
+    getWatchlistMock.mockResolvedValue([
+      {
+        type_id: 34,
+        type_name: "Tritanium",
+        added_at: "2026-03-20T00:00:00Z",
+        alert_min_margin: 10,
+      },
+    ]);
+    getPortfolioPnLMock.mockResolvedValue(
+      makePortfolioResponse({
+        topItems: [
+          {
+            type_id: 34,
+            type_name: "Tritanium",
+            total_bought: 1000,
+            total_sold: 1300,
+            net_pnl: 300,
+            margin_percent: 10,
+            qty_bought: 500,
+            qty_sold: 480,
+            avg_buy_price: 2,
+            avg_sell_price: 2.7,
+            transactions: 2,
+          },
+        ],
+      }),
+    );
+
+    const onAddToWatchlist = vi.fn(async () => undefined);
+
+    render(
+      <PnLTab
+        formatIsk={(v) => v.toFixed(0)}
+        characterScope={90000001}
+        t={(key) => key}
+        onAddToWatchlist={onAddToWatchlist}
+      />,
+    );
+
+    expect(await screen.findByText(/watchlistTracked/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "addToWatchlist: Tritanium" })).not.toBeInTheDocument();
+    expect(onAddToWatchlist).not.toHaveBeenCalled();
+  });
+
+  it("keeps add behavior for unwatched items and shows tracked indicator after pending add resolves", async () => {
+    getWatchlistMock.mockResolvedValue([]);
     getPortfolioPnLMock.mockResolvedValue(
       makePortfolioResponse({
         topItems: [
@@ -184,7 +234,49 @@ describe("PnLTab watchlist action", () => {
     if (resolveRequest) {
       resolveRequest();
     }
-    await waitFor(() => expect(button).not.toBeDisabled());
+    expect(await screen.findByText(/watchlistTracked/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "addToWatchlist: Tritanium" })).not.toBeInTheDocument();
+  });
+
+  it("switches to tracked indicator after successful add callback", async () => {
+    getWatchlistMock.mockResolvedValue([]);
+    getPortfolioPnLMock.mockResolvedValue(
+      makePortfolioResponse({
+        topItems: [
+          {
+            type_id: 34,
+            type_name: "Tritanium",
+            total_bought: 1000,
+            total_sold: 1300,
+            net_pnl: 300,
+            margin_percent: 10,
+            qty_bought: 500,
+            qty_sold: 480,
+            avg_buy_price: 2,
+            avg_sell_price: 2.7,
+            transactions: 2,
+          },
+        ],
+      }),
+    );
+
+    const onAddToWatchlist = vi.fn(async () => undefined);
+
+    render(
+      <PnLTab
+        formatIsk={(v) => v.toFixed(0)}
+        characterScope={90000001}
+        t={(key) => key}
+        onAddToWatchlist={onAddToWatchlist}
+      />,
+    );
+
+    const button = await screen.findByRole("button", { name: "addToWatchlist: Tritanium" });
+    fireEvent.click(button);
+
+    await waitFor(() => expect(onAddToWatchlist).toHaveBeenCalledWith(34, "Tritanium"));
+    expect(await screen.findByText(/watchlistTracked/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "addToWatchlist: Tritanium" })).not.toBeInTheDocument();
   });
 });
 
