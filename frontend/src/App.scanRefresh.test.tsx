@@ -2,9 +2,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "@/App";
 
-const mockGetConfig = vi.fn(async () => ({ system_name: "Jita" }));
-const mockScan = vi.fn(async () => []);
-const mockRebootStationCache = vi.fn(async () => ({ ok: true, cleared: 1 }));
+const { mockGetConfig, mockScan, mockRebootStationCache } = vi.hoisted(() => ({
+  mockGetConfig: vi.fn(async () => ({ system_name: "Jita" })),
+  mockScan: vi.fn(async () => []),
+  mockRebootStationCache: vi.fn(async () => ({ ok: true, cleared: 1 })),
+}));
 
 vi.mock("@/lib/api", () => ({
   applyAppUpdate: vi.fn(),
@@ -12,13 +14,13 @@ vi.mock("@/lib/api", () => ({
   getConfig: () => mockGetConfig(),
   skipAppUpdateForSession: vi.fn(async () => ({})),
   updateConfig: vi.fn(async () => ({})),
-  scan: (...args: unknown[]) => mockScan(...args),
+  scan: mockScan,
   scanMultiRegion: vi.fn(async () => []),
   scanRegionalDayTrader: vi.fn(async () => []),
   scanContracts: vi.fn(async () => []),
   testAlertChannels: vi.fn(),
   getWatchlist: vi.fn(async () => []),
-  rebootStationCache: (...args: unknown[]) => mockRebootStationCache(...args),
+  rebootStationCache: mockRebootStationCache,
 }));
 
 vi.mock("@/lib/useAuth", () => ({
@@ -136,7 +138,7 @@ describe("App scan and refresh controls", () => {
   });
 
   it("disables controls and shows loading label while scan-and-refresh is in flight", async () => {
-    let releaseScan: (() => void) | null = null;
+    let releaseScan: (() => void) | undefined;
     mockScan.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -156,7 +158,7 @@ describe("App scan and refresh controls", () => {
       expect(scanButton).toBeDisabled();
     });
 
-    releaseScan?.();
+    if (releaseScan) releaseScan();
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "scanAndRefresh" })).toBeEnabled();
