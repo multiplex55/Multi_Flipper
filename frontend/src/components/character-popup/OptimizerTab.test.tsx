@@ -59,7 +59,7 @@ describe("OptimizerTab watchlist actions", () => {
   it("calls onAddToWatchlist from AssetTable rows", async () => {
     getPortfolioOptimizationMock.mockResolvedValue(makeOptimizerResult());
 
-    let resolveRequest: (() => void) | null = null;
+    let resolveRequest: (() => void) | undefined;
     const onAddToWatchlist = vi.fn(
       () =>
         new Promise<void>((resolve) => {
@@ -82,7 +82,9 @@ describe("OptimizerTab watchlist actions", () => {
     expect(onAddToWatchlist).toHaveBeenCalledWith(34, "Tritanium");
     expect(assetButton).toBeDisabled();
 
-    resolveRequest?.();
+    if (resolveRequest) {
+      resolveRequest();
+    }
     await waitFor(() => expect(assetButton).not.toBeDisabled());
   });
 

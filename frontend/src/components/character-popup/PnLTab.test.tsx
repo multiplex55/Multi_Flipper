@@ -148,13 +148,17 @@ describe("PnLTab watchlist action", () => {
             total_sold: 1300,
             net_pnl: 300,
             margin_percent: 10,
+            qty_bought: 500,
+            qty_sold: 480,
+            avg_buy_price: 2,
+            avg_sell_price: 2.7,
             transactions: 2,
           },
         ],
       }),
     );
 
-    let resolveRequest: (() => void) | null = null;
+    let resolveRequest: (() => void) | undefined;
     const onAddToWatchlist = vi.fn(
       () =>
         new Promise<void>((resolve) => {
@@ -177,7 +181,9 @@ describe("PnLTab watchlist action", () => {
     expect(onAddToWatchlist).toHaveBeenCalledWith(34, "Tritanium");
     expect(button).toBeDisabled();
 
-    resolveRequest?.();
+    if (resolveRequest) {
+      resolveRequest();
+    }
     await waitFor(() => expect(button).not.toBeDisabled());
   });
 });
