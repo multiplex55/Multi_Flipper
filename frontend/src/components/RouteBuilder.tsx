@@ -8,6 +8,7 @@ import { ExecutionPlannerPopup } from "./ExecutionPlannerPopup";
 import { useGlobalToast } from "./Toast";
 import { handleEveUIError } from "@/lib/handleEveUIError";
 import { computeHopMetrics, computeRouteMetrics } from "@/lib/routeMetrics";
+import { buildNormalizedRouteCopyManifest, formatNormalizedRouteCopyManifest } from "@/lib/routeManifestFormat";
 import {
   TabSettingsPanel,
   SettingsCheckbox,
@@ -469,28 +470,10 @@ function RouteDetailPopup({
   };
 
   const handleCopyRoute = async () => {
-    const metrics = computeRouteMetrics(route);
-    const lines = ["=== EVE Flipper Route ==="];
-    route.Hops.forEach((hop, i) => {
-      const hopMetrics = computeHopMetrics(hop);
-      const emptyJumps = hop.EmptyJumps ?? 0;
-      const totalHopJumps = hop.Jumps + emptyJumps;
-      lines.push(`[${i + 1}] ${hop.StationName || hop.SystemName}`);
-      lines.push(`    Buy: ${hop.TypeName} x${hop.Units} @ ${formatISKFull(hop.BuyPrice)} ISK`);
-      if (emptyJumps > 0) {
-        lines.push(`    Empty move: ${emptyJumps} jumps`);
-      }
-      lines.push(`    → ${hop.DestSystemName} (${totalHopJumps} jumps, trade ${hop.Jumps})`);
-      lines.push(`    Sell: @ ${formatISKFull(hop.SellPrice)} ISK → Real Profit: ${formatISKFull(hopMetrics.realProfit)} ISK (${formatISK(hopMetrics.iskPerJump)} ISK/jump)`);
-      lines.push("");
-    });
-    if (route.TargetSystemName) {
-      lines.push(`Target: ${route.TargetSystemName} (${route.TargetJumps ?? 0} jumps)`);
-    }
-    lines.push(`Total Real Profit: ${formatISKFull(metrics.totalRealProfit)} ISK`);
-    lines.push(`Total: ${metrics.totalJumps} jumps / ${formatISK(metrics.iskPerJump)} ISK/jump / Avg Hop ISK/jump ${formatISK(metrics.averageIskPerJump)}`);
+    const manifest = buildNormalizedRouteCopyManifest(route);
+    const routeText = formatNormalizedRouteCopyManifest(manifest);
     try {
-      await navigator.clipboard.writeText(lines.join("\n"));
+      await navigator.clipboard.writeText(routeText);
       addToast(t("copied"), "success", 1400);
     } catch {
       addToast(t("errorSomethingWentWrong"), "error", 2200);
