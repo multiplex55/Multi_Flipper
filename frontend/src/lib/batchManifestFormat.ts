@@ -260,6 +260,13 @@ const HOP_FORMAT_ORDER = [
 
 const HOP_SEPARATOR = "------------------------";
 
+/**
+ * Contract expected by formatOrderedRouteManifestText (validated at copy-time):
+ * - station.item_count must match station.lines.length.
+ * - station totals must equal the sum of line totals (within rounding tolerance).
+ * - route summary totals must equal the sum of station totals.
+ * - jumps_to_buy_station must be monotonic and derived from prior hops' cumulative jumps_buy_to_sell when present.
+ */
 export function formatOrderedRouteManifestText(input: {
   originLabel?: string;
   metadataHeader?: RouteMetadataHeaderInput;
