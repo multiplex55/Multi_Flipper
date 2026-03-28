@@ -42,7 +42,7 @@ func TestBatchRouteRegression_StrictEndpointOnlyCanReturnEmpty(t *testing.T) {
 		t.Fatalf("strict endpoint-only behavior should prune off-path opportunities, got %d lines", len(lines))
 	}
 
-	options := buildBatchRouteOptionsFromCandidates(lines, params)
+	options := scanner.buildBatchRouteOptionsFromCandidates(lines, params)
 	if len(options) != 0 {
 		t.Fatalf("expected no options when strict endpoint-only filtering is applied, got %d", len(options))
 	}
@@ -73,7 +73,7 @@ func TestBatchRouteRegression_DetourExplorationReturnsOptions(t *testing.T) {
 		t.Fatalf("expected off-path opportunities when detour exploration is enabled")
 	}
 
-	options := buildBatchRouteOptionsFromCandidates(lines, params)
+	options := scanner.buildBatchRouteOptionsFromCandidates(lines, params)
 	if len(options) == 0 {
 		t.Fatalf("expected non-empty options when detour exploration is enabled")
 	}
@@ -104,7 +104,7 @@ func TestBatchRouteRegression_SecurityPolicyTogglesChangeOptions(t *testing.T) {
 		1,
 		1,
 	)
-	blockedOptions := buildBatchRouteOptionsFromCandidates(blockedLines, blocked)
+	blockedOptions := scanner.buildBatchRouteOptionsFromCandidates(blockedLines, blocked)
 	if len(blockedOptions) != 0 {
 		t.Fatalf("expected no options when lowsec transit is disallowed, got %d", len(blockedOptions))
 	}
@@ -120,7 +120,7 @@ func TestBatchRouteRegression_SecurityPolicyTogglesChangeOptions(t *testing.T) {
 		1,
 		1,
 	)
-	allowedOptions := buildBatchRouteOptionsFromCandidates(allowedLines, allowed)
+	allowedOptions := scanner.buildBatchRouteOptionsFromCandidates(allowedLines, allowed)
 	if len(allowedOptions) == 0 {
 		t.Fatalf("expected options when lowsec transit is allowed")
 	}

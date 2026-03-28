@@ -121,8 +121,11 @@ func TestBuildBatchRouteOptions_MultipleRankedOptionsDeterministic(t *testing.T)
 	}
 	params := BatchCreateRouteParams{RemainingCapacityM3: 12, CargoLimitM3: 20}
 
-	options1 := buildBatchRouteOptionsFromCandidates(lines, params)
-	options2 := buildBatchRouteOptionsFromCandidates(lines, params)
+	scanner := testBatchRouteScanner()
+	params.OriginSystemID = 10
+	params.FinalSellSystemID = 30
+	options1 := scanner.buildBatchRouteOptionsFromCandidates(lines, params)
+	options2 := scanner.buildBatchRouteOptionsFromCandidates(lines, params)
 	if len(options1) < 2 {
 		t.Fatalf("expected multiple strategy options, got %d", len(options1))
 	}
@@ -186,5 +189,88 @@ func TestMergeBatchRouteCandidatePools_DedupesAndExcludesBaseLines(t *testing.T)
 	}
 	if merged[0].RouteJumps != 4 {
 		t.Fatalf("merged route jumps = %d, want 4", merged[0].RouteJumps)
+	}
+}
+
+func TestBuildBatchRouteOptions_OptimizesMultiStopJumpsAcrossStations(t *testing.T) {
+	u := graph.NewUniverse()
+	// 1(start) -> 2 -> 3 -> 6(final) is shortest sequence when buying at 2 and 3.
+	u.AddGate(1, 2)
+	u.AddGate(2, 1)
+	u.AddGate(2, 3)
+	u.AddGate(3, 2)
+	u.AddGate(3, 6)
+	u.AddGate(6, 3)
+	// Longer detour branch.
+	u.AddGate(1, 4)
+	u.AddGate(4, 1)
+	u.AddGate(4, 5)
+	u.AddGate(5, 4)
+	u.AddGate(5, 6)
+	u.AddGate(6, 5)
+	for _, sys := range []int32{1, 2, 3, 4, 5, 6} {
+		u.SetRegion(sys, 1)
+		u.SetSecurity(sys, 1.0)
+	}
+	scanner := &Scanner{SDE: &sde.Data{Universe: u}}
+	params := BatchCreateRouteParams{
+		OriginSystemID:      1,
+		CurrentSystemID:     1,
+		FinalSellSystemID:   6,
+		RemainingCapacityM3: 100,
+	}
+	lines := []BatchCreateRouteLine{
+		{TypeID: 10, Units: 1, UnitVolumeM3: 1, ProfitTotalISK: 100, BuyTotalISK: 100, SellTotalISK: 200, RouteJumps: 6, BuySystemID: 2},
+		{TypeID: 11, Units: 1, UnitVolumeM3: 1, ProfitTotalISK: 90, BuyTotalISK: 90, SellTotalISK: 180, RouteJumps: 6, BuySystemID: 3},
+	}
+	options := scanner.buildBatchRouteOptionsFromCandidates(lines, params)
+	if len(options) == 0 {
+		t.Fatalf("expected options")
+	}
+	if options[0].TotalJumps != 3 {
+		t.Fatalf("optimized total jumps = %d, want 3", options[0].TotalJumps)
+	}
+	if !reflect.DeepEqual(options[0].OrderedBuySystems, []int32{2, 3}) {
+		t.Fatalf("ordered buy systems = %v, want [2 3]", options[0].OrderedBuySystems)
+	}
+}
+
+func TestBuildBatchRouteOptions_IncludesBaseLinesInRouteSequence(t *testing.T) {
+	u := graph.NewUniverse()
+	u.AddGate(1, 2)
+	u.AddGate(2, 1)
+	u.AddGate(2, 3)
+	u.AddGate(3, 2)
+	u.AddGate(3, 4)
+	u.AddGate(4, 3)
+	for _, sys := range []int32{1, 2, 3, 4} {
+		u.SetRegion(sys, 1)
+		u.SetSecurity(sys, 1.0)
+	}
+	scanner := &Scanner{SDE: &sde.Data{Universe: u}}
+	params := BatchCreateRouteParams{
+		OriginSystemID:      1,
+		CurrentSystemID:     1,
+		FinalSellSystemID:   4,
+		RemainingCapacityM3: 100,
+		BaseLines: []BatchCreateRouteLine{
+			{TypeID: 50, Units: 1, UnitVolumeM3: 1, BuySystemID: 2},
+		},
+	}
+	lines := []BatchCreateRouteLine{
+		{TypeID: 60, Units: 1, UnitVolumeM3: 1, ProfitTotalISK: 20, BuyTotalISK: 80, SellTotalISK: 100, RouteJumps: 2, BuySystemID: 3},
+	}
+	options := scanner.buildBatchRouteOptionsFromCandidates(lines, params)
+	if len(options) == 0 {
+		t.Fatalf("expected options")
+	}
+	if options[0].TotalJumps != 3 {
+		t.Fatalf("total jumps with base-line buy inclusion = %d, want 3", options[0].TotalJumps)
+	}
+	if !reflect.DeepEqual(options[0].OrderedBuySystems, []int32{2, 3}) {
+		t.Fatalf("ordered buy systems = %v, want [2 3]", options[0].OrderedBuySystems)
+	}
+	if !reflect.DeepEqual(options[0].RouteSequence, []int32{1, 2, 3, 4}) {
+		t.Fatalf("route sequence = %v, want [1 2 3 4]", options[0].RouteSequence)
 	}
 }

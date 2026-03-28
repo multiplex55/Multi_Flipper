@@ -88,6 +88,9 @@ type RouteAdditionOption struct {
 	RankingInputs         RouteOptionRankingInputs `json:"ranking_inputs"`
 	RankingTieBreakValues []float64                `json:"ranking_tie_break_values"`
 	RankingSortKey        string                   `json:"ranking_sort_key"`
+	OrderedBuySystems     []int32                  `json:"ordered_buy_systems,omitempty"`
+	RouteSequence         []int32                  `json:"route_sequence,omitempty"`
+	RouteTotalJumps       int                      `json:"route_total_jumps,omitempty"`
 }
 
 type DeterministicSortConfig struct {

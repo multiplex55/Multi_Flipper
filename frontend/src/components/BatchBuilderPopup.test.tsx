@@ -137,6 +137,9 @@ function makeRouteResponse(): BatchCreateRouteResponse {
         total_profit_isk: 40000,
         total_jumps: 8,
         isk_per_jump: 5000,
+        ordered_buy_systems: [30000142],
+        route_sequence: [30000142, 30002187],
+        route_total_jumps: 8,
         ranking_inputs: {
           total_profit_isk: 40000,
           total_jumps: 8,
@@ -173,6 +176,9 @@ function makeRouteResponse(): BatchCreateRouteResponse {
         total_profit_isk: 90000,
         total_jumps: 10,
         isk_per_jump: 9000,
+        ordered_buy_systems: [30000142],
+        route_sequence: [30000142, 30002187],
+        route_total_jumps: 10,
         ranking_inputs: {
           total_profit_isk: 90000,
           total_jumps: 10,
@@ -234,6 +240,9 @@ function makeDuplicateTotalsRouteResponse(): BatchCreateRouteResponse {
       total_profit_isk: 104000,
       total_jumps: 7,
       isk_per_jump: 14857.14,
+      ordered_buy_systems: [30000142],
+      route_sequence: [30000142, 30002187],
+      route_total_jumps: 7,
       ranking_inputs: {
         total_profit_isk: 104000,
         total_jumps: 7,
@@ -507,15 +516,15 @@ describe("BatchBuilderPopup route creation", () => {
     const manifest = writeText.mock.calls[0][0];
     expect(manifest).toContain("Origin: Jita (Jita IV - Moon 4)");
     expect(manifest).toContain("Buy Station: Jita IV - Moon 4");
-    expect(manifest).toContain("Jumps to Buy Station: N/A");
+    expect(manifest).toContain("Jumps to Buy Station: 0");
     expect(manifest).toContain("Jumps Buy -> Sell: 0");
     expect(manifest).toContain("Sell Station: Amarr VIII (Oris) - Emperor Family Academy");
-    expect(manifest).toContain("Cargo m3: 20,000 m3");
-    expect(manifest).toContain("Items: 1");
-    expect(manifest).toContain("Total volume: 80 m3");
-    expect(manifest).toContain("Total capital: 200,000 ISK");
-    expect(manifest).toContain("Total gross sell: 290,000 ISK");
-    expect(manifest).toContain("Total profit: 90,000 ISK");
+    expect(manifest).toContain("Cargo m3: 15,580 m3");
+    expect(manifest).toContain("Items: 4");
+    expect(manifest).toContain("Total volume: 15,580 m3");
+    expect(manifest).toContain("Total capital: 830,000 ISK");
+    expect(manifest).toContain("Total gross sell: 1,630,000 ISK");
+    expect(manifest).toContain("Total profit: 1,590,000 ISK");
     expect(manifest).toContain("Total isk/jump: 9,000 ISK");
     const requiredLabels = [
       "Buy Station:",
@@ -537,10 +546,10 @@ describe("BatchBuilderPopup route creation", () => {
       expect(matches?.length ?? 0).toBeGreaterThanOrEqual(1);
     }
     expect(manifest).toContain(
-      "Megacyte | qty 40 | buy total 200,000 ISK | buy per 5,000 ISK | sell total 290,000 ISK | sell per 7,250 ISK | vol 80 m3 | profit 90,000 ISK",
+      "Anchor Paste | qty 1,500 | buy total 150,000 ISK | buy per 100 ISK | sell total 180,000 ISK | sell per 120 ISK | vol 1,500 m3 | profit 150,000 ISK",
     );
     expect(manifest).toContain(
-      "Megacyte | qty 40 | buy total 200,000 ISK | buy per 5,000 ISK | sell total 290,000 ISK | sell per 7,250 ISK | vol 80 m3 | profit 90,000 ISK\n\nMegacyte 40",
+      "Megacyte | qty 40 | buy total 200,000 ISK | buy per 5,000 ISK | sell total 290,000 ISK | sell per 7,250 ISK | vol 80 m3 | profit 90,000 ISK",
     );
     const detailRowIndex = manifest.indexOf("Megacyte | qty 40");
     const autobuyRowIndex = manifest.indexOf("\nMegacyte 40");
@@ -587,6 +596,74 @@ describe("BatchBuilderPopup route creation", () => {
     expect(manifest).toContain("Jumps Buy -> Sell: N/A");
     expect(manifest).not.toContain("Jumps to Buy Station: 0");
     expect(manifest).not.toContain("Jumps Buy -> Sell: 0");
+  });
+
+  it("copy merged manifest orders station blocks by optimized route sequence", async () => {
+    const response = makeRouteResponse();
+    response.ranked_options = [
+      {
+        ...response.ranked_options[0],
+        option_id: "route-order",
+        lines: [
+          {
+            type_id: 8001,
+            type_name: "First Hop Item",
+            units: 10,
+            unit_volume_m3: 1,
+            buy_system_id: 30000142,
+            buy_location_id: 60003760,
+            sell_system_id: 30002187,
+            sell_location_id: 60008494,
+            buy_total_isk: 10000,
+            sell_total_isk: 13000,
+            profit_total_isk: 3000,
+            route_jumps: 8,
+          },
+          {
+            type_id: 8002,
+            type_name: "Second Hop Item",
+            units: 10,
+            unit_volume_m3: 1,
+            buy_system_id: 30005305,
+            buy_location_id: 61000001,
+            sell_system_id: 30002187,
+            sell_location_id: 60008494,
+            buy_total_isk: 12000,
+            sell_total_isk: 17000,
+            profit_total_isk: 5000,
+            route_jumps: 8,
+          },
+        ],
+        ordered_buy_systems: [30000142, 30005305],
+        route_sequence: [30000142, 30005305, 30002187],
+      },
+    ];
+    response.selected_option_id = "";
+    response.selected_rank = 0;
+    batchCreateRouteMock.mockResolvedValue(response);
+
+    const altRows = [
+      ...rows,
+      makeRow({
+        TypeID: 8002,
+        TypeName: "Second Hop Item",
+        BuySystemID: 30005305,
+        BuyLocationID: 61000001,
+        BuyStation: "Dodixie IX - Moon 20",
+      }),
+    ];
+    renderPopup({ anchorRow, rows: altRows });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(await screen.findByTestId("route-option-route-order"));
+    fireEvent.click(await screen.findByRole("button", { name: "Copy merged manifest" }));
+
+    const manifest = writeText.mock.calls[writeText.mock.calls.length - 1][0];
+    const jitaIndex = manifest.indexOf("Buy Station: Jita IV - Moon 4");
+    const dodixieIndex = manifest.indexOf("Buy Station: Dodixie IX - Moon 20");
+    expect(jitaIndex).toBeGreaterThanOrEqual(0);
+    expect(dodixieIndex).toBeGreaterThanOrEqual(0);
+    expect(jitaIndex).toBeLessThan(dodixieIndex);
   });
 
   it("copy merged manifest keeps true zero jump values when row metadata explicitly has zero jumps", async () => {
