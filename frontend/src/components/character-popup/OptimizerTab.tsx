@@ -9,13 +9,27 @@ interface OptimizerTabProps {
   formatIsk: (v: number) => string;
   characterScope: CharacterScope;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+  onAddToWatchlist: (typeId: number, typeName: string) => Promise<void>;
 }
 
-export function OptimizerTab({ formatIsk, characterScope, t }: OptimizerTabProps) {
+export function OptimizerTab({ formatIsk, characterScope, t, onAddToWatchlist }: OptimizerTabProps) {
   const [period, setPeriod] = useState<OptPeriod>(90);
   const [result, setResult] = useState<OptimizerResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [watchlistPending, setWatchlistPending] = useState<Record<number, boolean>>({});
+
+  const handleAddWatchlist = async (typeId: number, typeName: string) => {
+    if (watchlistPending[typeId]) return;
+    setWatchlistPending((prev) => ({ ...prev, [typeId]: true }));
+    try {
+      await onAddToWatchlist(typeId, typeName);
+    } catch {
+      // parent callback is responsible for user feedback
+    } finally {
+      setWatchlistPending((prev) => ({ ...prev, [typeId]: false }));
+    }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -211,14 +225,27 @@ export function OptimizerTab({ formatIsk, characterScope, t }: OptimizerTabProps
       {/* Asset Table */}
       <div className="bg-eve-panel border border-eve-border rounded-sm p-3">
         <div className="text-[10px] text-eve-dim uppercase tracking-wider mb-2">{t("optAssets")}</div>
-        <AssetTable assets={data.assets} currentWeights={data.current_weights} optimalWeights={data.optimal_weights} formatIsk={formatIsk} t={t} />
+        <AssetTable
+          assets={data.assets}
+          currentWeights={data.current_weights}
+          optimalWeights={data.optimal_weights}
+          formatIsk={formatIsk}
+          t={t}
+          watchlistPending={watchlistPending}
+          onAddToWatchlist={handleAddWatchlist}
+        />
       </div>
 
       {/* Suggestions */}
       {data.suggestions && data.suggestions.filter((s) => s.action !== "hold").length > 0 && (
         <div className="bg-eve-panel border border-eve-border rounded-sm p-3">
           <div className="text-[10px] text-eve-dim uppercase tracking-wider mb-2">{t("optSuggestions")}</div>
-          <SuggestionsPanel suggestions={data.suggestions} t={t} />
+          <SuggestionsPanel
+            suggestions={data.suggestions}
+            t={t}
+            watchlistPending={watchlistPending}
+            onAddToWatchlist={handleAddWatchlist}
+          />
         </div>
       )}
     </div>
@@ -404,12 +431,16 @@ function AssetTable({
   optimalWeights,
   formatIsk,
   t,
+  watchlistPending,
+  onAddToWatchlist,
 }: {
   assets: AssetStats[];
   currentWeights: number[];
   optimalWeights: number[];
   formatIsk: (v: number) => string;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+  watchlistPending: Record<number, boolean>;
+  onAddToWatchlist: (typeId: number, typeName: string) => Promise<void>;
 }) {
   return (
     <div className="border border-eve-border rounded-sm overflow-hidden">
@@ -423,6 +454,7 @@ function AssetTable({
             <th className="px-3 py-2 text-right">{t("optAssetSharpe")}</th>
             <th className="px-3 py-2 text-right">{t("optAssetVol")}</th>
             <th className="px-3 py-2 text-right">{t("optAssetDays")}</th>
+            <th className="px-3 py-2 text-right">{t("addToWatchlist")}</th>
           </tr>
         </thead>
         <tbody>
@@ -463,6 +495,17 @@ function AssetTable({
                 </td>
                 <td className="px-3 py-2 text-right text-eve-dim">{formatIsk(asset.volatility)}</td>
                 <td className="px-3 py-2 text-right text-eve-dim">{asset.trading_days}</td>
+                <td className="px-3 py-2 text-right">
+                  <button
+                    type="button"
+                    onClick={() => { void onAddToWatchlist(asset.type_id, asset.type_name || `#${asset.type_id}`); }}
+                    disabled={Boolean(watchlistPending[asset.type_id])}
+                    aria-label={`${t("addToWatchlist")}: ${asset.type_name || `#${asset.type_id}`}`}
+                    className="px-2 py-1 text-[10px] rounded-sm border border-eve-border bg-eve-dark/70 text-eve-dim hover:text-eve-accent hover:border-eve-accent/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {watchlistPending[asset.type_id] ? "…" : t("addToWatchlist")}
+                  </button>
+                </td>
               </tr>
             );
           })}
@@ -477,9 +520,13 @@ function AssetTable({
 function SuggestionsPanel({
   suggestions,
   t,
+  watchlistPending,
+  onAddToWatchlist,
 }: {
   suggestions: AllocationSuggestion[];
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
+  watchlistPending: Record<number, boolean>;
+  onAddToWatchlist: (typeId: number, typeName: string) => Promise<void>;
 }) {
   const actionable = suggestions.filter((s) => s.action !== "hold");
   if (actionable.length === 0) return null;
@@ -525,6 +572,15 @@ function SuggestionsPanel({
                 {t(reasonLabels[s.reason] || ("optReasonOverweight" as TranslationKey))}
               </span>
             )}
+            <button
+              type="button"
+              onClick={() => { void onAddToWatchlist(s.type_id, s.type_name || `#${s.type_id}`); }}
+              disabled={Boolean(watchlistPending[s.type_id])}
+              aria-label={`${t("addToWatchlist")}: ${s.type_name || `#${s.type_id}`}`}
+              className="ml-2 px-2 py-1 text-[10px] rounded-sm border border-eve-border bg-eve-dark/70 text-eve-dim hover:text-eve-accent hover:border-eve-accent/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {watchlistPending[s.type_id] ? "…" : t("addToWatchlist")}
+            </button>
           </div>
         );
       })}
