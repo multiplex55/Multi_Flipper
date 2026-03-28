@@ -114,10 +114,13 @@ describe("BatchBuyVerifier", () => {
     });
 
     const summaryPayload = writeTextMock.mock.calls[0][0] as string;
-    expect(summaryPayload).toContain("Buy these: 1");
-    expect(summaryPayload).toContain("Do not buy these: 1");
-    expect(summaryPayload).toContain("Missing / unavailable: 1");
-    expect(summaryPayload).toContain("Unexpected extras: 1");
+    expect(summaryPayload).toContain("Mode: Strict, quantity exact");
+    expect(summaryPayload).toContain("Safe: 1");
+    expect(summaryPayload).toContain("Do not buy: 1");
+    expect(summaryPayload).toContain("Missing from export: 1");
+    expect(summaryPayload).toContain("Unexpected in export: 1");
+    expect(summaryPayload).toContain("Extra ISK vs plan: 16.00 ISK");
+    expect(summaryPayload).toContain("Profit impact: 0.00 ISK");
 
     fireEvent.click(screen.getByRole("button", { name: "Copy Do Not Buy List" }));
 
@@ -126,7 +129,10 @@ describe("BatchBuyVerifier", () => {
     });
 
     const doNotBuyPayload = writeTextMock.mock.calls[1][0] as string;
-    expect(doNotBuyPayload).toContain("Pyerite");
+    expect(doNotBuyPayload).toContain("Pyerite — Overpriced:");
+    expect(doNotBuyPayload).toContain("Mexallon — Missing from export order.");
+    expect(doNotBuyPayload).toContain("Nocxium — Unexpected item in export order.");
+    expect(doNotBuyPayload).not.toContain("Tritanium");
   });
 
   it("shows parse errors without crashing", () => {
