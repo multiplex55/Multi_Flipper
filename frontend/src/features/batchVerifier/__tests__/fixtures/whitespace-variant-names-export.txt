@@ -1,0 +1,2 @@
+  Heavy    Water  	10	12,000	120,000
+Republic   Fleet   EMP S	400	3,000	1,200,000

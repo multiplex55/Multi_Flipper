@@ -1,0 +1,5 @@
+Items: 4
+Good Item | qty 2 | buy per 10 | buy total 20
+Bad Qty | qty nope | buy per 10
+Wrong Segments
+Another Good | qty 5 | buy per 2,500 | buy total 12,500

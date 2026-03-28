@@ -1,0 +1,4 @@
+Total:	1,410	1,226,500	1,329,550
+Heavy Water	10	12,500	125,000
+Tritanium	1,000	4.55	4,550.00
+Republic Fleet EMP S	400	3,000	1,200,000
