@@ -9591,7 +9591,58 @@ func (s *Server) handleAuthPortfolio(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fetchTxns := func(sess *auth.Session) ([]esi.WalletTransaction, error) {
+		needsLocationName := func(name string) bool {
+			trimmed := strings.TrimSpace(name)
+			if trimmed == "" {
+				return true
+			}
+			if strings.HasPrefix(trimmed, "#") {
+				trimmed = strings.TrimSpace(strings.TrimPrefix(trimmed, "#"))
+			}
+			if trimmed == "" {
+				return true
+			}
+			for _, r := range trimmed {
+				if !unicode.IsDigit(r) {
+					return false
+				}
+			}
+			return true
+		}
+		enrichTxns := func(txns []esi.WalletTransaction) {
+			// Enrich type names from SDE.
+			s.mu.RLock()
+			sdeData := s.sdeData
+			s.mu.RUnlock()
+			if sdeData != nil {
+				for i := range txns {
+					if t, ok := sdeData.Types[txns[i].TypeID]; ok {
+						txns[i].TypeName = t.Name
+					}
+				}
+			}
+
+			// Enrich location names from station resolver cache/API.
+			locationIDs := make(map[int64]bool)
+			for _, txn := range txns {
+				if txn.LocationID > 0 {
+					locationIDs[txn.LocationID] = true
+				}
+			}
+			if len(locationIDs) > 0 {
+				s.esi.PrefetchStationNames(locationIDs)
+				for i := range txns {
+					if txns[i].LocationID <= 0 {
+						continue
+					}
+					if needsLocationName(txns[i].LocationName) {
+						txns[i].LocationName = s.esi.StationName(txns[i].LocationID)
+					}
+				}
+			}
+		}
 		if cached, ok := s.getWalletTxnCache(sess.CharacterID); ok {
+			enrichTxns(cached)
 			return cached, nil
 		}
 		token, tokenErr := s.sessions.EnsureValidTokenForUserCharacter(s.sso, userID, sess.CharacterID)
@@ -9602,18 +9653,7 @@ func (s *Server) handleAuthPortfolio(w http.ResponseWriter, r *http.Request) {
 		if fetchErr != nil {
 			return nil, fetchErr
 		}
-
-		// Enrich type names from SDE
-		s.mu.RLock()
-		sdeData := s.sdeData
-		s.mu.RUnlock()
-		if sdeData != nil {
-			for i := range freshTxns {
-				if t, ok := sdeData.Types[freshTxns[i].TypeID]; ok {
-					freshTxns[i].TypeName = t.Name
-				}
-			}
-		}
+		enrichTxns(freshTxns)
 		s.setWalletTxnCache(sess.CharacterID, freshTxns)
 		return freshTxns, nil
 	}

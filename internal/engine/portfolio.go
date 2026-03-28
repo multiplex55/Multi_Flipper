@@ -3,6 +3,7 @@ package engine
 import (
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"eve-flipper/internal/esi"
@@ -293,16 +294,20 @@ func ComputePortfolioPnLWithOptions(txns []esi.WalletTransaction, opt PortfolioP
 		return item
 	}
 	addStation := func(locationID int64, name string) *StationPnL {
+		normalizedName := name
+		if normalizedName != "" {
+			normalizedName = strings.TrimSpace(normalizedName)
+		}
 		st, ok := stationMap[locationID]
 		if !ok {
 			st = &StationPnL{
 				LocationID:   locationID,
-				LocationName: name,
+				LocationName: normalizedName,
 			}
 			stationMap[locationID] = st
 		}
-		if st.LocationName == "" && name != "" {
-			st.LocationName = name
+		if strings.TrimSpace(st.LocationName) == "" && normalizedName != "" {
+			st.LocationName = normalizedName
 		}
 		return st
 	}
