@@ -1,0 +1,158 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  buildReasonText,
+  classifyRow,
+  compareManifestToExport,
+} from "@/features/batchVerifier/compare";
+import type { ExportItem, ManifestItem } from "@/features/batchVerifier/parsing";
+
+function manifest(overrides: Partial<ManifestItem> = {}): ManifestItem {
+  return {
+    rawName: overrides.rawName ?? "Item A",
+    name: overrides.name ?? "Item A",
+    qty: overrides.qty ?? 10,
+    buyPer: overrides.buyPer ?? 100,
+    buyTotal: overrides.buyTotal ?? 1000,
+    sellTotal: overrides.sellTotal,
+    sellPer: overrides.sellPer,
+    vol: overrides.vol,
+    profit: overrides.profit,
+  };
+}
+
+function exportRow(overrides: Partial<ExportItem> = {}): ExportItem {
+  return {
+    rawName: overrides.rawName ?? "Item A",
+    name: overrides.name ?? "Item A",
+    qty: overrides.qty ?? 10,
+    buyPer: overrides.buyPer ?? 100,
+    buyTotal: overrides.buyTotal ?? 1000,
+  };
+}
+
+describe("compareManifestToExport", () => {
+  it("applies core overpriced do-not-buy rule", () => {
+    const result = compareManifestToExport(
+      [manifest({ name: "Heavy Water", buyPer: 100, buyTotal: 1000, qty: 10 })],
+      [exportRow({ name: "Heavy Water", buyPer: 125, buyTotal: 1250, qty: 10 })],
+      { thresholdMode: "strict" },
+    );
+
+    expect(result.doNotBuy).toHaveLength(1);
+    expect(result.doNotBuy[0]).toMatchObject({
+      state: "do_not_buy",
+      buyPerDelta: 25,
+      buyTotalDelta: 250,
+      qtyDelta: 0,
+    });
+    expect(result.buyThese).toHaveLength(0);
+  });
+
+  it("supports strict, isk tolerance, and percent tolerance threshold modes", () => {
+    const manifestItem = manifest({ name: "Tritanium", buyPer: 100, buyTotal: 1000, qty: 10 });
+    const exportItem = exportRow({ name: "Tritanium", buyPer: 106, buyTotal: 1060, qty: 10 });
+
+    const strict = compareManifestToExport([manifestItem], [exportItem], { thresholdMode: "strict" });
+    expect(strict.rows[0]?.state).toBe("do_not_buy");
+
+    const iskTolerance = compareManifestToExport([manifestItem], [exportItem], {
+      thresholdMode: "isk_tolerance",
+      iskTolerance: 10,
+    });
+    expect(iskTolerance.rows[0]?.state).toBe("safe");
+
+    const percentTolerance = compareManifestToExport([manifestItem], [exportItem], {
+      thresholdMode: "percent_tolerance",
+      percentTolerance: 5,
+    });
+    expect(percentTolerance.rows[0]?.state).toBe("do_not_buy");
+
+    const percentTolerancePass = compareManifestToExport([manifestItem], [exportItem], {
+      thresholdMode: "percent_tolerance",
+      percentTolerance: 6,
+    });
+    expect(percentTolerancePass.rows[0]?.state).toBe("safe");
+  });
+
+  it("handles quantity mismatch toggle behavior", () => {
+    const m = manifest({ qty: 10, buyPer: 100, buyTotal: 1000 });
+    const e = exportRow({ qty: 11, buyPer: 100, buyTotal: 1100 });
+
+    const enabled = compareManifestToExport([m], [e], { enableQuantityMismatch: true });
+    expect(enabled.rows[0]?.state).toBe("quantity_mismatch");
+    expect(enabled.review).toHaveLength(1);
+
+    const disabled = compareManifestToExport([m], [e], { enableQuantityMismatch: false });
+    expect(disabled.rows[0]?.state).toBe("safe");
+    expect(disabled.review).toBeUndefined();
+  });
+
+  it("detects missing and unexpected items", () => {
+    const result = compareManifestToExport(
+      [manifest({ name: "A" }), manifest({ name: "B" })],
+      [exportRow({ name: "A" }), exportRow({ name: "C" })],
+      {},
+    );
+
+    expect(result.missing.map((row) => row.name)).toEqual(["B"]);
+    expect(result.unexpected.map((row) => row.name)).toEqual(["C"]);
+    expect(result.summary.counts.missing_from_export).toBe(1);
+    expect(result.summary.counts.unexpected_in_export).toBe(1);
+  });
+
+  it("calculates summary metrics deterministically", () => {
+    const result = compareManifestToExport(
+      [
+        manifest({ name: "Overpriced", qty: 10, buyPer: 100, buyTotal: 1000, profit: 400 }),
+        manifest({ name: "Missing", qty: 5, buyPer: 200, buyTotal: 1000, sellTotal: 1300 }),
+        manifest({ name: "Safe", qty: 2, buyPer: 50, buyTotal: 100 }),
+      ],
+      [
+        exportRow({ name: "Overpriced", qty: 10, buyPer: 130, buyTotal: 1300 }),
+        exportRow({ name: "Safe", qty: 2, buyPer: 50, buyTotal: 100 }),
+      ],
+      { thresholdMode: "strict" },
+    );
+
+    expect(result.summary.counts).toMatchObject({
+      safe: 1,
+      do_not_buy: 1,
+      missing_from_export: 1,
+      unexpected_in_export: 0,
+      quantity_mismatch: 0,
+    });
+    expect(result.summary.extraIskRequiredVsPlan).toBe(300);
+    expect(result.summary.estimatedProfitLost).toBe(700);
+  });
+
+  it("generates explanation text for each non-safe state", () => {
+    const m = manifest({ name: "Item X", qty: 10, buyPer: 100, buyTotal: 1000, profit: 100 });
+    const e = exportRow({ name: "Item X", qty: 12, buyPer: 140, buyTotal: 1680 });
+
+    const doNotBuy = classifyRow(m, e, { thresholdMode: "strict", enableQuantityMismatch: true });
+    expect(doNotBuy.state).toBe("do_not_buy");
+    expect(doNotBuy.reason).toContain("exceeds allowed");
+
+    const qtyMismatch = classifyRow(m, exportRow({ name: "Item X", qty: 12, buyPer: 100, buyTotal: 1200 }), {
+      enableQuantityMismatch: true,
+    });
+    expect(qtyMismatch.state).toBe("quantity_mismatch");
+    expect(qtyMismatch.reason).toContain("Quantity mismatch");
+
+    const missing = classifyRow(m, undefined, {});
+    expect(missing.state).toBe("missing_from_export");
+    expect(missing.reason).toContain("missing from export");
+
+    const unexpected = classifyRow(undefined, e, {});
+    expect(unexpected.state).toBe("unexpected_in_export");
+    expect(unexpected.reason).toContain("not listed in manifest");
+
+    expect(
+      buildReasonText({
+        name: "Safe",
+        state: "safe",
+      }),
+    ).toContain("Within configured");
+  });
+});
