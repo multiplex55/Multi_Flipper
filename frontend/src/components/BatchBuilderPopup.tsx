@@ -9,6 +9,7 @@ import {
   type BatchBuildResult,
 } from "@/lib/batchMetrics";
 import {
+  formatDetailedManifestItemLine,
   formatBaseBatchManifestText,
   formatOrderedRouteManifestText,
 } from "@/lib/batchManifestFormat";
@@ -532,12 +533,35 @@ export function BatchBuilderPopup({
       stations: orderedStations,
     };
 
-    const manifest = formatOrderedRouteManifestText({
+    const routeManifestText = formatOrderedRouteManifestText({
       originLabel: `${baseBatchManifest.origin_system_name} (${baseBatchManifest.origin_location_name})`,
       metadataHeader: undefined,
       manifest: orderedManifest,
     });
-    await navigator.clipboard.writeText(manifest);
+    const baseManifestItems = combinedLines.map((line) => {
+      const units = Math.max(0, Math.floor(safeNumber(line.units)));
+      const volume = safeNumber(line.unit_volume_m3) * units;
+      const buyTotal = safeNumber(line.buy_total_isk);
+      const sellTotal = safeNumber(line.sell_total_isk);
+      return formatDetailedManifestItemLine(
+        {
+          typeName: line.type_name,
+          qty: units,
+          buyTotal,
+          buyPer: units > 0 ? buyTotal / units : 0,
+          sellTotal,
+          sellPer: units > 0 ? sellTotal / units : 0,
+          volume,
+          profit: safeNumber(line.profit_total_isk),
+        },
+        t,
+      );
+    });
+    const manifestParts = [routeManifestText];
+    if (baseManifestItems.length > 0) {
+      manifestParts.push("", t("batchBuilderMergedManifestBaseItemsHeader"), ...baseManifestItems);
+    }
+    await navigator.clipboard.writeText(manifestParts.join("\n"));
     addToast(t("batchBuilderCopiedMerged"), "success", 2200);
   }, [baseBatchManifest, mergedManifest, addToast, t, routeOptions, selectedOptionId, rows, anchorRow]);
 

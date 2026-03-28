@@ -721,6 +721,7 @@ export const en = {
     batchBuilderManifestItemSellPer: "sell per {isk} ISK",
     batchBuilderManifestItemVol: "vol {volume} m3",
     batchBuilderManifestItemProfit: "profit {isk} ISK",
+    batchBuilderMergedManifestBaseItemsHeader: "Base manifest items:",
 
     // Table features
     columnsButton: "Columns",
