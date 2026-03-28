@@ -60,6 +60,24 @@ type BaseManifestTranslationKey =
   | "batchBuilderManifestItemVol"
   | "batchBuilderManifestItemProfit";
 
+export type DetailedManifestItemLineInput = {
+  typeName: string;
+  qty: number;
+  buyTotal: number;
+  buyPer: number;
+  sellTotal: number;
+  sellPer: number;
+  volume: number;
+  profit: number;
+};
+
+export function formatDetailedManifestItemLine(
+  input: DetailedManifestItemLineInput,
+  t: (key: BaseManifestTranslationKey, vars?: Record<string, string | number>) => string,
+): string {
+  return `${input.typeName} | ${t("batchBuilderManifestItemQty", { qty: input.qty.toLocaleString() })} | ${t("batchBuilderManifestItemBuyTotal", { isk: Math.round(input.buyTotal).toLocaleString() })} | ${t("batchBuilderManifestItemBuyPer", { isk: Math.round(input.buyPer).toLocaleString() })} | ${t("batchBuilderManifestItemSellTotal", { isk: Math.round(input.sellTotal).toLocaleString() })} | ${t("batchBuilderManifestItemSellPer", { isk: Math.round(input.sellPer).toLocaleString() })} | ${t("batchBuilderManifestItemVol", { volume: input.volume.toLocaleString(undefined, { maximumFractionDigits: 1 }) })} | ${t("batchBuilderManifestItemProfit", { isk: Math.round(input.profit).toLocaleString() })}`;
+}
+
 type BaseBatchManifestTextInput = {
   buyStation: string;
   sellStation: string;
@@ -128,7 +146,19 @@ export function formatBaseBatchManifestText(input: BaseBatchManifestTextInput): 
     const vol = line.volume;
     const profit = line.profit;
     lines.push(
-      `${line.row.TypeName} | ${input.t("batchBuilderManifestItemQty", { qty: qty.toLocaleString() })} | ${input.t("batchBuilderManifestItemBuyTotal", { isk: Math.round(buyTotal).toLocaleString() })} | ${input.t("batchBuilderManifestItemBuyPer", { isk: Math.round(buyPer).toLocaleString() })} | ${input.t("batchBuilderManifestItemSellTotal", { isk: Math.round(sellTotal).toLocaleString() })} | ${input.t("batchBuilderManifestItemSellPer", { isk: Math.round(sellPer).toLocaleString() })} | ${input.t("batchBuilderManifestItemVol", { volume: vol.toLocaleString(undefined, { maximumFractionDigits: 1 }) })} | ${input.t("batchBuilderManifestItemProfit", { isk: Math.round(profit).toLocaleString() })}`,
+      formatDetailedManifestItemLine(
+        {
+          typeName: line.row.TypeName,
+          qty,
+          buyTotal,
+          buyPer,
+          sellTotal,
+          sellPer,
+          volume: vol,
+          profit,
+        },
+        input.t,
+      ),
     );
   }
 

@@ -503,17 +503,23 @@ describe("BatchBuilderPopup route creation", () => {
     expect(option).toHaveTextContent("Merged profit: 1.6 M");
   });
 
-  it("copy merged manifest writes export-contract station blocks and station-local item lines", async () => {
+  it("copy merged manifest writes route blocks and appends base-manifest-formatted item section", async () => {
     batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
 
     renderPopup({ anchorRow, rows });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Copy manifest" }));
+    const baseManifest = writeText.mock.calls[0][0] as string;
+    const baseDetailLines = baseManifest
+      .split("\n")
+      .filter((line) => line.includes(" | qty ") && line.includes(" | buy total "));
 
     fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
     fireEvent.click(await screen.findByTestId("route-option-rank-2"));
     fireEvent.click(await screen.findByRole("button", { name: "Copy merged manifest" }));
 
-    expect(writeText).toHaveBeenCalledTimes(1);
-    const manifest = writeText.mock.calls[0][0];
+    expect(writeText).toHaveBeenCalledTimes(2);
+    const manifest = writeText.mock.calls[1][0] as string;
     expect(manifest).toContain("Origin: Jita (Jita IV - Moon 4)");
     expect(manifest).toContain("Buy Station: Jita IV - Moon 4");
     expect(manifest).toContain("Jumps to Buy Station: 0");
@@ -526,6 +532,7 @@ describe("BatchBuilderPopup route creation", () => {
     expect(manifest).toContain("Total gross sell: 1,630,000 ISK");
     expect(manifest).toContain("Total profit: 1,590,000 ISK");
     expect(manifest).toContain("Total isk/jump: 9,000 ISK");
+    expect(manifest).toContain("Base manifest items:");
     const requiredLabels = [
       "Buy Station:",
       "Jumps to Buy Station:",
@@ -545,6 +552,9 @@ describe("BatchBuilderPopup route creation", () => {
       );
       expect(matches?.length ?? 0).toBeGreaterThanOrEqual(1);
     }
+    for (const baseLine of baseDetailLines) {
+      expect(manifest).toContain(baseLine);
+    }
     expect(manifest).toContain(
       "Anchor Paste | qty 1,500 | buy total 150,000 ISK | buy per 100 ISK | sell total 180,000 ISK | sell per 120 ISK | vol 1,500 m3 | profit 150,000 ISK",
     );
@@ -559,6 +569,26 @@ describe("BatchBuilderPopup route creation", () => {
     expect(manifest).not.toContain("Item list:");
     expect(manifest).not.toContain("----- ROUTE SUMMARY -----");
     expect(manifest).not.toContain("----- MERGED SUMMARY -----");
+  });
+
+  it("copy merged manifest includes mixed base+added item lines once each in base manifest items section", async () => {
+    batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
+
+    renderPopup({ anchorRow, rows });
+    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(await screen.findByTestId("route-option-rank-2"));
+    fireEvent.click(await screen.findByRole("button", { name: "Copy merged manifest" }));
+
+    const manifest = writeText.mock.calls[writeText.mock.calls.length - 1][0] as string;
+    const sectionStart = manifest.indexOf("\nBase manifest items:\n");
+    expect(sectionStart).toBeGreaterThanOrEqual(0);
+    const baseItemsSection = manifest.slice(sectionStart);
+    const anchorLine =
+      "Anchor Paste | qty 1,500 | buy total 150,000 ISK | buy per 100 ISK | sell total 180,000 ISK | sell per 120 ISK | vol 1,500 m3 | profit 150,000 ISK";
+    const addedLine =
+      "Megacyte | qty 40 | buy total 200,000 ISK | buy per 5,000 ISK | sell total 290,000 ISK | sell per 7,250 ISK | vol 80 m3 | profit 90,000 ISK";
+    expect((baseItemsSection.match(new RegExp(anchorLine.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g")) ?? []).length).toBe(1);
+    expect((baseItemsSection.match(new RegExp(addedLine.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g")) ?? []).length).toBe(1);
   });
 
   it("copy merged manifest does not print zero placeholders for unknown jump metadata", async () => {

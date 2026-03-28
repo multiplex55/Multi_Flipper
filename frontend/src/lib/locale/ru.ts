@@ -721,6 +721,7 @@ export const ru = {
     batchBuilderManifestItemSellPer: "продажа за шт. {isk} ISK",
     batchBuilderManifestItemVol: "объем {volume} м3",
     batchBuilderManifestItemProfit: "прибыль {isk} ISK",
+    batchBuilderMergedManifestBaseItemsHeader: "Позиции базового манифеста:",
 
     // Table features
     columnsButton: "Колонки",
