@@ -148,11 +148,12 @@ export function parseBatchManifest(text: string): ParseResult<ManifestItem> {
       addError(errors, lineNumber, line, "missing required qty segment");
       continue;
     }
+    const requiredQty = qty as number;
 
     items.push({
       rawName,
       name,
-      qty: Math.trunc(qty),
+      qty: Math.trunc(requiredQty),
       buyTotal: parsedValues.get("buy total"),
       buyPer: parsedValues.get("buy per"),
       sellTotal: parsedValues.get("sell total"),
