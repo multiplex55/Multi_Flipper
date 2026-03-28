@@ -8,7 +8,8 @@ import { ExecutionPlannerPopup } from "./ExecutionPlannerPopup";
 import { useGlobalToast } from "./Toast";
 import { handleEveUIError } from "@/lib/handleEveUIError";
 import { computeHopMetrics, computeRouteMetrics } from "@/lib/routeMetrics";
-import { buildNormalizedRouteCopyManifest, formatNormalizedRouteCopyManifest } from "@/lib/routeManifestFormat";
+import { adaptRouteResultToOrderedRouteManifest } from "@/lib/routeManifestAdapter";
+import { formatOrderedRouteManifestText } from "@/lib/batchManifestFormat";
 import {
   TabSettingsPanel,
   SettingsCheckbox,
@@ -470,8 +471,8 @@ function RouteDetailPopup({
   };
 
   const handleCopyRoute = async () => {
-    const manifest = buildNormalizedRouteCopyManifest(route);
-    const routeText = formatNormalizedRouteCopyManifest(manifest);
+    const adapted = adaptRouteResultToOrderedRouteManifest(route);
+    const routeText = formatOrderedRouteManifestText({ manifest: adapted.manifest });
     try {
       await navigator.clipboard.writeText(routeText);
       addToast(t("copied"), "success", 1400);

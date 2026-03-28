@@ -8,6 +8,102 @@ import {
 } from "@/lib/batchManifestFormat";
 import type { OrderedRouteManifest } from "@/lib/types";
 
+const multiHopMultiItemRegressionManifest: OrderedRouteManifest = {
+  summary: {
+    station_count: 2,
+    item_count: 4,
+    total_units: 44,
+    total_volume_m3: 88,
+    total_buy_isk: 88_000,
+    total_sell_isk: 115_500,
+    total_profit_isk: 27_500,
+    total_jumps: 9,
+    isk_per_jump: 3_056,
+  },
+  stations: [
+    {
+      station_key: "id:60003760",
+      buy_station_name: "Jita IV - Moon 4",
+      sell_station_name: "Perimeter - Tranquility",
+      jumps_to_buy_station: 0,
+      jumps_buy_to_sell: 5,
+      cargo_m3: 88,
+      item_count: 2,
+      total_volume_m3: 50,
+      total_buy_isk: 50_000,
+      total_sell_isk: 66_000,
+      total_profit_isk: 16_000,
+      isk_per_jump: 3_200,
+      lines: [
+        {
+          type_id: 34,
+          type_name: "Tritanium",
+          units: 20,
+          unit_volume_m3: 1,
+          volume_m3: 20,
+          buy_total_isk: 20_000,
+          buy_per_isk: 1_000,
+          sell_total_isk: 26_000,
+          sell_per_isk: 1_300,
+          profit_isk: 6_000,
+        },
+        {
+          type_id: 35,
+          type_name: "Pyerite",
+          units: 10,
+          unit_volume_m3: 3,
+          volume_m3: 30,
+          buy_total_isk: 30_000,
+          buy_per_isk: 3_000,
+          sell_total_isk: 40_000,
+          sell_per_isk: 4_000,
+          profit_isk: 10_000,
+        },
+      ],
+    },
+    {
+      station_key: "id:60008494",
+      buy_station_name: "Perimeter - Tranquility",
+      sell_station_name: "Amarr VIII (Oris) - Emperor Family Academy",
+      jumps_to_buy_station: 5,
+      jumps_buy_to_sell: 4,
+      cargo_m3: 88,
+      item_count: 2,
+      total_volume_m3: 38,
+      total_buy_isk: 38_000,
+      total_sell_isk: 49_500,
+      total_profit_isk: 11_500,
+      isk_per_jump: 1_278,
+      lines: [
+        {
+          type_id: 36,
+          type_name: "Mexallon",
+          units: 8,
+          unit_volume_m3: 2,
+          volume_m3: 16,
+          buy_total_isk: 16_000,
+          buy_per_isk: 2_000,
+          sell_total_isk: 20_000,
+          sell_per_isk: 2_500,
+          profit_isk: 4_000,
+        },
+        {
+          type_id: 37,
+          type_name: "Isogen",
+          units: 6,
+          unit_volume_m3: 3.6667,
+          volume_m3: 22,
+          buy_total_isk: 22_000,
+          buy_per_isk: 3_666.67,
+          sell_total_isk: 29_500,
+          sell_per_isk: 4_916.67,
+          profit_isk: 7_500,
+        },
+      ],
+    },
+  ],
+};
+
 describe("batchManifestFormat", () => {
   it("parses a detailed line with extended columns and removes grouping commas from quantity", () => {
     const parsed = parseDetailedBatchLine(
@@ -306,6 +402,82 @@ describe("batch route manifest formatter", () => {
     );
     expect(text).toContain("\n\nPyerite 3000\nMexallon 750");
     expect(text).not.toContain("Item list:");
+  });
+
+  it("keeps route summary and hop blocks in strict field order with stable separators and blank lines", () => {
+    const text = formatOrderedRouteManifestText({ manifest: multiHopMultiItemRegressionManifest });
+
+    expect(text).toContain(
+      [
+        "Cargo m3: 88 m3",
+        "Stations: 2",
+        "Items: 4",
+        "Total volume: 88 m3",
+        "Total capital: 88,000 ISK",
+        "Total gross sell: 115,500 ISK",
+        "Total profit: 27,500 ISK",
+        "Total isk/jump: 3,056 ISK",
+      ].join("\n"),
+    );
+
+    const firstHopExpected = [
+      "Buy Station: Jita IV - Moon 4",
+      "Jumps to Buy Station: 0",
+      "Sell Station: Perimeter - Tranquility",
+      "Jumps Buy -> Sell: 5",
+      "Cargo m3: 88 m3",
+      "Items: 2",
+      "Total volume: 50 m3",
+      "Total capital: 50,000 ISK",
+      "Total gross sell: 66,000 ISK",
+      "Total profit: 16,000 ISK",
+      "Total isk/jump: 3,200 ISK",
+    ].join("\n");
+
+    expect(text).toContain(firstHopExpected);
+    expect(text).toContain("\n\n------------------------\nBuy Station: Perimeter - Tranquility");
+    expect(text).toContain("\n\nTritanium 20\nPyerite 10\n\n------------------------");
+  });
+
+  it("prints detail rows followed by autobuy rows for every hop in multi-hop, multi-item regression fixture", () => {
+    const text = formatOrderedRouteManifestText({ manifest: multiHopMultiItemRegressionManifest });
+
+    const firstDetailRow = text.indexOf("Tritanium | qty 20");
+    const firstAutobuyRow = text.indexOf("\nTritanium 20");
+    const secondHopHeader = text.indexOf("Buy Station: Perimeter - Tranquility");
+    const secondDetailRow = text.indexOf("Mexallon | qty 8");
+    const secondAutobuyRow = text.indexOf("\nMexallon 8");
+
+    expect(firstDetailRow).toBeGreaterThan(-1);
+    expect(firstAutobuyRow).toBeGreaterThan(firstDetailRow);
+    expect(secondHopHeader).toBeGreaterThan(firstAutobuyRow);
+    expect(secondDetailRow).toBeGreaterThan(secondHopHeader);
+    expect(secondAutobuyRow).toBeGreaterThan(secondDetailRow);
+    expect(text).toContain("Pyerite 10");
+    expect(text).toContain("Isogen 6");
+  });
+
+  it("keeps route-level totals and hop-level totals coherent in regression fixture", () => {
+    const manifest = multiHopMultiItemRegressionManifest;
+    const hopBuyTotal = manifest.stations.reduce((sum, station) => sum + station.total_buy_isk, 0);
+    const hopSellTotal = manifest.stations.reduce((sum, station) => sum + station.total_sell_isk, 0);
+    const hopProfitTotal = manifest.stations.reduce((sum, station) => sum + station.total_profit_isk, 0);
+
+    expect(manifest.summary?.total_buy_isk).toBe(hopBuyTotal);
+    expect(manifest.summary?.total_sell_isk).toBe(hopSellTotal);
+    expect(manifest.summary?.total_profit_isk).toBe(hopProfitTotal);
+
+    for (const station of manifest.stations) {
+      expect(station.total_buy_isk).toBe(station.lines.reduce((sum, line) => sum + line.buy_total_isk, 0));
+      expect(station.total_sell_isk).toBe(station.lines.reduce((sum, line) => sum + line.sell_total_isk, 0));
+      expect(station.total_profit_isk).toBe(station.lines.reduce((sum, line) => sum + line.profit_isk, 0));
+    }
+  });
+
+  it("produces deterministic text output for repeated formatting of the same manifest input", () => {
+    const one = formatOrderedRouteManifestText({ manifest: multiHopMultiItemRegressionManifest });
+    const two = formatOrderedRouteManifestText({ manifest: multiHopMultiItemRegressionManifest });
+    expect(one).toBe(two);
   });
 
   it("enforces required station field labels exactly and rejects legacy debug headings", () => {
