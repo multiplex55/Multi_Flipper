@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as compareModule from "@/features/batchVerifier/compare";
 import { BatchBuyVerifier } from "@/features/batchVerifier/BatchBuyVerifier";
 
 const writeTextMock = vi.fn();
@@ -16,6 +17,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
 });
 
 const manifestText = [
@@ -31,6 +33,28 @@ const exportText = [
 ].join("\n");
 
 describe("BatchBuyVerifier", () => {
+  it("passes selected control options into compare function", () => {
+    const compareSpy = vi.spyOn(compareModule, "compareManifestToExport");
+    render(<BatchBuyVerifier />);
+
+    fireEvent.change(screen.getByLabelText("Batch Buy Manifest"), { target: { value: manifestText } });
+    fireEvent.change(screen.getByLabelText("Export Order"), { target: { value: exportText } });
+    fireEvent.click(screen.getByLabelText("Allow slippage"));
+    fireEvent.change(screen.getByLabelText("Slippage type"), { target: { value: "percent" } });
+    fireEvent.change(screen.getByLabelText("Slippage value"), { target: { value: "12.5" } });
+    fireEvent.change(screen.getByLabelText("Quantity handling"), { target: { value: "ignore_mismatch" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
+
+    expect(compareSpy).toHaveBeenCalledTimes(1);
+    expect(compareSpy.mock.calls[0]?.[2]).toMatchObject({
+      thresholdMode: "percent_tolerance",
+      percentTolerance: 12.5,
+      enableQuantityMismatch: false,
+      includeReview: true,
+    });
+  });
+
   it("renders dual input areas and action buttons", () => {
     render(<BatchBuyVerifier />);
 
@@ -121,5 +145,55 @@ describe("BatchBuyVerifier", () => {
     expect(screen.getByText(/invalid numeric value for qty/i)).toBeInTheDocument();
     expect(screen.getByText(/expected 4 tab-delimited columns/i)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Buy these" })).toBeInTheDocument();
+  });
+
+  it("strict mode marks overpriced item do-not-buy while tolerant mode marks it safe", () => {
+    render(<BatchBuyVerifier />);
+    const strictManifest = "Tritanium | qty 10 | buy per 5 | buy total 50";
+    const strictExport = "Tritanium\t10\t6\t60";
+
+    fireEvent.change(screen.getByLabelText("Batch Buy Manifest"), { target: { value: strictManifest } });
+    fireEvent.change(screen.getByLabelText("Export Order"), { target: { value: strictExport } });
+
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
+    expect(screen.getByRole("heading", { name: "Do not buy these" })).toBeInTheDocument();
+    expect(screen.getByText("Tritanium")).toBeInTheDocument();
+    expect(screen.getByText("Summary (Strict, quantity exact)")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("Allow slippage"));
+    fireEvent.change(screen.getByLabelText("Slippage type"), { target: { value: "isk" } });
+    fireEvent.change(screen.getByLabelText("Slippage value"), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
+
+    const buySection = screen.getByRole("region", { name: "Buy these" });
+    expect(buySection).toHaveTextContent("Tritanium");
+    expect(screen.getByText("Summary (Allow slippage (1 ISK), quantity exact)")).toBeInTheDocument();
+  });
+
+  it("quantity handling toggle changes classification outcome", () => {
+    render(<BatchBuyVerifier />);
+    const quantityManifest = "Tritanium | qty 10 | buy per 5 | buy total 50";
+    const quantityExport = "Tritanium\t9\t5\t45";
+
+    fireEvent.change(screen.getByLabelText("Batch Buy Manifest"), { target: { value: quantityManifest } });
+    fireEvent.change(screen.getByLabelText("Export Order"), { target: { value: quantityExport } });
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
+    expect(screen.getByRole("heading", { name: "Do not buy these" }).closest("section")).toHaveTextContent("Tritanium");
+
+    fireEvent.change(screen.getByLabelText("Quantity handling"), { target: { value: "ignore_mismatch" } });
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
+
+    const buySection = screen.getByRole("region", { name: "Buy these" });
+    expect(buySection).toHaveTextContent("Tritanium");
+  });
+
+  it("invalid tolerance disables Evaluate and shows inline validation", () => {
+    render(<BatchBuyVerifier />);
+    fireEvent.click(screen.getByLabelText("Allow slippage"));
+    fireEvent.change(screen.getByLabelText("Slippage type"), { target: { value: "percent" } });
+    fireEvent.change(screen.getByLabelText("Slippage value"), { target: { value: "250" } });
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Percent slippage must be between 0 and 100.");
+    expect(screen.getByRole("button", { name: "Evaluate" })).toBeDisabled();
   });
 });
