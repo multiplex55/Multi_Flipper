@@ -20,6 +20,7 @@ import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import { useGlobalToast } from "./components/Toast";
 import { Modal } from "./components/Modal";
 import { CharacterPopup } from "./components/CharacterPopup";
+import { TopActionButtons } from "./components/TopActionButtons";
 import {
   applyAppUpdate,
   getUpdateCheckStatus,
@@ -1322,16 +1323,11 @@ function App() {
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           {/* Desktop controls — hidden on mobile */}
           <div className="hidden sm:flex items-center gap-2">
-            {/* Watchlist button */}
-            <button
-              onClick={() => setShowWatchlist(true)}
-              className="flex items-center gap-1.5 h-[34px] px-3 bg-eve-panel border border-eve-border rounded-sm text-xs text-eve-dim hover:text-eve-accent hover:border-eve-accent/50 transition-colors"
-              title={t("tabWatchlist")}
-              aria-label={t("tabWatchlist")}
-            >
-              <span aria-hidden="true">&#11088;</span>
-              <span>{t("tabWatchlist")}</span>
-            </button>
+            <TopActionButtons
+              watchlistLabel={t("tabWatchlist")}
+              verifierLabel={t("batchPriceVerify")}
+              onOpenWatchlist={() => setShowWatchlist(true)}
+            />
             {/* History button */}
             <button
               onClick={() => setShowHistory(true)}

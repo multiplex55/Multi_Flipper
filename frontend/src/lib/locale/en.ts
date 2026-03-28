@@ -660,6 +660,7 @@ export const en = {
     copyContractID: "Copy contract ID",
     buildBatch: "Build batch (same route)",
     batchBuilderTitle: "Batch Builder",
+    batchPriceVerify: "Batch Price Verify",
     batchBuilderHint:
       "Adds extra deals on the same buy -> sell route to fill cargo more efficiently.",
     batchBuilderCargoLabel: "Cargo limit (m3)",
