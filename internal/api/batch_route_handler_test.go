@@ -63,13 +63,15 @@ func TestHandleBatchCreateRoute_ValidRequestReturnsRankedOptions(t *testing.T) {
 		return engine.BatchCreateRouteResult{
 			Options: []engine.BatchCreateRouteOption{
 				{
-					OptionID:       "batch-option-1",
-					AddedVolumeM3:  100,
-					TotalBuyISK:    500,
-					TotalSellISK:   700,
-					TotalProfitISK: 180,
-					TotalJumps:     8,
-					ISKPerJump:     22.5,
+					OptionID:          "batch-option-1",
+					AddedVolumeM3:     100,
+					TotalBuyISK:       500,
+					TotalSellISK:      700,
+					TotalProfitISK:    180,
+					TotalJumps:        8,
+					ISKPerJump:        22.5,
+					OrderedBuySystems: []int32{30000142},
+					RouteSequence:     []int32{30000142, 30002187},
 					Lines: []engine.BatchCreateRouteLine{
 						{
 							TypeID:         35,
@@ -111,6 +113,15 @@ func TestHandleBatchCreateRoute_ValidRequestReturnsRankedOptions(t *testing.T) {
 	}
 	if resp.SelectedOptionID != "batch-option-1" {
 		t.Fatalf("SelectedOptionID = %q, want batch-option-1", resp.SelectedOptionID)
+	}
+	if len(resp.RankedOptions[0].OrderedBuySystems) != 1 || resp.RankedOptions[0].OrderedBuySystems[0] != 30000142 {
+		t.Fatalf("OrderedBuySystems = %v, want [30000142]", resp.RankedOptions[0].OrderedBuySystems)
+	}
+	if len(resp.RankedOptions[0].RouteSequence) != 2 || resp.RankedOptions[0].RouteSequence[0] != 30000142 || resp.RankedOptions[0].RouteSequence[1] != 30002187 {
+		t.Fatalf("RouteSequence = %v, want [30000142 30002187]", resp.RankedOptions[0].RouteSequence)
+	}
+	if resp.RankedOptions[0].RouteTotalJumps != 8 {
+		t.Fatalf("RouteTotalJumps = %d, want 8", resp.RankedOptions[0].RouteTotalJumps)
 	}
 }
 

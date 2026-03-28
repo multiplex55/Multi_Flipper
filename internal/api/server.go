@@ -3320,7 +3320,10 @@ func (s *Server) handleBatchCreateRoute(w http.ResponseWriter, r *http.Request) 
 				ISKPerJump:     opt.ISKPerJump,
 				UtilizationPct: utilization,
 			},
-			RankingSortKey: fmt.Sprintf("profit:%.2f|isk_per_jump:%.2f", opt.TotalProfitISK, opt.ISKPerJump),
+			RankingSortKey:    fmt.Sprintf("profit:%.2f|isk_per_jump:%.2f", opt.TotalProfitISK, opt.ISKPerJump),
+			OrderedBuySystems: append([]int32(nil), opt.OrderedBuySystems...),
+			RouteSequence:     append([]int32(nil), opt.RouteSequence...),
+			RouteTotalJumps:   opt.TotalJumps,
 		})
 	}
 

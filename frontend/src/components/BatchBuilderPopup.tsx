@@ -319,7 +319,41 @@ export function BatchBuilderPopup({
       }
     }
 
-    const findRowForLine = (line: (typeof selectedOption.lines)[number]): FlipResult | undefined => {
+    type CombinedLine = {
+      type_id: number;
+      type_name: string;
+      units: number;
+      unit_volume_m3: number;
+      buy_system_id: number;
+      buy_location_id: number;
+      sell_system_id: number;
+      sell_location_id: number;
+      buy_total_isk: number;
+      sell_total_isk: number;
+      profit_total_isk: number;
+      route_jumps: number;
+      source: "base" | "addition";
+    };
+    const combinedLines: CombinedLine[] = [
+      ...baseBatchManifest.base_lines.map((line) => ({
+        type_id: line.type_id,
+        type_name: line.type_name,
+        units: line.units,
+        unit_volume_m3: line.unit_volume_m3,
+        buy_system_id: line.buy_system_id,
+        buy_location_id: line.buy_location_id,
+        sell_system_id: line.sell_system_id,
+        sell_location_id: line.sell_location_id,
+        buy_total_isk: line.buy_total_isk,
+        sell_total_isk: line.sell_total_isk,
+        profit_total_isk: line.profit_total_isk,
+        route_jumps: line.jumps,
+        source: "base" as const,
+      })),
+      ...selectedOption.lines.map((line) => ({ ...line, source: "addition" as const })),
+    ];
+
+    const findRowForLine = (line: CombinedLine): FlipResult | undefined => {
       const exact = routeRows.find((row) => {
         if (row.TypeID !== line.type_id) return false;
         const rowBuyLocationId = safeNumber(row.BuyLocationID);
@@ -333,7 +367,7 @@ export function BatchBuilderPopup({
     };
 
     const resolveBuyStationName = (
-      line: (typeof selectedOption.lines)[number],
+      line: CombinedLine,
       matchedRow?: FlipResult,
     ): { stationName: string; usedIdFallback: boolean } => {
       if (hasStationName(matchedRow?.BuyStation)) {
@@ -377,8 +411,15 @@ export function BatchBuilderPopup({
 
     const fallbackToIdStationIds = new Set<number>();
     const stationOrder: string[] = [];
+    const routeIndexBySystemID = new Map<number, number>();
+    (selectedOption.route_sequence ?? []).forEach((systemID, idx) => {
+      if (!routeIndexBySystemID.has(systemID)) {
+        routeIndexBySystemID.set(systemID, idx);
+      }
+    });
     const stations = new Map<string, OrderedRouteManifest["stations"][number]>();
-    for (const line of selectedOption.lines) {
+    const stationSystemByKey = new Map<string, number>();
+    for (const line of combinedLines) {
       const matchedRow = findRowForLine(line);
       const matchedSellRow =
         matchedRow ??
@@ -392,6 +433,7 @@ export function BatchBuilderPopup({
       const stationKey = primaryKey || `name:${fallbackKey}`;
       if (!stations.has(stationKey)) {
         stationOrder.push(stationKey);
+        stationSystemByKey.set(stationKey, line.buy_system_id);
         const jumpsToBuy = toKnownJumpCount(matchedRow?.BuyJumps);
         const jumpsBuyToSell = toKnownJumpCount(matchedRow?.SellJumps ?? matchedSellRow?.SellJumps);
         stations.set(stationKey, {
@@ -460,19 +502,27 @@ export function BatchBuilderPopup({
     const orderedStations = stationOrder
       .map((key) => stations.get(key))
       .filter((station): station is OrderedRouteManifest["stations"][number] => station != null);
+    orderedStations.sort((left, right) => {
+      const leftSystem = stationSystemByKey.get(left.station_key) ?? 0;
+      const rightSystem = stationSystemByKey.get(right.station_key) ?? 0;
+      const leftRoute = routeIndexBySystemID.get(leftSystem);
+      const rightRoute = routeIndexBySystemID.get(rightSystem);
+      if (leftRoute != null || rightRoute != null) {
+        if (leftRoute == null) return 1;
+        if (rightRoute == null) return -1;
+        if (leftRoute !== rightRoute) return leftRoute - rightRoute;
+      }
+      return left.buy_station_name.localeCompare(right.buy_station_name);
+    });
     const orderedManifest: OrderedRouteManifest = {
       summary: {
         station_count: orderedStations.length,
-        item_count: orderedStations.reduce((sum, station) => sum + station.item_count, 0),
-        total_units: orderedStations.reduce(
-          (sum, station) =>
-            sum + station.lines.reduce((lineSum, line) => lineSum + line.units, 0),
-          0,
-        ),
-        total_volume_m3: orderedStations.reduce((sum, station) => sum + station.total_volume_m3, 0),
-        total_buy_isk: orderedStations.reduce((sum, station) => sum + station.total_buy_isk, 0),
-        total_sell_isk: orderedStations.reduce((sum, station) => sum + station.total_sell_isk, 0),
-        total_profit_isk: orderedStations.reduce((sum, station) => sum + station.total_profit_isk, 0),
+        item_count: mergedManifest.total_line_count,
+        total_units: mergedManifest.total_units,
+        total_volume_m3: mergedManifest.total_volume_m3,
+        total_buy_isk: mergedManifest.total_buy_isk,
+        total_sell_isk: mergedManifest.total_sell_isk,
+        total_profit_isk: mergedManifest.total_profit_isk,
         total_jumps: selectedOption.total_jumps,
         isk_per_jump:
           selectedOption.total_jumps > 0 && Number.isFinite(selectedOption.isk_per_jump)

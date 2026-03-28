@@ -67,14 +67,16 @@ type BatchCreateRouteLine struct {
 }
 
 type BatchCreateRouteOption struct {
-	OptionID       string
-	Lines          []BatchCreateRouteLine
-	AddedVolumeM3  float64
-	TotalBuyISK    float64
-	TotalSellISK   float64
-	TotalProfitISK float64
-	TotalJumps     int
-	ISKPerJump     float64
+	OptionID          string
+	Lines             []BatchCreateRouteLine
+	OrderedBuySystems []int32
+	RouteSequence     []int32
+	AddedVolumeM3     float64
+	TotalBuyISK       float64
+	TotalSellISK      float64
+	TotalProfitISK    float64
+	TotalJumps        int
+	ISKPerJump        float64
 }
 
 type BatchCreateRouteResult struct {
@@ -197,7 +199,7 @@ func (s *Scanner) CreateBatchRoute(ctx context.Context, params BatchCreateRouteP
 		return result, nil
 	}
 
-	options := buildBatchRouteOptionsFromCandidates(lines, params)
+	options := s.buildBatchRouteOptionsFromCandidates(lines, params)
 	if len(options) == 0 {
 		result.Diagnostics = append(result.Diagnostics, "no additions fit remaining cargo after capacity enforcement")
 		result.Diagnostics = append(result.Diagnostics, formatBatchRoutePruneDiagnostics(pruned)...)
@@ -594,7 +596,255 @@ func (s *Scanner) routePolicyAllowsSystem(routePolicy batchRoutePolicy, systemID
 	return routePolicy.AllowNullsec
 }
 
-func buildBatchRouteOptionsFromCandidates(lines []BatchCreateRouteLine, params BatchCreateRouteParams) []BatchCreateRouteOption {
+func (s *Scanner) computeRouteSequenceJumps(
+	params BatchCreateRouteParams,
+	additionLines []BatchCreateRouteLine,
+	routePolicy batchRoutePolicy,
+) (int, []int32, []int32, bool) {
+	if s == nil {
+		return 0, nil, nil, false
+	}
+	startSystemID := params.OriginSystemID
+	if params.CurrentSystemID > 0 {
+		startSystemID = params.CurrentSystemID
+	}
+	finalSellSystemID := params.FinalSellSystemID
+	if startSystemID <= 0 || finalSellSystemID <= 0 {
+		return 0, nil, nil, false
+	}
+	if !s.routePolicyAllowsSystem(routePolicy, startSystemID) || !s.routePolicyAllowsSystem(routePolicy, finalSellSystemID) {
+		return 0, nil, nil, false
+	}
+
+	uniqueBuySet := make(map[int32]struct{}, len(params.BaseLines)+len(additionLines))
+	for _, line := range params.BaseLines {
+		if line.BuySystemID > 0 {
+			uniqueBuySet[line.BuySystemID] = struct{}{}
+		}
+	}
+	for _, line := range additionLines {
+		if line.BuySystemID > 0 {
+			uniqueBuySet[line.BuySystemID] = struct{}{}
+		}
+	}
+	uniqueBuySystems := make([]int32, 0, len(uniqueBuySet))
+	for systemID := range uniqueBuySet {
+		uniqueBuySystems = append(uniqueBuySystems, systemID)
+	}
+	sort.Slice(uniqueBuySystems, func(i, j int) bool { return uniqueBuySystems[i] < uniqueBuySystems[j] })
+	if len(uniqueBuySystems) == 0 {
+		jumps := s.jumpsBetweenWithRoutePolicy(startSystemID, finalSellSystemID, routePolicy)
+		if jumps == UnreachableJumps {
+			return 0, nil, nil, false
+		}
+		return jumps, nil, []int32{startSystemID, finalSellSystemID}, true
+	}
+
+	routeOrder, ok := s.optimizeBuySystemVisitOrder(startSystemID, finalSellSystemID, uniqueBuySystems, routePolicy)
+	if !ok {
+		return 0, nil, nil, false
+	}
+
+	totalJumps := 0
+	routeSequence := make([]int32, 0, len(routeOrder)+2)
+	routeSequence = append(routeSequence, startSystemID)
+	prev := startSystemID
+	for _, nextSystem := range routeOrder {
+		segment := s.jumpsBetweenWithRoutePolicy(prev, nextSystem, routePolicy)
+		if segment == UnreachableJumps {
+			return 0, nil, nil, false
+		}
+		totalJumps += segment
+		routeSequence = append(routeSequence, nextSystem)
+		prev = nextSystem
+	}
+	lastSegment := s.jumpsBetweenWithRoutePolicy(prev, finalSellSystemID, routePolicy)
+	if lastSegment == UnreachableJumps {
+		return 0, nil, nil, false
+	}
+	totalJumps += lastSegment
+	routeSequence = append(routeSequence, finalSellSystemID)
+	return totalJumps, routeOrder, routeSequence, true
+}
+
+func (s *Scanner) optimizeBuySystemVisitOrder(
+	startSystemID int32,
+	finalSellSystemID int32,
+	buySystems []int32,
+	routePolicy batchRoutePolicy,
+) ([]int32, bool) {
+	if len(buySystems) <= 10 {
+		return s.optimizeBuySystemOrderExact(startSystemID, finalSellSystemID, buySystems, routePolicy)
+	}
+	return s.optimizeBuySystemOrderHeuristic(startSystemID, finalSellSystemID, buySystems, routePolicy)
+}
+
+func (s *Scanner) optimizeBuySystemOrderExact(
+	startSystemID int32,
+	finalSellSystemID int32,
+	buySystems []int32,
+	routePolicy batchRoutePolicy,
+) ([]int32, bool) {
+	n := len(buySystems)
+	if n == 0 {
+		return nil, true
+	}
+	distsStart := make([]int, n)
+	distsToFinal := make([]int, n)
+	between := make([][]int, n)
+	for i := 0; i < n; i++ {
+		distsStart[i] = s.jumpsBetweenWithRoutePolicy(startSystemID, buySystems[i], routePolicy)
+		distsToFinal[i] = s.jumpsBetweenWithRoutePolicy(buySystems[i], finalSellSystemID, routePolicy)
+		if distsStart[i] == UnreachableJumps || distsToFinal[i] == UnreachableJumps {
+			return nil, false
+		}
+		between[i] = make([]int, n)
+		for j := 0; j < n; j++ {
+			if i == j {
+				continue
+			}
+			between[i][j] = s.jumpsBetweenWithRoutePolicy(buySystems[i], buySystems[j], routePolicy)
+			if between[i][j] == UnreachableJumps {
+				return nil, false
+			}
+		}
+	}
+
+	const inf = int(^uint(0) >> 2)
+	stateCount := 1 << n
+	dp := make([][]int, stateCount)
+	prev := make([][]int, stateCount)
+	for mask := 0; mask < stateCount; mask++ {
+		dp[mask] = make([]int, n)
+		prev[mask] = make([]int, n)
+		for i := 0; i < n; i++ {
+			dp[mask][i] = inf
+			prev[mask][i] = -1
+		}
+	}
+
+	for i := 0; i < n; i++ {
+		mask := 1 << i
+		dp[mask][i] = distsStart[i]
+	}
+	for mask := 1; mask < stateCount; mask++ {
+		for last := 0; last < n; last++ {
+			if (mask&(1<<last)) == 0 || dp[mask][last] >= inf {
+				continue
+			}
+			for next := 0; next < n; next++ {
+				if mask&(1<<next) != 0 {
+					continue
+				}
+				nextMask := mask | (1 << next)
+				cost := dp[mask][last] + between[last][next]
+				if cost < dp[nextMask][next] || (cost == dp[nextMask][next] && (prev[nextMask][next] == -1 || buySystems[last] < buySystems[prev[nextMask][next]])) {
+					dp[nextMask][next] = cost
+					prev[nextMask][next] = last
+				}
+			}
+		}
+	}
+
+	fullMask := stateCount - 1
+	bestLast := -1
+	bestCost := inf
+	for i := 0; i < n; i++ {
+		cost := dp[fullMask][i] + distsToFinal[i]
+		if cost < bestCost || (cost == bestCost && (bestLast == -1 || buySystems[i] < buySystems[bestLast])) {
+			bestCost = cost
+			bestLast = i
+		}
+	}
+	if bestLast == -1 || bestCost >= inf {
+		return nil, false
+	}
+
+	order := make([]int32, 0, n)
+	mask := fullMask
+	current := bestLast
+	for current != -1 {
+		order = append(order, buySystems[current])
+		next := prev[mask][current]
+		mask &= ^(1 << current)
+		current = next
+	}
+	for i, j := 0, len(order)-1; i < j; i, j = i+1, j-1 {
+		order[i], order[j] = order[j], order[i]
+	}
+	return order, true
+}
+
+func (s *Scanner) optimizeBuySystemOrderHeuristic(
+	startSystemID int32,
+	finalSellSystemID int32,
+	buySystems []int32,
+	routePolicy batchRoutePolicy,
+) ([]int32, bool) {
+	remaining := append([]int32(nil), buySystems...)
+	sort.Slice(remaining, func(i, j int) bool { return remaining[i] < remaining[j] })
+	order := make([]int32, 0, len(remaining))
+	current := startSystemID
+	for len(remaining) > 0 {
+		bestIdx := -1
+		bestDist := int(^uint(0) >> 1)
+		for idx, systemID := range remaining {
+			dist := s.jumpsBetweenWithRoutePolicy(current, systemID, routePolicy)
+			if dist == UnreachableJumps {
+				return nil, false
+			}
+			if dist < bestDist || (dist == bestDist && systemID < remaining[bestIdx]) {
+				bestDist = dist
+				bestIdx = idx
+			}
+		}
+		order = append(order, remaining[bestIdx])
+		current = remaining[bestIdx]
+		remaining = append(remaining[:bestIdx], remaining[bestIdx+1:]...)
+	}
+
+	routeCost := func(candidate []int32) int {
+		if len(candidate) == 0 {
+			return s.jumpsBetweenWithRoutePolicy(startSystemID, finalSellSystemID, routePolicy)
+		}
+		total := 0
+		prev := startSystemID
+		for _, systemID := range candidate {
+			segment := s.jumpsBetweenWithRoutePolicy(prev, systemID, routePolicy)
+			if segment == UnreachableJumps {
+				return int(^uint(0) >> 1)
+			}
+			total += segment
+			prev = systemID
+		}
+		last := s.jumpsBetweenWithRoutePolicy(prev, finalSellSystemID, routePolicy)
+		if last == UnreachableJumps {
+			return int(^uint(0) >> 1)
+		}
+		return total + last
+	}
+
+	bestCost := routeCost(order)
+	if bestCost == int(^uint(0)>>1) {
+		return nil, false
+	}
+	for i := 0; i < len(order)-1; i++ {
+		for j := i + 1; j < len(order); j++ {
+			candidate := append([]int32(nil), order...)
+			for left, right := i, j; left < right; left, right = left+1, right-1 {
+				candidate[left], candidate[right] = candidate[right], candidate[left]
+			}
+			candidateCost := routeCost(candidate)
+			if candidateCost < bestCost {
+				order = candidate
+				bestCost = candidateCost
+			}
+		}
+	}
+	return order, true
+}
+
+func (s *Scanner) buildBatchRouteOptionsFromCandidates(lines []BatchCreateRouteLine, params BatchCreateRouteParams) []BatchCreateRouteOption {
 	if len(lines) == 0 {
 		return nil
 	}
@@ -669,6 +919,14 @@ func buildBatchRouteOptionsFromCandidates(lines []BatchCreateRouteLine, params B
 				option.TotalJumps = line.RouteJumps
 			}
 			signature += fmt.Sprintf("%d:%d:%d:%d:%d|", line.TypeID, line.Units, line.BuySystemID, line.SellSystemID, line.SellLocationID)
+		}
+		if s != nil {
+			jumps, orderedBuySystems, routeSequence, ok := s.computeRouteSequenceJumps(params, option.Lines, newBatchRoutePolicy(params))
+			if ok {
+				option.TotalJumps = jumps
+				option.OrderedBuySystems = orderedBuySystems
+				option.RouteSequence = routeSequence
+			}
 		}
 		if option.TotalJumps > 0 {
 			option.ISKPerJump = option.TotalProfitISK / float64(option.TotalJumps)

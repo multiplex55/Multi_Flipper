@@ -306,6 +306,9 @@ export interface RouteAdditionOption {
   };
   ranking_tie_break_values: number[];
   ranking_sort_key: string;
+  ordered_buy_systems?: number[];
+  route_sequence?: number[];
+  route_total_jumps?: number;
 }
 
 export interface RouteManifestSummary {
