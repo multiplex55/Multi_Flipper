@@ -94,7 +94,7 @@ export function BanlistModal({ banlist, latestResults, routeResults, onAdd, onRe
             <thead className="sticky top-0 bg-eve-panel border-b border-eve-border">
               <tr>
                 <th className="px-3 py-2 text-left">{t("colItem")}</th>
-                <th className="px-3 py-2 text-right">{t("colActions")}</th>
+                <th className="px-3 py-2 text-right">{t("watchlistAlertActions")}</th>
               </tr>
             </thead>
             <tbody>
