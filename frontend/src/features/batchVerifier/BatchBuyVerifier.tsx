@@ -22,7 +22,7 @@ type EvaluationResult = {
   comparison: ComparisonResult;
 };
 
-type ToleranceMode = "strict" | "allow_slippage";
+type ToleranceMode = "strict" | "allow_slippage" | "sell_value_evaluate";
 type SlippageType = "isk" | "percent";
 type QuantityHandling = "ignore_mismatch" | "require_exact";
 
@@ -169,7 +169,7 @@ export function BatchBuyVerifier() {
   }, [slippageValueInput]);
 
   const slippageValidationMessage = useMemo(() => {
-    if (toleranceMode === "strict") return "";
+    if (toleranceMode === "strict" || toleranceMode === "sell_value_evaluate") return "";
     if (!Number.isFinite(slippageValue)) return "Slippage value must be a valid number.";
     if (slippageValue < 0) return "Slippage value must be non-negative.";
     if (slippageType === "percent" && slippageValue > 100) return "Percent slippage must be between 0 and 100.";
@@ -186,6 +186,13 @@ export function BatchBuyVerifier() {
       return {
         ...base,
         thresholdMode: "strict",
+      };
+    }
+
+    if (toleranceMode === "sell_value_evaluate") {
+      return {
+        ...base,
+        thresholdMode: "sell_value_evaluate",
       };
     }
 
@@ -207,6 +214,7 @@ export function BatchBuyVerifier() {
   const modeSummaryLabel = useMemo(() => {
     const quantityLabel = quantityHandling === "require_exact" ? "quantity exact" : "ignore quantity mismatch";
     if (toleranceMode === "strict") return `Strict, ${quantityLabel}`;
+    if (toleranceMode === "sell_value_evaluate") return `Sell Value Evaluate, ${quantityLabel}`;
     const toleranceLabel = slippageType === "isk" ? `${slippageValueInput} ISK` : `${slippageValueInput}%`;
     return `Allow slippage (${toleranceLabel}), ${quantityLabel}`;
   }, [quantityHandling, slippageType, slippageValueInput, toleranceMode]);
@@ -312,6 +320,15 @@ export function BatchBuyVerifier() {
             />{" "}
             Allow slippage
           </label>
+          <label>
+            <input
+              type="radio"
+              name="toleranceMode"
+              checked={toleranceMode === "sell_value_evaluate"}
+              onChange={() => setToleranceMode("sell_value_evaluate")}
+            />{" "}
+            Sell Value Evaluate
+          </label>
         </div>
 
         <label style={{ display: "grid", gap: 6, maxWidth: 240 }}>
@@ -319,7 +336,7 @@ export function BatchBuyVerifier() {
           <select
             aria-label="Slippage type"
             value={slippageType}
-            disabled={toleranceMode === "strict"}
+            disabled={toleranceMode !== "allow_slippage"}
             onChange={(event) => setSlippageType(event.target.value as SlippageType)}
           >
             <option value="isk">ISK</option>
@@ -334,7 +351,7 @@ export function BatchBuyVerifier() {
             type="text"
             inputMode="decimal"
             value={slippageValueInput}
-            disabled={toleranceMode === "strict"}
+            disabled={toleranceMode !== "allow_slippage"}
             onChange={(event) => setSlippageValueInput(event.target.value)}
           />
         </label>

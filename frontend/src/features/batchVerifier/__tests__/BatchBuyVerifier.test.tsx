@@ -193,6 +193,41 @@ describe("BatchBuyVerifier", () => {
     expect(buySection).toHaveTextContent("Tritanium");
   });
 
+  it("supports Sell Value Evaluate mode and updates summary label", () => {
+    render(<BatchBuyVerifier />);
+    const sellModeManifest = "Tritanium | qty 10 | buy per 5 | buy total 50 | sell per 6";
+    const sellModeExport = "Tritanium\t10\t5.5\t55";
+
+    fireEvent.change(screen.getByLabelText("Batch Buy Manifest"), { target: { value: sellModeManifest } });
+    fireEvent.change(screen.getByLabelText("Export Order"), { target: { value: sellModeExport } });
+    fireEvent.click(screen.getByLabelText("Sell Value Evaluate"));
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
+
+    expect(screen.getByText("Summary (Sell Value Evaluate, quantity exact)")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Buy these" })).toHaveTextContent("Tritanium");
+  });
+
+  it("sell-value mode changes classification and handles missing sellPer", () => {
+    render(<BatchBuyVerifier />);
+
+    const noSellManifest = "Tritanium | qty 10 | buy per 5 | buy total 50";
+    const exportAtFivePointFive = "Tritanium\t10\t5.5\t55";
+
+    fireEvent.change(screen.getByLabelText("Batch Buy Manifest"), { target: { value: noSellManifest } });
+    fireEvent.change(screen.getByLabelText("Export Order"), { target: { value: exportAtFivePointFive } });
+    fireEvent.click(screen.getByLabelText("Sell Value Evaluate"));
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
+
+    expect(screen.getByRole("region", { name: "Do not buy these" })).toHaveTextContent("Tritanium");
+    expect(screen.getByText(/missing sell-per/i)).toBeInTheDocument();
+
+    const hasSellManifest = "Tritanium | qty 10 | buy per 5 | buy total 50 | sell per 6";
+    fireEvent.change(screen.getByLabelText("Batch Buy Manifest"), { target: { value: hasSellManifest } });
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
+
+    expect(screen.getByRole("region", { name: "Buy these" })).toHaveTextContent("Tritanium");
+  });
+
   it("invalid tolerance disables Evaluate and shows inline validation", () => {
     render(<BatchBuyVerifier />);
     fireEvent.click(screen.getByLabelText("Allow slippage"));
