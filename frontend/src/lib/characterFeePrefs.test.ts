@@ -70,7 +70,9 @@ describe("characterFeePrefs", () => {
     saveCharacterFeeSnapshot(3002, makeSnapshot({ sales_tax_percent: 5 }), storage);
 
     expect(storage.setItem).toHaveBeenCalled();
-    const latestRaw = (storage.setItem as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[1];
+    const setItemCalls = (storage.setItem as ReturnType<typeof vi.fn>).mock.calls;
+    const latestCall = setItemCalls[setItemCalls.length - 1];
+    const latestRaw = latestCall?.[1];
     expect(typeof latestRaw).toBe("string");
 
     const parsed = JSON.parse(latestRaw as string) as {
@@ -81,8 +83,6 @@ describe("characterFeePrefs", () => {
     expect(parsed.version).toBe(1);
     expect(Object.keys(parsed.by_character)).toEqual(["3001", "3002"]);
     expect(parsed.by_character["3002"].sales_tax_percent).toBe(5);
-    expect((storage.setItem as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0]).toBe(
-      CHARACTER_FEE_PREFS_STORAGE_KEY,
-    );
+    expect(latestCall?.[0]).toBe(CHARACTER_FEE_PREFS_STORAGE_KEY);
   });
 });

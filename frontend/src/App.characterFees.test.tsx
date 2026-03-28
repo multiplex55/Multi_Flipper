@@ -13,7 +13,7 @@ type AuthState = {
 let authState: AuthState = { logged_in: false, characters: [] };
 
 const mockGetConfig = vi.fn(async () => ({}));
-const mockUpdateConfig = vi.fn(async () => ({}));
+const mockUpdateConfig = vi.fn(async (_payload: unknown) => ({}));
 
 vi.mock("@/lib/api", () => ({
   applyAppUpdate: vi.fn(),
