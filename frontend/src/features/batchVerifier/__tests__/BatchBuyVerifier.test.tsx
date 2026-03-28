@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as compareModule from "@/features/batchVerifier/compare";
 import { BatchBuyVerifier } from "@/features/batchVerifier/BatchBuyVerifier";
@@ -201,5 +201,40 @@ describe("BatchBuyVerifier", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent("Percent slippage must be between 0 and 100.");
     expect(screen.getByRole("button", { name: "Evaluate" })).toBeDisabled();
+  });
+
+  it("uses dark-mode-safe row and section styles while preserving per-state distinction", () => {
+    render(<BatchBuyVerifier />);
+
+    fireEvent.change(screen.getByLabelText("Batch Buy Manifest"), { target: { value: manifestText } });
+    fireEvent.change(screen.getByLabelText("Export Order"), { target: { value: exportText } });
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
+
+    const evaluationSummary = screen.getByTestId("evaluation-summary-section");
+    const verifierControls = screen.getByTestId("verifier-controls-section");
+    expect(evaluationSummary).toHaveStyle({ borderColor: "#374151", borderStyle: "solid" });
+    expect(verifierControls).toHaveStyle({ borderColor: "#374151", borderStyle: "solid" });
+    expect(evaluationSummary).not.toHaveStyle({ borderColor: "#d1d5db" });
+    expect(verifierControls).not.toHaveStyle({ borderColor: "#d1d5db" });
+
+    const table = screen.getAllByTestId("batch-verifier-result-table")[0];
+    expect(table).toHaveStyle({ backgroundColor: "#0b1220", color: "#e5e7eb" });
+    const headerCell = within(table).getByRole("columnheader", { name: "Item name" });
+    expect(headerCell).toHaveStyle({ backgroundColor: "#111827", color: "#e5e7eb", borderBottom: "1px solid #4b5563" });
+
+    const safeRow = screen.getByTestId("result-row-safe");
+    const doNotBuyRow = screen.getByTestId("result-row-do_not_buy");
+    const missingRow = screen.getByTestId("result-row-missing_from_export");
+    const unexpectedRow = screen.getByTestId("result-row-unexpected_in_export");
+
+    expect(safeRow).toHaveStyle({ backgroundColor: "#052e16", color: "#bbf7d0" });
+    expect(doNotBuyRow).toHaveStyle({ backgroundColor: "#450a0a", color: "#fecaca" });
+    expect(missingRow).toHaveStyle({ backgroundColor: "#1f2937", color: "#e5e7eb" });
+    expect(unexpectedRow).toHaveStyle({ backgroundColor: "#0f172a", color: "#cbd5e1" });
+
+    expect(safeRow).not.toHaveStyle({ backgroundColor: "#ecfdf3" });
+    expect(doNotBuyRow).not.toHaveStyle({ backgroundColor: "#fef2f2" });
+    expect(missingRow).not.toHaveStyle({ backgroundColor: "#f3f4f6" });
+    expect(unexpectedRow).not.toHaveStyle({ backgroundColor: "#f3f4f6" });
   });
 });

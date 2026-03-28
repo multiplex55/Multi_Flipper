@@ -27,12 +27,28 @@ type SlippageType = "isk" | "percent";
 type QuantityHandling = "ignore_mismatch" | "require_exact";
 
 const statusStyles: Record<string, CSSProperties> = {
-  safe: { backgroundColor: "#ecfdf3", color: "#166534" },
-  do_not_buy: { backgroundColor: "#fef2f2", color: "#b91c1c" },
-  quantity_mismatch: { backgroundColor: "#fefce8", color: "#854d0e" },
-  missing_from_export: { backgroundColor: "#f3f4f6", color: "#374151" },
-  unexpected_in_export: { backgroundColor: "#f3f4f6", color: "#374151" },
+  safe: { backgroundColor: "#052e16", color: "#bbf7d0" },
+  do_not_buy: { backgroundColor: "#450a0a", color: "#fecaca" },
+  quantity_mismatch: { backgroundColor: "#422006", color: "#fde68a" },
+  missing_from_export: { backgroundColor: "#1f2937", color: "#e5e7eb" },
+  unexpected_in_export: { backgroundColor: "#0f172a", color: "#cbd5e1" },
 };
+
+const tableHeaderCellStyle: CSSProperties = {
+  textAlign: "left",
+  padding: "8px 10px",
+  borderBottom: "1px solid #4b5563",
+  backgroundColor: "#111827",
+  color: "#e5e7eb",
+  fontWeight: 600,
+};
+
+const tableBodyCellStyle: CSSProperties = {
+  padding: "8px 10px",
+  borderBottom: "1px solid #374151",
+};
+
+const sectionStyle: CSSProperties = { border: "1px solid #374151", borderRadius: 8, padding: 12 };
 
 function formatNumber(value: number | undefined): string {
   if (typeof value !== "number" || Number.isNaN(value)) return "—";
@@ -59,30 +75,38 @@ async function copyToClipboard(text: string): Promise<boolean> {
 function ResultTable({ rows }: { rows: ComparisonRow[] }) {
   return (
     <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <table
+        data-testid="batch-verifier-result-table"
+        style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0, backgroundColor: "#0b1220", color: "#e5e7eb" }}
+      >
         <thead>
           <tr>
-            <th>Item name</th>
-            <th>Manifest qty</th>
-            <th>Export qty</th>
-            <th>Target buy per</th>
-            <th>Actual buy per</th>
-            <th>Delta</th>
-            <th>Decision</th>
-            <th>Reason</th>
+            <th style={tableHeaderCellStyle}>Item name</th>
+            <th style={tableHeaderCellStyle}>Manifest qty</th>
+            <th style={tableHeaderCellStyle}>Export qty</th>
+            <th style={tableHeaderCellStyle}>Target buy per</th>
+            <th style={tableHeaderCellStyle}>Actual buy per</th>
+            <th style={tableHeaderCellStyle}>Delta</th>
+            <th style={tableHeaderCellStyle}>Decision</th>
+            <th style={tableHeaderCellStyle}>Reason</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={`${row.name}-${row.state}`} style={statusStyles[row.state]}>
-              <td>{row.name}</td>
-              <td>{formatNumber(row.manifestItem?.qty)}</td>
-              <td>{formatNumber(row.exportItem?.qty)}</td>
-              <td>{formatNumber(row.manifestItem?.buyPer)}</td>
-              <td>{formatNumber(row.exportItem?.buyPer)}</td>
-              <td>{formatNumber(row.buyPerDelta)}</td>
-              <td>{decisionForRow(row.state)}</td>
-              <td>{row.reason}</td>
+          {rows.map((row, index) => (
+            <tr
+              key={`${row.name}-${row.state}-${index}`}
+              data-testid={`result-row-${row.state}`}
+              data-row-state={row.state}
+              style={statusStyles[row.state]}
+            >
+              <td style={tableBodyCellStyle}>{row.name}</td>
+              <td style={tableBodyCellStyle}>{formatNumber(row.manifestItem?.qty)}</td>
+              <td style={tableBodyCellStyle}>{formatNumber(row.exportItem?.qty)}</td>
+              <td style={tableBodyCellStyle}>{formatNumber(row.manifestItem?.buyPer)}</td>
+              <td style={tableBodyCellStyle}>{formatNumber(row.exportItem?.buyPer)}</td>
+              <td style={tableBodyCellStyle}>{formatNumber(row.buyPerDelta)}</td>
+              <td style={tableBodyCellStyle}>{decisionForRow(row.state)}</td>
+              <td style={tableBodyCellStyle}>{row.reason}</td>
             </tr>
           ))}
         </tbody>
@@ -93,7 +117,7 @@ function ResultTable({ rows }: { rows: ComparisonRow[] }) {
 
 function ResultSection({ title, rows }: { title: string; rows: ComparisonRow[] }) {
   return (
-    <section aria-label={title} style={{ border: "1px solid #d1d5db", borderRadius: 8, padding: 12 }}>
+    <section aria-label={title} data-testid={`result-section-${title}`} style={sectionStyle}>
       <h3 style={{ marginTop: 0 }}>{title}</h3>
       {rows.length === 0 ? <p>No items.</p> : <ResultTable rows={rows} />}
     </section>
@@ -104,7 +128,11 @@ function ParseDiagnostics({ diagnostics }: { diagnostics: ParseDiagnostic[] }) {
   if (diagnostics.length === 0) return null;
 
   return (
-    <section aria-label="Parse diagnostics" style={{ border: "1px solid #f59e0b", borderRadius: 8, padding: 12 }}>
+    <section
+      aria-label="Parse diagnostics"
+      data-testid="parse-diagnostics-section"
+      style={{ border: "1px solid #92400e", borderRadius: 8, padding: 12, backgroundColor: "#1f1606", color: "#fde68a" }}
+    >
       <h3 style={{ marginTop: 0 }}>Parse diagnostics</h3>
       <ul>
         {diagnostics.map((diagnostic) => (
@@ -261,7 +289,8 @@ export function BatchBuyVerifier() {
 
       <section
         aria-label="Verifier controls"
-        style={{ display: "grid", gap: 12, border: "1px solid #d1d5db", borderRadius: 8, padding: 12 }}
+        data-testid="verifier-controls-section"
+        style={{ display: "grid", gap: 12, border: "1px solid #374151", borderRadius: 8, padding: 12 }}
       >
         <div style={{ display: "grid", gap: 6 }}>
           <span>Mode</span>
@@ -323,7 +352,7 @@ export function BatchBuyVerifier() {
         </label>
 
         {slippageValidationMessage ? (
-          <p role="alert" style={{ margin: 0, color: "#b91c1c" }}>
+          <p role="alert" style={{ margin: 0, color: "#fca5a5" }}>
             {slippageValidationMessage}
           </p>
         ) : null}
@@ -335,7 +364,7 @@ export function BatchBuyVerifier() {
 
       {result ? (
         <div style={{ display: "grid", gap: 12 }}>
-          <section aria-label="Evaluation summary" style={{ border: "1px solid #d1d5db", borderRadius: 8, padding: 12 }}>
+          <section aria-label="Evaluation summary" data-testid="evaluation-summary-section" style={sectionStyle}>
             <h3 style={{ margin: 0 }}>Summary ({result.modeLabel})</h3>
           </section>
           <ParseDiagnostics diagnostics={result.diagnostics} />
