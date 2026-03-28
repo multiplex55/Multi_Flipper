@@ -1108,7 +1108,7 @@ function App() {
           },
         );
         const filtered = filterBannedItems(results, banlist, (row) => row.TypeID);
-        setRadiusResults(filtered);
+        setRadiusResults(results);
         setRadiusCacheMeta(meta ?? null);
         await triggerDesktopAlerts(filtered);
       } else if (currentTab === "region") {
@@ -1132,7 +1132,7 @@ function App() {
           // ignore storage quota errors
         }
         const filtered = filterBannedItems(normalizedRows, banlist, (row) => row.TypeID);
-        setRegionResults(filtered);
+        setRegionResults(normalizedRows);
         setRegionCacheMeta(meta ?? null);
 
         const flatRows: Array<{
@@ -1168,7 +1168,7 @@ function App() {
             meta = m;
           },
         );
-        setRegionResults(filterBannedItems(results, banlist, (row) => row.TypeID));
+        setRegionResults(results);
         setRegionCacheMeta(meta ?? null);
         await triggerDesktopAlerts(filterBannedItems(results, banlist, (row) => row.TypeID));
       }
@@ -1952,7 +1952,7 @@ function App() {
                 <button
                   className="px-2 py-0.5 rounded bg-eve-accent/20 text-eve-accent hover:bg-eve-accent/40 transition-colors"
                   onClick={() => {
-                    setRegionResults(filterBannedItems(regionRestorePrompt.results, banlist, (row) => row.TypeID));
+                    setRegionResults(regionRestorePrompt.results);
                     setRegionRestorePrompt(null);
                   }}
                 >
@@ -2163,8 +2163,8 @@ function App() {
       >
         <BanlistModal
           banlist={banlist}
-          latestResults={[...filteredRadiusResults, ...filteredRegionResults]}
-          routeResults={filteredRouteLoadedResults}
+          latestResults={[...radiusResults, ...regionResults]}
+          routeResults={routeLoadedResults ?? []}
           onAdd={addItemToBanlist}
           onRemove={removeItemFromBanlist}
           onClear={clearBanlist}
@@ -2182,12 +2182,10 @@ function App() {
           onLoadResults={(resultTab, results, loadedParams) => {
             // Load historical results into appropriate tab
             if (resultTab === "radius") {
-              setRadiusResults(filterBannedItems(results as FlipResult[], banlist, (row) => row.TypeID));
+              setRadiusResults(results as FlipResult[]);
               setTab("radius");
             } else if (resultTab === "region") {
-              setRegionResults(
-                filterBannedItems(normalizeRegionalResults(results), banlist, (row) => row.TypeID),
-              );
+              setRegionResults(normalizeRegionalResults(results));
               setTab("region");
             } else if (resultTab === "contracts") {
               setContractResults(results as ContractResult[]);
@@ -2196,7 +2194,7 @@ function App() {
               setStationLoadedResults(results as StationTrade[]);
               setTab("station");
             } else if (resultTab === "route") {
-              setRouteLoadedResults(filterRouteResultsByBanlist(results as RouteResult[], banlist));
+              setRouteLoadedResults(results as RouteResult[]);
               setTab("route");
             }
             // Restore only global ScanParams-compatible fields (avoid leaking tab-specific params)
