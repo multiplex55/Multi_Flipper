@@ -660,6 +660,7 @@ export const ru = {
     copyContractID: "Копировать ID контракта",
     buildBatch: "Собрать батч (тот же маршрут)",
     batchBuilderTitle: "Сборщик батча",
+    batchPriceVerify: "Проверка цен батча",
     batchBuilderHint:
       "Добавляет доп. сделки по тому же маршруту buy -> sell, чтобы эффективнее заполнить карго.",
     batchBuilderCargoLabel: "Лимит карго (м3)",
