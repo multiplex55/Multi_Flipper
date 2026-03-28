@@ -3,7 +3,7 @@ VERSION   := $(shell git describe --tags --always --dirty 2>/dev/null || echo de
 BUILD_DIR := build
 LDFLAGS   := -s -w -X main.version=$(VERSION)
 
-.PHONY: all build run test clean frontend frontend-wails wails wails-run cross
+.PHONY: all build run test frontend-test clean frontend frontend-wails wails wails-run cross
 
 ## build: build frontend + backend into a single binary
 build: frontend
@@ -24,6 +24,11 @@ run: build
 ## test: run all Go tests
 test:
 	go test ./...
+
+
+## frontend-test: install deps and run frontend tests
+frontend-test:
+	cd frontend && npm install && npm run test
 
 ## frontend: install deps and build frontend
 frontend:
@@ -63,5 +68,5 @@ cross: frontend
 clean:
 	rm -rf $(BUILD_DIR)
 
-## all: test + cross-compile (includes frontend)
-all: test cross
+## all: run backend tests + frontend tests + cross-compile
+all: test frontend-test cross

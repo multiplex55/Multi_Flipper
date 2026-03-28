@@ -1,0 +1,4 @@
+Items: 3
+Heavy Water | qty 10 | buy total 120,000 ISK | buy per 12,000 ISK | sell total 130,000 ISK | sell per 13,000 ISK | vol 2.5 m3 | profit 10,000 ISK
+Tritanium | qty 1,000 | buy total 4,550.00 | buy per 4.55 | sell total 5,000.00 | sell per 5.00 | vol 0.01 m3
+Republic Fleet EMP S | qty 400 | buy total 1,200,000 | buy per 3,000 | sell per 3,500 | vol 0.01 m3 | profit 200,000
