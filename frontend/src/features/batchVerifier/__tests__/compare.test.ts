@@ -161,6 +161,53 @@ describe("compareManifestToExport", () => {
     });
     expect(result.summary.extraIskRequiredVsPlan).toBe(300);
     expect(result.summary.estimatedProfitLost).toBe(700);
+    expect(result.summary.alertingRowsCount).toBe(0);
+  });
+
+  it("marks row alert metadata when threshold is crossed", () => {
+    const result = compareManifestToExport(
+      [manifest({ name: "Cross", qty: 10, buyPer: 100, buyTotal: 1000 })],
+      [exportRow({ name: "Cross", qty: 10, buyPer: 120, buyTotal: 1200 })],
+      { thresholdMode: "strict", priceDiffAlertPercent: 10 },
+    );
+
+    expect(result.rows[0]?.priceDiffPercent).toBe(20);
+    expect(result.rows[0]?.crossesPriceDiffAlert).toBe(true);
+    expect(result.summary.alertingRowsCount).toBe(1);
+    expect(result.summary.maxPriceDiffPercent).toBe(20);
+    expect(result.rows[0]?.reason).toContain("exceeds configured % difference");
+  });
+
+  it("does not mark alert metadata when threshold is not crossed", () => {
+    const result = compareManifestToExport(
+      [manifest({ name: "Within", qty: 10, buyPer: 100, buyTotal: 1000 })],
+      [exportRow({ name: "Within", qty: 10, buyPer: 105, buyTotal: 1050 })],
+      { thresholdMode: "strict", priceDiffAlertPercent: 10 },
+    );
+
+    expect(result.rows[0]?.priceDiffPercent).toBe(5);
+    expect(result.rows[0]?.crossesPriceDiffAlert).toBe(false);
+    expect(result.summary.alertingRowsCount).toBe(0);
+    expect(result.summary.maxPriceDiffPercent).toBe(5);
+  });
+
+  it("handles zero baseline and missing values for price-diff metadata", () => {
+    const zeroBaseline = compareManifestToExport(
+      [manifest({ name: "Zero", qty: 10, buyPer: 0, buyTotal: 0 })],
+      [exportRow({ name: "Zero", qty: 10, buyPer: 10, buyTotal: 100 })],
+      { thresholdMode: "strict", priceDiffAlertPercent: 1 },
+    );
+    expect(zeroBaseline.rows[0]?.priceDiffPercent).toBeUndefined();
+    expect(zeroBaseline.rows[0]?.crossesPriceDiffAlert).toBe(false);
+
+    const missingValues = compareManifestToExport(
+      [manifest({ name: "Missing", qty: 10, buyPer: Number.NaN, buyTotal: 0 })],
+      [exportRow({ name: "Missing", qty: 10, buyPer: 10, buyTotal: 100 })],
+      { thresholdMode: "strict", priceDiffAlertPercent: 1 },
+    );
+    expect(missingValues.rows[0]?.priceDiffPercent).toBeUndefined();
+    expect(missingValues.rows[0]?.crossesPriceDiffAlert).toBe(false);
+    expect(missingValues.summary.maxPriceDiffPercent).toBeUndefined();
   });
 
   it("generates explanation text for each non-safe state", () => {

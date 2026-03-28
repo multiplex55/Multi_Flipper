@@ -52,6 +52,9 @@ export function formatSummaryReport(
     `Quantity mismatch: ${result.summary.counts.quantity_mismatch}`,
     `Missing from export: ${result.summary.counts.missing_from_export}`,
     `Unexpected in export: ${result.summary.counts.unexpected_in_export}`,
+    `Price diff alert threshold (%): ${formatNumber(result.summary.alertThresholdPercent, 2, locale)}`,
+    `Rows above alert threshold: ${result.summary.alertingRowsCount}`,
+    `Max price diff (%): ${formatNumber(result.summary.maxPriceDiffPercent, 2, locale)}`,
     `Extra ISK vs plan: ${formatNumber(result.summary.extraIskRequiredVsPlan, 2, locale)} ISK`,
     `Profit impact: ${formatNumber(result.summary.estimatedProfitLost, 2, locale)} ISK`,
   ];
