@@ -16,6 +16,8 @@ type BanlistModalProps = {
 };
 
 function collectKnownItems(latestResults: FlipResult[], routeResults: RouteResult[]): KnownItem[] {
+  // NOTE: this must operate on raw (unfiltered) result sets so banlist suggestions
+  // can re-surface recently unbanned items instead of starving from filtered tables.
   const byId = new Map<number, string>();
   for (const row of latestResults) {
     if (row.TypeID > 0) byId.set(row.TypeID, row.TypeName || `Type ${row.TypeID}`);
