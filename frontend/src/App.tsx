@@ -40,6 +40,11 @@ import { useAuth } from "./lib/useAuth";
 import { useVersionCheck } from "./lib/useVersionCheck";
 import { useEsiStatus } from "./lib/useEsiStatus";
 import { evaluateUpdatePoll } from "./lib/updatePolling";
+import {
+  extractCharacterFeeSnapshot,
+  loadCharacterFeeSnapshot,
+  saveCharacterFeeSnapshot,
+} from "./lib/characterFeePrefs";
 import type {
   ContractResult,
   FlipResult,
@@ -340,6 +345,8 @@ function App() {
     route_allow_empty_hops: false,
     sell_order_mode: false,
   });
+  const globalFeeSnapshotRef = useRef(extractCharacterFeeSnapshot(params));
+  const previousCharacterIdRef = useRef<number | null>(null);
   const configLoadedRef = useRef(false);
   const regionDefaultsAppliedRef = useRef(false);
 
@@ -383,6 +390,7 @@ function App() {
     handleDeleteCharacter,
     refreshAuthStatus,
   } = useAuth();
+  const activeCharacterId = authStatus.logged_in ? authStatus.character_id ?? null : null;
   const characterCount = authStatus.characters?.length ?? (authStatus.logged_in ? 1 : 0);
   const {
     appVersion,
@@ -811,6 +819,56 @@ function App() {
         configLoadedRef.current = true;
       });
   }, []);
+
+  useEffect(() => {
+    if (activeCharacterId !== null) return;
+    globalFeeSnapshotRef.current = extractCharacterFeeSnapshot(params);
+  }, [
+    activeCharacterId,
+    params.sales_tax_percent,
+    params.broker_fee_percent,
+    params.split_trade_fees,
+    params.buy_broker_fee_percent,
+    params.sell_broker_fee_percent,
+    params.buy_sales_tax_percent,
+    params.sell_sales_tax_percent,
+  ]);
+
+  useEffect(() => {
+    const previousCharacterId = previousCharacterIdRef.current;
+    previousCharacterIdRef.current = activeCharacterId;
+
+    if (activeCharacterId === null) {
+      if (previousCharacterId !== null) {
+        const fallbackFees = globalFeeSnapshotRef.current;
+        setParams((prev) => ({ ...prev, ...fallbackFees }));
+      }
+      return;
+    }
+
+    const storedSnapshot = loadCharacterFeeSnapshot(activeCharacterId);
+    if (storedSnapshot) {
+      setParams((prev) => ({ ...prev, ...storedSnapshot }));
+      return;
+    }
+
+    const fallbackFees = globalFeeSnapshotRef.current;
+    setParams((prev) => ({ ...prev, ...fallbackFees }));
+  }, [activeCharacterId]);
+
+  useEffect(() => {
+    if (activeCharacterId === null) return;
+    saveCharacterFeeSnapshot(activeCharacterId, extractCharacterFeeSnapshot(params));
+  }, [
+    activeCharacterId,
+    params.sales_tax_percent,
+    params.broker_fee_percent,
+    params.split_trade_fees,
+    params.buy_broker_fee_percent,
+    params.sell_broker_fee_percent,
+    params.buy_sales_tax_percent,
+    params.sell_sales_tax_percent,
+  ]);
 
   // On mount: check localStorage for a recent region scan (< 4 hours old) and offer restore
   useEffect(() => {
