@@ -30,4 +30,41 @@ describe("RouteBuilder banlist filtering", () => {
     expect(screen.queryByText(/found:1/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Jita/)).not.toBeInTheDocument();
   });
+
+  it("removes banned items from multi-item hops", () => {
+    render(
+      <RouteBuilder
+        params={{ system_name: "Jita", cargo_capacity: 0, buy_radius: 1, sell_radius: 1, min_margin: 0, sales_tax_percent: 0, broker_fee_percent: 0 }}
+        loadedResults={[
+          {
+            Hops: [{
+              TypeID: 35,
+              TypeName: "Pyerite",
+              SystemName: "Jita",
+              DestSystemName: "Amarr",
+              BuyPrice: 1,
+              SellPrice: 2,
+              Units: 1,
+              Profit: 2,
+              Jumps: 1,
+              SystemID: 1,
+              DestSystemID: 2,
+              Items: [
+                { TypeID: 34, TypeName: "Tritanium", Units: 5, BuyPrice: 1, SellPrice: 2, Profit: 5 },
+                { TypeID: 35, TypeName: "Pyerite", Units: 2, BuyPrice: 1, SellPrice: 3, Profit: 4 },
+              ],
+            }],
+            TotalProfit: 9,
+            TotalJumps: 1,
+            ProfitPerJump: 9,
+            HopCount: 1,
+          },
+        ] as never}
+        banlist={{ byId: { 34: true }, entries: [{ typeId: 34, typeName: "Tritanium" }] }}
+      />,
+    );
+
+    expect(screen.getByText(/found:1/i)).toBeInTheDocument();
+    expect(screen.getByText(/Jita/)).toBeInTheDocument();
+  });
 });

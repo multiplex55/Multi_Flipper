@@ -3022,6 +3022,8 @@ func (s *Server) handleRouteFind(w http.ResponseWriter, r *http.Request) {
 		IgnoredSystemIDs     []int32 `json:"ignored_system_ids"`
 		TargetSystemName     string  `json:"target_system_name"`
 		CargoCapacity        float64 `json:"cargo_capacity"`
+		MaxInvestment        float64 `json:"max_investment"`
+		BannedTypeIDs        []int32 `json:"banned_type_ids"`
 		MinMargin            float64 `json:"min_margin"`
 		MinISKPerJump        float64 `json:"min_isk_per_jump"`
 		SalesTaxPercent      float64 `json:"sales_tax_percent"`
@@ -3082,6 +3084,8 @@ func (s *Server) handleRouteFind(w http.ResponseWriter, r *http.Request) {
 		IgnoredSystemIDs:     ignoredSystemIDs,
 		TargetSystemName:     req.TargetSystemName,
 		CargoCapacity:        req.CargoCapacity,
+		MaxInvestment:        req.MaxInvestment,
+		BannedTypeIDs:        req.BannedTypeIDs,
 		MinMargin:            req.MinMargin,
 		MinISKPerJump:        req.MinISKPerJump,
 		SalesTaxPercent:      req.SalesTaxPercent,
