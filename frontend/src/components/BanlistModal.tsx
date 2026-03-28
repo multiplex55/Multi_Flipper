@@ -19,19 +19,26 @@ function collectKnownItems(latestResults: FlipResult[], routeResults: RouteResul
   // NOTE: this must operate on raw (unfiltered) result sets so banlist suggestions
   // can re-surface recently unbanned items instead of starving from filtered tables.
   const byId = new Map<number, string>();
+  const rememberItem = (typeId: number, typeName?: string) => {
+    if (typeId <= 0 || byId.has(typeId)) return;
+    byId.set(typeId, typeName || `Type ${typeId}`);
+  };
+
   for (const row of latestResults) {
-    if (row.TypeID > 0) byId.set(row.TypeID, row.TypeName || `Type ${row.TypeID}`);
+    rememberItem(row.TypeID, row.TypeName);
   }
   for (const route of routeResults) {
     for (const hop of route.Hops ?? []) {
-      if (hop.TypeID > 0 && !byId.has(hop.TypeID)) {
-        byId.set(hop.TypeID, hop.TypeName || `Type ${hop.TypeID}`);
-      }
+      rememberItem(hop.TypeID, hop.TypeName);
+      for (const item of hop.Items ?? []) rememberItem(item.TypeID, item.TypeName);
     }
   }
   return [...byId.entries()]
     .map(([typeId, typeName]) => ({ typeId, typeName }))
-    .sort((a, b) => a.typeName.localeCompare(b.typeName));
+    .sort((a, b) => {
+      const byName = a.typeName.localeCompare(b.typeName);
+      return byName !== 0 ? byName : a.typeId - b.typeId;
+    });
 }
 
 export function BanlistModal({ banlist, latestResults, routeResults, onAdd, onRemove, onClear }: BanlistModalProps) {
@@ -80,7 +87,10 @@ export function BanlistModal({ banlist, latestResults, routeResults, onAdd, onRe
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-eve-text">{t("banlistCurrent")}</h3>
         <button
-          onClick={onClear}
+          onClick={() => {
+            onClear();
+            setQuery("");
+          }}
           disabled={banlist.entries.length === 0}
           className="px-2 py-1 text-xs rounded-sm border border-eve-border disabled:opacity-40"
         >

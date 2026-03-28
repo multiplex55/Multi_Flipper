@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterRouteResultsByBanlistItems, normalizeRouteHop } from "@/lib/routeModels";
+import { filterRouteResultsByBanlistItems, normalizeRouteHop, normalizeRouteResults } from "@/lib/routeModels";
 
 describe("routeModels", () => {
   it("migrates legacy single-item hop payloads to items[]", () => {
@@ -57,5 +57,40 @@ describe("routeModels", () => {
     expect(filtered[0].Hops[0].Items?.[0].TypeID).toBe(35);
     expect(filtered[0].TotalProfit).toBe(150);
     expect(filtered[0].ProfitPerJump).toBe(150);
+  });
+
+  it("normalizes representative multi-item route hops while preserving all hop items", () => {
+    const [route] = normalizeRouteResults([
+      {
+        Hops: [{
+          SystemName: "Jita",
+          StationName: "4-4",
+          SystemID: 1,
+          DestSystemName: "Amarr",
+          DestSystemID: 2,
+          TypeName: "Legacy Item",
+          TypeID: 999,
+          BuyPrice: 1,
+          SellPrice: 1,
+          Units: 1,
+          Profit: 0,
+          Jumps: 1,
+          Items: [
+            { TypeID: 34, TypeName: "Tritanium", Units: 100, BuyPrice: 10, SellPrice: 12, Profit: 200 },
+            { TypeID: 35, TypeName: "Pyerite", Units: 50, BuyPrice: 8, SellPrice: 11, Profit: 150 },
+          ],
+        }],
+        TotalProfit: 350,
+        TotalJumps: 1,
+        ProfitPerJump: 350,
+        HopCount: 1,
+      },
+    ]);
+
+    expect(route.Hops).toHaveLength(1);
+    expect(route.Hops[0].Items).toHaveLength(2);
+    expect(route.Hops[0].Items?.map((item) => item.TypeID)).toEqual([34, 35]);
+    expect(route.Hops[0].TypeID).toBe(34);
+    expect(route.TotalProfit).toBe(350);
   });
 });
