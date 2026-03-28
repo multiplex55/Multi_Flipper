@@ -59,8 +59,13 @@ describe("BatchBuyVerifier", () => {
   it("renders dual input areas and action buttons", () => {
     render(<BatchBuyVerifier />);
 
-    expect(screen.getByLabelText("Batch Buy Manifest")).toBeInTheDocument();
-    expect(screen.getByLabelText("Export Order")).toBeInTheDocument();
+    const manifestTextarea = screen.getByLabelText("Batch Buy Manifest");
+    const exportTextarea = screen.getByLabelText("Export Order");
+
+    expect(manifestTextarea).toBeInTheDocument();
+    expect(exportTextarea).toBeInTheDocument();
+    expect(manifestTextarea).toHaveClass("bg-eve-input", "border-eve-border", "text-eve-text");
+    expect(exportTextarea).toHaveClass("bg-eve-input", "border-eve-border", "text-eve-text");
     expect(screen.getByRole("button", { name: "Evaluate" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Clear" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy Summary" })).toBeInTheDocument();

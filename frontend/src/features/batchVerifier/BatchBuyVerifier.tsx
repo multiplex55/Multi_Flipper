@@ -50,6 +50,10 @@ const tableBodyCellStyle: CSSProperties = {
 
 const sectionStyle: CSSProperties = { border: "1px solid #374151", borderRadius: 8, padding: 12 };
 
+const themedInputClassName =
+  "w-full rounded-sm border border-eve-border bg-eve-input px-3 py-2 text-sm text-eve-text placeholder:text-eve-dim focus:outline-none focus:border-eve-accent focus:ring-1 focus:ring-eve-accent/30 disabled:cursor-not-allowed disabled:opacity-60 disabled:text-eve-dim";
+
+
 function formatNumber(value: number | undefined): string {
   if (typeof value !== "number" || Number.isNaN(value)) return "—";
   return value.toLocaleString();
@@ -270,13 +274,14 @@ export function BatchBuyVerifier() {
   };
 
   return (
-    <div style={{ display: "grid", gap: 16 }}>
+    <div className="text-eve-text" style={{ display: "grid", gap: 16 }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <label style={{ display: "grid", gap: 8 }}>
           <span>Batch Buy Manifest</span>
           <textarea
             aria-label="Batch Buy Manifest"
             rows={12}
+            className={`${themedInputClassName} min-h-[18rem] resize-y font-mono text-xs leading-relaxed`}
             value={manifestText}
             onChange={(event) => setManifestText(event.target.value)}
           />
@@ -287,6 +292,7 @@ export function BatchBuyVerifier() {
           <textarea
             aria-label="Export Order"
             rows={12}
+            className={`${themedInputClassName} min-h-[18rem] resize-y font-mono text-xs leading-relaxed`}
             value={exportText}
             onChange={(event) => setExportText(event.target.value)}
           />
@@ -315,11 +321,12 @@ export function BatchBuyVerifier() {
       <section
         aria-label="Verifier controls"
         data-testid="verifier-controls-section"
+        className="bg-eve-panel/40 text-eve-text"
         style={{ display: "grid", gap: 12, border: "1px solid #374151", borderRadius: 8, padding: 12 }}
       >
         <div style={{ display: "grid", gap: 6 }}>
-          <span>Mode</span>
-          <label>
+          <span className="text-eve-dim">Mode</span>
+          <label className="text-eve-dim">
             <input
               type="radio"
               name="toleranceMode"
@@ -328,7 +335,7 @@ export function BatchBuyVerifier() {
             />{" "}
             Strict
           </label>
-          <label>
+          <label className="text-eve-dim">
             <input
               type="radio"
               name="toleranceMode"
@@ -337,7 +344,7 @@ export function BatchBuyVerifier() {
             />{" "}
             Allow slippage
           </label>
-          <label>
+          <label className="text-eve-dim">
             <input
               type="radio"
               name="toleranceMode"
@@ -349,9 +356,10 @@ export function BatchBuyVerifier() {
         </div>
 
         <label style={{ display: "grid", gap: 6, maxWidth: 240 }}>
-          <span>Slippage type</span>
+          <span className="text-eve-dim">Slippage type</span>
           <select
             aria-label="Slippage type"
+            className={themedInputClassName}
             value={slippageType}
             disabled={toleranceMode !== "allow_slippage"}
             onChange={(event) => setSlippageType(event.target.value as SlippageType)}
@@ -362,9 +370,10 @@ export function BatchBuyVerifier() {
         </label>
 
         <label style={{ display: "grid", gap: 6, maxWidth: 240 }}>
-          <span>Slippage value</span>
+          <span className="text-eve-dim">Slippage value</span>
           <input
             aria-label="Slippage value"
+            className={themedInputClassName}
             type="text"
             inputMode="decimal"
             value={slippageValueInput}
@@ -374,9 +383,10 @@ export function BatchBuyVerifier() {
         </label>
 
         <label style={{ display: "grid", gap: 6, maxWidth: 280 }}>
-          <span>Quantity handling</span>
+          <span className="text-eve-dim">Quantity handling</span>
           <select
             aria-label="Quantity handling"
+            className={themedInputClassName}
             value={quantityHandling}
             onChange={(event) => setQuantityHandling(event.target.value as QuantityHandling)}
           >
@@ -386,9 +396,10 @@ export function BatchBuyVerifier() {
         </label>
 
         <label style={{ display: "grid", gap: 6, maxWidth: 280 }}>
-          <span>Price diff alert %</span>
+          <span className="text-eve-dim">Price diff alert %</span>
           <input
             aria-label="Price diff alert percent"
+            className={themedInputClassName}
             type="text"
             inputMode="decimal"
             value={priceDiffAlertPercentInput}
@@ -397,20 +408,20 @@ export function BatchBuyVerifier() {
         </label>
 
         {slippageValidationMessage ? (
-          <p role="alert" style={{ margin: 0, color: "#fca5a5" }}>
+          <p role="alert" className="text-eve-error" style={{ margin: 0 }}>
             {slippageValidationMessage}
           </p>
         ) : null}
         {priceDiffValidationMessage ? (
-          <p role="alert" style={{ margin: 0, color: "#fca5a5" }}>
+          <p role="alert" className="text-eve-error" style={{ margin: 0 }}>
             {priceDiffValidationMessage}
           </p>
         ) : null}
       </section>
 
-      {copyStatus ? <p role="status">{copyStatus}</p> : null}
+      {copyStatus ? <p role="status" className="text-eve-dim">{copyStatus}</p> : null}
 
-      {!result && !hasInput ? <p>Paste manifest and export data, then click Evaluate.</p> : null}
+      {!result && !hasInput ? <p className="text-eve-dim">Paste manifest and export data, then click Evaluate.</p> : null}
 
       {result ? (
         <div style={{ display: "grid", gap: 12 }}>
