@@ -153,6 +153,7 @@ export function BatchBuyVerifier() {
   const [toleranceMode, setToleranceMode] = useState<ToleranceMode>("strict");
   const [slippageType, setSlippageType] = useState<SlippageType>("isk");
   const [slippageValueInput, setSlippageValueInput] = useState<string>("0");
+  const [priceDiffAlertPercentInput, setPriceDiffAlertPercentInput] = useState<string>("10");
   const [quantityHandling, setQuantityHandling] = useState<QuantityHandling>("require_exact");
 
   const hasInput = manifestText.trim().length > 0 || exportText.trim().length > 0;
@@ -176,10 +177,22 @@ export function BatchBuyVerifier() {
     return "";
   }, [slippageType, slippageValue, toleranceMode]);
 
+  const priceDiffAlertPercent = useMemo(() => {
+    if (priceDiffAlertPercentInput.trim() === "") return Number.NaN;
+    return Number(priceDiffAlertPercentInput);
+  }, [priceDiffAlertPercentInput]);
+
+  const priceDiffValidationMessage = useMemo(() => {
+    if (!Number.isFinite(priceDiffAlertPercent)) return "Price diff alert % must be a valid number.";
+    if (priceDiffAlertPercent < 0) return "Price diff alert % must be non-negative.";
+    return "";
+  }, [priceDiffAlertPercent]);
+
   const optionsForCompare = useMemo<ComparisonOptions>(() => {
     const base: ComparisonOptions = {
       includeReview: true,
       enableQuantityMismatch: quantityHandling === "require_exact",
+      priceDiffAlertPercent: Number.isFinite(priceDiffAlertPercent) ? priceDiffAlertPercent : undefined,
     };
 
     if (toleranceMode === "strict") {
@@ -209,7 +222,7 @@ export function BatchBuyVerifier() {
       thresholdMode: "percent_tolerance",
       percentTolerance: Number.isFinite(slippageValue) ? slippageValue : 0,
     };
-  }, [quantityHandling, slippageType, slippageValue, toleranceMode]);
+  }, [priceDiffAlertPercent, quantityHandling, slippageType, slippageValue, toleranceMode]);
 
   const modeSummaryLabel = useMemo(() => {
     const quantityLabel = quantityHandling === "require_exact" ? "quantity exact" : "ignore quantity mismatch";
@@ -220,7 +233,7 @@ export function BatchBuyVerifier() {
   }, [quantityHandling, slippageType, slippageValueInput, toleranceMode]);
 
   const handleEvaluate = () => {
-    if (slippageValidationMessage) return;
+    if (slippageValidationMessage || priceDiffValidationMessage) return;
     const manifestParsed = parseBatchManifest(manifestText);
     const exportParsed = parseExportOrder(exportText);
     const comparison = compareManifestToExport(manifestParsed.items, exportParsed.items, optionsForCompare);
@@ -281,7 +294,11 @@ export function BatchBuyVerifier() {
       </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button type="button" onClick={handleEvaluate} disabled={Boolean(slippageValidationMessage)}>
+        <button
+          type="button"
+          onClick={handleEvaluate}
+          disabled={Boolean(slippageValidationMessage || priceDiffValidationMessage)}
+        >
           Evaluate
         </button>
         <button type="button" onClick={handleClear}>
@@ -368,9 +385,25 @@ export function BatchBuyVerifier() {
           </select>
         </label>
 
+        <label style={{ display: "grid", gap: 6, maxWidth: 280 }}>
+          <span>Price diff alert %</span>
+          <input
+            aria-label="Price diff alert percent"
+            type="text"
+            inputMode="decimal"
+            value={priceDiffAlertPercentInput}
+            onChange={(event) => setPriceDiffAlertPercentInput(event.target.value)}
+          />
+        </label>
+
         {slippageValidationMessage ? (
           <p role="alert" style={{ margin: 0, color: "#fca5a5" }}>
             {slippageValidationMessage}
+          </p>
+        ) : null}
+        {priceDiffValidationMessage ? (
+          <p role="alert" style={{ margin: 0, color: "#fca5a5" }}>
+            {priceDiffValidationMessage}
           </p>
         ) : null}
       </section>
@@ -383,6 +416,23 @@ export function BatchBuyVerifier() {
         <div style={{ display: "grid", gap: 12 }}>
           <section aria-label="Evaluation summary" data-testid="evaluation-summary-section" style={sectionStyle}>
             <h3 style={{ margin: 0 }}>Summary ({result.modeLabel})</h3>
+            {result.comparison.summary.alertingRowsCount > 0 ? (
+              <div
+                role="alert"
+                style={{
+                  marginTop: 10,
+                  border: "1px solid #92400e",
+                  borderRadius: 8,
+                  padding: 10,
+                  backgroundColor: "#1f1606",
+                  color: "#fde68a",
+                }}
+              >
+                Warning: {result.comparison.summary.alertingRowsCount} row(s) exceed the configured{" "}
+                {formatNumber(result.comparison.summary.alertThresholdPercent)}% difference threshold. Highest delta:{" "}
+                {formatNumber(result.comparison.summary.maxPriceDiffPercent)}%.
+              </div>
+            ) : null}
           </section>
           <ParseDiagnostics diagnostics={result.diagnostics} />
           <ResultSection title="Buy these" rows={result.buyThese} />

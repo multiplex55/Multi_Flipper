@@ -50,6 +50,7 @@ describe("BatchBuyVerifier", () => {
     expect(compareSpy.mock.calls[0]?.[2]).toMatchObject({
       thresholdMode: "percent_tolerance",
       percentTolerance: 12.5,
+      priceDiffAlertPercent: 10,
       enableQuantityMismatch: false,
       includeReview: true,
     });
@@ -119,6 +120,8 @@ describe("BatchBuyVerifier", () => {
     expect(summaryPayload).toContain("Do not buy: 1");
     expect(summaryPayload).toContain("Missing from export: 1");
     expect(summaryPayload).toContain("Unexpected in export: 1");
+    expect(summaryPayload).toContain("Price diff alert threshold (%): 10.00");
+    expect(summaryPayload).toContain("Rows above alert threshold: 1");
     expect(summaryPayload).toContain("Extra ISK vs plan: 16.00 ISK");
     expect(summaryPayload).toContain("Profit impact: 0.00 ISK");
 
@@ -236,6 +239,42 @@ describe("BatchBuyVerifier", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent("Percent slippage must be between 0 and 100.");
     expect(screen.getByRole("button", { name: "Evaluate" })).toBeDisabled();
+  });
+
+  it("invalid price diff threshold blocks Evaluate and shows inline validation", () => {
+    render(<BatchBuyVerifier />);
+    fireEvent.change(screen.getByLabelText("Price diff alert percent"), { target: { value: "-1" } });
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Price diff alert % must be non-negative.");
+    expect(screen.getByRole("button", { name: "Evaluate" })).toBeDisabled();
+  });
+
+  it("shows warning in summary when configured threshold is exceeded", () => {
+    render(<BatchBuyVerifier />);
+    const alertManifest = "Tritanium | qty 10 | buy per 5 | buy total 50";
+    const alertExport = "Tritanium\t10\t6\t60";
+
+    fireEvent.change(screen.getByLabelText("Batch Buy Manifest"), { target: { value: alertManifest } });
+    fireEvent.change(screen.getByLabelText("Export Order"), { target: { value: alertExport } });
+    fireEvent.change(screen.getByLabelText("Price diff alert percent"), { target: { value: "10" } });
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("1 row(s) exceed");
+    expect(screen.getByRole("alert")).toHaveTextContent("Highest delta: 20%");
+  });
+
+  it("does not show threshold warning when all rows are within configured limit", () => {
+    render(<BatchBuyVerifier />);
+    const withinManifest = "Tritanium | qty 10 | buy per 5 | buy total 50";
+    const withinExport = "Tritanium\t10\t5.2\t52";
+
+    fireEvent.change(screen.getByLabelText("Batch Buy Manifest"), { target: { value: withinManifest } });
+    fireEvent.change(screen.getByLabelText("Export Order"), { target: { value: withinExport } });
+    fireEvent.change(screen.getByLabelText("Price diff alert percent"), { target: { value: "10" } });
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
+
+    const summary = screen.getByTestId("evaluation-summary-section");
+    expect(within(summary).queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("uses dark-mode-safe row and section styles while preserving per-state distinction", () => {

@@ -18,6 +18,8 @@ function row(overrides: Partial<ComparisonRow>): ComparisonRow {
     qtyDelta: overrides.qtyDelta,
     buyPerDelta: overrides.buyPerDelta,
     buyTotalDelta: overrides.buyTotalDelta,
+    priceDiffPercent: overrides.priceDiffPercent,
+    crossesPriceDiffAlert: overrides.crossesPriceDiffAlert,
     extraIskVsPlan: overrides.extraIskVsPlan,
     estimatedProfitLost: overrides.estimatedProfitLost,
   };
@@ -41,6 +43,9 @@ function result(rows: ComparisonRow[], summaryOverrides: Partial<ComparisonResul
       },
       extraIskRequiredVsPlan: 1234567.891,
       estimatedProfitLost: 98765.432,
+      alertThresholdPercent: 10,
+      alertingRowsCount: 2,
+      maxPriceDiffPercent: 18.75,
       ...summaryOverrides,
     },
   };
@@ -85,6 +90,9 @@ describe("formatSummaryReport", () => {
     expect(summary).toContain("Quantity mismatch: 1");
     expect(summary).toContain("Missing from export: 1");
     expect(summary).toContain("Unexpected in export: 1");
+    expect(summary).toContain("Price diff alert threshold (%): 10.00");
+    expect(summary).toContain("Rows above alert threshold: 2");
+    expect(summary).toContain("Max price diff (%): 18.75");
     expect(summary).toContain("Extra ISK vs plan: 1,234,567.89 ISK");
     expect(summary).toContain("Profit impact: 98,765.43 ISK");
   });
