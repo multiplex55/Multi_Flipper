@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getPortfolioPnL, type CharacterScope } from "../../lib/api";
+import { getPortfolioPnL, getWatchlist, type CharacterScope } from "../../lib/api";
 import { type TranslationKey } from "../../lib/i18n";
 import type { ItemPnL, PortfolioPnL, StationPnL } from "../../lib/types";
 import { StatCard } from "./shared";
@@ -23,18 +23,40 @@ export function PnLTab({ formatIsk, characterScope, t, onAddToWatchlist }: PnLTa
   const [itemView, setItemView] = useState<"profit" | "loss">("profit");
   const [bottomView, setBottomView] = useState<"items" | "stations">("items");
   const [watchlistPending, setWatchlistPending] = useState<Record<number, boolean>>({});
+  const [watchedTypeIds, setWatchedTypeIds] = useState<Set<number>>(new Set());
 
   const handleAddWatchlist = async (typeId: number, typeName: string) => {
-    if (watchlistPending[typeId]) return;
+    if (watchlistPending[typeId] || watchedTypeIds.has(typeId)) return;
     setWatchlistPending((prev) => ({ ...prev, [typeId]: true }));
     try {
       await onAddToWatchlist(typeId, typeName);
+      setWatchedTypeIds((prev) => {
+        const next = new Set(prev);
+        next.add(typeId);
+        return next;
+      });
     } catch {
       // parent callback is responsible for user feedback
     } finally {
       setWatchlistPending((prev) => ({ ...prev, [typeId]: false }));
     }
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    getWatchlist()
+      .then((watchlist) => {
+        if (cancelled) return;
+        setWatchedTypeIds(new Set(watchlist.map((item) => item.type_id)));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setWatchedTypeIds(new Set());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -323,6 +345,7 @@ export function PnLTab({ formatIsk, characterScope, t, onAddToWatchlist }: PnLTa
             formatIsk={formatIsk}
             t={t}
             watchlistPending={watchlistPending}
+            watchedTypeIds={watchedTypeIds}
             onAddToWatchlist={handleAddWatchlist}
           />
         ) : (
@@ -568,12 +591,14 @@ function PnLItemsTable({
   formatIsk,
   t,
   watchlistPending,
+  watchedTypeIds,
   onAddToWatchlist,
 }: {
   items: ItemPnL[];
   formatIsk: (v: number) => string;
   t: (key: TranslationKey, params?: Record<string, string | number>) => string;
   watchlistPending: Record<number, boolean>;
+  watchedTypeIds: Set<number>;
   onAddToWatchlist: (typeId: number, typeName: string) => Promise<void>;
 }) {
   if (items.length === 0) {
@@ -600,6 +625,8 @@ function PnLItemsTable({
           {items.slice(0, 20).map((item) => {
             const isProfit = item.net_pnl >= 0;
             const barPct = (Math.abs(item.net_pnl) / maxAbsPnl) * 100;
+            const isWatched = watchedTypeIds.has(item.type_id);
+            const isPending = Boolean(watchlistPending[item.type_id]);
 
             return (
               <tr key={item.type_id} className="border-t border-eve-border/50 hover:bg-eve-panel/50">
@@ -639,15 +666,21 @@ function PnLItemsTable({
                   {item.transactions}
                 </td>
                 <td className="px-3 py-2 text-right">
-                  <button
-                    type="button"
-                    onClick={() => { void onAddToWatchlist(item.type_id, item.type_name || `Type #${item.type_id}`); }}
-                    disabled={Boolean(watchlistPending[item.type_id])}
-                    aria-label={`${t("addToWatchlist")}: ${item.type_name || `Type #${item.type_id}`}`}
-                    className="px-2 py-1 text-[10px] rounded-sm border border-eve-border bg-eve-dark/70 text-eve-dim hover:text-eve-accent hover:border-eve-accent/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {watchlistPending[item.type_id] ? "…" : t("addToWatchlist")}
-                  </button>
+                  {isWatched ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 text-[10px] rounded-sm border border-eve-border/70 bg-eve-panel text-eve-dim">
+                      ✓ {t("watchlistTracked")}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => { void onAddToWatchlist(item.type_id, item.type_name || `Type #${item.type_id}`); }}
+                      disabled={isPending}
+                      aria-label={`${t("addToWatchlist")}: ${item.type_name || `Type #${item.type_id}`}`}
+                      className="px-2 py-1 text-[10px] rounded-sm border border-eve-border bg-eve-dark/70 text-eve-dim hover:text-eve-accent hover:border-eve-accent/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isPending ? "…" : t("addToWatchlist")}
+                    </button>
+                  )}
                 </td>
               </tr>
             );
