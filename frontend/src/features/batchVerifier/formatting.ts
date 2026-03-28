@@ -14,6 +14,14 @@ export type SummaryReportOptions = {
 
 export function formatDecisionReason(row: Pick<ComparisonRow, "state" | "exportItem" | "manifestItem" | "allowedBuyPer">): string {
   if (row.state === "do_not_buy") {
+    if (typeof row.allowedBuyPer !== "number" && typeof row.manifestItem?.sellPer !== "number") {
+      return "Cannot evaluate sell-value threshold: manifest sell-per is missing.";
+    }
+
+    if (typeof row.manifestItem?.sellPer === "number" && row.allowedBuyPer === row.manifestItem.sellPer) {
+      return `Sell target exceeded: export ${formatNumber(row.exportItem?.buyPer)} ISK > sell-per target ${formatNumber(row.allowedBuyPer)} ISK.`;
+    }
+
     return `Overpriced: ${formatNumber(row.exportItem?.buyPer)} ISK > allowed ${formatNumber(row.allowedBuyPer)} ISK.`;
   }
 

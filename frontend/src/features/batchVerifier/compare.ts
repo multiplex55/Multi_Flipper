@@ -8,7 +8,7 @@ export type ComparisonState =
   | "missing_from_export"
   | "unexpected_in_export";
 
-export type ThresholdMode = "strict" | "isk_tolerance" | "percent_tolerance";
+export type ThresholdMode = "strict" | "isk_tolerance" | "percent_tolerance" | "sell_value_evaluate";
 
 export type ComparisonOptions = {
   thresholdMode?: ThresholdMode;
@@ -48,7 +48,7 @@ export type ComparisonResult = {
   summary: ComparisonSummary;
 };
 
-function getAllowedBuyPer(manifestItem: ManifestItem, options: ComparisonOptions): number {
+function getAllowedBuyPer(manifestItem: ManifestItem, options: ComparisonOptions): number | undefined {
   const plannedBuyPer = manifestItem.buyPer ?? 0;
   const mode = options.thresholdMode ?? "strict";
 
@@ -58,6 +58,10 @@ function getAllowedBuyPer(manifestItem: ManifestItem, options: ComparisonOptions
 
   if (mode === "percent_tolerance") {
     return plannedBuyPer * (1 + (options.percentTolerance ?? 0) / 100);
+  }
+
+  if (mode === "sell_value_evaluate") {
+    return manifestItem.sellPer;
   }
 
   return plannedBuyPer;
@@ -80,11 +84,22 @@ function estimatedProfitForManifestItem(manifestItem: ManifestItem): number {
 }
 
 export function buildReasonText(row: Omit<ComparisonRow, "reason">): string {
+  const manifestSellPer = row.manifestItem?.sellPer;
+
   switch (row.state) {
     case "safe":
       return "Within configured buy-per threshold and quantity rules.";
-    case "do_not_buy":
+    case "do_not_buy": {
+      if (typeof row.allowedBuyPer !== "number" && typeof manifestSellPer !== "number") {
+        return "Sell Value Evaluate mode requires manifest sell-per; missing sell-per so item is do-not-buy.";
+      }
+
+      if (typeof manifestSellPer === "number" && row.allowedBuyPer === manifestSellPer) {
+        return `Export buy-per ${row.exportItem?.buyPer ?? 0} exceeds sell-per target ${row.allowedBuyPer}.`;
+      }
+
       return `Buy-per ${row.exportItem?.buyPer ?? 0} exceeds allowed ${row.allowedBuyPer ?? 0}.`;
+    }
     case "quantity_mismatch":
       return `Quantity mismatch: manifest ${row.manifestItem?.qty ?? 0}, export ${row.exportItem?.qty ?? 0}.`;
     case "missing_from_export":
@@ -127,9 +142,14 @@ export function classifyRow(
   const buyPerDelta = safeExport.buyPer - (safeManifest.buyPer ?? 0);
   const buyTotalDelta = safeExport.buyTotal - (safeManifest.buyTotal ?? (safeManifest.buyPer ?? 0) * safeManifest.qty);
   const allowedBuyPer = getAllowedBuyPer(safeManifest, options);
+  const mode = options.thresholdMode ?? "strict";
 
   let state: ComparisonState = "safe";
-  if (safeExport.buyPer > allowedBuyPer) {
+  // In sell-value mode, missing sellPer cannot produce a meaningful threshold,
+  // so we fail closed as do_not_buy.
+  if (mode === "sell_value_evaluate" && typeof safeManifest.sellPer !== "number") {
+    state = "do_not_buy";
+  } else if (typeof allowedBuyPer === "number" && safeExport.buyPer > allowedBuyPer) {
     state = "do_not_buy";
   } else if (options.enableQuantityMismatch !== false && qtyDelta !== 0) {
     state = "quantity_mismatch";

@@ -75,6 +75,43 @@ describe("compareManifestToExport", () => {
     expect(percentTolerancePass.rows[0]?.state).toBe("safe");
   });
 
+  it("supports sell-value evaluation mode thresholds", () => {
+    const manifestItem = manifest({ name: "Megacyte", qty: 10, buyPer: 100, buyTotal: 1000, sellPer: 120 });
+
+    const allowed = compareManifestToExport(
+      [manifestItem],
+      [exportRow({ name: "Megacyte", qty: 10, buyPer: 110, buyTotal: 1100 })],
+      { thresholdMode: "sell_value_evaluate" },
+    );
+    expect(allowed.rows[0]?.state).toBe("safe");
+
+    const blocked = compareManifestToExport(
+      [manifestItem],
+      [exportRow({ name: "Megacyte", qty: 10, buyPer: 121, buyTotal: 1210 })],
+      { thresholdMode: "sell_value_evaluate" },
+    );
+    expect(blocked.rows[0]?.state).toBe("do_not_buy");
+    expect(blocked.rows[0]?.reason).toContain("sell-per target");
+
+    const boundary = compareManifestToExport(
+      [manifestItem],
+      [exportRow({ name: "Megacyte", qty: 10, buyPer: 120, buyTotal: 1200 })],
+      { thresholdMode: "sell_value_evaluate" },
+    );
+    expect(boundary.rows[0]?.state).toBe("safe");
+  });
+
+  it("fails closed in sell-value mode when manifest sellPer is missing", () => {
+    const result = compareManifestToExport(
+      [manifest({ name: "Zydrine", qty: 5, buyPer: 200, buyTotal: 1000, sellPer: undefined })],
+      [exportRow({ name: "Zydrine", qty: 5, buyPer: 190, buyTotal: 950 })],
+      { thresholdMode: "sell_value_evaluate" },
+    );
+
+    expect(result.rows[0]?.state).toBe("do_not_buy");
+    expect(result.rows[0]?.reason).toContain("missing sell-per");
+  });
+
   it("handles quantity mismatch toggle behavior", () => {
     const m = manifest({ qty: 10, buyPer: 100, buyTotal: 1000 });
     const e = exportRow({ qty: 11, buyPer: 100, buyTotal: 1100 });
