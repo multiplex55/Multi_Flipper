@@ -4,8 +4,10 @@ import { BatchBuyVerifier } from "@/features/batchVerifier/BatchBuyVerifier";
 
 type TopActionButtonsProps = {
   watchlistLabel: string;
+  banlistLabel: string;
   verifierLabel: string;
   onOpenWatchlist: () => void;
+  onOpenBanlist: () => void;
   onTrackAction?: (action: string) => void;
   verifierOpen?: boolean;
   initialManifestText?: string;
@@ -15,8 +17,10 @@ type TopActionButtonsProps = {
 
 export function TopActionButtons({
   watchlistLabel,
+  banlistLabel,
   verifierLabel,
   onOpenWatchlist,
+  onOpenBanlist,
   onTrackAction,
   verifierOpen,
   initialManifestText,
@@ -30,6 +34,10 @@ export function TopActionButtons({
   const openWatchlist = () => {
     onTrackAction?.("watchlist_open_clicked");
     onOpenWatchlist();
+  };
+  const openBanlist = () => {
+    onTrackAction?.("banlist_open_clicked");
+    onOpenBanlist();
   };
 
   const openVerifier = () => {
@@ -56,6 +64,15 @@ export function TopActionButtons({
       >
         <span aria-hidden="true">&#11088;</span>
         <span>{watchlistLabel}</span>
+      </button>
+      <button
+        onClick={openBanlist}
+        className="flex items-center gap-1.5 h-[34px] px-3 bg-eve-panel border border-eve-border rounded-sm text-xs text-eve-dim hover:text-eve-accent hover:border-eve-accent/50 transition-colors"
+        title={banlistLabel}
+        aria-label={banlistLabel}
+      >
+        <span aria-hidden="true">&#9940;</span>
+        <span>{banlistLabel}</span>
       </button>
 
       <button

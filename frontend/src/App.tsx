@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useKeyboardShortcuts } from "./lib/useKeyboardShortcuts";
 import { StatusBar } from "./components/StatusBar";
 import { ParametersPanel } from "./components/ParametersPanel";
@@ -21,6 +21,7 @@ import { useGlobalToast } from "./components/Toast";
 import { Modal } from "./components/Modal";
 import { CharacterPopup } from "./components/CharacterPopup";
 import { TopActionButtons } from "./components/TopActionButtons";
+import { BanlistModal } from "./components/BanlistModal";
 import {
   applyAppUpdate,
   getUpdateCheckStatus,
@@ -56,6 +57,14 @@ import type {
   StationCacheMeta,
   StationTrade,
 } from "./lib/types";
+import {
+  banlistReducer,
+  emptyBanlistState,
+  filterBannedItems,
+  hydrateBanlistFromStorage,
+  saveBanlistToStorage,
+  type BanlistState,
+} from "./lib/banlist";
 import logo from "./assets/logo.svg";
 
 type Tab =
@@ -300,6 +309,16 @@ function normalizeRegionalResults(raw: unknown[]): FlipResult[] {
   return out.filter((row) => row.TypeID > 0);
 }
 
+function filterRouteResultsByBanlist(results: RouteResult[], banlist: BanlistState): RouteResult[] {
+  if (results.length === 0 || banlist.entries.length === 0) return results;
+  return results
+    .map((route) => ({
+      ...route,
+      Hops: filterBannedItems(route.Hops ?? [], banlist, (hop) => hop.TypeID),
+    }))
+    .filter((route) => (route.Hops?.length ?? 0) > 0);
+}
+
 function App() {
   const { t } = useI18n();
   const [bootSplashState, setBootSplashState] = useState<
@@ -430,6 +449,7 @@ function App() {
   const [autoRefreshRegion, setAutoRefreshRegion] = useState(false);
 
   const [showWatchlist, setShowWatchlist] = useState(false);
+  const [showBanlist, setShowBanlist] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showPatrons, setShowPatrons] = useState(false);
   const [showCharacter, setShowCharacter] = useState(false);
@@ -462,6 +482,15 @@ function App() {
   const regionAutoRefreshSignatureRef = useRef<string>("");
   const regionAutoRefreshLastRunRef = useRef<number>(0);
   const { addToast } = useGlobalToast();
+  const [banlist, dispatchBanlist] = useReducer(
+    banlistReducer,
+    emptyBanlistState,
+    () => hydrateBanlistFromStorage(),
+  );
+
+  useEffect(() => {
+    saveBanlistToStorage(banlist);
+  }, [banlist]);
 
   const openExternalURL = useCallback(async (url: string) => {
     const { runtime, isTauri, isWails } = getDesktopRuntimeFlags();
@@ -501,6 +530,34 @@ function App() {
     params.contract_target_confidence,
     t,
   ]);
+
+  const filteredRadiusResults = useMemo(
+    () => filterBannedItems(radiusResults, banlist, (row) => row.TypeID),
+    [radiusResults, banlist],
+  );
+  const filteredRegionResults = useMemo(
+    () => filterBannedItems(regionResults, banlist, (row) => row.TypeID),
+    [regionResults, banlist],
+  );
+  const filteredRouteLoadedResults = useMemo(
+    () => filterRouteResultsByBanlist(routeLoadedResults ?? [], banlist),
+    [routeLoadedResults, banlist],
+  );
+
+  const addItemToBanlist = useCallback((item: { typeId: number; typeName: string }) => {
+    dispatchBanlist({ type: "add", payload: item });
+    addToast(t("banlistItemAdded"), "success", 2200);
+  }, [addToast, t]);
+
+  const removeItemFromBanlist = useCallback((typeId: number) => {
+    dispatchBanlist({ type: "remove", payload: { typeId } });
+    addToast(t("banlistItemRemoved"), "info", 2200);
+  }, [addToast, t]);
+
+  const clearBanlist = useCallback(() => {
+    dispatchBanlist({ type: "clear" });
+    addToast(t("banlistCleared"), "warning", 2200);
+  }, [addToast, t]);
 
   // Keyboard shortcuts
   const shortcuts = useMemo(
@@ -1055,9 +1112,10 @@ function App() {
             meta = m;
           },
         );
-        setRadiusResults(results);
+        const filtered = filterBannedItems(results, banlist, (row) => row.TypeID);
+        setRadiusResults(filtered);
         setRadiusCacheMeta(meta ?? null);
-        await triggerDesktopAlerts(results);
+        await triggerDesktopAlerts(filtered);
       } else if (currentTab === "region") {
         let meta: StationCacheMeta | undefined;
         const rows = await scanRegionalDayTrader(
@@ -1078,7 +1136,8 @@ function App() {
         } catch {
           // ignore storage quota errors
         }
-        setRegionResults(normalizedRows);
+        const filtered = filterBannedItems(normalizedRows, banlist, (row) => row.TypeID);
+        setRegionResults(filtered);
         setRegionCacheMeta(meta ?? null);
 
         const flatRows: Array<{
@@ -1088,7 +1147,7 @@ function App() {
           TotalProfit: number;
           ProfitPerUnit: number;
           DailyVolume: number;
-        }> = normalizedRows.map((row) => ({
+        }> = filtered.map((row) => ({
           TypeID: row.TypeID,
           TypeName: row.TypeName,
           MarginPercent: row.MarginPercent,
@@ -1114,9 +1173,9 @@ function App() {
             meta = m;
           },
         );
-        setRegionResults(results);
+        setRegionResults(filterBannedItems(results, banlist, (row) => row.TypeID));
         setRegionCacheMeta(meta ?? null);
-        await triggerDesktopAlerts(results);
+        await triggerDesktopAlerts(filterBannedItems(results, banlist, (row) => row.TypeID));
       }
     } catch (e: unknown) {
       if (e instanceof Error && e.name !== "AbortError") {
@@ -1125,7 +1184,7 @@ function App() {
     } finally {
       setScanning(false);
     }
-  }, [scanning, tab, params, t, addToast, alertChannels]);
+  }, [scanning, tab, params, t, addToast, alertChannels, banlist]);
 
   const handleScanAndRefresh = useCallback(async () => {
     if (scanning || scanAndRefreshing) return;
@@ -1398,8 +1457,10 @@ function App() {
           <div className="hidden sm:flex items-center gap-2">
             <TopActionButtons
               watchlistLabel={t("tabWatchlist")}
+              banlistLabel={t("tabBanlist")}
               verifierLabel={t("batchPriceVerify")}
               onOpenWatchlist={() => setShowWatchlist(true)}
+              onOpenBanlist={() => setShowBanlist(true)}
               verifierOpen={showVerifierModal}
               initialManifestText={verifierInitialManifestText}
               onOpenVerifier={() => {
@@ -1532,6 +1593,16 @@ function App() {
           >
             <span>&#11088;</span>
             <span>{t("tabWatchlist")}</span>
+          </button>
+          <button
+            onClick={() => {
+              setShowBanlist(true);
+              setMobileMenuOpen(false);
+            }}
+            className="flex items-center gap-1.5 h-9 px-3 bg-eve-panel border border-eve-border rounded-sm text-xs text-eve-dim"
+          >
+            <span>&#9940;</span>
+            <span>{t("tabBanlist")}</span>
           </button>
           <button
             onClick={() => {
@@ -1820,7 +1891,7 @@ function App() {
               </div>
             )}
             <ScanResultsTable
-              results={radiusResults}
+              results={filteredRadiusResults}
               scanning={scanning && tab === "radius"}
               progress={tab === "radius" ? progress : ""}
               cacheMeta={radiusCacheMeta}
@@ -1872,7 +1943,7 @@ function App() {
               </div>
             )}
             {/* Restore prompt: offer to reload last scan from localStorage */}
-            {regionRestorePrompt && regionResults.length === 0 && !scanning && (
+            {regionRestorePrompt && filteredRegionResults.length === 0 && !scanning && (
               <div className="shrink-0 flex items-center gap-3 px-3 py-2 bg-eve-accent/10 border-b border-eve-accent/30 text-xs">
                 <span className="text-eve-accent">💾</span>
                 <span className="text-eve-text flex-1">
@@ -1886,7 +1957,7 @@ function App() {
                 <button
                   className="px-2 py-0.5 rounded bg-eve-accent/20 text-eve-accent hover:bg-eve-accent/40 transition-colors"
                   onClick={() => {
-                    setRegionResults(regionRestorePrompt.results);
+                    setRegionResults(filterBannedItems(regionRestorePrompt.results, banlist, (row) => row.TypeID));
                     setRegionRestorePrompt(null);
                   }}
                 >
@@ -1904,7 +1975,7 @@ function App() {
               </div>
             )}
             <ScanResultsTable
-              results={regionResults}
+              results={filteredRegionResults}
               scanning={scanning && tab === "region"}
               progress={tab === "region" ? progress : ""}
               cacheMeta={regionCacheMeta}
@@ -1968,8 +2039,9 @@ function App() {
             <RouteBuilder
               params={params}
               onChange={setParams}
-              loadedResults={routeLoadedResults}
+              loadedResults={filteredRouteLoadedResults}
               isLoggedIn={authStatus.logged_in}
+              banlist={banlist}
             />
           </div>
           <div
@@ -2074,7 +2146,7 @@ function App() {
         width="max-w-3xl"
       >
         <WatchlistTab
-          latestResults={[...radiusResults, ...regionResults]}
+          latestResults={[...filteredRadiusResults, ...filteredRegionResults]}
           alertChannels={alertChannels}
           toggleAlertChannel={toggleAlertChannel}
           alertTelegramToken={alertTelegramToken}
@@ -2085,6 +2157,22 @@ function App() {
           setAlertDiscordWebhook={setAlertDiscordWebhook}
           handleTestAlert={handleTestAlert}
           alertTestLoading={alertTestLoading}
+        />
+      </Modal>
+
+      <Modal
+        open={showBanlist}
+        onClose={() => setShowBanlist(false)}
+        title={t("tabBanlist")}
+        width="max-w-3xl"
+      >
+        <BanlistModal
+          banlist={banlist}
+          latestResults={[...filteredRadiusResults, ...filteredRegionResults]}
+          routeResults={filteredRouteLoadedResults}
+          onAdd={addItemToBanlist}
+          onRemove={removeItemFromBanlist}
+          onClear={clearBanlist}
         />
       </Modal>
 
@@ -2099,10 +2187,12 @@ function App() {
           onLoadResults={(resultTab, results, loadedParams) => {
             // Load historical results into appropriate tab
             if (resultTab === "radius") {
-              setRadiusResults(results as FlipResult[]);
+              setRadiusResults(filterBannedItems(results as FlipResult[], banlist, (row) => row.TypeID));
               setTab("radius");
             } else if (resultTab === "region") {
-              setRegionResults(normalizeRegionalResults(results));
+              setRegionResults(
+                filterBannedItems(normalizeRegionalResults(results), banlist, (row) => row.TypeID),
+              );
               setTab("region");
             } else if (resultTab === "contracts") {
               setContractResults(results as ContractResult[]);
@@ -2111,7 +2201,7 @@ function App() {
               setStationLoadedResults(results as StationTrade[]);
               setTab("station");
             } else if (resultTab === "route") {
-              setRouteLoadedResults(results as RouteResult[]);
+              setRouteLoadedResults(filterRouteResultsByBanlist(results as RouteResult[], banlist));
               setTab("route");
             }
             // Restore only global ScanParams-compatible fields (avoid leaking tab-specific params)
