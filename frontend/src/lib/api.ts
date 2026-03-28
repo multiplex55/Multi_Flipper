@@ -384,6 +384,7 @@ export async function findRoutes(
   params: ScanParams,
   minHops: number,
   maxHops: number,
+  bannedTypeIDs: number[],
   onProgress: (msg: string) => void,
   signal?: AbortSignal
 ): Promise<RouteResult[]> {
@@ -394,6 +395,8 @@ export async function findRoutes(
       ignored_system_ids: params.ignored_system_ids ?? [],
       target_system_name: params.route_target_system_name,
       cargo_capacity: params.cargo_capacity,
+      max_investment: params.max_investment,
+      banned_type_ids: bannedTypeIDs,
       min_margin: params.min_margin,
       min_isk_per_jump: params.route_min_isk_per_jump,
       sales_tax_percent: params.sales_tax_percent,

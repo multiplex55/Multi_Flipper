@@ -209,6 +209,9 @@ export interface RouteHop {
   DestSystemName: string;
   DestStationName?: string;
   DestSystemID: number;
+  Items?: RouteHopItem[];
+  BuyCost?: number;
+  SellValue?: number;
   TypeName: string;
   TypeID: number;
   BuyPrice: number;
@@ -217,6 +220,18 @@ export interface RouteHop {
   Profit: number;
   Jumps: number;
   RegionID?: number;
+}
+
+export interface RouteHopItem {
+  TypeName: string;
+  TypeID: number;
+  BuyPrice: number;
+  SellPrice: number;
+  Units: number;
+  BuyCost?: number;
+  SellValue?: number;
+  Profit: number;
+  MarginPercent?: number;
 }
 
 export interface RouteResult {

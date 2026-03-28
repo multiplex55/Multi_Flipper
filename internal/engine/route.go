@@ -48,6 +48,75 @@ type sourceSystemCandidate struct {
 	emptyJumps int
 }
 
+type routeCapacityState struct {
+	remainingVolume float64
+	remainingBudget float64
+}
+
+func filterRouteCandidatesByBanlist(candidates []RouteHop, banned map[int32]bool) []RouteHop {
+	if len(candidates) == 0 || len(banned) == 0 {
+		return candidates
+	}
+	filtered := make([]RouteHop, 0, len(candidates))
+	for _, c := range candidates {
+		if banned[c.TypeID] {
+			continue
+		}
+		filtered = append(filtered, c)
+	}
+	return filtered
+}
+
+func newRouteCapacityState(params RouteParams) routeCapacityState {
+	remainingVolume := math.Inf(1)
+	if params.CargoCapacity > 0 {
+		remainingVolume = params.CargoCapacity
+	}
+	remainingBudget := math.Inf(1)
+	if params.MaxInvestment > 0 {
+		remainingBudget = params.MaxInvestment
+	}
+	return routeCapacityState{remainingVolume: remainingVolume, remainingBudget: remainingBudget}
+}
+
+func (s routeCapacityState) canFit(volumePerUnit, buyPrice float64, units int32) int32 {
+	if units <= 0 || volumePerUnit <= 0 || buyPrice <= 0 {
+		return 0
+	}
+	maxUnits := int64(units)
+	if !math.IsInf(s.remainingVolume, 1) {
+		maxByVolume := int64(math.Floor((s.remainingVolume + 1e-9) / volumePerUnit))
+		if maxByVolume < maxUnits {
+			maxUnits = maxByVolume
+		}
+	}
+	if !math.IsInf(s.remainingBudget, 1) {
+		maxByBudget := int64(math.Floor((s.remainingBudget + 1e-9) / buyPrice))
+		if maxByBudget < maxUnits {
+			maxUnits = maxByBudget
+		}
+	}
+	if maxUnits <= 0 {
+		return 0
+	}
+	if maxUnits > math.MaxInt32 {
+		maxUnits = math.MaxInt32
+	}
+	return int32(maxUnits)
+}
+
+func (s *routeCapacityState) consume(volumePerUnit, buyPrice float64, units int32) {
+	if units <= 0 {
+		return
+	}
+	if !math.IsInf(s.remainingVolume, 1) {
+		s.remainingVolume -= float64(units) * volumePerUnit
+	}
+	if !math.IsInf(s.remainingBudget, 1) {
+		s.remainingBudget -= float64(units) * buyPrice
+	}
+}
+
 func routeMinISKPerJumpPass(
 	minISKPerJump float64,
 	profit float64,
@@ -362,8 +431,21 @@ func (s *Scanner) findBestTradesFromSources(
 							BuyPrice:       sell.Price,
 							SellPrice:      buy.Price,
 							Units:          actualUnits,
-							Profit:         profit,
-							Jumps:          tradeJumps,
+							Items: []RouteHopItem{{
+								TypeName:      itemType.Name,
+								TypeID:        typeID,
+								BuyPrice:      sell.Price,
+								SellPrice:     buy.Price,
+								Units:         actualUnits,
+								BuyCost:       float64(actualUnits) * sell.Price,
+								SellValue:     float64(actualUnits) * buy.Price,
+								Profit:        profit,
+								MarginPercent: margin,
+							}},
+							BuyCost:   float64(actualUnits) * sell.Price,
+							SellValue: float64(actualUnits) * buy.Price,
+							Profit:    profit,
+							Jumps:     tradeJumps,
 						},
 						score: profit,
 					})
@@ -392,6 +474,111 @@ func (s *Scanner) findBestTradesFromSources(
 		hops[i] = c.hop
 	}
 	return hops
+}
+
+func (s *Scanner) aggregateRouteHopCandidates(candidates []RouteHop, params RouteParams, maxItemsPerHop int) []RouteHop {
+	if len(candidates) == 0 {
+		return nil
+	}
+	if maxItemsPerHop <= 0 {
+		maxItemsPerHop = 4
+	}
+	byLane := make(map[string][]RouteHop, len(candidates))
+	for _, hop := range candidates {
+		key := fmt.Sprintf("%d>%d:%d", hop.SystemID, hop.DestSystemID, hop.EmptyJumps)
+		byLane[key] = append(byLane[key], hop)
+	}
+	out := make([]RouteHop, 0, len(byLane))
+	for _, lane := range byLane {
+		if len(lane) == 0 {
+			continue
+		}
+		sort.Slice(lane, func(i, j int) bool {
+			leftMargin := 0.0
+			if lane[i].BuyPrice > 0 {
+				leftMargin = ((lane[i].SellPrice - lane[i].BuyPrice) / lane[i].BuyPrice) * 100
+			}
+			rightMargin := 0.0
+			if lane[j].BuyPrice > 0 {
+				rightMargin = ((lane[j].SellPrice - lane[j].BuyPrice) / lane[j].BuyPrice) * 100
+			}
+			if leftMargin == rightMargin {
+				return lane[i].TypeID < lane[j].TypeID
+			}
+			return leftMargin > rightMargin
+		})
+
+		capacity := newRouteCapacityState(params)
+		items := make([]RouteHopItem, 0, min(maxItemsPerHop, len(lane)))
+		var totalProfit, totalBuy, totalSell float64
+		for _, candidate := range lane {
+			if len(items) >= maxItemsPerHop {
+				break
+			}
+			itemType, ok := s.SDE.Types[candidate.TypeID]
+			if !ok || itemType == nil || itemType.Volume <= 0 {
+				continue
+			}
+			allowedUnits := capacity.canFit(itemType.Volume, candidate.BuyPrice, candidate.Units)
+			if allowedUnits <= 0 {
+				continue
+			}
+			buyCost := float64(allowedUnits) * candidate.BuyPrice
+			sellValue := float64(allowedUnits) * candidate.SellPrice
+			profit := sellValue - buyCost
+			if profit <= 0 {
+				continue
+			}
+			margin := 0.0
+			if buyCost > 0 {
+				margin = (profit / buyCost) * 100
+			}
+			items = append(items, RouteHopItem{
+				TypeName:      candidate.TypeName,
+				TypeID:        candidate.TypeID,
+				BuyPrice:      candidate.BuyPrice,
+				SellPrice:     candidate.SellPrice,
+				Units:         allowedUnits,
+				BuyCost:       buyCost,
+				SellValue:     sellValue,
+				Profit:        profit,
+				MarginPercent: margin,
+			})
+			totalProfit += profit
+			totalBuy += buyCost
+			totalSell += sellValue
+			capacity.consume(itemType.Volume, candidate.BuyPrice, allowedUnits)
+		}
+		if len(items) == 0 {
+			continue
+		}
+		primary := items[0]
+		agg := lane[0]
+		agg.Items = items
+		agg.BuyCost = totalBuy
+		agg.SellValue = totalSell
+		agg.Profit = totalProfit
+		agg.TypeID = primary.TypeID
+		agg.TypeName = primary.TypeName
+		agg.Units = primary.Units
+		agg.BuyPrice = primary.BuyPrice
+		agg.SellPrice = primary.SellPrice
+		out = append(out, agg)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Profit == out[j].Profit {
+			leftJumps := max(1, out[i].Jumps+out[i].EmptyJumps)
+			rightJumps := max(1, out[j].Jumps+out[j].EmptyJumps)
+			leftPPJ := out[i].Profit / float64(leftJumps)
+			rightPPJ := out[j].Profit / float64(rightJumps)
+			if leftPPJ == rightPPJ {
+				return out[i].TypeID < out[j].TypeID
+			}
+			return leftPPJ > rightPPJ
+		}
+		return out[i].Profit > out[j].Profit
+	})
+	return out
 }
 
 // FindRoutes finds the most profitable multi-hop trade routes using beam search.
@@ -596,13 +783,22 @@ func (s *Scanner) FindRoutes(params RouteParams, progress func(string)) ([]Route
 		type hopCandidate struct {
 			hop RouteHop
 		}
-		raw := make([]hopCandidate, 0, topN*2)
+		raw := make([]hopCandidate, 0, topN*3)
+		banned := make(map[int32]bool, len(params.BannedTypeIDs))
+		for _, typeID := range params.BannedTypeIDs {
+			if typeID > 0 {
+				banned[typeID] = true
+			}
+		}
 		for _, source := range getSourceCandidates(fromSystemID) {
 			perSourceTopN := topN
 			if source.emptyJumps > 0 {
 				perSourceTopN = max(2, topN/2)
 			}
 			for _, trade := range getTradesFromSource(source.systemID, perSourceTopN) {
+				if banned[trade.TypeID] {
+					continue
+				}
 				hop := trade
 				hop.EmptyJumps = source.emptyJumps
 				totalHopJumps := hop.Jumps + hop.EmptyJumps
@@ -618,21 +814,15 @@ func (s *Scanner) FindRoutes(params RouteParams, progress func(string)) ([]Route
 				raw = append(raw, hopCandidate{hop: hop})
 			}
 		}
-		sort.Slice(raw, func(i, j int) bool {
-			if raw[i].hop.Profit == raw[j].hop.Profit {
-				leftJumps := max(1, raw[i].hop.Jumps+raw[i].hop.EmptyJumps)
-				rightJumps := max(1, raw[j].hop.Jumps+raw[j].hop.EmptyJumps)
-				return (raw[i].hop.Profit / float64(leftJumps)) > (raw[j].hop.Profit / float64(rightJumps))
-			}
-			return raw[i].hop.Profit > raw[j].hop.Profit
-		})
-		if len(raw) > topN {
-			raw = raw[:topN]
-		}
 
-		out := make([]RouteHop, len(raw))
-		for i, c := range raw {
-			out[i] = c.hop
+		flat := make([]RouteHop, 0, len(raw))
+		for _, c := range raw {
+			flat = append(flat, c.hop)
+		}
+		flat = filterRouteCandidatesByBanlist(flat, banned)
+		out := s.aggregateRouteHopCandidates(flat, params, 4)
+		if len(out) > topN {
+			out = out[:topN]
 		}
 		return out
 	}

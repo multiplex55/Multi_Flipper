@@ -124,8 +124,11 @@ type RouteHop struct {
 	EmptyJumps      int   `json:"EmptyJumps,omitempty"` // optional deadhead jumps before this trade hop
 	DestSystemID    int32
 	DestSystemName  string
-	DestStationName string `json:"DestStationName,omitempty"`
-	DestLocationID  int64  `json:"-"`
+	DestStationName string         `json:"DestStationName,omitempty"`
+	DestLocationID  int64          `json:"-"`
+	Items           []RouteHopItem `json:"Items,omitempty"`
+	BuyCost         float64        `json:"BuyCost,omitempty"`
+	SellValue       float64        `json:"SellValue,omitempty"`
 	TypeName        string
 	TypeID          int32
 	BuyPrice        float64
@@ -133,6 +136,19 @@ type RouteHop struct {
 	Units           int32
 	Profit          float64
 	Jumps           int // jumps to destination
+}
+
+// RouteHopItem represents a single purchased item in a route hop.
+type RouteHopItem struct {
+	TypeName      string
+	TypeID        int32
+	BuyPrice      float64
+	SellPrice     float64
+	Units         int32
+	BuyCost       float64
+	SellValue     float64
+	Profit        float64
+	MarginPercent float64
 }
 
 // RouteResult represents a complete multi-hop trade route with aggregated profit.
@@ -150,8 +166,10 @@ type RouteResult struct {
 type RouteParams struct {
 	SystemName       string
 	IgnoredSystemIDs []int32
+	BannedTypeIDs    []int32
 	TargetSystemName string
 	CargoCapacity    float64
+	MaxInvestment    float64
 	MinMargin        float64
 	MinISKPerJump    float64
 	SalesTaxPercent  float64

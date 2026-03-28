@@ -3,7 +3,7 @@ import { findRoutes, setWaypointInGame } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import type { RouteResult, RouteHop, ScanParams } from "@/lib/types";
 import type { BanlistState } from "@/lib/banlist";
-import { filterBannedItems } from "@/lib/banlist";
+import { filterRouteResultsByBanlistItems, normalizeRouteHop, normalizeRouteResults } from "@/lib/routeModels";
 import { ExecutionPlannerPopup } from "./ExecutionPlannerPopup";
 import { useGlobalToast } from "./Toast";
 import { handleEveUIError } from "@/lib/handleEveUIError";
@@ -51,7 +51,7 @@ export function RouteBuilder({ params, onChange, loadedResults, isLoggedIn = fal
   // Accept externally loaded results (from history)
   useEffect(() => {
     if (loadedResults && loadedResults.length > 0) {
-      setResults(loadedResults);
+      setResults(normalizeRouteResults(loadedResults));
     }
   }, [loadedResults]);
 
@@ -152,13 +152,7 @@ export function RouteBuilder({ params, onChange, loadedResults, isLoggedIn = fal
   };
 
   const filteredResults = useMemo(() => {
-    if (!banlist || banlist.entries.length === 0) return results;
-    return results
-      .map((route) => ({
-        ...route,
-        Hops: filterBannedItems(route.Hops ?? [], banlist, (hop) => hop.TypeID),
-      }))
-      .filter((route) => (route.Hops?.length ?? 0) > 0);
+    return filterRouteResultsByBanlistItems(results, banlist);
   }, [results, banlist]);
 
   const sortedResults = useMemo(() => {
@@ -176,7 +170,7 @@ export function RouteBuilder({ params, onChange, loadedResults, isLoggedIn = fal
 
   useEffect(() => {
     if (!selectedRoute || !banlist || banlist.entries.length === 0) return;
-    const keptHops = filterBannedItems(selectedRoute.Hops ?? [], banlist, (hop) => hop.TypeID);
+    const keptHops = filterRouteResultsByBanlistItems([{ ...selectedRoute }], banlist)[0]?.Hops ?? [];
     if (keptHops.length === (selectedRoute.Hops?.length ?? 0)) return;
     setSelectedRoute(null);
     addToast(t("banlistSelectionRemoved"), "warning", 2400);
@@ -206,8 +200,9 @@ export function RouteBuilder({ params, onChange, loadedResults, isLoggedIn = fal
         route_min_hops: searchMinHops,
         route_max_hops: searchMaxHops,
       };
-      const res = await findRoutes(searchParams, searchMinHops, searchMaxHops, setProgress, controller.signal);
-      setResults(res);
+      const bannedIDs = banlist?.entries.map((entry) => entry.typeId) ?? [];
+      const res = await findRoutes(searchParams, searchMinHops, searchMaxHops, bannedIDs, setProgress, controller.signal);
+      setResults(normalizeRouteResults(res));
     } catch (e: unknown) {
       if (e instanceof Error && e.name !== "AbortError") {
         setProgress(t("errorPrefix") + e.message);
@@ -215,7 +210,7 @@ export function RouteBuilder({ params, onChange, loadedResults, isLoggedIn = fal
     } finally {
       setScanning(false);
     }
-  }, [scanning, params, minHops, maxHops, minISKPerJump, targetSystemName, allowEmptyHops, t]);
+  }, [scanning, params, minHops, maxHops, minISKPerJump, targetSystemName, allowEmptyHops, banlist, t]);
 
   const routeSummary = (route: RouteResult) =>
     route.Hops
@@ -428,6 +423,25 @@ function RouteDetailPopup({
   const { t } = useI18n();
   const { addToast } = useGlobalToast();
   const [execPlanHop, setExecPlanHop] = useState<RouteHop | null>(null);
+  const [expandedHopKeys, setExpandedHopKeys] = useState<Record<string, boolean>>({});
+  const [selectedItemsByHop, setSelectedItemsByHop] = useState<Record<string, Record<number, number>>>({});
+
+  const hopItems = useCallback((hop: RouteHop) => normalizeRouteHop(hop).Items ?? [], []);
+
+  useEffect(() => {
+    const initialExpanded: Record<string, boolean> = {};
+    const initialSelected: Record<string, Record<number, number>> = {};
+    route.Hops.forEach((hop, idx) => {
+      const key = `${idx}:${hop.SystemID}->${hop.DestSystemID}`;
+      initialExpanded[key] = idx === 0;
+      initialSelected[key] = {};
+      hopItems(hop).forEach((item) => {
+        initialSelected[key][item.TypeID] = item.Units;
+      });
+    });
+    setExpandedHopKeys(initialExpanded);
+    setSelectedItemsByHop(initialSelected);
+  }, [route, hopItems]);
 
   const handleSetWaypoint = async (systemID: number) => {
     try {
@@ -501,6 +515,24 @@ function RouteDetailPopup({
         <div className="flex-1 overflow-y-auto p-4 space-y-0">
           {route.Hops.map((hop, i) => (
             <div key={i}>
+              {(() => {
+                const key = `${i}:${hop.SystemID}->${hop.DestSystemID}`;
+                const items = hopItems(hop);
+                const selected = selectedItemsByHop[key] ?? {};
+                const selectedMetrics = items
+                  .filter((item) => (selected[item.TypeID] ?? 0) > 0)
+                  .map((item) => {
+                    const qty = Math.min(item.Units, Math.max(0, Math.floor(selected[item.TypeID] ?? 0)));
+                    const buyCost = qty * item.BuyPrice;
+                    const sellValue = qty * item.SellPrice;
+                    return { ...item, qty, buyCost, sellValue, profit: sellValue - buyCost };
+                  });
+                const subBuy = selectedMetrics.reduce((sum, item) => sum + item.buyCost, 0);
+                const subSell = selectedMetrics.reduce((sum, item) => sum + item.sellValue, 0);
+                const subProfit = selectedMetrics.reduce((sum, item) => sum + item.profit, 0);
+                const expanded = expandedHopKeys[key] ?? false;
+                return (
+                  <>
               {/* Hop card */}
               <div className="bg-eve-dark/50 border border-eve-border/50 rounded-sm p-3">
                 <div className="flex items-center gap-2 mb-2">
@@ -558,8 +590,49 @@ function RouteDetailPopup({
                     <span className="text-eve-dim">→</span>
                     <span className="font-mono text-green-400">+{formatISKFull(hop.Profit)} ISK</span>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedHopKeys((prev) => ({ ...prev, [key]: !expanded }))}
+                    className="mt-2 text-[11px] text-eve-accent hover:underline"
+                  >
+                    {expanded ? "Hide items" : "Show items"}
+                  </button>
+                  {expanded && (
+                    <div className="mt-2 border border-eve-border/50 rounded-sm p-2 space-y-1" data-testid={`hop-items-${i}`}>
+                      {items.map((item) => {
+                        const currentQty = selected[item.TypeID] ?? item.Units;
+                        return (
+                          <div key={item.TypeID} className="grid grid-cols-[1fr_auto_auto] gap-2 items-center text-[11px]">
+                            <label className="text-eve-text">{item.TypeName}</label>
+                            <input
+                              aria-label={`qty-${i}-${item.TypeID}`}
+                              type="number"
+                              min={0}
+                              max={item.Units}
+                              value={currentQty}
+                              onChange={(e) => {
+                                const value = Math.max(0, Math.min(item.Units, Math.floor(Number(e.target.value) || 0)));
+                                setSelectedItemsByHop((prev) => ({
+                                  ...prev,
+                                  [key]: { ...(prev[key] ?? {}), [item.TypeID]: value },
+                                }));
+                              }}
+                              className="w-20 px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text"
+                            />
+                            <span className="font-mono text-green-400">{formatISKFull(item.Profit)} ISK</span>
+                          </div>
+                        );
+                      })}
+                      <div className="pt-1 mt-1 border-t border-eve-border/50 text-[11px] font-mono text-eve-dim">
+                        Subtotal: buy {formatISKFull(subBuy)} / sell {formatISKFull(subSell)} / profit {formatISKFull(subProfit)}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
+                  </>
+                );
+              })()}
 
               {/* Connector */}
               {i < route.Hops.length - 1 && (

@@ -596,3 +596,74 @@ func TestRouteHelpers_CopyVisitAndKey(t *testing.T) {
 		t.Fatalf("routeKey = %q, want %q", key, "1>2:34|2>3:35")
 	}
 }
+
+func TestAggregateRouteHopCandidates_AllowsMultipleItemsPerHop(t *testing.T) {
+	s := &Scanner{SDE: &sde.Data{Types: map[int32]*sde.ItemType{
+		34: {ID: 34, Name: "Tritanium", Volume: 1},
+		35: {ID: 35, Name: "Pyerite", Volume: 1},
+	}}}
+	candidates := []RouteHop{
+		{SystemID: 1, DestSystemID: 2, TypeID: 34, TypeName: "Tritanium", BuyPrice: 10, SellPrice: 15, Units: 10, Jumps: 1},
+		{SystemID: 1, DestSystemID: 2, TypeID: 35, TypeName: "Pyerite", BuyPrice: 12, SellPrice: 18, Units: 10, Jumps: 1},
+	}
+	out := s.aggregateRouteHopCandidates(candidates, RouteParams{CargoCapacity: 1000}, 4)
+	if len(out) != 1 {
+		t.Fatalf("len(out) = %d, want 1", len(out))
+	}
+	if len(out[0].Items) < 2 {
+		t.Fatalf("len(items) = %d, want >=2", len(out[0].Items))
+	}
+}
+
+func TestAggregateRouteHopCandidates_RespectsCapacityAndBudget(t *testing.T) {
+	s := &Scanner{SDE: &sde.Data{Types: map[int32]*sde.ItemType{
+		34: {ID: 34, Name: "Tritanium", Volume: 2},
+		35: {ID: 35, Name: "Pyerite", Volume: 3},
+	}}}
+	candidates := []RouteHop{
+		{SystemID: 1, DestSystemID: 2, TypeID: 34, TypeName: "Tritanium", BuyPrice: 10, SellPrice: 13, Units: 20, Jumps: 1},
+		{SystemID: 1, DestSystemID: 2, TypeID: 35, TypeName: "Pyerite", BuyPrice: 20, SellPrice: 30, Units: 20, Jumps: 1},
+	}
+	out := s.aggregateRouteHopCandidates(candidates, RouteParams{CargoCapacity: 20, MaxInvestment: 120}, 4)
+	if len(out) != 1 {
+		t.Fatalf("len(out) = %d, want 1", len(out))
+	}
+	if len(out[0].Items) == 0 {
+		t.Fatalf("expected at least one selected item")
+	}
+	for _, item := range out[0].Items {
+		if item.BuyCost > 120 {
+			t.Fatalf("item buy cost exceeded budget: %f", item.BuyCost)
+		}
+	}
+	if out[0].BuyCost > 120.0001 {
+		t.Fatalf("total buy cost exceeded budget: %f", out[0].BuyCost)
+	}
+}
+
+func TestFilterRouteCandidatesByBanlist(t *testing.T) {
+	candidates := []RouteHop{{TypeID: 34}, {TypeID: 35}, {TypeID: 36}}
+	filtered := filterRouteCandidatesByBanlist(candidates, map[int32]bool{35: true})
+	if len(filtered) != 2 {
+		t.Fatalf("len(filtered) = %d, want 2", len(filtered))
+	}
+	for _, c := range filtered {
+		if c.TypeID == 35 {
+			t.Fatalf("banned type leaked into filtered output")
+		}
+	}
+}
+
+func TestRouteHopUnmarshalJSON_MigratesLegacySingleItem(t *testing.T) {
+	payload := []byte(`{"SystemID":1,"DestSystemID":2,"TypeID":34,"TypeName":"Tritanium","BuyPrice":10,"SellPrice":12,"Units":100,"Profit":200,"Jumps":1}`)
+	var hop RouteHop
+	if err := hop.UnmarshalJSON(payload); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(hop.Items) != 1 {
+		t.Fatalf("len(items) = %d, want 1", len(hop.Items))
+	}
+	if hop.Items[0].TypeID != 34 {
+		t.Fatalf("item type id = %d, want 34", hop.Items[0].TypeID)
+	}
+}

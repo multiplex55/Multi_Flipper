@@ -65,6 +65,7 @@ import {
   saveBanlistToStorage,
   type BanlistState,
 } from "./lib/banlist";
+import { filterRouteResultsByBanlistItems } from "./lib/routeModels";
 import logo from "./assets/logo.svg";
 
 type Tab =
@@ -310,13 +311,7 @@ function normalizeRegionalResults(raw: unknown[]): FlipResult[] {
 }
 
 function filterRouteResultsByBanlist(results: RouteResult[], banlist: BanlistState): RouteResult[] {
-  if (results.length === 0 || banlist.entries.length === 0) return results;
-  return results
-    .map((route) => ({
-      ...route,
-      Hops: filterBannedItems(route.Hops ?? [], banlist, (hop) => hop.TypeID),
-    }))
-    .filter((route) => (route.Hops?.length ?? 0) > 0);
+  return filterRouteResultsByBanlistItems(results, banlist);
 }
 
 function App() {
