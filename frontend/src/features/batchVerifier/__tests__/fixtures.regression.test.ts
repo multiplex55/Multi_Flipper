@@ -1,16 +1,24 @@
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-
 import { describe, expect, it } from "vitest";
 
 import { compareManifestToExport } from "@/features/batchVerifier/compare";
 import { parseBatchManifest, parseExportOrder, parseIskNumber } from "@/features/batchVerifier/parsing";
 
-const fixtureDir = resolve(dirname(fileURLToPath(import.meta.url)), "fixtures");
+import decimalCommaFormatVariants from "./fixtures/decimal-comma-format-variants.txt?raw";
+import exportWithTotalRow from "./fixtures/export-with-total-row.txt?raw";
+import mixedValidInvalidLines from "./fixtures/mixed-valid-invalid-lines.txt?raw";
+import normalBatchManifest from "./fixtures/normal-batch-manifest.txt?raw";
+import whitespaceVariantNamesExport from "./fixtures/whitespace-variant-names-export.txt?raw";
 
-function readFixture(name: string): string {
-  return readFileSync(resolve(fixtureDir, name), "utf8");
+const fixtures = {
+  "decimal-comma-format-variants.txt": decimalCommaFormatVariants,
+  "export-with-total-row.txt": exportWithTotalRow,
+  "mixed-valid-invalid-lines.txt": mixedValidInvalidLines,
+  "normal-batch-manifest.txt": normalBatchManifest,
+  "whitespace-variant-names-export.txt": whitespaceVariantNamesExport,
+} as const;
+
+function readFixture(name: keyof typeof fixtures): string {
+  return fixtures[name];
 }
 
 describe("batch verifier fixture regressions", () => {
