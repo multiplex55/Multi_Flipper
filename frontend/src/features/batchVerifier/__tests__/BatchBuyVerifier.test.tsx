@@ -33,6 +33,45 @@ const exportText = [
 ].join("\n");
 
 describe("BatchBuyVerifier", () => {
+  it("defaults to Sell Value Evaluate and renders mode radios in expected order", () => {
+    render(<BatchBuyVerifier />);
+
+    const sellValueEvaluateRadio = screen.getByLabelText("Sell Value Evaluate");
+    const strictRadio = screen.getByLabelText("Strict");
+    const allowSlippageRadio = screen.getByLabelText("Allow slippage");
+
+    expect(sellValueEvaluateRadio).toBeChecked();
+    expect(strictRadio).not.toBeChecked();
+    expect(allowSlippageRadio).not.toBeChecked();
+    expect(screen.getByLabelText("Slippage type")).toBeDisabled();
+    expect(screen.getByLabelText("Slippage value")).toBeDisabled();
+
+    const modeRadios = screen.getAllByRole("radio", { name: /Sell Value Evaluate|Strict|Allow slippage/i });
+    expect(modeRadios.map((radio) => radio.getAttribute("aria-label") ?? radio.parentElement?.textContent?.trim())).toEqual([
+      "Sell Value Evaluate",
+      "Strict",
+      "Allow slippage",
+    ]);
+  });
+
+  it("uses Sell Value Evaluate compare mode by default without user interaction", () => {
+    const compareSpy = vi.spyOn(compareModule, "compareManifestToExport");
+    render(<BatchBuyVerifier />);
+
+    fireEvent.change(screen.getByLabelText("Batch Buy Manifest"), { target: { value: manifestText } });
+    fireEvent.change(screen.getByLabelText("Export Order"), { target: { value: exportText } });
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
+
+    expect(compareSpy).toHaveBeenCalledTimes(1);
+    expect(compareSpy.mock.calls[0]?.[2]).toMatchObject({
+      thresholdMode: "sell_value_evaluate",
+      priceDiffAlertPercent: 10,
+      enableQuantityMismatch: true,
+      includeReview: true,
+    });
+    expect(screen.getByText("Summary (Sell Value Evaluate, quantity exact)")).toBeInTheDocument();
+  });
+
   it("passes selected control options into compare function", () => {
     const compareSpy = vi.spyOn(compareModule, "compareManifestToExport");
     render(<BatchBuyVerifier />);
@@ -137,9 +176,9 @@ describe("BatchBuyVerifier", () => {
     });
 
     const summaryPayload = writeTextMock.mock.calls[0][0] as string;
-    expect(summaryPayload).toContain("Mode: Strict, quantity exact");
-    expect(summaryPayload).toContain("Safe: 1");
-    expect(summaryPayload).toContain("Do not buy: 1");
+    expect(summaryPayload).toContain("Mode: Sell Value Evaluate, quantity exact");
+    expect(summaryPayload).toContain("Safe: 0");
+    expect(summaryPayload).toContain("Do not buy: 2");
     expect(summaryPayload).toContain("Missing from export: 1");
     expect(summaryPayload).toContain("Unexpected in export: 1");
     expect(summaryPayload).toContain("Price diff alert threshold (%): 10.00");
@@ -154,10 +193,10 @@ describe("BatchBuyVerifier", () => {
     });
 
     const doNotBuyPayload = writeTextMock.mock.calls[1][0] as string;
-    expect(doNotBuyPayload).toContain("Pyerite — Overpriced:");
+    expect(doNotBuyPayload).toContain("Pyerite — Cannot evaluate sell-value threshold: manifest sell-per is missing.");
     expect(doNotBuyPayload).toContain("Mexallon — Missing from export order.");
     expect(doNotBuyPayload).toContain("Nocxium — Unexpected item in export order.");
-    expect(doNotBuyPayload).not.toContain("Tritanium");
+    expect(doNotBuyPayload).toContain("Tritanium — Cannot evaluate sell-value threshold: manifest sell-per is missing.");
   });
 
   it("shows parse errors without crashing", () => {
@@ -186,6 +225,7 @@ describe("BatchBuyVerifier", () => {
     fireEvent.change(screen.getByLabelText("Batch Buy Manifest"), { target: { value: strictManifest } });
     fireEvent.change(screen.getByLabelText("Export Order"), { target: { value: strictExport } });
 
+    fireEvent.click(screen.getByLabelText("Strict"));
     fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
     expect(screen.getByRole("heading", { name: "Do not buy these" })).toBeInTheDocument();
     expect(screen.getByText("Tritanium")).toBeInTheDocument();
@@ -208,6 +248,7 @@ describe("BatchBuyVerifier", () => {
 
     fireEvent.change(screen.getByLabelText("Batch Buy Manifest"), { target: { value: quantityManifest } });
     fireEvent.change(screen.getByLabelText("Export Order"), { target: { value: quantityExport } });
+    fireEvent.click(screen.getByLabelText("Strict"));
     fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
     expect(screen.getByRole("heading", { name: "Do not buy these" }).closest("section")).toHaveTextContent("Tritanium");
 
@@ -304,6 +345,7 @@ describe("BatchBuyVerifier", () => {
 
     fireEvent.change(screen.getByLabelText("Batch Buy Manifest"), { target: { value: manifestText } });
     fireEvent.change(screen.getByLabelText("Export Order"), { target: { value: exportText } });
+    fireEvent.click(screen.getByLabelText("Strict"));
     fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
 
     const evaluationSummary = screen.getByTestId("evaluation-summary-section");
