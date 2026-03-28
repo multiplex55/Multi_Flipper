@@ -158,7 +158,7 @@ export function BatchBuyVerifier({ initialManifestText }: BatchBuyVerifierProps)
   const [exportText, setExportText] = useState("");
   const [result, setResult] = useState<EvaluationResult | null>(null);
   const [copyStatus, setCopyStatus] = useState<string>("");
-  const [toleranceMode, setToleranceMode] = useState<ToleranceMode>("strict");
+  const [toleranceMode, setToleranceMode] = useState<ToleranceMode>("sell_value_evaluate");
   const [slippageType, setSlippageType] = useState<SlippageType>("isk");
   const [slippageValueInput, setSlippageValueInput] = useState<string>("0");
   const [priceDiffAlertPercentInput, setPriceDiffAlertPercentInput] = useState<string>("10");
@@ -342,6 +342,15 @@ export function BatchBuyVerifier({ initialManifestText }: BatchBuyVerifierProps)
             <input
               type="radio"
               name="toleranceMode"
+              checked={toleranceMode === "sell_value_evaluate"}
+              onChange={() => setToleranceMode("sell_value_evaluate")}
+            />{" "}
+            Sell Value Evaluate
+          </label>
+          <label className="text-eve-dim">
+            <input
+              type="radio"
+              name="toleranceMode"
               checked={toleranceMode === "strict"}
               onChange={() => setToleranceMode("strict")}
             />{" "}
@@ -355,15 +364,6 @@ export function BatchBuyVerifier({ initialManifestText }: BatchBuyVerifierProps)
               onChange={() => setToleranceMode("allow_slippage")}
             />{" "}
             Allow slippage
-          </label>
-          <label className="text-eve-dim">
-            <input
-              type="radio"
-              name="toleranceMode"
-              checked={toleranceMode === "sell_value_evaluate"}
-              onChange={() => setToleranceMode("sell_value_evaluate")}
-            />{" "}
-            Sell Value Evaluate
           </label>
         </div>
 
