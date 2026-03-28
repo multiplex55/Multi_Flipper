@@ -226,6 +226,40 @@ function formatStationLine(line: OrderedRouteManifest["stations"][number]["lines
   return `${line.type_name} | qty ${formatQuantity(line.units)} | buy total ${formatInteger(line.buy_total_isk)} ISK | buy per ${formatInteger(line.buy_per_isk)} ISK | sell total ${formatInteger(line.sell_total_isk)} ISK | sell per ${formatInteger(line.sell_per_isk)} ISK | vol ${formatVolume(line.volume_m3)} m3 | profit ${formatInteger(line.profit_isk)} ISK`;
 }
 
+/**
+ * Formatting policy for ordered route manifests:
+ * - "en-US" locale is used for all grouped numbers to keep separators deterministic.
+ * - ISK values are rounded to nearest integer via Math.round.
+ * - Quantities are truncated toward zero (no fractional units).
+ * - Volumes are fixed to 0-1 decimal places.
+ */
+const ROUTE_SUMMARY_FORMAT_ORDER = [
+  "Cargo m3",
+  "Stations",
+  "Items",
+  "Total volume",
+  "Total capital",
+  "Total gross sell",
+  "Total profit",
+  "Total isk/jump",
+] as const;
+
+const HOP_FORMAT_ORDER = [
+  "Buy Station",
+  "Jumps to Buy Station",
+  "Sell Station",
+  "Jumps Buy -> Sell",
+  "Cargo m3",
+  "Items",
+  "Total volume",
+  "Total capital",
+  "Total gross sell",
+  "Total profit",
+  "Total isk/jump",
+] as const;
+
+const HOP_SEPARATOR = "------------------------";
+
 export function formatOrderedRouteManifestText(input: {
   originLabel?: string;
   metadataHeader?: RouteMetadataHeaderInput;
@@ -246,31 +280,41 @@ export function formatOrderedRouteManifestText(input: {
     const summary = input.manifest.summary;
     const sellStation = resolveSellStation();
     if (sellStation) output.push(`Sell Station: ${sellStation}`);
-    output.push(`Cargo m3: ${formatVolume(summary.total_volume_m3)} m3`);
-    output.push(`Stations: ${formatQuantity(summary.station_count)}`);
-    output.push(`Items: ${formatQuantity(summary.item_count)}`);
-    output.push(`Total volume: ${formatVolume(summary.total_volume_m3)} m3`);
-    output.push(`Total capital: ${formatInteger(summary.total_buy_isk)} ISK`);
-    output.push(`Total gross sell: ${formatInteger(summary.total_sell_isk)} ISK`);
-    output.push(`Total profit: ${formatInteger(summary.total_profit_isk)} ISK`);
-    output.push(`Total isk/jump: ${formatOptionalInteger(summary.isk_per_jump)} ISK`);
+    const summaryLinesByKey: Record<(typeof ROUTE_SUMMARY_FORMAT_ORDER)[number], string> = {
+      "Cargo m3": `Cargo m3: ${formatVolume(summary.total_volume_m3)} m3`,
+      Stations: `Stations: ${formatQuantity(summary.station_count)}`,
+      Items: `Items: ${formatQuantity(summary.item_count)}`,
+      "Total volume": `Total volume: ${formatVolume(summary.total_volume_m3)} m3`,
+      "Total capital": `Total capital: ${formatInteger(summary.total_buy_isk)} ISK`,
+      "Total gross sell": `Total gross sell: ${formatInteger(summary.total_sell_isk)} ISK`,
+      "Total profit": `Total profit: ${formatInteger(summary.total_profit_isk)} ISK`,
+      "Total isk/jump": `Total isk/jump: ${formatOptionalInteger(summary.isk_per_jump)} ISK`,
+    };
+    output.push(...ROUTE_SUMMARY_FORMAT_ORDER.map((key) => summaryLinesByKey[key]));
   }
-  for (const [index, station] of input.manifest.stations.entries()) {
+
+  // Keep hop order stable by preserving the input sequence explicitly.
+  const stationsInOutputOrder = input.manifest.stations.map((station) => station);
+  for (const [index, station] of stationsInOutputOrder.entries()) {
     if (output.length > 0) output.push("");
-    if (index > 0) output.push("------------------------");
-    output.push(`Buy Station: ${station.buy_station_name}`);
-    output.push(`Jumps to Buy Station: ${formatOptionalQuantity(station.jumps_to_buy_station)}`);
-    output.push(`Sell Station: ${station.sell_station_name ?? resolveSellStation() ?? "Unknown Station"}`);
-    output.push(`Jumps Buy -> Sell: ${formatOptionalQuantity(station.jumps_buy_to_sell)}`);
-    output.push(
-      `Cargo m3: ${formatVolume(station.cargo_m3 ?? input.manifest.summary?.total_volume_m3 ?? 0)} m3`,
-    );
-    output.push(`Items: ${formatQuantity(station.item_count)}`);
-    output.push(`Total volume: ${formatVolume(station.total_volume_m3)} m3`);
-    output.push(`Total capital: ${formatInteger(station.total_buy_isk)} ISK`);
-    output.push(`Total gross sell: ${formatInteger(station.total_sell_isk)} ISK`);
-    output.push(`Total profit: ${formatInteger(station.total_profit_isk)} ISK`);
-    output.push(`Total isk/jump: ${formatOptionalInteger(station.isk_per_jump)} ISK`);
+    if (index > 0) output.push(HOP_SEPARATOR);
+
+    const hopLinesByKey: Record<(typeof HOP_FORMAT_ORDER)[number], string> = {
+      "Buy Station": `Buy Station: ${station.buy_station_name}`,
+      "Jumps to Buy Station": `Jumps to Buy Station: ${formatOptionalQuantity(station.jumps_to_buy_station)}`,
+      "Sell Station": `Sell Station: ${station.sell_station_name ?? resolveSellStation() ?? "Unknown Station"}`,
+      "Jumps Buy -> Sell": `Jumps Buy -> Sell: ${formatOptionalQuantity(station.jumps_buy_to_sell)}`,
+      "Cargo m3": `Cargo m3: ${formatVolume(station.cargo_m3 ?? input.manifest.summary?.total_volume_m3 ?? 0)} m3`,
+      Items: `Items: ${formatQuantity(station.item_count)}`,
+      "Total volume": `Total volume: ${formatVolume(station.total_volume_m3)} m3`,
+      "Total capital": `Total capital: ${formatInteger(station.total_buy_isk)} ISK`,
+      "Total gross sell": `Total gross sell: ${formatInteger(station.total_sell_isk)} ISK`,
+      "Total profit": `Total profit: ${formatInteger(station.total_profit_isk)} ISK`,
+      "Total isk/jump": `Total isk/jump: ${formatOptionalInteger(station.isk_per_jump)} ISK`,
+    };
+    output.push(...HOP_FORMAT_ORDER.map((key) => hopLinesByKey[key]));
+
+    if (station.lines.length > 0) output.push("");
     for (const line of station.lines) output.push(formatStationLine(line));
     if (station.lines.length > 0) {
       output.push("");
