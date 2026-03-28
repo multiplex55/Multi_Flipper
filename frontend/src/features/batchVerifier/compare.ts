@@ -145,10 +145,7 @@ export function classifyRow(
     buyTotalDelta,
     allowedBuyPer,
     extraIskVsPlan: buyTotalDelta,
-    estimatedProfitLost:
-      state === "do_not_buy" || state === "missing_from_export"
-        ? Math.max(0, estimatedProfitForManifestItem(safeManifest))
-        : 0,
+    estimatedProfitLost: state === "do_not_buy" ? Math.max(0, estimatedProfitForManifestItem(safeManifest)) : 0,
   };
 
   return { ...row, reason: buildReasonText(row) };
