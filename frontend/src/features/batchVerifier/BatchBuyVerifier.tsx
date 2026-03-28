@@ -1,5 +1,5 @@
 import { type CSSProperties, useMemo, useState } from "react";
-import { compareManifestToExport, type ComparisonRow } from "@/features/batchVerifier/compare";
+import { compareManifestToExport, type ComparisonRow, type ComparisonOptions } from "@/features/batchVerifier/compare";
 import {
   parseBatchManifest,
   parseExportOrder,
@@ -12,7 +12,12 @@ type EvaluationResult = {
   missing: ComparisonRow[];
   unexpected: ComparisonRow[];
   diagnostics: ParseDiagnostic[];
+  modeLabel: string;
 };
+
+type ToleranceMode = "strict" | "allow_slippage";
+type SlippageType = "isk" | "percent";
+type QuantityHandling = "ignore_mismatch" | "require_exact";
 
 const statusStyles: Record<string, CSSProperties> = {
   safe: { backgroundColor: "#ecfdf3", color: "#166534" },
@@ -37,6 +42,7 @@ function decisionForRow(state: ComparisonRow["state"]): string {
 
 function buildSummaryText(result: EvaluationResult): string {
   const lines = [
+    `Mode: ${result.modeLabel}`,
     `Buy these: ${result.buyThese.length}`,
     `Do not buy these: ${result.doNotBuyThese.length}`,
     `Missing / unavailable: ${result.missing.length}`,
@@ -135,16 +141,69 @@ export function BatchBuyVerifier() {
   const [exportText, setExportText] = useState("");
   const [result, setResult] = useState<EvaluationResult | null>(null);
   const [copyStatus, setCopyStatus] = useState<string>("");
+  const [toleranceMode, setToleranceMode] = useState<ToleranceMode>("strict");
+  const [slippageType, setSlippageType] = useState<SlippageType>("isk");
+  const [slippageValueInput, setSlippageValueInput] = useState<string>("0");
+  const [quantityHandling, setQuantityHandling] = useState<QuantityHandling>("require_exact");
 
   const hasInput = manifestText.trim().length > 0 || exportText.trim().length > 0;
 
   const summaryText = useMemo(() => (result ? buildSummaryText(result) : ""), [result]);
   const doNotBuyText = useMemo(() => (result ? buildDoNotBuyText(result) : ""), [result]);
 
+  const slippageValue = useMemo(() => {
+    if (slippageValueInput.trim() === "") return Number.NaN;
+    return Number(slippageValueInput);
+  }, [slippageValueInput]);
+
+  const slippageValidationMessage = useMemo(() => {
+    if (toleranceMode === "strict") return "";
+    if (!Number.isFinite(slippageValue)) return "Slippage value must be a valid number.";
+    if (slippageValue < 0) return "Slippage value must be non-negative.";
+    if (slippageType === "percent" && slippageValue > 100) return "Percent slippage must be between 0 and 100.";
+    return "";
+  }, [slippageType, slippageValue, toleranceMode]);
+
+  const optionsForCompare = useMemo<ComparisonOptions>(() => {
+    const base: ComparisonOptions = {
+      includeReview: true,
+      enableQuantityMismatch: quantityHandling === "require_exact",
+    };
+
+    if (toleranceMode === "strict") {
+      return {
+        ...base,
+        thresholdMode: "strict",
+      };
+    }
+
+    if (slippageType === "isk") {
+      return {
+        ...base,
+        thresholdMode: "isk_tolerance",
+        iskTolerance: Number.isFinite(slippageValue) ? slippageValue : 0,
+      };
+    }
+
+    return {
+      ...base,
+      thresholdMode: "percent_tolerance",
+      percentTolerance: Number.isFinite(slippageValue) ? slippageValue : 0,
+    };
+  }, [quantityHandling, slippageType, slippageValue, toleranceMode]);
+
+  const modeSummaryLabel = useMemo(() => {
+    const quantityLabel = quantityHandling === "require_exact" ? "quantity exact" : "ignore quantity mismatch";
+    if (toleranceMode === "strict") return `Strict, ${quantityLabel}`;
+    const toleranceLabel = slippageType === "isk" ? `${slippageValueInput} ISK` : `${slippageValueInput}%`;
+    return `Allow slippage (${toleranceLabel}), ${quantityLabel}`;
+  }, [quantityHandling, slippageType, slippageValueInput, toleranceMode]);
+
   const handleEvaluate = () => {
+    if (slippageValidationMessage) return;
     const manifestParsed = parseBatchManifest(manifestText);
     const exportParsed = parseExportOrder(exportText);
-    const comparison = compareManifestToExport(manifestParsed.items, exportParsed.items, { includeReview: true });
+    const comparison = compareManifestToExport(manifestParsed.items, exportParsed.items, optionsForCompare);
 
     setResult({
       buyThese: comparison.buyThese,
@@ -152,6 +211,7 @@ export function BatchBuyVerifier() {
       missing: comparison.missing,
       unexpected: comparison.unexpected,
       diagnostics: [...manifestParsed.errors, ...exportParsed.errors],
+      modeLabel: modeSummaryLabel,
     });
     setCopyStatus("");
   };
@@ -200,7 +260,7 @@ export function BatchBuyVerifier() {
       </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button type="button" onClick={handleEvaluate}>
+        <button type="button" onClick={handleEvaluate} disabled={Boolean(slippageValidationMessage)}>
           Evaluate
         </button>
         <button type="button" onClick={handleClear}>
@@ -214,12 +274,85 @@ export function BatchBuyVerifier() {
         </button>
       </div>
 
+      <section
+        aria-label="Verifier controls"
+        style={{ display: "grid", gap: 12, border: "1px solid #d1d5db", borderRadius: 8, padding: 12 }}
+      >
+        <div style={{ display: "grid", gap: 6 }}>
+          <span>Mode</span>
+          <label>
+            <input
+              type="radio"
+              name="toleranceMode"
+              checked={toleranceMode === "strict"}
+              onChange={() => setToleranceMode("strict")}
+            />{" "}
+            Strict
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="toleranceMode"
+              checked={toleranceMode === "allow_slippage"}
+              onChange={() => setToleranceMode("allow_slippage")}
+            />{" "}
+            Allow slippage
+          </label>
+        </div>
+
+        <label style={{ display: "grid", gap: 6, maxWidth: 240 }}>
+          <span>Slippage type</span>
+          <select
+            aria-label="Slippage type"
+            value={slippageType}
+            disabled={toleranceMode === "strict"}
+            onChange={(event) => setSlippageType(event.target.value as SlippageType)}
+          >
+            <option value="isk">ISK</option>
+            <option value="percent">%</option>
+          </select>
+        </label>
+
+        <label style={{ display: "grid", gap: 6, maxWidth: 240 }}>
+          <span>Slippage value</span>
+          <input
+            aria-label="Slippage value"
+            type="text"
+            inputMode="decimal"
+            value={slippageValueInput}
+            disabled={toleranceMode === "strict"}
+            onChange={(event) => setSlippageValueInput(event.target.value)}
+          />
+        </label>
+
+        <label style={{ display: "grid", gap: 6, maxWidth: 280 }}>
+          <span>Quantity handling</span>
+          <select
+            aria-label="Quantity handling"
+            value={quantityHandling}
+            onChange={(event) => setQuantityHandling(event.target.value as QuantityHandling)}
+          >
+            <option value="ignore_mismatch">Ignore mismatch</option>
+            <option value="require_exact">Require exact</option>
+          </select>
+        </label>
+
+        {slippageValidationMessage ? (
+          <p role="alert" style={{ margin: 0, color: "#b91c1c" }}>
+            {slippageValidationMessage}
+          </p>
+        ) : null}
+      </section>
+
       {copyStatus ? <p role="status">{copyStatus}</p> : null}
 
       {!result && !hasInput ? <p>Paste manifest and export data, then click Evaluate.</p> : null}
 
       {result ? (
         <div style={{ display: "grid", gap: 12 }}>
+          <section aria-label="Evaluation summary" style={{ border: "1px solid #d1d5db", borderRadius: 8, padding: 12 }}>
+            <h3 style={{ margin: 0 }}>Summary ({result.modeLabel})</h3>
+          </section>
           <ParseDiagnostics diagnostics={result.diagnostics} />
           <ResultSection title="Buy these" rows={result.buyThese} />
           <ResultSection title="Do not buy these" rows={result.doNotBuyThese} />
