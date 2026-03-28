@@ -669,6 +669,7 @@ export const ru = {
     batchBuilderNoCandidates:
       "Нет прибыльных кандидатов по этому маршруту в текущих результатах.",
     batchBuilderCopyManifest: "Копировать манифест",
+    batchBuilderOpenPriceValidation: "Открыть валидацию цен",
     batchBuilderBatchCreateRoute: "Пакетно построить маршрут",
     batchBuilderCopyMergedManifest: "Копировать merged манифест",
     batchBuilderCopied: "Манифест батча скопирован",

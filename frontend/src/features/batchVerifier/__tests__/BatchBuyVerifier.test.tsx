@@ -72,6 +72,23 @@ describe("BatchBuyVerifier", () => {
     expect(screen.getByRole("button", { name: "Copy Do Not Buy List" })).toBeInTheDocument();
   });
 
+  it("hydrates manifest from initialManifestText and keeps Export Order empty", () => {
+    render(<BatchBuyVerifier initialManifestText="Tritanium 10" />);
+
+    expect(screen.getByLabelText("Batch Buy Manifest")).toHaveValue("Tritanium 10");
+    expect(screen.getByLabelText("Export Order")).toHaveValue("");
+  });
+
+  it("updates hydrated manifest when initialManifestText changes", () => {
+    const { rerender } = render(<BatchBuyVerifier initialManifestText="Tritanium 10" />);
+    fireEvent.change(screen.getByLabelText("Export Order"), { target: { value: "export row" } });
+
+    rerender(<BatchBuyVerifier initialManifestText="Pyerite 5" />);
+
+    expect(screen.getByLabelText("Batch Buy Manifest")).toHaveValue("Pyerite 5");
+    expect(screen.getByLabelText("Export Order")).toHaveValue("");
+  });
+
   it("Evaluate triggers parser+compare pipeline and displays grouped sections", () => {
     render(<BatchBuyVerifier />);
 
