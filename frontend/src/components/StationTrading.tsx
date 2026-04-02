@@ -1697,7 +1697,9 @@ export function StationTrading({
     col: (typeof columnDefs)[number],
     row: StationTrade,
   ): string => {
-    const val = row[col.key];
+    const val = col.key === "OpportunityScore"
+      ? scoreStationTrade(row).finalScore
+      : row[col.key as keyof StationTrade];
     if (
       col.key === "BuyPrice" ||
       col.key === "SellPrice" ||

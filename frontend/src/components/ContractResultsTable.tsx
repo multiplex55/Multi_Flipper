@@ -290,7 +290,11 @@ export function ContractResultsTable({
       for (const col of columnDefs) {
         const fval = filters[col.key];
         if (!fval) continue;
-        const cellVal = col.key === "Title" ? effectiveTitle(row) : row[col.key];
+        const cellVal = col.numeric
+          ? numericCellValue(row, col.key)
+          : col.key === "Title"
+            ? effectiveTitle(row)
+            : row[col.key as keyof ContractResult];
         if (col.numeric) {
           // Support filters: "100-500" (range), ">100", ">=100", "<500", "<=500", "=100" (exact), or plain number (>= threshold)
           const num = numericCellValue(row, col.key);
@@ -507,7 +511,11 @@ export function ContractResultsTable({
   const hasActiveFilters = Object.values(filters).some((v) => !!v);
 
   const formatCell = (col: (typeof columnDefs)[number], row: ContractResult): string => {
-    const val = col.key === "Title" ? effectiveTitle(row) : row[col.key];
+    const val = col.key === "OpportunityScore"
+      ? scoreContractResult(row).finalScore
+      : col.key === "Title"
+        ? effectiveTitle(row)
+        : row[col.key as keyof ContractResult];
     if (val == null || val === "") return "\u2014";
     if (
       col.key === "Price" ||
@@ -534,7 +542,7 @@ export function ContractResultsTable({
           ? numericCellValue(row, col.key)
           : col.key === "Title"
             ? effectiveTitle(row)
-            : row[col.key];
+            : row[col.key as keyof ContractResult];
         const str = String(val);
         return str.includes(",") ? `"${str}"` : str;
       }).join(",")
