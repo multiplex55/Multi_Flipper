@@ -111,7 +111,7 @@ describe("opportunityScore", () => {
       makeContract({ ExpectedProfit: 210_000_000, SellConfidence: 0.8, EstLiquidationDays: 6 }),
     );
 
-    expect(flip.finalScore).toBeCloseTo(75.5077, 4);
+    expect(flip.finalScore).toBeCloseTo(77.0077, 4);
     expect(station.finalScore).toBeCloseTo(71.5852, 4);
     expect(contract.finalScore).toBeCloseTo(64.9465, 4);
   });

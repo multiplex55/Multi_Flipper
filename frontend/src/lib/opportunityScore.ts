@@ -189,7 +189,12 @@ function computeFromMetrics(metrics: FactorMetricSet, profile?: OpportunityWeigh
 
 export function flipResultMetrics(row: FlipResult): FactorMetricSet {
   const profit = row.ExpectedProfit ?? row.RealProfit ?? row.TotalProfit ?? row.DailyProfit ?? null;
-  const risk = row.IsHighRiskFlag ? 0.85 : Math.min(1, Math.max(0, (row.BuyCompetitors + row.SellCompetitors) / 20));
+  const competitorRisk = Math.min(1, Math.max(0, (row.BuyCompetitors + row.SellCompetitors) / 20));
+  const slippageRisk = Math.min(
+    1,
+    Math.max(0, ((row.SlippageBuyPct ?? 0) + (row.SlippageSellPct ?? 0)) / 30),
+  );
+  const risk = clamp(competitorRisk * 0.7 + slippageRisk * 0.3, 0, 1);
   const velocity = row.DayTargetDemandPerDay ?? row.S2BPerDay ?? row.BfSPerDay ?? row.DailyVolume ?? row.Velocity ?? null;
   const jumps = row.TotalJumps ?? (((row.BuyJumps ?? 0) + (row.SellJumps ?? 0)) || null);
   const units = row.UnitsToBuy ?? 0;
