@@ -7,10 +7,12 @@ import { PresetPicker } from "./PresetPicker";
 import { SystemBlacklistButton } from "./SystemBlacklistButton";
 import { getPresetsForTab } from "@/lib/presets";
 import { getStations, getStructures, getCharacterInfo } from "@/lib/api";
-import type { ScanParams, StationInfo } from "@/lib/types";
+import type { ScanParams, StationInfo, StrategyScoreConfig } from "@/lib/types";
+import { ScoringProfileEditor } from "./ScoringProfileEditor";
+import { DEFAULT_STRATEGY_SCORE } from "@/lib/scoringPresets";
 
 // EVE skill IDs for trade fee calculation
-const SKILL_ACCOUNTING = 16622;      // Accounting: reduces sales tax by 11% per level
+const SKILL_ACCOUNTING = 16622; // Accounting: reduces sales tax by 11% per level
 const SKILL_BROKER_RELATIONS = 3446; // Broker Relations: reduces broker fee by 0.3% per level (NPC stations)
 
 type TabForParams = "radius" | "region" | "contracts" | "route";
@@ -20,6 +22,8 @@ interface Props {
   onChange: (params: ScanParams) => void;
   isLoggedIn?: boolean;
   tab?: TabForParams;
+  strategyScore?: StrategyScoreConfig;
+  onStrategyScoreChange?: (value: StrategyScoreConfig) => void;
 }
 
 const HELP_STEPS: Record<TabForParams, { steps: string[]; wiki: string }> = {
@@ -51,16 +55,20 @@ const PERSIST_KEY = "eve-settings-expanded:params";
 // EVE Online item categories for the regional day trader category filter.
 // IDs are stable SDE constants. Labels are intentionally concise for chip display.
 const EVE_CATEGORIES: { id: number; label: string; hint: string }[] = [
-  { id: 6,  label: "Ships",       hint: "Ships (frigates, cruisers, capitals…)" },
-  { id: 7,  label: "Modules",     hint: "Ship modules (armor, shield, propulsion…)" },
-  { id: 8,  label: "Charges",     hint: "Ammunition and charges" },
-  { id: 18, label: "Drones",      hint: "Combat, mining and utility drones" },
-  { id: 20, label: "Implants",    hint: "Implants and boosters" },
-  { id: 9,  label: "Blueprints",  hint: "Blueprints (originals and copies)" },
-  { id: 32, label: "Subsystems",  hint: "T3 strategic cruiser subsystems" },
+  { id: 6, label: "Ships", hint: "Ships (frigates, cruisers, capitals…)" },
+  {
+    id: 7,
+    label: "Modules",
+    hint: "Ship modules (armor, shield, propulsion…)",
+  },
+  { id: 8, label: "Charges", hint: "Ammunition and charges" },
+  { id: 18, label: "Drones", hint: "Combat, mining and utility drones" },
+  { id: 20, label: "Implants", hint: "Implants and boosters" },
+  { id: 9, label: "Blueprints", hint: "Blueprints (originals and copies)" },
+  { id: 32, label: "Subsystems", hint: "T3 strategic cruiser subsystems" },
   { id: 35, label: "Deployables", hint: "Deployable structures and cans" },
-  { id: 43, label: "PI",          hint: "Planetary industry commodities" },
-  { id: 65, label: "Structures",  hint: "Upwell structures and components" },
+  { id: 43, label: "PI", hint: "Planetary industry commodities" },
+  { id: 65, label: "Structures", hint: "Upwell structures and components" },
 ];
 
 const sectionClass =
@@ -97,6 +105,8 @@ export function ParametersPanel({
   onChange,
   isLoggedIn = false,
   tab = "radius",
+  strategyScore,
+  onStrategyScoreChange,
 }: Props) {
   const { t } = useI18n();
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -145,8 +155,7 @@ export function ParametersPanel({
     (isFlowTab
       ? Number((params.min_daily_volume ?? 0) > 0) +
         Number(
-          tab === "region" &&
-            (params.shipping_cost_per_m3_jump ?? 0) > 0,
+          tab === "region" && (params.shipping_cost_per_m3_jump ?? 0) > 0,
         ) +
         Number((params.max_investment ?? 0) > 0) +
         Number((params.min_s2b_per_day ?? 0) > 0) +
@@ -158,7 +167,9 @@ export function ParametersPanel({
         Number(tab === "region" && (params.min_demand_per_day ?? 0) > 0) +
         Number(tab === "region" && (params.category_ids ?? []).length > 0)
       : 0) +
-    Number(tab === "radius" && (params.restrict_to_target_market ?? true) === false);
+    Number(
+      tab === "radius" && (params.restrict_to_target_market ?? true) === false,
+    );
 
   const toggleExpanded = () => {
     setExpanded((prev) => {
@@ -212,8 +223,12 @@ export function ParametersPanel({
     try {
       const info = await getCharacterInfo();
       const skills = info.skills?.skills ?? [];
-      const accounting = skills.find((s) => s.skill_id === SKILL_ACCOUNTING)?.active_skill_level ?? 0;
-      const brokerRel = skills.find((s) => s.skill_id === SKILL_BROKER_RELATIONS)?.active_skill_level ?? 0;
+      const accounting =
+        skills.find((s) => s.skill_id === SKILL_ACCOUNTING)
+          ?.active_skill_level ?? 0;
+      const brokerRel =
+        skills.find((s) => s.skill_id === SKILL_BROKER_RELATIONS)
+          ?.active_skill_level ?? 0;
 
       // Accounting: base sales tax 8%, each level reduces by 11% of base (not of current)
       // Formula: tax = 8% * (1 - 0.11 * level)
@@ -229,7 +244,9 @@ export function ParametersPanel({
         buy_broker_fee_percent: brokerFee,
         sell_broker_fee_percent: brokerFee,
       });
-      setEsiSkillsMsg(`✓ Accounting L${accounting} → tax ${salesTax}%  ·  Broker L${brokerRel} → fee ${brokerFee}%`);
+      setEsiSkillsMsg(
+        `✓ Accounting L${accounting} → tax ${salesTax}%  ·  Broker L${brokerRel} → fee ${brokerFee}%`,
+      );
     } catch {
       setEsiSkillsMsg("✗ ESI error — check character login");
     } finally {
@@ -374,12 +391,7 @@ export function ParametersPanel({
         : [...targetStations];
     merged.sort((a, b) => a.name.localeCompare(b.name));
     return merged;
-  }, [
-    includeStructures,
-    isLoggedIn,
-    targetStations,
-    targetStructureStations,
-  ]);
+  }, [includeStructures, isLoggedIn, targetStations, targetStructureStations]);
 
   useEffect(() => {
     if (tab !== "region") return;
@@ -432,6 +444,14 @@ export function ParametersPanel({
 
       {expanded && (
         <div className="p-3 space-y-2">
+          <ScoringProfileEditor
+            value={strategyScore ?? DEFAULT_STRATEGY_SCORE}
+            onChange={(next) => onStrategyScoreChange?.(next)}
+            disabled={!onStrategyScoreChange}
+            compact
+            persistKey={`score-${tab}`}
+          />
+
           {tab === "region" ? (
             /* ══ REGION TAB: compact 3-card layout ══ */
             <>
@@ -441,15 +461,24 @@ export function ParametersPanel({
                   <span className="text-eve-accent">⌁</span> Route
                 </div>
                 <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2">
-                  <Field label={t("sourceRegions")} hint={t("sourceRegionsHint")}>
+                  <Field
+                    label={t("sourceRegions")}
+                    hint={t("sourceRegionsHint")}
+                  >
                     <select
                       value={sourceRegionMode}
-                      onChange={(e) => setSourceRegionMode(e.target.value as SourceRegionMode)}
+                      onChange={(e) =>
+                        setSourceRegionMode(e.target.value as SourceRegionMode)
+                      }
                       className={inputClass}
                     >
-                      <option value="major_hubs">{t("sourceRegionsMajorHubs")}</option>
+                      <option value="major_hubs">
+                        {t("sourceRegionsMajorHubs")}
+                      </option>
                       <option value="radius">{t("sourceRegionsRadius")}</option>
-                      <option value="single_region">{t("sourceRegionsSingle")}</option>
+                      <option value="single_region">
+                        {t("sourceRegionsSingle")}
+                      </option>
                     </select>
                   </Field>
                   {sourceRegionMode === "radius" && (
@@ -465,7 +494,10 @@ export function ParametersPanel({
                     </Field>
                   )}
                   {sourceRegionMode === "single_region" && (
-                    <Field label={t("sourceRegionSingle")} hint={t("sourceRegionSingleHint")}>
+                    <Field
+                      label={t("sourceRegionSingle")}
+                      hint={t("sourceRegionSingleHint")}
+                    >
                       <RegionAutocomplete
                         value={singleSourceRegion}
                         onChange={setSingleSourceRegion}
@@ -473,15 +505,28 @@ export function ParametersPanel({
                       />
                     </Field>
                   )}
-                  <Field label={t("targetMarketplaceSystem")} hint={t("targetMarketplaceSystemHint")}>
+                  <Field
+                    label={t("targetMarketplaceSystem")}
+                    hint={t("targetMarketplaceSystemHint")}
+                  >
                     <SystemAutocomplete
                       value={params.target_market_system ?? ""}
-                      onChange={(v) => onChange({ ...params, target_market_system: v, target_market_location_id: 0 })}
+                      onChange={(v) =>
+                        onChange({
+                          ...params,
+                          target_market_system: v,
+                          target_market_location_id: 0,
+                        })
+                      }
                       showLocationButton={false}
                       isLoggedIn={isLoggedIn}
                       includeStructures={params.include_structures}
                       onIncludeStructuresChange={(v) =>
-                        onChange({ ...params, include_structures: v, target_market_location_id: 0 })
+                        onChange({
+                          ...params,
+                          include_structures: v,
+                          target_market_location_id: 0,
+                        })
                       }
                       extraActionSlots={1}
                       extraAction={
@@ -493,32 +538,53 @@ export function ParametersPanel({
                       }
                     />
                   </Field>
-                  <Field label={t("targetMarketplaceLocation")} hint={t("targetMarketplaceLocationHint")}>
+                  <Field
+                    label={t("targetMarketplaceLocation")}
+                    hint={t("targetMarketplaceLocationHint")}
+                  >
                     {!targetMarketSystem ? (
-                      <div className="h-[34px] flex items-center text-xs text-eve-dim">{t("selectTargetMarketplaceSystemFirst")}</div>
+                      <div className="h-[34px] flex items-center text-xs text-eve-dim">
+                        {t("selectTargetMarketplaceSystemFirst")}
+                      </div>
                     ) : loadingTargetStations || loadingTargetStructures ? (
-                      <div className="h-[34px] flex items-center text-xs text-eve-dim">{t("loadingDestinations")}</div>
+                      <div className="h-[34px] flex items-center text-xs text-eve-dim">
+                        {t("loadingDestinations")}
+                      </div>
                     ) : targetMarketplaceStations.length === 0 ? (
-                      <div className="h-[34px] flex items-center text-xs text-eve-dim">{t("noDestinationsFound")}</div>
+                      <div className="h-[34px] flex items-center text-xs text-eve-dim">
+                        {t("noDestinationsFound")}
+                      </div>
                     ) : (
                       <select
                         value={String(params.target_market_location_id ?? 0)}
-                        onChange={(e) => set("target_market_location_id", Number(e.target.value) || 0)}
+                        onChange={(e) =>
+                          set(
+                            "target_market_location_id",
+                            Number(e.target.value) || 0,
+                          )
+                        }
                         className={inputClass}
                       >
                         <option value="0">{t("anyStationInSystem")}</option>
                         {targetMarketplaceStations.map((station) => (
                           <option key={station.id} value={station.id}>
-                            {station.is_structure ? `[STR] ${station.name}` : station.name}
+                            {station.is_structure
+                              ? `[STR] ${station.name}`
+                              : station.name}
                           </option>
                         ))}
                       </select>
                     )}
                   </Field>
-                  <Field label={t("paramsSecurity")} hint={t("routeSecurityHint")}>
+                  <Field
+                    label={t("paramsSecurity")}
+                    hint={t("routeSecurityHint")}
+                  >
                     <select
                       value={String(params.min_route_security ?? 0)}
-                      onChange={(e) => set("min_route_security", parseFloat(e.target.value))}
+                      onChange={(e) =>
+                        set("min_route_security", parseFloat(e.target.value))
+                      }
                       className={inputClass}
                     >
                       <option value="0">{t("routeSecurityAll")}</option>
@@ -528,7 +594,12 @@ export function ParametersPanel({
                     </select>
                   </Field>
                   <Field label={t("paramsCargo")}>
-                    <NumberInput value={params.cargo_capacity} onChange={(v) => set("cargo_capacity", v)} min={0} max={CARGO_INPUT_MAX} />
+                    <NumberInput
+                      value={params.cargo_capacity}
+                      onChange={(v) => set("cargo_capacity", v)}
+                      min={0}
+                      max={CARGO_INPUT_MAX}
+                    />
                   </Field>
                 </div>
               </div>
@@ -540,25 +611,71 @@ export function ParametersPanel({
                 </div>
                 <div className="grid grid-cols-3 lg:grid-cols-7 gap-2">
                   <Field label={t("minItemProfit")}>
-                    <NumberInput value={params.min_item_profit ?? 0} onChange={(v) => set("min_item_profit", v)} min={0} max={999999999999} />
+                    <NumberInput
+                      value={params.min_item_profit ?? 0}
+                      onChange={(v) => set("min_item_profit", v)}
+                      min={0}
+                      max={999999999999}
+                    />
                   </Field>
                   <Field label={t("minPeriodROI")} hint={t("minPeriodROIHint")}>
-                    <NumberInput value={params.min_period_roi ?? 0} onChange={(v) => set("min_period_roi", v)} min={0} max={10000} step={0.1} />
+                    <NumberInput
+                      value={params.min_period_roi ?? 0}
+                      onChange={(v) => set("min_period_roi", v)}
+                      min={0}
+                      max={10000}
+                      step={0.1}
+                    />
                   </Field>
                   <Field label={t("maxDOS")} hint={t("maxDOSHint")}>
-                    <NumberInput value={params.max_dos ?? 0} onChange={(v) => set("max_dos", v)} min={0} max={9999} step={0.5} />
+                    <NumberInput
+                      value={params.max_dos ?? 0}
+                      onChange={(v) => set("max_dos", v)}
+                      min={0}
+                      max={9999}
+                      step={0.5}
+                    />
                   </Field>
-                  <Field label={t("minDemandPerDay")} hint={t("minDemandPerDayHint")}>
-                    <NumberInput value={params.min_demand_per_day ?? 0} onChange={(v) => set("min_demand_per_day", v)} min={0} max={999999} step={0.5} />
+                  <Field
+                    label={t("minDemandPerDay")}
+                    hint={t("minDemandPerDayHint")}
+                  >
+                    <NumberInput
+                      value={params.min_demand_per_day ?? 0}
+                      onChange={(v) => set("min_demand_per_day", v)}
+                      min={0}
+                      max={999999}
+                      step={0.5}
+                    />
                   </Field>
-                  <Field label={t("purchaseDemandDays")} hint={t("purchaseDemandDaysHint")}>
-                    <NumberInput value={params.purchase_demand_days ?? 0.5} onChange={(v) => set("purchase_demand_days", v)} min={0} max={30} step={0.1} />
+                  <Field
+                    label={t("purchaseDemandDays")}
+                    hint={t("purchaseDemandDaysHint")}
+                  >
+                    <NumberInput
+                      value={params.purchase_demand_days ?? 0.5}
+                      onChange={(v) => set("purchase_demand_days", v)}
+                      min={0}
+                      max={30}
+                      step={0.1}
+                    />
                   </Field>
                   <Field label={t("avgPricePeriod")}>
-                    <NumberInput value={params.avg_price_period ?? 14} onChange={(v) => set("avg_price_period", Math.round(v))} min={1} max={365} />
+                    <NumberInput
+                      value={params.avg_price_period ?? 14}
+                      onChange={(v) => set("avg_price_period", Math.round(v))}
+                      min={1}
+                      max={365}
+                    />
                   </Field>
                   <Field label={t("minOrderMargin")}>
-                    <NumberInput value={params.min_margin} onChange={(v) => set("min_margin", v)} min={0.1} max={1000} step={0.1} />
+                    <NumberInput
+                      value={params.min_margin}
+                      onChange={(v) => set("min_margin", v)}
+                      min={0.1}
+                      max={1000}
+                      step={0.1}
+                    />
                   </Field>
                 </div>
                 {/* ── Revenue mode toggle ── */}
@@ -608,42 +725,99 @@ export function ParametersPanel({
                   {!splitTradeFees ? (
                     <>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-eve-dim shrink-0">{t("paramsTax")}</span>
+                        <span className="text-[10px] text-eve-dim shrink-0">
+                          {t("paramsTax")}
+                        </span>
                         <div className="w-20">
-                          <NumberInput value={params.sales_tax_percent} onChange={setLegacySalesTax} min={0} max={100} step={0.1} />
+                          <NumberInput
+                            value={params.sales_tax_percent}
+                            onChange={setLegacySalesTax}
+                            min={0}
+                            max={100}
+                            step={0.1}
+                          />
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-eve-dim shrink-0">{t("paramsBrokerFee")}</span>
+                        <span className="text-[10px] text-eve-dim shrink-0">
+                          {t("paramsBrokerFee")}
+                        </span>
                         <div className="w-20">
-                          <NumberInput value={params.broker_fee_percent} onChange={setLegacyBrokerFee} min={0} max={10} step={0.1} />
+                          <NumberInput
+                            value={params.broker_fee_percent}
+                            onChange={setLegacyBrokerFee}
+                            min={0}
+                            max={10}
+                            step={0.1}
+                          />
                         </div>
                       </div>
                     </>
                   ) : (
                     <>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-eve-dim shrink-0">{t("paramsBuyTax")}</span>
+                        <span className="text-[10px] text-eve-dim shrink-0">
+                          {t("paramsBuyTax")}
+                        </span>
                         <div className="w-16">
-                          <NumberInput value={params.buy_sales_tax_percent ?? 0} onChange={(v) => set("buy_sales_tax_percent", v)} min={0} max={100} step={0.1} />
+                          <NumberInput
+                            value={params.buy_sales_tax_percent ?? 0}
+                            onChange={(v) => set("buy_sales_tax_percent", v)}
+                            min={0}
+                            max={100}
+                            step={0.1}
+                          />
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-eve-dim shrink-0">{t("paramsSellTax")}</span>
+                        <span className="text-[10px] text-eve-dim shrink-0">
+                          {t("paramsSellTax")}
+                        </span>
                         <div className="w-16">
-                          <NumberInput value={params.sell_sales_tax_percent ?? params.sales_tax_percent} onChange={(v) => set("sell_sales_tax_percent", v)} min={0} max={100} step={0.1} />
+                          <NumberInput
+                            value={
+                              params.sell_sales_tax_percent ??
+                              params.sales_tax_percent
+                            }
+                            onChange={(v) => set("sell_sales_tax_percent", v)}
+                            min={0}
+                            max={100}
+                            step={0.1}
+                          />
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-eve-dim shrink-0">{t("paramsBuyBrokerFee")}</span>
+                        <span className="text-[10px] text-eve-dim shrink-0">
+                          {t("paramsBuyBrokerFee")}
+                        </span>
                         <div className="w-16">
-                          <NumberInput value={params.buy_broker_fee_percent ?? params.broker_fee_percent} onChange={(v) => set("buy_broker_fee_percent", v)} min={0} max={10} step={0.1} />
+                          <NumberInput
+                            value={
+                              params.buy_broker_fee_percent ??
+                              params.broker_fee_percent
+                            }
+                            onChange={(v) => set("buy_broker_fee_percent", v)}
+                            min={0}
+                            max={10}
+                            step={0.1}
+                          />
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-eve-dim shrink-0">{t("paramsSellBrokerFee")}</span>
+                        <span className="text-[10px] text-eve-dim shrink-0">
+                          {t("paramsSellBrokerFee")}
+                        </span>
                         <div className="w-16">
-                          <NumberInput value={params.sell_broker_fee_percent ?? params.broker_fee_percent} onChange={(v) => set("sell_broker_fee_percent", v)} min={0} max={10} step={0.1} />
+                          <NumberInput
+                            value={
+                              params.sell_broker_fee_percent ??
+                              params.broker_fee_percent
+                            }
+                            onChange={(v) => set("sell_broker_fee_percent", v)}
+                            min={0}
+                            max={10}
+                            step={0.1}
+                          />
                         </div>
                       </div>
                     </>
@@ -652,14 +826,24 @@ export function ParametersPanel({
                     type="button"
                     disabled={!isLoggedIn || esiSkillsLoading}
                     onClick={fetchSkillsFromESI}
-                    title={isLoggedIn ? "Auto-fill fees from Accounting + Broker Relations skill levels" : "Login via ESI to use this feature"}
+                    title={
+                      isLoggedIn
+                        ? "Auto-fill fees from Accounting + Broker Relations skill levels"
+                        : "Login via ESI to use this feature"
+                    }
                     className="flex items-center gap-1 px-2 py-1 rounded-sm text-[11px] border border-eve-accent/40 text-eve-accent bg-eve-accent/10 hover:bg-eve-accent/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
                   >
-                    {esiSkillsLoading ? <span className="animate-pulse">⟳</span> : "⚡"}
+                    {esiSkillsLoading ? (
+                      <span className="animate-pulse">⟳</span>
+                    ) : (
+                      "⚡"
+                    )}
                     {esiSkillsLoading ? "Loading…" : "ESI Skills"}
                   </button>
                   <label className="flex items-center gap-1.5 cursor-pointer select-none ml-auto shrink-0">
-                    <span className="text-[10px] text-eve-dim">{t("splitTradeFees")}</span>
+                    <span className="text-[10px] text-eve-dim">
+                      {t("splitTradeFees")}
+                    </span>
                     <input
                       type="checkbox"
                       checked={splitTradeFees}
@@ -669,7 +853,9 @@ export function ParametersPanel({
                   </label>
                 </div>
                 {esiSkillsMsg && (
-                  <div className={`mt-1.5 text-[11px] font-mono ${esiSkillsMsg.startsWith("✓") ? "text-green-300" : "text-red-400"}`}>
+                  <div
+                    className={`mt-1.5 text-[11px] font-mono ${esiSkillsMsg.startsWith("✓") ? "text-green-300" : "text-red-400"}`}
+                  >
                     {esiSkillsMsg}
                   </div>
                 )}
@@ -683,7 +869,11 @@ export function ParametersPanel({
                   className="w-full flex items-center justify-between gap-3 text-[11px] uppercase tracking-wider text-eve-dim hover:text-eve-accent font-medium transition-colors"
                 >
                   <span className="flex items-center gap-1.5">
-                    <span className={`transition-transform ${showAdvanced ? "rotate-90" : ""}`}>▸</span>
+                    <span
+                      className={`transition-transform ${showAdvanced ? "rotate-90" : ""}`}
+                    >
+                      ▸
+                    </span>
                     {t("advancedFilters")}
                   </span>
                   {activeAdvancedCount > 0 && (
@@ -696,20 +886,38 @@ export function ParametersPanel({
                   <div className="mt-2.5 pt-2.5 border-t border-eve-border/50 space-y-2">
                     <div className="grid grid-cols-3 gap-2">
                       <Field label={t("minDailyVolume")}>
-                        <NumberInput value={params.min_daily_volume ?? 0} onChange={(v) => set("min_daily_volume", v)} min={0} max={999999999} />
+                        <NumberInput
+                          value={params.min_daily_volume ?? 0}
+                          onChange={(v) => set("min_daily_volume", v)}
+                          min={0}
+                          max={999999999}
+                        />
                       </Field>
                       <Field label={t("maxInvestment")}>
-                        <NumberInput value={params.max_investment ?? 0} onChange={(v) => set("max_investment", v)} min={0} max={999999999999} />
+                        <NumberInput
+                          value={params.max_investment ?? 0}
+                          onChange={(v) => set("max_investment", v)}
+                          min={0}
+                          max={999999999999}
+                        />
                       </Field>
                       <Field label="Shipping ISK/(m³·j)">
-                        <NumberInput value={params.shipping_cost_per_m3_jump ?? 0} onChange={(v) => set("shipping_cost_per_m3_jump", v)} min={0} max={1000000} step={0.1} />
+                        <NumberInput
+                          value={params.shipping_cost_per_m3_jump ?? 0}
+                          onChange={(v) => set("shipping_cost_per_m3_jump", v)}
+                          min={0}
+                          max={1000000}
+                          step={0.1}
+                        />
                       </Field>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <Field label={t("routeMaxJumps")}>
                         <NumberInput
                           value={params.route_max_hops ?? 0}
-                          onChange={(v) => set("route_max_hops", Math.max(0, Math.round(v)))}
+                          onChange={(v) =>
+                            set("route_max_hops", Math.max(0, Math.round(v)))
+                          }
                           min={0}
                         />
                       </Field>
@@ -717,24 +925,63 @@ export function ParametersPanel({
                         <NumberInput
                           value={params.max_detour_jumps_per_node ?? 0}
                           onChange={(v) =>
-                            set("max_detour_jumps_per_node", Math.max(0, Math.round(v)))
+                            set(
+                              "max_detour_jumps_per_node",
+                              Math.max(0, Math.round(v)),
+                            )
                           }
                           min={0}
                         />
                       </Field>
                     </div>
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-                      <Field label={t("minS2BPerDay")} hint={t("minS2BPerDayHint")}>
-                        <NumberInput value={params.min_s2b_per_day ?? 0} onChange={(v) => set("min_s2b_per_day", v)} min={0} max={999999999} step={0.1} />
+                      <Field
+                        label={t("minS2BPerDay")}
+                        hint={t("minS2BPerDayHint")}
+                      >
+                        <NumberInput
+                          value={params.min_s2b_per_day ?? 0}
+                          onChange={(v) => set("min_s2b_per_day", v)}
+                          min={0}
+                          max={999999999}
+                          step={0.1}
+                        />
                       </Field>
-                      <Field label={t("minBfSPerDay")} hint={t("minBfSPerDayHint")}>
-                        <NumberInput value={params.min_bfs_per_day ?? 0} onChange={(v) => set("min_bfs_per_day", v)} min={0} max={999999999} step={0.1} />
+                      <Field
+                        label={t("minBfSPerDay")}
+                        hint={t("minBfSPerDayHint")}
+                      >
+                        <NumberInput
+                          value={params.min_bfs_per_day ?? 0}
+                          onChange={(v) => set("min_bfs_per_day", v)}
+                          min={0}
+                          max={999999999}
+                          step={0.1}
+                        />
                       </Field>
-                      <Field label={t("minS2BBfSRatio")} hint={t("minS2BBfSRatioHint")}>
-                        <NumberInput value={params.min_s2b_bfs_ratio ?? 0} onChange={(v) => set("min_s2b_bfs_ratio", v)} min={0} max={999999} step={0.1} />
+                      <Field
+                        label={t("minS2BBfSRatio")}
+                        hint={t("minS2BBfSRatioHint")}
+                      >
+                        <NumberInput
+                          value={params.min_s2b_bfs_ratio ?? 0}
+                          onChange={(v) => set("min_s2b_bfs_ratio", v)}
+                          min={0}
+                          max={999999}
+                          step={0.1}
+                        />
                       </Field>
-                      <Field label={t("maxS2BBfSRatio")} hint={t("maxS2BBfSRatioHint")}>
-                        <NumberInput value={params.max_s2b_bfs_ratio ?? 0} onChange={(v) => set("max_s2b_bfs_ratio", v)} min={0} max={999999} step={0.1} />
+                      <Field
+                        label={t("maxS2BBfSRatio")}
+                        hint={t("maxS2BBfSRatioHint")}
+                      >
+                        <NumberInput
+                          value={params.max_s2b_bfs_ratio ?? 0}
+                          onChange={(v) => set("max_s2b_bfs_ratio", v)}
+                          min={0}
+                          max={999999}
+                          step={0.1}
+                        />
                       </Field>
                     </div>
                     {/* ── Category filter ── */}
@@ -755,7 +1002,9 @@ export function ParametersPanel({
                       </div>
                       <div className="flex flex-wrap gap-1.5">
                         {EVE_CATEGORIES.map((cat) => {
-                          const active = (params.category_ids ?? []).includes(cat.id);
+                          const active = (params.category_ids ?? []).includes(
+                            cat.id,
+                          );
                           return (
                             <button
                               key={cat.id}
@@ -789,355 +1038,374 @@ export function ParametersPanel({
           ) : (
             /* ══ NON-REGION TABS: original layout ══ */
             <>
-          {/* Main sections */}
-          <div className="grid grid-cols-1 xl:grid-cols-12 gap-3">
-            <section className={`${sectionClass} xl:col-span-8 p-3`}>
-              <SectionHeader
-                title={t("system")}
-                subtitle={t("paramsMargin")}
-                icon="⌁"
-              />
+              {/* Main sections */}
+              <div className="grid grid-cols-1 xl:grid-cols-12 gap-3">
+                <section className={`${sectionClass} xl:col-span-8 p-3`}>
+                  <SectionHeader
+                    title={t("system")}
+                    subtitle={t("paramsMargin")}
+                    icon="⌁"
+                  />
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 mt-2">
-                <Field label={t("system")}>
-                  <SystemAutocomplete
-                    value={params.system_name}
-                    onChange={(v) => set("system_name", v)}
-                    isLoggedIn={isLoggedIn}
-                    includeStructures={params.include_structures}
-                    onIncludeStructuresChange={(v) => set("include_structures", v)}
-                    extraActionSlots={1}
-                    extraAction={
-                      <SystemBlacklistButton
-                        compact
-                        value={params.ignored_system_ids ?? []}
-                        onChange={(ids) => set("ignored_system_ids", ids)}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 mt-2">
+                    <Field label={t("system")}>
+                      <SystemAutocomplete
+                        value={params.system_name}
+                        onChange={(v) => set("system_name", v)}
+                        isLoggedIn={isLoggedIn}
+                        includeStructures={params.include_structures}
+                        onIncludeStructuresChange={(v) =>
+                          set("include_structures", v)
+                        }
+                        extraActionSlots={1}
+                        extraAction={
+                          <SystemBlacklistButton
+                            compact
+                            value={params.ignored_system_ids ?? []}
+                            onChange={(ids) => set("ignored_system_ids", ids)}
+                          />
+                        }
                       />
-                    }
-                  />
-                </Field>
+                    </Field>
 
-                {showCargoInMain && (
-                  <Field label={t("paramsCargo")}>
-                    <NumberInput
-                      value={params.cargo_capacity}
-                      onChange={(v) => set("cargo_capacity", v)}
-                      min={0}
-                      max={CARGO_INPUT_MAX}
-                    />
-                  </Field>
-                )}
-
-                {showBuyRadius && (
-                  <Field label={t("paramsBuy")}>
-                    <NumberInput
-                      value={params.buy_radius}
-                      onChange={(v) => set("buy_radius", v)}
-                      min={0}
-                    />
-                  </Field>
-                )}
-
-                {!hideSellRadius && (
-                  <Field label={t("paramsSell")}>
-                    <NumberInput
-                      value={params.sell_radius}
-                      onChange={(v) => set("sell_radius", v)}
-                      min={0}
-                    />
-                  </Field>
-                )}
-
-                <Field label={t("paramsMargin")}>
-                  <NumberInput
-                    value={params.min_margin}
-                    onChange={(v) => set("min_margin", v)}
-                    min={0.1}
-                    max={1000}
-                    step={0.1}
-                  />
-                </Field>
-              </div>
-            </section>
-
-            <section className={`${sectionClass} xl:col-span-4 p-3`}>
-              <SectionHeader
-                title={t("splitTradeFees")}
-                subtitle={t("splitTradeFeesHint")}
-                icon="∑"
-              />
-
-              <label className="mt-2 h-[34px] px-2.5 py-1.5 bg-eve-input border border-eve-border rounded text-eve-text text-sm flex items-center justify-between">
-                <span className="text-eve-dim text-xs">
-                  {t("splitTradeFeesHint")}
-                </span>
-                <input
-                  type="checkbox"
-                  checked={splitTradeFees}
-                  onChange={(e) => setSplitFees(e.target.checked)}
-                  className="accent-eve-accent"
-                />
-              </label>
-
-              {!splitTradeFees && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-3 mt-3">
-                  <Field label={t("paramsTax")}>
-                    <NumberInput
-                      value={params.sales_tax_percent}
-                      onChange={setLegacySalesTax}
-                      min={0}
-                      max={100}
-                      step={0.1}
-                    />
-                  </Field>
-
-                  <Field label={t("paramsBrokerFee")}>
-                    <NumberInput
-                      value={params.broker_fee_percent}
-                      onChange={setLegacyBrokerFee}
-                      min={0}
-                      max={10}
-                      step={0.1}
-                    />
-                  </Field>
-                </div>
-              )}
-
-              {splitTradeFees && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
-                  <Field label={t("paramsBuyTax")}>
-                    <NumberInput
-                      value={params.buy_sales_tax_percent ?? 0}
-                      onChange={(v) => set("buy_sales_tax_percent", v)}
-                      min={0}
-                      max={100}
-                      step={0.1}
-                    />
-                  </Field>
-                  <Field label={t("paramsSellTax")}>
-                    <NumberInput
-                      value={
-                        params.sell_sales_tax_percent ?? params.sales_tax_percent
-                      }
-                      onChange={(v) => set("sell_sales_tax_percent", v)}
-                      min={0}
-                      max={100}
-                      step={0.1}
-                    />
-                  </Field>
-                  <Field label={t("paramsBuyBrokerFee")}>
-                    <NumberInput
-                      value={
-                        params.buy_broker_fee_percent ??
-                        params.broker_fee_percent
-                      }
-                      onChange={(v) => set("buy_broker_fee_percent", v)}
-                      min={0}
-                      max={10}
-                      step={0.1}
-                    />
-                  </Field>
-                  <Field label={t("paramsSellBrokerFee")}>
-                    <NumberInput
-                      value={
-                        params.sell_broker_fee_percent ??
-                        params.broker_fee_percent
-                      }
-                      onChange={(v) => set("sell_broker_fee_percent", v)}
-                      min={0}
-                      max={10}
-                      step={0.1}
-                    />
-                  </Field>
-                </div>
-              )}
-
-              {/* ESI skills autofill */}
-              <div className="mt-3 flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={!isLoggedIn || esiSkillsLoading}
-                    onClick={fetchSkillsFromESI}
-                    title={isLoggedIn ? "Auto-fill fees from ESI (Accounting + Broker Relations skill levels)" : "Login via ESI to use this feature"}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded-sm text-[11px] border border-eve-accent/40 text-eve-accent bg-eve-accent/10 hover:bg-eve-accent/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {esiSkillsLoading ? (
-                      <span className="animate-pulse">⟳</span>
-                    ) : (
-                      <span>⚡</span>
+                    {showCargoInMain && (
+                      <Field label={t("paramsCargo")}>
+                        <NumberInput
+                          value={params.cargo_capacity}
+                          onChange={(v) => set("cargo_capacity", v)}
+                          min={0}
+                          max={CARGO_INPUT_MAX}
+                        />
+                      </Field>
                     )}
-                    {esiSkillsLoading ? "Loading…" : "Fetch from ESI"}
-                  </button>
-                  <span className="text-[10px] text-eve-dim">
-                    Accounting + Broker Relations skills
-                  </span>
-                </div>
-                {esiSkillsMsg && (
-                  <span
-                    className={`text-[11px] font-mono ${esiSkillsMsg.startsWith("✓") ? "text-green-300" : "text-red-400"}`}
-                  >
-                    {esiSkillsMsg}
-                  </span>
-                )}
-              </div>
-            </section>
-          </div>
 
-          {/* Advanced filters */}
-          <section className={`${sectionClass} p-3`}>
-            <button
-              type="button"
-              onClick={() => setShowAdvanced((a) => !a)}
-              className="w-full flex items-center justify-between gap-3 text-[11px] uppercase tracking-wider text-eve-dim hover:text-eve-accent font-medium transition-colors"
-            >
-              <span className="flex items-center gap-1.5">
-                <span
-                  className={`transition-transform ${
-                    showAdvanced ? "rotate-90" : ""
-                  }`}
-                >
-                  ▸
-                </span>
-                {t("advancedFilters")}
-              </span>
+                    {showBuyRadius && (
+                      <Field label={t("paramsBuy")}>
+                        <NumberInput
+                          value={params.buy_radius}
+                          onChange={(v) => set("buy_radius", v)}
+                          min={0}
+                        />
+                      </Field>
+                    )}
 
-              {activeAdvancedCount > 0 && (
-                <span className="px-1.5 py-0.5 rounded-sm border border-eve-accent/40 text-eve-accent text-[10px] font-mono">
-                  {activeAdvancedCount}
-                </span>
-              )}
-            </button>
+                    {!hideSellRadius && (
+                      <Field label={t("paramsSell")}>
+                        <NumberInput
+                          value={params.sell_radius}
+                          onChange={(v) => set("sell_radius", v)}
+                          min={0}
+                        />
+                      </Field>
+                    )}
 
-            {showAdvanced && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 mt-3 pt-3 border-t border-eve-border/50">
-                <Field label={t("paramsSecurity")}>
-                  <select
-                    value={String(params.min_route_security ?? 0)}
-                    onChange={(e) =>
-                      set("min_route_security", parseFloat(e.target.value))
-                    }
-                    className={inputClass}
-                  >
-                    <option value="0">{t("routeSecurityAll")}</option>
-                    <option value="0.45">{t("routeSecurityHighsec")}</option>
-                    <option value="0.5">{t("routeSecurityMin05")}</option>
-                    <option value="0.7">{t("routeSecurityMin07")}</option>
-                  </select>
-                </Field>
+                    <Field label={t("paramsMargin")}>
+                      <NumberInput
+                        value={params.min_margin}
+                        onChange={(v) => set("min_margin", v)}
+                        min={0.1}
+                        max={1000}
+                        step={0.1}
+                      />
+                    </Field>
+                  </div>
+                </section>
 
-                <Field label={t("routeMaxJumps")}>
-                  <NumberInput
-                    value={params.route_max_hops ?? 0}
-                    onChange={(v) => set("route_max_hops", Math.max(0, Math.round(v)))}
-                    min={0}
+                <section className={`${sectionClass} xl:col-span-4 p-3`}>
+                  <SectionHeader
+                    title={t("splitTradeFees")}
+                    subtitle={t("splitTradeFeesHint")}
+                    icon="∑"
                   />
-                </Field>
 
-                <Field label={t("maxDetourJumpsPerNode")}>
-                  <NumberInput
-                    value={params.max_detour_jumps_per_node ?? 0}
-                    onChange={(v) =>
-                      set("max_detour_jumps_per_node", Math.max(0, Math.round(v)))
-                    }
-                    min={0}
-                  />
-                </Field>
+                  <label className="mt-2 h-[34px] px-2.5 py-1.5 bg-eve-input border border-eve-border rounded text-eve-text text-sm flex items-center justify-between">
+                    <span className="text-eve-dim text-xs">
+                      {t("splitTradeFeesHint")}
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={splitTradeFees}
+                      onChange={(e) => setSplitFees(e.target.checked)}
+                      className="accent-eve-accent"
+                    />
+                  </label>
 
-                {tab === "radius" && (
-                  <Field label={t("restrictToTargetMarket")} hint={t("restrictToTargetMarketHint")}>
-                    <label className="h-[34px] px-2.5 py-1.5 bg-eve-input border border-eve-border rounded text-eve-text text-sm flex items-center justify-between cursor-pointer">
-                      <span className="text-eve-dim text-xs truncate">
-                        {(params.restrict_to_target_market ?? true)
-                          ? (params.target_market_system?.trim() || "Jita")
-                          : t("routeSecurityAll")}
+                  {!splitTradeFees && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-3 mt-3">
+                      <Field label={t("paramsTax")}>
+                        <NumberInput
+                          value={params.sales_tax_percent}
+                          onChange={setLegacySalesTax}
+                          min={0}
+                          max={100}
+                          step={0.1}
+                        />
+                      </Field>
+
+                      <Field label={t("paramsBrokerFee")}>
+                        <NumberInput
+                          value={params.broker_fee_percent}
+                          onChange={setLegacyBrokerFee}
+                          min={0}
+                          max={10}
+                          step={0.1}
+                        />
+                      </Field>
+                    </div>
+                  )}
+
+                  {splitTradeFees && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                      <Field label={t("paramsBuyTax")}>
+                        <NumberInput
+                          value={params.buy_sales_tax_percent ?? 0}
+                          onChange={(v) => set("buy_sales_tax_percent", v)}
+                          min={0}
+                          max={100}
+                          step={0.1}
+                        />
+                      </Field>
+                      <Field label={t("paramsSellTax")}>
+                        <NumberInput
+                          value={
+                            params.sell_sales_tax_percent ??
+                            params.sales_tax_percent
+                          }
+                          onChange={(v) => set("sell_sales_tax_percent", v)}
+                          min={0}
+                          max={100}
+                          step={0.1}
+                        />
+                      </Field>
+                      <Field label={t("paramsBuyBrokerFee")}>
+                        <NumberInput
+                          value={
+                            params.buy_broker_fee_percent ??
+                            params.broker_fee_percent
+                          }
+                          onChange={(v) => set("buy_broker_fee_percent", v)}
+                          min={0}
+                          max={10}
+                          step={0.1}
+                        />
+                      </Field>
+                      <Field label={t("paramsSellBrokerFee")}>
+                        <NumberInput
+                          value={
+                            params.sell_broker_fee_percent ??
+                            params.broker_fee_percent
+                          }
+                          onChange={(v) => set("sell_broker_fee_percent", v)}
+                          min={0}
+                          max={10}
+                          step={0.1}
+                        />
+                      </Field>
+                    </div>
+                  )}
+
+                  {/* ESI skills autofill */}
+                  <div className="mt-3 flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={!isLoggedIn || esiSkillsLoading}
+                        onClick={fetchSkillsFromESI}
+                        title={
+                          isLoggedIn
+                            ? "Auto-fill fees from ESI (Accounting + Broker Relations skill levels)"
+                            : "Login via ESI to use this feature"
+                        }
+                        className="flex items-center gap-1.5 px-2 py-1 rounded-sm text-[11px] border border-eve-accent/40 text-eve-accent bg-eve-accent/10 hover:bg-eve-accent/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {esiSkillsLoading ? (
+                          <span className="animate-pulse">⟳</span>
+                        ) : (
+                          <span>⚡</span>
+                        )}
+                        {esiSkillsLoading ? "Loading…" : "Fetch from ESI"}
+                      </button>
+                      <span className="text-[10px] text-eve-dim">
+                        Accounting + Broker Relations skills
                       </span>
-                      <input
-                        type="checkbox"
-                        checked={params.restrict_to_target_market ?? true}
-                        onChange={(e) => set("restrict_to_target_market", e.target.checked)}
-                        className="accent-eve-accent ml-2 shrink-0"
-                      />
-                    </label>
-                  </Field>
-                )}
-
-                {isFlowTab && (
-                  <>
-                    <Field label={t("minDailyVolume")}>
-                      <NumberInput
-                        value={params.min_daily_volume ?? 0}
-                        onChange={(v) => set("min_daily_volume", v)}
-                        min={0}
-                        max={999999999}
-                      />
-                    </Field>
-
-                    <Field label={t("maxInvestment")}>
-                      <NumberInput
-                        value={params.max_investment ?? 0}
-                        onChange={(v) => set("max_investment", v)}
-                        min={0}
-                        max={999999999999}
-                      />
-                    </Field>
-
-                    <Field
-                      label={t("minS2BPerDay")}
-                      hint={t("minS2BPerDayHint")}
-                    >
-                      <NumberInput
-                        value={params.min_s2b_per_day ?? 0}
-                        onChange={(v) => set("min_s2b_per_day", v)}
-                        min={0}
-                        max={999999999}
-                        step={0.1}
-                      />
-                    </Field>
-
-                    <Field
-                      label={t("minBfSPerDay")}
-                      hint={t("minBfSPerDayHint")}
-                    >
-                      <NumberInput
-                        value={params.min_bfs_per_day ?? 0}
-                        onChange={(v) => set("min_bfs_per_day", v)}
-                        min={0}
-                        max={999999999}
-                        step={0.1}
-                      />
-                    </Field>
-
-                    <Field
-                      label={t("minS2BBfSRatio")}
-                      hint={t("minS2BBfSRatioHint")}
-                    >
-                      <NumberInput
-                        value={params.min_s2b_bfs_ratio ?? 0}
-                        onChange={(v) => set("min_s2b_bfs_ratio", v)}
-                        min={0}
-                        max={999999}
-                        step={0.1}
-                      />
-                    </Field>
-
-                    <Field
-                      label={t("maxS2BBfSRatio")}
-                      hint={t("maxS2BBfSRatioHint")}
-                    >
-                      <NumberInput
-                        value={params.max_s2b_bfs_ratio ?? 0}
-                        onChange={(v) => set("max_s2b_bfs_ratio", v)}
-                        min={0}
-                        max={999999}
-                        step={0.1}
-                      />
-                    </Field>
-                  </>
-                )}
+                    </div>
+                    {esiSkillsMsg && (
+                      <span
+                        className={`text-[11px] font-mono ${esiSkillsMsg.startsWith("✓") ? "text-green-300" : "text-red-400"}`}
+                      >
+                        {esiSkillsMsg}
+                      </span>
+                    )}
+                  </div>
+                </section>
               </div>
-            )}
-          </section>
+
+              {/* Advanced filters */}
+              <section className={`${sectionClass} p-3`}>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced((a) => !a)}
+                  className="w-full flex items-center justify-between gap-3 text-[11px] uppercase tracking-wider text-eve-dim hover:text-eve-accent font-medium transition-colors"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      className={`transition-transform ${
+                        showAdvanced ? "rotate-90" : ""
+                      }`}
+                    >
+                      ▸
+                    </span>
+                    {t("advancedFilters")}
+                  </span>
+
+                  {activeAdvancedCount > 0 && (
+                    <span className="px-1.5 py-0.5 rounded-sm border border-eve-accent/40 text-eve-accent text-[10px] font-mono">
+                      {activeAdvancedCount}
+                    </span>
+                  )}
+                </button>
+
+                {showAdvanced && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3 mt-3 pt-3 border-t border-eve-border/50">
+                    <Field label={t("paramsSecurity")}>
+                      <select
+                        value={String(params.min_route_security ?? 0)}
+                        onChange={(e) =>
+                          set("min_route_security", parseFloat(e.target.value))
+                        }
+                        className={inputClass}
+                      >
+                        <option value="0">{t("routeSecurityAll")}</option>
+                        <option value="0.45">
+                          {t("routeSecurityHighsec")}
+                        </option>
+                        <option value="0.5">{t("routeSecurityMin05")}</option>
+                        <option value="0.7">{t("routeSecurityMin07")}</option>
+                      </select>
+                    </Field>
+
+                    <Field label={t("routeMaxJumps")}>
+                      <NumberInput
+                        value={params.route_max_hops ?? 0}
+                        onChange={(v) =>
+                          set("route_max_hops", Math.max(0, Math.round(v)))
+                        }
+                        min={0}
+                      />
+                    </Field>
+
+                    <Field label={t("maxDetourJumpsPerNode")}>
+                      <NumberInput
+                        value={params.max_detour_jumps_per_node ?? 0}
+                        onChange={(v) =>
+                          set(
+                            "max_detour_jumps_per_node",
+                            Math.max(0, Math.round(v)),
+                          )
+                        }
+                        min={0}
+                      />
+                    </Field>
+
+                    {tab === "radius" && (
+                      <Field
+                        label={t("restrictToTargetMarket")}
+                        hint={t("restrictToTargetMarketHint")}
+                      >
+                        <label className="h-[34px] px-2.5 py-1.5 bg-eve-input border border-eve-border rounded text-eve-text text-sm flex items-center justify-between cursor-pointer">
+                          <span className="text-eve-dim text-xs truncate">
+                            {(params.restrict_to_target_market ?? true)
+                              ? params.target_market_system?.trim() || "Jita"
+                              : t("routeSecurityAll")}
+                          </span>
+                          <input
+                            type="checkbox"
+                            checked={params.restrict_to_target_market ?? true}
+                            onChange={(e) =>
+                              set("restrict_to_target_market", e.target.checked)
+                            }
+                            className="accent-eve-accent ml-2 shrink-0"
+                          />
+                        </label>
+                      </Field>
+                    )}
+
+                    {isFlowTab && (
+                      <>
+                        <Field label={t("minDailyVolume")}>
+                          <NumberInput
+                            value={params.min_daily_volume ?? 0}
+                            onChange={(v) => set("min_daily_volume", v)}
+                            min={0}
+                            max={999999999}
+                          />
+                        </Field>
+
+                        <Field label={t("maxInvestment")}>
+                          <NumberInput
+                            value={params.max_investment ?? 0}
+                            onChange={(v) => set("max_investment", v)}
+                            min={0}
+                            max={999999999999}
+                          />
+                        </Field>
+
+                        <Field
+                          label={t("minS2BPerDay")}
+                          hint={t("minS2BPerDayHint")}
+                        >
+                          <NumberInput
+                            value={params.min_s2b_per_day ?? 0}
+                            onChange={(v) => set("min_s2b_per_day", v)}
+                            min={0}
+                            max={999999999}
+                            step={0.1}
+                          />
+                        </Field>
+
+                        <Field
+                          label={t("minBfSPerDay")}
+                          hint={t("minBfSPerDayHint")}
+                        >
+                          <NumberInput
+                            value={params.min_bfs_per_day ?? 0}
+                            onChange={(v) => set("min_bfs_per_day", v)}
+                            min={0}
+                            max={999999999}
+                            step={0.1}
+                          />
+                        </Field>
+
+                        <Field
+                          label={t("minS2BBfSRatio")}
+                          hint={t("minS2BBfSRatioHint")}
+                        >
+                          <NumberInput
+                            value={params.min_s2b_bfs_ratio ?? 0}
+                            onChange={(v) => set("min_s2b_bfs_ratio", v)}
+                            min={0}
+                            max={999999}
+                            step={0.1}
+                          />
+                        </Field>
+
+                        <Field
+                          label={t("maxS2BBfSRatio")}
+                          hint={t("maxS2BBfSRatioHint")}
+                        >
+                          <NumberInput
+                            value={params.max_s2b_bfs_ratio ?? 0}
+                            onChange={(v) => set("max_s2b_bfs_ratio", v)}
+                            min={0}
+                            max={999999}
+                            step={0.1}
+                          />
+                        </Field>
+                      </>
+                    )}
+                  </div>
+                )}
+              </section>
             </>
           )}
         </div>
@@ -1232,7 +1500,8 @@ function NumberInput({
       value={value}
       onChange={(e) => {
         const v = parseFloat(e.target.value);
-        if (!isNaN(v) && v >= min && (max === undefined || v <= max)) onChange(v);
+        if (!isNaN(v) && v >= min && (max === undefined || v <= max))
+          onChange(v);
       }}
       min={min}
       max={max}
