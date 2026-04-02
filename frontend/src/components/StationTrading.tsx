@@ -8,6 +8,7 @@ import type {
   StationTrade,
   StationInfo,
   ScanParams,
+  StrategyScoreConfig,
   WatchlistItem,
 } from "@/lib/types";
 import {
@@ -44,6 +45,8 @@ import { SystemAutocomplete } from "./SystemAutocomplete";
 import { PresetPicker } from "./PresetPicker";
 import { StationAIAssistant } from "./StationAIAssistant";
 import { SystemBlacklistButton } from "./SystemBlacklistButton";
+import { ScoringProfileEditor } from "./ScoringProfileEditor";
+import { DEFAULT_STRATEGY_SCORE } from "@/lib/scoringPresets";
 import {
   STATION_BUILTIN_PRESETS,
   type StationTradingSettings,
@@ -90,6 +93,8 @@ interface Props {
   params: ScanParams;
   /** Called when system (or other global param) is changed in this tab; updates global filter */
   onChange?: (params: ScanParams) => void;
+  strategyScore?: StrategyScoreConfig;
+  onStrategyScoreChange?: (value: StrategyScoreConfig) => void;
   isLoggedIn?: boolean;
   /** Results loaded externally (e.g. from history); component will display them */
   loadedResults?: StationTrade[] | null;
@@ -248,7 +253,9 @@ function mapServerCacheMeta(
         ? meta.current_revision
         : Math.floor(nextExpiryTs / 1000),
     lastRefreshAt: Number.isFinite(lastRefreshTs) ? lastRefreshTs : now,
-    nextExpiryAt: Number.isFinite(nextExpiryTs) ? nextExpiryTs : now + STATION_CACHE_TTL_MS,
+    nextExpiryAt: Number.isFinite(nextExpiryTs)
+      ? nextExpiryTs
+      : now + STATION_CACHE_TTL_MS,
     scopeLabel: fallbackScope,
     regionCount: Math.max(1, fallbackRegionCount),
   };
@@ -321,7 +328,10 @@ function computePlannedStationAction(
       row.command.expected_delta_daily_profit > 0 &&
       row.trade.ConfidenceLabel !== "low"
     ) {
-      if (row.command.active_order_count > 0 || row.command.open_position_qty > 0) {
+      if (
+        row.command.active_order_count > 0 ||
+        row.command.open_position_qty > 0
+      ) {
         return "reprice";
       }
       return "new_entry";
@@ -334,6 +344,8 @@ function computePlannedStationAction(
 export function StationTrading({
   params,
   onChange,
+  strategyScore,
+  onStrategyScoreChange,
   isLoggedIn = false,
   loadedResults,
 }: Props) {
@@ -387,7 +399,9 @@ export function StationTrading({
   const [batchPreset, setBatchPreset] = useState<BatchPreset>("balanced");
   const [operatorPanelWidth, setOperatorPanelWidth] = useState<number>(() => {
     if (typeof window === "undefined") return OPERATOR_PANEL_DEFAULT;
-    const stored = Number(window.localStorage.getItem(OPERATOR_PANEL_STORAGE_KEY));
+    const stored = Number(
+      window.localStorage.getItem(OPERATOR_PANEL_STORAGE_KEY),
+    );
     return clampOperatorPanelWidth(stored);
   });
   const [operatorPanelCollapsed, setOperatorPanelCollapsed] = useState<boolean>(
@@ -615,57 +629,62 @@ export function StationTrading({
     ],
   );
 
-  const handlePresetApply = useCallback((s: Record<string, any>) => {
-    // eslint-disable-line @typescript-eslint/no-explicit-any
-    const st = s as StationTradingSettings;
-    const nextSystemName = typeof st.systemName === "string" ? st.systemName.trim() : "";
-    const systemChanged = Boolean(nextSystemName) && nextSystemName !== params.system_name;
-    if (systemChanged) {
-      onChange?.({ ...params, system_name: nextSystemName });
-    }
-    if (st.selectedStationId !== undefined && !systemChanged) {
-      setSelectedStationId(st.selectedStationId);
-    }
-    if (st.includeStructures !== undefined) {
-      setIncludeStructures(st.includeStructures);
-    }
-    if (st.minMargin !== undefined) setMinMargin(st.minMargin);
-    if (st.brokerFee !== undefined) setBrokerFee(st.brokerFee);
-    if (st.salesTaxPercent !== undefined)
-      setSalesTaxPercent(st.salesTaxPercent);
-    if (st.splitTradeFees !== undefined) setSplitTradeFees(st.splitTradeFees);
-    if (st.buyBrokerFeePercent !== undefined)
-      setBuyBrokerFeePercent(st.buyBrokerFeePercent);
-    if (st.sellBrokerFeePercent !== undefined)
-      setSellBrokerFeePercent(st.sellBrokerFeePercent);
-    if (st.buySalesTaxPercent !== undefined)
-      setBuySalesTaxPercent(st.buySalesTaxPercent);
-    if (st.sellSalesTaxPercent !== undefined)
-      setSellSalesTaxPercent(st.sellSalesTaxPercent);
-    if (
-      st.ctsProfile === "balanced" ||
-      st.ctsProfile === "aggressive" ||
-      st.ctsProfile === "defensive"
-    ) {
-      setCTSProfile(st.ctsProfile);
-    }
-    if (st.radius !== undefined) setRadius(st.radius);
-    if (st.minDailyVolume !== undefined) setMinDailyVolume(st.minDailyVolume);
-    if (st.minItemProfit !== undefined) setMinItemProfit(st.minItemProfit);
-    if (st.minDemandPerDay !== undefined)
-      setMinDemandPerDay(st.minDemandPerDay);
-    if (st.minBfSPerDay !== undefined) setMinBfSPerDay(st.minBfSPerDay);
-    if (st.avgPricePeriod !== undefined) setAvgPricePeriod(st.avgPricePeriod);
-    if (st.minPeriodROI !== undefined) setMinPeriodROI(st.minPeriodROI);
-    if (st.bvsRatioMin !== undefined) setBvsRatioMin(st.bvsRatioMin);
-    if (st.bvsRatioMax !== undefined) setBvsRatioMax(st.bvsRatioMax);
-    if (st.maxPVI !== undefined) setMaxPVI(st.maxPVI);
-    if (st.maxSDS !== undefined) setMaxSDS(st.maxSDS);
-    if (st.limitBuyToPriceLow !== undefined)
-      setLimitBuyToPriceLow(st.limitBuyToPriceLow);
-    if (st.flagExtremePrices !== undefined)
-      setFlagExtremePrices(st.flagExtremePrices);
-  }, [onChange, params]);
+  const handlePresetApply = useCallback(
+    (s: Record<string, any>) => {
+      // eslint-disable-line @typescript-eslint/no-explicit-any
+      const st = s as StationTradingSettings;
+      const nextSystemName =
+        typeof st.systemName === "string" ? st.systemName.trim() : "";
+      const systemChanged =
+        Boolean(nextSystemName) && nextSystemName !== params.system_name;
+      if (systemChanged) {
+        onChange?.({ ...params, system_name: nextSystemName });
+      }
+      if (st.selectedStationId !== undefined && !systemChanged) {
+        setSelectedStationId(st.selectedStationId);
+      }
+      if (st.includeStructures !== undefined) {
+        setIncludeStructures(st.includeStructures);
+      }
+      if (st.minMargin !== undefined) setMinMargin(st.minMargin);
+      if (st.brokerFee !== undefined) setBrokerFee(st.brokerFee);
+      if (st.salesTaxPercent !== undefined)
+        setSalesTaxPercent(st.salesTaxPercent);
+      if (st.splitTradeFees !== undefined) setSplitTradeFees(st.splitTradeFees);
+      if (st.buyBrokerFeePercent !== undefined)
+        setBuyBrokerFeePercent(st.buyBrokerFeePercent);
+      if (st.sellBrokerFeePercent !== undefined)
+        setSellBrokerFeePercent(st.sellBrokerFeePercent);
+      if (st.buySalesTaxPercent !== undefined)
+        setBuySalesTaxPercent(st.buySalesTaxPercent);
+      if (st.sellSalesTaxPercent !== undefined)
+        setSellSalesTaxPercent(st.sellSalesTaxPercent);
+      if (
+        st.ctsProfile === "balanced" ||
+        st.ctsProfile === "aggressive" ||
+        st.ctsProfile === "defensive"
+      ) {
+        setCTSProfile(st.ctsProfile);
+      }
+      if (st.radius !== undefined) setRadius(st.radius);
+      if (st.minDailyVolume !== undefined) setMinDailyVolume(st.minDailyVolume);
+      if (st.minItemProfit !== undefined) setMinItemProfit(st.minItemProfit);
+      if (st.minDemandPerDay !== undefined)
+        setMinDemandPerDay(st.minDemandPerDay);
+      if (st.minBfSPerDay !== undefined) setMinBfSPerDay(st.minBfSPerDay);
+      if (st.avgPricePeriod !== undefined) setAvgPricePeriod(st.avgPricePeriod);
+      if (st.minPeriodROI !== undefined) setMinPeriodROI(st.minPeriodROI);
+      if (st.bvsRatioMin !== undefined) setBvsRatioMin(st.bvsRatioMin);
+      if (st.bvsRatioMax !== undefined) setBvsRatioMax(st.bvsRatioMax);
+      if (st.maxPVI !== undefined) setMaxPVI(st.maxPVI);
+      if (st.maxSDS !== undefined) setMaxSDS(st.maxSDS);
+      if (st.limitBuyToPriceLow !== undefined)
+        setLimitBuyToPriceLow(st.limitBuyToPriceLow);
+      if (st.flagExtremePrices !== undefined)
+        setFlagExtremePrices(st.flagExtremePrices);
+    },
+    [onChange, params],
+  );
 
   // Keep station sales-tax aligned with global params.
   useEffect(() => {
@@ -743,7 +762,9 @@ export function StationTrading({
 
   const canScan =
     params.system_name &&
-    (allStations.length > 0 || radius > 0 || selectedStationId === ALL_STATIONS_ID) &&
+    (allStations.length > 0 ||
+      radius > 0 ||
+      selectedStationId === ALL_STATIONS_ID) &&
     regionId > 0;
 
   function stationRowKey(row: StationTrade) {
@@ -812,7 +833,10 @@ export function StationTrading({
       const key = stationRowKey(row);
       const untilRevision =
         mode === "done"
-          ? Math.max(1, cacheMeta?.currentRevision ?? Math.floor(Date.now() / 1000))
+          ? Math.max(
+              1,
+              cacheMeta?.currentRevision ?? Math.floor(Date.now() / 1000),
+            )
           : 0;
       const entry: HiddenTradeEntry = {
         key,
@@ -922,7 +946,12 @@ export function StationTrading({
       addToast("Failed to clear done trades", "error", 2600);
       void refreshHiddenStates(cacheMeta?.currentRevision);
     }
-  }, [addToast, cacheMeta?.currentRevision, hiddenTradeMap, refreshHiddenStates]);
+  }, [
+    addToast,
+    cacheMeta?.currentRevision,
+    hiddenTradeMap,
+    refreshHiddenStates,
+  ]);
 
   const clearAllHiddenRows = useCallback(async () => {
     if (Object.keys(hiddenTradeMap).length === 0) return;
@@ -934,7 +963,12 @@ export function StationTrading({
       addToast("Failed to clear hidden trades", "error", 2600);
       void refreshHiddenStates(cacheMeta?.currentRevision);
     }
-  }, [addToast, cacheMeta?.currentRevision, hiddenTradeMap, refreshHiddenStates]);
+  }, [
+    addToast,
+    cacheMeta?.currentRevision,
+    hiddenTradeMap,
+    refreshHiddenStates,
+  ]);
 
   const togglePin = useCallback((key: string) => {
     setPinnedKeys((prev) => {
@@ -990,7 +1024,9 @@ export function StationTrading({
       const scanParams: Parameters<typeof scanStation>[0] = {
         min_margin: minMargin,
         ignored_system_ids: params.ignored_system_ids ?? [],
-        sales_tax_percent: splitTradeFees ? sellSalesTaxPercent : salesTaxPercent,
+        sales_tax_percent: splitTradeFees
+          ? sellSalesTaxPercent
+          : salesTaxPercent,
         broker_fee: splitTradeFees ? sellBrokerFeePercent : brokerFee,
         cts_profile: ctsProfile,
         split_trade_fees: splitTradeFees,
@@ -1034,7 +1070,8 @@ export function StationTrading({
         scanParams.region_id = regionId;
       }
 
-      const singleStationMode = radius === 0 && selectedStationId !== ALL_STATIONS_ID;
+      const singleStationMode =
+        radius === 0 && selectedStationId !== ALL_STATIONS_ID;
       // Include structures for radius/all scans. Single-station mode stays strictly row-scoped.
       if (includeStructures && !singleStationMode) {
         scanParams.include_structures = true;
@@ -1108,11 +1145,7 @@ export function StationTrading({
             : selectedStationId !== ALL_STATIONS_ID
               ? `Station ${selectedStationId}`
               : `Region ${regionId} (all)`;
-        const cacheView = mapServerCacheMeta(
-          resultMeta,
-          scopeLabel,
-          1,
-        );
+        const cacheView = mapServerCacheMeta(resultMeta, scopeLabel, 1);
         setCacheMeta(cacheView);
         setCacheNowTs(scanFinishedAt);
         await refreshHiddenStates(cacheView.currentRevision, normalizedResults);
@@ -1281,7 +1314,9 @@ export function StationTrading({
       setCacheNowTs(now);
       addToast(t("cacheRebooted", { count: res.cleared }), "success", 2400);
       addToast(t("cacheRebootRescanHint"), "info", 2600);
-      setProgress(`${t("cacheRebooted", { count: res.cleared })}. ${t("cacheRebootRescanHint")}`);
+      setProgress(
+        `${t("cacheRebooted", { count: res.cleared })}. ${t("cacheRebootRescanHint")}`,
+      );
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : t("cacheRebootFailed");
       addToast(msg, "error", 2800);
@@ -1291,7 +1326,10 @@ export function StationTrading({
   }, [addToast, cacheRebooting, t]);
 
   const { pageRows, totalPages, safePage } = useMemo(() => {
-    const totalPages = Math.max(1, Math.ceil(displayRows.length / STATION_PAGE_SIZE));
+    const totalPages = Math.max(
+      1,
+      Math.ceil(displayRows.length / STATION_PAGE_SIZE),
+    );
     const safePage = Math.min(page, totalPages - 1);
     const pageRows = displayRows.slice(
       safePage * STATION_PAGE_SIZE,
@@ -1358,7 +1396,9 @@ export function StationTrading({
     }
   };
 
-  const actionBadgeClass = (action?: StationCommandRow["recommended_action"]) => {
+  const actionBadgeClass = (
+    action?: StationCommandRow["recommended_action"],
+  ) => {
     switch (action) {
       case "new_entry":
         return "text-emerald-300 border-emerald-500/40 bg-emerald-500/10";
@@ -1517,14 +1557,16 @@ export function StationTrading({
         batchPreset,
       ),
     }));
-    const actionRank: Record<StationCommandRow["recommended_action"], number> = {
-      cancel: 4,
-      reprice: 3,
-      new_entry: 2,
-      hold: 1,
-    };
+    const actionRank: Record<StationCommandRow["recommended_action"], number> =
+      {
+        cancel: 4,
+        reprice: 3,
+        new_entry: 2,
+        hold: 1,
+      };
     rows.sort((a, b) => {
-      const actionDelta = actionRank[b.plannedAction] - actionRank[a.plannedAction];
+      const actionDelta =
+        actionRank[b.plannedAction] - actionRank[a.plannedAction];
       if (actionDelta !== 0) {
         return actionDelta;
       }
@@ -1850,7 +1892,9 @@ export function StationTrading({
                   <SettingsField label={t("system")}>
                     <SystemAutocomplete
                       value={params.system_name}
-                      onChange={(v) => onChange?.({ ...params, system_name: v })}
+                      onChange={(v) =>
+                        onChange?.({ ...params, system_name: v })
+                      }
                       showLocationButton={true}
                       isLoggedIn={isLoggedIn}
                       extraActionSlots={1}
@@ -1947,6 +1991,16 @@ export function StationTrading({
                   </SettingsField>
                 </div>
               </section>
+
+              <div className="xl:col-span-4">
+                <ScoringProfileEditor
+                  value={strategyScore ?? DEFAULT_STRATEGY_SCORE}
+                  onChange={(next) => onStrategyScoreChange?.(next)}
+                  disabled={!onStrategyScoreChange}
+                  compact
+                  persistKey="score-station"
+                />
+              </div>
 
               <section className={`${settingsSectionClass} xl:col-span-4 p-3`}>
                 <PanelSectionHeader
@@ -2254,7 +2308,11 @@ export function StationTrading({
                 tone="neutral"
               />
               {hiddenCounts.total > 0 && (
-                <StatusChip label="Hidden" value={hiddenCounts.total} tone="neutral" />
+                <StatusChip
+                  label="Hidden"
+                  value={hiddenCounts.total}
+                  tone="neutral"
+                />
               )}
               <StatusChip
                 label={t("highRisk")}
@@ -2294,50 +2352,52 @@ export function StationTrading({
                   type="checkbox"
                   checked={showHiddenRows}
                   onChange={(e) => setShowHiddenRows(e.target.checked)}
-                className="accent-eve-accent"
-              />
-              <span>Show hidden</span>
-            </label>
-            <button
-              type="button"
-              onClick={() => setIgnoredModalOpen(true)}
-              className="px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] hover:border-eve-accent/50 hover:text-eve-accent transition-colors"
-              title="Open hidden rows manager"
-            >
-              Ignored ({hiddenCounts.total})
-            </button>
+                  className="accent-eve-accent"
+                />
+                <span>Show hidden</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setIgnoredModalOpen(true)}
+                className="px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] hover:border-eve-accent/50 hover:text-eve-accent transition-colors"
+                title="Open hidden rows manager"
+              >
+                Ignored ({hiddenCounts.total})
+              </button>
               <button
                 type="button"
                 onClick={() => {
                   void handleRebootCache();
                 }}
                 disabled={cacheRebooting}
-              className={`px-2 py-0.5 rounded-sm border bg-eve-dark/40 text-[11px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                cacheSecondsLeft != null && cacheSecondsLeft <= 0
-                  ? "border-red-500/60 text-red-300 hover:bg-red-900/20"
-                  : "border-eve-border/60 text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent"
-              }`}
-              title={t("cacheHardResetTitle")}
-            >
-              {cacheRebooting ? t("cacheRebooting") : t("cacheReboot")}
+                className={`px-2 py-0.5 rounded-sm border bg-eve-dark/40 text-[11px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                  cacheSecondsLeft != null && cacheSecondsLeft <= 0
+                    ? "border-red-500/60 text-red-300 hover:bg-red-900/20"
+                    : "border-eve-border/60 text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent"
+                }`}
+                title={t("cacheHardResetTitle")}
+              >
+                {cacheRebooting ? t("cacheRebooting") : t("cacheReboot")}
               </button>
-            <button
-              type="button"
-              className={`px-2 py-0.5 rounded-sm border text-[11px] font-mono transition-colors ${
-                cacheSecondsLeft != null && cacheSecondsLeft <= 0
-                  ? "border-red-500/50 text-red-300 bg-red-950/30"
-                  : "border-eve-border/60 text-eve-accent bg-eve-dark/40 hover:border-eve-accent/50"
-              }`}
-              title={
-                cacheMeta
-                  ? `Scope: ${cacheMeta.scopeLabel}\nRegions: ${cacheMeta.regionCount}\nLast refresh: ${new Date(cacheMeta.lastRefreshAt).toLocaleTimeString()}\nNext expiry: ${new Date(cacheMeta.nextExpiryAt).toLocaleTimeString()}`
-                  : "Cache metadata unavailable"
-              }
+              <button
+                type="button"
+                className={`px-2 py-0.5 rounded-sm border text-[11px] font-mono transition-colors ${
+                  cacheSecondsLeft != null && cacheSecondsLeft <= 0
+                    ? "border-red-500/50 text-red-300 bg-red-950/30"
+                    : "border-eve-border/60 text-eve-accent bg-eve-dark/40 hover:border-eve-accent/50"
+                }`}
+                title={
+                  cacheMeta
+                    ? `Scope: ${cacheMeta.scopeLabel}\nRegions: ${cacheMeta.regionCount}\nLast refresh: ${new Date(cacheMeta.lastRefreshAt).toLocaleTimeString()}\nNext expiry: ${new Date(cacheMeta.nextExpiryAt).toLocaleTimeString()}`
+                    : "Cache metadata unavailable"
+                }
               >
                 {cacheBadgeText}
               </button>
               {cacheSecondsLeft != null && cacheSecondsLeft <= 0 && (
-                <span className="text-red-300 text-[11px]">{t("cacheStaleHint")}</span>
+                <span className="text-red-300 text-[11px]">
+                  {t("cacheStaleHint")}
+                </span>
               )}
             </div>
           )}
@@ -2418,7 +2478,9 @@ export function StationTrading({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setOperatorPanelWidth(OPERATOR_PANEL_DEFAULT)}
+                    onClick={() =>
+                      setOperatorPanelWidth(OPERATOR_PANEL_DEFAULT)
+                    }
                     className="px-1.5 py-0.5 rounded-sm border border-eve-border/60 text-eve-dim hover:text-eve-accent hover:border-eve-accent/50 transition-colors text-[10px] font-mono"
                     title="Reset to 50/50"
                   >
@@ -2533,21 +2595,28 @@ export function StationTrading({
                 <div className="mt-2 grid grid-cols-2 gap-1 text-[10px]">
                   <div className="rounded-sm border border-eve-border/40 bg-eve-dark/40 px-2 py-1">
                     <span className="text-eve-dim">Preset</span>
-                    <span className="ml-1 text-eve-accent font-mono">{batchPreset}</span>
+                    <span className="ml-1 text-eve-accent font-mono">
+                      {batchPreset}
+                    </span>
                   </div>
                   <div className="rounded-sm border border-eve-border/40 bg-eve-dark/40 px-2 py-1">
                     <span className="text-eve-dim">Rows</span>
-                    <span className="ml-1 text-eve-accent font-mono">{batchSummary.count}</span>
+                    <span className="ml-1 text-eve-accent font-mono">
+                      {batchSummary.count}
+                    </span>
                   </div>
                   <div className="rounded-sm border border-eve-border/40 bg-eve-dark/40 px-2 py-1">
                     <span className="text-eve-dim">Actions</span>
                     <span className="ml-1 text-eve-accent font-mono">
-                      n{batchSummary.new_entry} r{batchSummary.reprice} c{batchSummary.cancel} h{batchSummary.hold}
+                      n{batchSummary.new_entry} r{batchSummary.reprice} c
+                      {batchSummary.cancel} h{batchSummary.hold}
                     </span>
                   </div>
                   <div className="rounded-sm border border-eve-border/40 bg-eve-dark/40 px-2 py-1">
                     <span className="text-eve-dim">Changed</span>
-                    <span className="ml-1 text-eve-accent font-mono">{batchSummary.changed}</span>
+                    <span className="ml-1 text-eve-accent font-mono">
+                      {batchSummary.changed}
+                    </span>
                   </div>
                   <div className="col-span-2 rounded-sm border border-eve-border/40 bg-eve-dark/40 px-2 py-1">
                     <span className="text-eve-dim">Delta/day</span>
@@ -2564,7 +2633,8 @@ export function StationTrading({
                   Shortcuts
                 </summary>
                 <div className="mt-1 font-mono">
-                  `Ctrl+Shift+A` actionable | `Ctrl+Shift+C` copy | `Ctrl+Shift+X` clear
+                  `Ctrl+Shift+A` actionable | `Ctrl+Shift+C` copy |
+                  `Ctrl+Shift+X` clear
                 </div>
               </details>
 
@@ -2625,9 +2695,12 @@ export function StationTrading({
                             <td className="px-2 py-1">
                               <span
                                 className={`inline-flex items-center px-1 py-px rounded-sm border ${
-                                  row.plannedAction === row.command.recommended_action
+                                  row.plannedAction ===
+                                  row.command.recommended_action
                                     ? "border-eve-border/40 text-eve-dim"
-                                    : actionBadgeClass(row.command.recommended_action)
+                                    : actionBadgeClass(
+                                        row.command.recommended_action,
+                                      )
                                 }`}
                               >
                                 {actionLabel(row.command.recommended_action)}
@@ -2646,11 +2719,17 @@ export function StationTrading({
                                   : "text-red-300"
                               }`}
                             >
-                              {row.command.expected_delta_daily_profit >= 0 ? "+" : ""}
-                              {formatISK(row.command.expected_delta_daily_profit)}
+                              {row.command.expected_delta_daily_profit >= 0
+                                ? "+"
+                                : ""}
+                              {formatISK(
+                                row.command.expected_delta_daily_profit,
+                              )}
                             </td>
                             <td className="px-2 py-1 text-right text-eve-accent font-mono">
-                              {formatBandISK(row.command.forecast?.daily_profit)}
+                              {formatBandISK(
+                                row.command.forecast?.daily_profit,
+                              )}
                             </td>
                             <td className="px-2 py-1 text-right text-eve-dim font-mono">
                               {row.command.forecast?.eta_days
@@ -2671,7 +2750,10 @@ export function StationTrading({
                             </td>
                             <td
                               className="px-2 py-1 text-eve-dim max-w-[280px] truncate"
-                              title={row.command.action_reason || "no action explanation"}
+                              title={
+                                row.command.action_reason ||
+                                "no action explanation"
+                              }
                             >
                               {row.command.action_reason || "\u2014"}
                             </td>
@@ -2728,208 +2810,230 @@ export function StationTrading({
               : undefined
           }
         >
-        <table className="w-full min-w-max text-sm">
-          <thead className="sticky top-0 z-10">
-            <tr className="bg-eve-dark border-b border-eve-border">
-              {showOperatorColumns && (
-                <th className="w-8 px-1 py-2 text-center">
-                  <input
-                    type="checkbox"
-                    checked={
-                      pageRows.length > 0 &&
-                      pageRows.every((row) =>
-                        selectedBatchKeys.has(stationRowKey(row)),
-                      )
-                    }
-                    onChange={toggleBatchPage}
-                    className="accent-eve-accent cursor-pointer"
-                  />
+          <table className="w-full min-w-max text-sm">
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-eve-dark border-b border-eve-border">
+                {showOperatorColumns && (
+                  <th className="w-8 px-1 py-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={
+                        pageRows.length > 0 &&
+                        pageRows.every((row) =>
+                          selectedBatchKeys.has(stationRowKey(row)),
+                        )
+                      }
+                      onChange={toggleBatchPage}
+                      className="accent-eve-accent cursor-pointer"
+                    />
+                  </th>
+                )}
+                <th className="min-w-[24px] px-1 py-2"></th>
+                <th
+                  className="min-w-[32px] px-1 py-2 text-center text-[10px] uppercase tracking-wider text-eve-dim"
+                  title={t("execPlanTitle")}
+                >
+                  📊
                 </th>
-              )}
-              <th className="min-w-[24px] px-1 py-2"></th>
-              <th
-                className="min-w-[32px] px-1 py-2 text-center text-[10px] uppercase tracking-wider text-eve-dim"
-                title={t("execPlanTitle")}
-              >
-                📊
-              </th>
-              {showOperatorColumns && (
-                <>
-                  <th className="min-w-[92px] px-2 py-2 text-left text-[10px] uppercase tracking-wider text-eve-dim font-medium">
-                    Action
-                  </th>
-                  <th className="min-w-[96px] px-2 py-2 text-right text-[10px] uppercase tracking-wider text-eve-dim font-medium">
-                    Delta/day
-                  </th>
-                </>
-              )}
-              {columnDefs.map((col) => {
-                const tooltipKey = metricTooltipKeys[col.key];
-                return (
-                  <th
-                    key={col.key}
-                    onClick={() => toggleSort(col.key)}
-                    className={`${col.width} px-2 py-2 text-left text-[10px] uppercase tracking-wider
+                {showOperatorColumns && (
+                  <>
+                    <th className="min-w-[92px] px-2 py-2 text-left text-[10px] uppercase tracking-wider text-eve-dim font-medium">
+                      Action
+                    </th>
+                    <th className="min-w-[96px] px-2 py-2 text-right text-[10px] uppercase tracking-wider text-eve-dim font-medium">
+                      Delta/day
+                    </th>
+                  </>
+                )}
+                {columnDefs.map((col) => {
+                  const tooltipKey = metricTooltipKeys[col.key];
+                  return (
+                    <th
+                      key={col.key}
+                      onClick={() => toggleSort(col.key)}
+                      className={`${col.width} px-2 py-2 text-left text-[10px] uppercase tracking-wider
                       text-eve-dim font-medium cursor-pointer select-none
                       hover:text-eve-accent transition-colors ${
                         sortKey === col.key ? "text-eve-accent" : ""
                       }`}
+                    >
+                      <span className="inline-flex items-center">
+                        {t(col.labelKey)}
+                        {sortKey === col.key && (
+                          <span className="ml-1">
+                            {sortDir === "asc" ? "▲" : "▼"}
+                          </span>
+                        )}
+                        {tooltipKey && (
+                          <MetricTooltipContent metricKey={tooltipKey} t={t} />
+                        )}
+                      </span>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {pageRows.map((row, i) => {
+                const key = stationRowKey(row);
+                const commandRow = commandRowsByKey[key];
+                const batchSelected = selectedBatchKeys.has(key);
+                const hiddenEntry = hiddenTradeMap[key];
+                return (
+                  <tr
+                    key={key}
+                    className={`${getRowClass(row, safePage * STATION_PAGE_SIZE + i, commandRow)} ${
+                      pinnedKeys.has(key)
+                        ? "bg-eve-accent/10 border-l-2 border-l-eve-accent"
+                        : ""
+                    } ${hiddenEntry ? "opacity-60" : ""}`}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setContextMenu({ x: e.clientX, y: e.clientY, row });
+                    }}
                   >
-                    <span className="inline-flex items-center">
-                      {t(col.labelKey)}
-                      {sortKey === col.key && (
-                        <span className="ml-1">
-                          {sortDir === "asc" ? "▲" : "▼"}
-                        </span>
-                      )}
-                      {tooltipKey && (
-                        <MetricTooltipContent metricKey={tooltipKey} t={t} />
-                      )}
-                    </span>
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {pageRows.map((row, i) => {
-              const key = stationRowKey(row);
-              const commandRow = commandRowsByKey[key];
-              const batchSelected = selectedBatchKeys.has(key);
-              const hiddenEntry = hiddenTradeMap[key];
-              return (
-                <tr
-                  key={key}
-                  className={`${getRowClass(row, safePage * STATION_PAGE_SIZE + i, commandRow)} ${
-                    pinnedKeys.has(key) ? "bg-eve-accent/10 border-l-2 border-l-eve-accent" : ""
-                  } ${hiddenEntry ? "opacity-60" : ""}`}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setContextMenu({ x: e.clientX, y: e.clientY, row });
-                  }}
-                >
-                  {showOperatorColumns && (
-                    <td className="w-8 px-1 py-1 text-center">
-                      <input
-                        type="checkbox"
-                        checked={batchSelected}
-                        onChange={() => toggleBatchRow(key)}
-                        className="accent-eve-accent cursor-pointer"
-                      />
-                    </td>
-                  )}
-                  {/* Risk indicator */}
-                  <td className="px-1 py-1 text-center">
-                    {hiddenEntry
-                      ? hiddenEntry.mode === "ignored"
-                        ? "✖"
-                        : "✓"
-                      : row.IsHighRiskFlag
-                        ? "🚨"
-                        : row.IsExtremePriceFlag
-                          ? "⚠️"
-                          : ""}
-                  </td>
-                  <td className="px-1 py-1 text-center">
-                    {rowRegionID(row, regionId) > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setExecPlanRow(row)}
-                        className="text-eve-dim hover:text-eve-accent transition-colors text-sm"
-                        title={t("execPlanTitle")}
-                      >
-                        📊
-                      </button>
-                    )}
-                  </td>
-                  {showOperatorColumns && (
-                    <>
-                      <td className="px-2 py-1 text-left">
-                        <span
-                          className={`inline-flex items-center px-1.5 py-0.5 rounded-sm border text-[10px] uppercase tracking-wide ${actionBadgeClass(commandRow?.recommended_action)}`}
-                          title={commandRow?.action_reason || "no action explanation"}
-                        >
-                          {actionLabel(commandRow?.recommended_action)}
-                        </span>
+                    {showOperatorColumns && (
+                      <td className="w-8 px-1 py-1 text-center">
+                        <input
+                          type="checkbox"
+                          checked={batchSelected}
+                          onChange={() => toggleBatchRow(key)}
+                          className="accent-eve-accent cursor-pointer"
+                        />
                       </td>
+                    )}
+                    {/* Risk indicator */}
+                    <td className="px-1 py-1 text-center">
+                      {hiddenEntry
+                        ? hiddenEntry.mode === "ignored"
+                          ? "✖"
+                          : "✓"
+                        : row.IsHighRiskFlag
+                          ? "🚨"
+                          : row.IsExtremePriceFlag
+                            ? "⚠️"
+                            : ""}
+                    </td>
+                    <td className="px-1 py-1 text-center">
+                      {rowRegionID(row, regionId) > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setExecPlanRow(row)}
+                          className="text-eve-dim hover:text-eve-accent transition-colors text-sm"
+                          title={t("execPlanTitle")}
+                        >
+                          📊
+                        </button>
+                      )}
+                    </td>
+                    {showOperatorColumns && (
+                      <>
+                        <td className="px-2 py-1 text-left">
+                          <span
+                            className={`inline-flex items-center px-1.5 py-0.5 rounded-sm border text-[10px] uppercase tracking-wide ${actionBadgeClass(commandRow?.recommended_action)}`}
+                            title={
+                              commandRow?.action_reason ||
+                              "no action explanation"
+                            }
+                          >
+                            {actionLabel(commandRow?.recommended_action)}
+                          </span>
+                        </td>
+                        <td
+                          className={`px-2 py-1 text-right font-mono ${
+                            (commandRow?.expected_delta_daily_profit ?? 0) >= 0
+                              ? "text-emerald-300"
+                              : "text-red-300"
+                          }`}
+                        >
+                          {commandRow
+                            ? `${commandRow.expected_delta_daily_profit >= 0 ? "+" : ""}${formatISK(commandRow.expected_delta_daily_profit)}`
+                            : "\u2014"}
+                        </td>
+                      </>
+                    )}
+                    {columnDefs.map((col) => (
                       <td
-                        className={`px-2 py-1 text-right font-mono ${
-                          (commandRow?.expected_delta_daily_profit ?? 0) >= 0
-                            ? "text-emerald-300"
-                            : "text-red-300"
+                        key={col.key}
+                        className={`px-2 py-1 ${col.width} truncate ${
+                          col.key === "CTS"
+                            ? `font-mono font-bold ${getCTSColor(row.CTS)}`
+                            : col.key === "SDS"
+                              ? `font-mono ${getSDSColor(row.SDS)}`
+                              : col.numeric
+                                ? "text-eve-accent font-mono"
+                                : "text-eve-text"
                         }`}
                       >
-                        {commandRow
-                          ? `${commandRow.expected_delta_daily_profit >= 0 ? "+" : ""}${formatISK(commandRow.expected_delta_daily_profit)}`
-                          : "\u2014"}
-                      </td>
-                    </>
-                  )}
-                  {columnDefs.map((col) => (
-                  <td
-                    key={col.key}
-                    className={`px-2 py-1 ${col.width} truncate ${
-                      col.key === "CTS"
-                        ? `font-mono font-bold ${getCTSColor(row.CTS)}`
-                        : col.key === "SDS"
-                          ? `font-mono ${getSDSColor(row.SDS)}`
-                          : col.numeric
-                            ? "text-eve-accent font-mono"
-                            : "text-eve-text"
-                    }`}
-                  >
-                    {col.key === "TypeName" ? (
-                      <div className="flex items-center gap-1">
-                        <span className="truncate">{formatCell(col, row)}</span>
-                        {isLoggedIn && (
-                          <button
-                            type="button"
-                            className="shrink-0 text-eve-dim hover:text-eve-accent transition-colors"
-                            title={t("openMarket")}
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              try {
-                                await openMarketInGame(row.TypeID);
-                                addToast(t("actionSuccess"), "success", 2000);
-                              } catch (err: any) {
-                                const { messageKey, duration } =
-                                  handleEveUIError(err);
-                                addToast(t(messageKey), "error", duration);
-                              }
-                            }}
-                          >
-                            🎮
-                          </button>
+                        {col.key === "TypeName" ? (
+                          <div className="flex items-center gap-1">
+                            <span className="truncate">
+                              {formatCell(col, row)}
+                            </span>
+                            {isLoggedIn && (
+                              <button
+                                type="button"
+                                className="shrink-0 text-eve-dim hover:text-eve-accent transition-colors"
+                                title={t("openMarket")}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    await openMarketInGame(row.TypeID);
+                                    addToast(
+                                      t("actionSuccess"),
+                                      "success",
+                                      2000,
+                                    );
+                                  } catch (err: any) {
+                                    const { messageKey, duration } =
+                                      handleEveUIError(err);
+                                    addToast(t(messageKey), "error", duration);
+                                  }
+                                }}
+                              >
+                                🎮
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          formatCell(col, row)
                         )}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+              {displayRows.length === 0 && !scanning && (
+                <tr>
+                  <td
+                    colSpan={
+                      columnDefs.length + 2 + (showOperatorColumns ? 3 : 0)
+                    }
+                    className="p-0"
+                  >
+                    {results.length > 0 &&
+                    hiddenCounts.total > 0 &&
+                    !showHiddenRows ? (
+                      <div className="p-6 text-center text-sm text-eve-dim">
+                        All rows are hidden by filters. Enable{" "}
+                        <span className="text-eve-accent">Show hidden</span> or
+                        open{" "}
+                        <span className="text-eve-accent">
+                          Ignored ({hiddenCounts.total})
+                        </span>
+                        .
                       </div>
                     ) : (
-                      formatCell(col, row)
+                      <EmptyState
+                        reason="no_scan_yet"
+                        wikiSlug="Station-Trading"
+                      />
                     )}
                   </td>
-                  ))}
                 </tr>
-              );
-            })}
-            {displayRows.length === 0 && !scanning && (
-              <tr>
-                <td
-                  colSpan={columnDefs.length + 2 + (showOperatorColumns ? 3 : 0)}
-                  className="p-0"
-                >
-                  {results.length > 0 && hiddenCounts.total > 0 && !showHiddenRows ? (
-                    <div className="p-6 text-center text-sm text-eve-dim">
-                      All rows are hidden by filters. Enable{" "}
-                      <span className="text-eve-accent">Show hidden</span> or open{" "}
-                      <span className="text-eve-accent">Ignored ({hiddenCounts.total})</span>.
-                    </div>
-                  ) : (
-                    <EmptyState reason="no_scan_yet" wikiSlug="Station-Trading" />
-                  )}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -2960,7 +3064,9 @@ export function StationTrading({
             <span className="text-eve-dim">
               actions:{" "}
               <span className="text-eve-accent font-mono font-semibold">
-                {commandSummary.new_entry_count} new / {commandSummary.reprice_count} reprice / {commandSummary.cancel_count} cancel
+                {commandSummary.new_entry_count} new /{" "}
+                {commandSummary.reprice_count} reprice /{" "}
+                {commandSummary.cancel_count} cancel
               </span>
             </span>
           )}
@@ -3172,20 +3278,22 @@ export function StationTrading({
                 className="h-8 px-2 min-w-[240px] rounded-sm border border-eve-border bg-eve-input text-eve-text text-xs"
               />
               <div className="flex items-center gap-1">
-                {(["all", "done", "ignored"] as HiddenFilterTab[]).map((tab) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    onClick={() => setIgnoredTab(tab)}
-                    className={`px-2 py-1 rounded-sm border text-xs uppercase tracking-wide transition-colors ${
-                      ignoredTab === tab
-                        ? "border-eve-accent text-eve-accent bg-eve-accent/10"
-                        : "border-eve-border/60 text-eve-dim hover:border-eve-accent/40 hover:text-eve-text"
-                    }`}
-                  >
-                    {tab}
-                  </button>
-                ))}
+                {(["all", "done", "ignored"] as HiddenFilterTab[]).map(
+                  (tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => setIgnoredTab(tab)}
+                      className={`px-2 py-1 rounded-sm border text-xs uppercase tracking-wide transition-colors ${
+                        ignoredTab === tab
+                          ? "border-eve-accent text-eve-accent bg-eve-accent/10"
+                          : "border-eve-border/60 text-eve-dim hover:border-eve-accent/40 hover:text-eve-text"
+                      }`}
+                    >
+                      {tab}
+                    </button>
+                  ),
+                )}
               </div>
               <div className="flex-1" />
               <button
@@ -3240,7 +3348,9 @@ export function StationTrading({
                               return;
                             }
                             setIgnoredSelectedKeys(
-                              new Set(filteredHiddenEntries.map((entry) => entry.key)),
+                              new Set(
+                                filteredHiddenEntries.map((entry) => entry.key),
+                              ),
                             );
                           }}
                           className="accent-eve-accent"
@@ -3286,8 +3396,12 @@ export function StationTrading({
                             className="accent-eve-accent"
                           />
                         </td>
-                        <td className="px-2 py-1 text-eve-text">{entry.typeName}</td>
-                        <td className="px-2 py-1 text-eve-dim">{entry.stationName}</td>
+                        <td className="px-2 py-1 text-eve-text">
+                          {entry.typeName}
+                        </td>
+                        <td className="px-2 py-1 text-eve-dim">
+                          {entry.stationName}
+                        </td>
                         <td className="px-2 py-1">
                           <span
                             className={`inline-flex items-center px-1.5 py-0.5 rounded-sm border text-[10px] uppercase tracking-wide ${
@@ -3380,7 +3494,9 @@ function StatusChip({
     <span
       className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm border font-mono tabular-nums ${toneClass}`}
     >
-      <span className="text-[10px] uppercase tracking-wide opacity-80">{label}</span>
+      <span className="text-[10px] uppercase tracking-wide opacity-80">
+        {label}
+      </span>
       <span className="text-[11px] text-eve-text font-semibold">{value}</span>
     </span>
   );

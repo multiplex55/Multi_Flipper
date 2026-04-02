@@ -1,5 +1,7 @@
 import { useI18n } from "@/lib/i18n";
-import type { ScanParams } from "@/lib/types";
+import type { ScanParams, StrategyScoreConfig } from "@/lib/types";
+import { ScoringProfileEditor } from "./ScoringProfileEditor";
+import { DEFAULT_STRATEGY_SCORE } from "@/lib/scoringPresets";
 import {
   TabSettingsPanel,
   SettingsField,
@@ -12,32 +14,42 @@ import {
 interface Props {
   params: ScanParams;
   onChange: (params: ScanParams) => void;
+  strategyScore?: StrategyScoreConfig;
+  onStrategyScoreChange?: (value: StrategyScoreConfig) => void;
 }
 
-export function ContractParametersPanel({ params, onChange }: Props) {
+export function ContractParametersPanel({
+  params,
+  onChange,
+  strategyScore,
+  onStrategyScoreChange,
+}: Props) {
   const { t, locale } = useI18n();
 
   const set = <K extends keyof ScanParams>(key: K, value: ScanParams[K]) => {
     onChange({ ...params, [key]: value });
   };
 
-  const hints = locale === "ru" ? [
-    `**${t("minContractPrice")}**: фильтрует контракты с ценой ниже порога (защита от bait контрактов)`,
-    `**${t("maxContractMargin")}**: контракты с маржой выше этого значения скорее всего скам`,
-    `**${t("minPricedRatio")}**: минимальный % предметов, которые должны иметь рыночную цену`,
-    `**${t("requireHistory")}**: требовать историю торговли для более точной оценки (медленнее)`,
-    `**${t("contractInstantLiquidation")}**: считать только то, что можно сразу продать в buy orders в радиусе продажи`,
-    `**${t("contractHoldDays")}**: горизонт в днях для оценки вероятности полной распродажи`,
-    `**${t("contractTargetConfidence")}**: минимальная вероятность полной распродажи за горизонт`,
-  ] : [
-    `**${t("minContractPrice")}**: filter contracts below this price (bait protection)`,
-    `**${t("maxContractMargin")}**: contracts above this margin are likely scams`,
-    `**${t("minPricedRatio")}**: minimum % of items that must have market price`,
-    `**${t("requireHistory")}**: require trading history for accurate pricing (slower)`,
-    `**${t("contractInstantLiquidation")}**: keep only contracts that can be sold immediately into buy orders within sell radius`,
-    `**${t("contractHoldDays")}**: horizon in days for liquidation probability modeling`,
-    `**${t("contractTargetConfidence")}**: minimum full-liquidation probability within the horizon`,
-  ];
+  const hints =
+    locale === "ru"
+      ? [
+          `**${t("minContractPrice")}**: фильтрует контракты с ценой ниже порога (защита от bait контрактов)`,
+          `**${t("maxContractMargin")}**: контракты с маржой выше этого значения скорее всего скам`,
+          `**${t("minPricedRatio")}**: минимальный % предметов, которые должны иметь рыночную цену`,
+          `**${t("requireHistory")}**: требовать историю торговли для более точной оценки (медленнее)`,
+          `**${t("contractInstantLiquidation")}**: считать только то, что можно сразу продать в buy orders в радиусе продажи`,
+          `**${t("contractHoldDays")}**: горизонт в днях для оценки вероятности полной распродажи`,
+          `**${t("contractTargetConfidence")}**: минимальная вероятность полной распродажи за горизонт`,
+        ]
+      : [
+          `**${t("minContractPrice")}**: filter contracts below this price (bait protection)`,
+          `**${t("maxContractMargin")}**: contracts above this margin are likely scams`,
+          `**${t("minPricedRatio")}**: minimum % of items that must have market price`,
+          `**${t("requireHistory")}**: require trading history for accurate pricing (slower)`,
+          `**${t("contractInstantLiquidation")}**: keep only contracts that can be sold immediately into buy orders within sell radius`,
+          `**${t("contractHoldDays")}**: horizon in days for liquidation probability modeling`,
+          `**${t("contractTargetConfidence")}**: minimum full-liquidation probability within the horizon`,
+        ];
 
   return (
     <TabSettingsPanel
@@ -45,7 +57,14 @@ export function ContractParametersPanel({ params, onChange }: Props) {
       hint={t("contractFiltersHint")}
       icon="📜"
       persistKey="contracts"
-      help={{ stepKeys: ["helpContractsStep1", "helpContractsStep2", "helpContractsStep3"], wikiSlug: "Contract-Arbitrage" }}
+      help={{
+        stepKeys: [
+          "helpContractsStep1",
+          "helpContractsStep2",
+          "helpContractsStep3",
+        ],
+        wikiSlug: "Contract-Arbitrage",
+      }}
     >
       <SettingsGrid cols={4}>
         <SettingsField label={t("minContractPrice")}>
@@ -119,6 +138,14 @@ export function ContractParametersPanel({ params, onChange }: Props) {
           />
         </SettingsField>
       </SettingsGrid>
+
+      <ScoringProfileEditor
+        value={strategyScore ?? DEFAULT_STRATEGY_SCORE}
+        onChange={(next) => onStrategyScoreChange?.(next)}
+        disabled={!onStrategyScoreChange}
+        compact
+        persistKey="score-contracts"
+      />
 
       <SettingsHints hints={hints} />
     </TabSettingsPanel>

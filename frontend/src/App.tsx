@@ -58,6 +58,7 @@ import type {
   StationTrade,
 } from "./lib/types";
 import logo from "./assets/logo.svg";
+import { DEFAULT_STRATEGY_SCORE } from "@/lib/scoringPresets";
 
 type Tab =
   | "radius"
@@ -89,17 +90,11 @@ type PatronFeed = {
   patrons?: unknown[];
 };
 
-const defaultPatronsURL = "https://ilyaux.github.io/eve-flipper-data/patrons.json";
+const defaultPatronsURL =
+  "https://ilyaux.github.io/eve-flipper-data/patrons.json";
 const patronsDataURL =
   (import.meta.env.VITE_PATRONS_URL as string | undefined)?.trim() ||
   defaultPatronsURL;
-const DEFAULT_STRATEGY_SCORE: StrategyScoreConfig = {
-  profit_weight: 35,
-  risk_weight: 25,
-  velocity_weight: 20,
-  jump_weight: 10,
-  capital_weight: 10,
-};
 
 type DesktopRuntimeWindow = Window & {
   __TAURI_INTERNALS__?: unknown;
@@ -119,7 +114,8 @@ function toRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function toNumber(value: unknown, fallback = 0): number {
-  if (typeof value === "number") return Number.isFinite(value) ? value : fallback;
+  if (typeof value === "number")
+    return Number.isFinite(value) ? value : fallback;
   if (typeof value === "string") {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
@@ -180,7 +176,9 @@ function isFlipResultLike(value: unknown): value is FlipResult {
   return toInt(rec.TypeID, 0) > 0;
 }
 
-function isLegacyRegionalItemLike(value: unknown): value is RegionalDayTradeItem {
+function isLegacyRegionalItemLike(
+  value: unknown,
+): value is RegionalDayTradeItem {
   const rec = toRecord(value);
   if (!rec) return false;
   return toInt(rec.type_id, 0) > 0;
@@ -247,7 +245,10 @@ function legacyRegionalItemToFlip(
     SellCompetitors: 0,
     DailyProfit: dailyProfit,
     ExpectedBuyPrice: toNumber(item.source_avg_price, 0),
-    ExpectedSellPrice: toNumber(item.target_period_price, toNumber(item.target_now_price, 0)),
+    ExpectedSellPrice: toNumber(
+      item.target_period_price,
+      toNumber(item.target_now_price, 0),
+    ),
     ExpectedProfit: periodProfit,
     RealProfit: periodProfit,
     DaySecurity: toNumber(hub?.security, 0),
@@ -259,7 +260,10 @@ function legacyRegionalItemToFlip(
     DayActiveOrders: toInt(item.active_orders, 0),
     DaySourceAvgPrice: toNumber(item.source_avg_price, 0),
     DayTargetNowPrice: toNumber(item.target_now_price, 0),
-    DayTargetPeriodPrice: toNumber(item.target_period_price, toNumber(item.target_now_price, 0)),
+    DayTargetPeriodPrice: toNumber(
+      item.target_period_price,
+      toNumber(item.target_now_price, 0),
+    ),
     DayNowProfit: nowProfit,
     DayPeriodProfit: periodProfit,
     DayROINow: toNumber(item.roi_now, 0),
@@ -270,9 +274,7 @@ function legacyRegionalItemToFlip(
     DayGroupID: toInt(item.group_id, 0),
     DayGroupName: toText(item.group_name, ""),
     DayIskPerM3Jump:
-      volume > 0 && sellJumps > 0
-        ? perUnitNowProfit / (volume * sellJumps)
-        : 0,
+      volume > 0 && sellJumps > 0 ? perUnitNowProfit / (volume * sellJumps) : 0,
     DayTradeScore: toNumber(item.trade_score, 0),
     DayTargetLowestSell: toNumber(item.target_lowest_sell, 0),
   };
@@ -315,7 +317,8 @@ function App() {
   >("visible");
   const showBootSplash = bootSplashState !== "hidden";
   const [showVerifierModal, setShowVerifierModal] = useState(false);
-  const [verifierInitialManifestText, setVerifierInitialManifestText] = useState("");
+  const [verifierInitialManifestText, setVerifierInitialManifestText] =
+    useState("");
 
   const [params, setParams] = useState<ScanParams>({
     system_name: "Jita",
@@ -404,8 +407,11 @@ function App() {
     handleDeleteCharacter,
     refreshAuthStatus,
   } = useAuth();
-  const activeCharacterId = authStatus.logged_in ? authStatus.character_id ?? null : null;
-  const characterCount = authStatus.characters?.length ?? (authStatus.logged_in ? 1 : 0);
+  const activeCharacterId = authStatus.logged_in
+    ? (authStatus.character_id ?? null)
+    : null;
+  const characterCount =
+    authStatus.characters?.length ?? (authStatus.logged_in ? 1 : 0);
   const {
     appVersion,
     latestVersion,
@@ -420,9 +426,12 @@ function App() {
   const [radiusResults, setRadiusResults] = useState<FlipResult[]>([]);
   const [regionResults, setRegionResults] = useState<FlipResult[]>([]);
   const [contractResults, setContractResults] = useState<ContractResult[]>([]);
-  const [radiusCacheMeta, setRadiusCacheMeta] = useState<StationCacheMeta | null>(null);
-  const [regionCacheMeta, setRegionCacheMeta] = useState<StationCacheMeta | null>(null);
-  const [contractCacheMeta, setContractCacheMeta] = useState<StationCacheMeta | null>(null);
+  const [radiusCacheMeta, setRadiusCacheMeta] =
+    useState<StationCacheMeta | null>(null);
+  const [regionCacheMeta, setRegionCacheMeta] =
+    useState<StationCacheMeta | null>(null);
+  const [contractCacheMeta, setContractCacheMeta] =
+    useState<StationCacheMeta | null>(null);
   const [stationLoadedResults, setStationLoadedResults] = useState<
     StationTrade[] | null
   >(null);
@@ -601,7 +610,8 @@ function App() {
       }
     };
     window.addEventListener("keydown", handler, { capture: true });
-    return () => window.removeEventListener("keydown", handler, { capture: true });
+    return () =>
+      window.removeEventListener("keydown", handler, { capture: true });
   }, []);
 
   const toggleAlertChannel = useCallback(
@@ -717,7 +727,8 @@ function App() {
       setUpdateExpectedVersion((result.to_version || "").trim());
       setUpdateApplyStarted(true);
     } catch (err) {
-      const reason = err instanceof Error ? err.message : t("updateModalFailed");
+      const reason =
+        err instanceof Error ? err.message : t("updateModalFailed");
       setUpdateApplyError(reason);
       setUpdateApplying(false);
     }
@@ -797,16 +808,13 @@ function App() {
           min_item_profit: cfg.min_item_profit ?? prev.min_item_profit,
           min_s2b_per_day: cfg.min_s2b_per_day ?? prev.min_s2b_per_day,
           min_bfs_per_day: cfg.min_bfs_per_day ?? prev.min_bfs_per_day,
-          min_s2b_bfs_ratio:
-            cfg.min_s2b_bfs_ratio ?? prev.min_s2b_bfs_ratio,
-          max_s2b_bfs_ratio:
-            cfg.max_s2b_bfs_ratio ?? prev.max_s2b_bfs_ratio,
+          min_s2b_bfs_ratio: cfg.min_s2b_bfs_ratio ?? prev.min_s2b_bfs_ratio,
+          max_s2b_bfs_ratio: cfg.max_s2b_bfs_ratio ?? prev.max_s2b_bfs_ratio,
           min_route_security: cfg.min_route_security ?? prev.min_route_security,
           avg_price_period: cfg.avg_price_period ?? prev.avg_price_period,
           min_period_roi: cfg.min_period_roi ?? prev.min_period_roi,
           max_dos: cfg.max_dos ?? prev.max_dos,
-          min_demand_per_day:
-            cfg.min_demand_per_day ?? prev.min_demand_per_day,
+          min_demand_per_day: cfg.min_demand_per_day ?? prev.min_demand_per_day,
           purchase_demand_days:
             cfg.purchase_demand_days ?? prev.purchase_demand_days,
           shipping_cost_per_m3_jump:
@@ -874,7 +882,10 @@ function App() {
 
   useEffect(() => {
     if (activeCharacterId === null) return;
-    saveCharacterFeeSnapshot(activeCharacterId, extractCharacterFeeSnapshot(params));
+    saveCharacterFeeSnapshot(
+      activeCharacterId,
+      extractCharacterFeeSnapshot(params),
+    );
   }, [
     activeCharacterId,
     params.sales_tax_percent,
@@ -899,7 +910,10 @@ function App() {
       }
       const ageMs = Date.now() - (parsed.ts ?? 0);
       if (ageMs > 4 * 60 * 60 * 1000) return; // older than 4 hours → skip
-      setRegionRestorePrompt({ ts: parsed.ts ?? Date.now(), results: normalized });
+      setRegionRestorePrompt({
+        ts: parsed.ts ?? Date.now(),
+        results: normalized,
+      });
     } catch {
       // ignore parse errors
     }
@@ -923,7 +937,14 @@ function App() {
       }).catch(() => {});
     }, 500);
     return () => clearTimeout(saveTimerRef.current);
-  }, [params, strategyScore, alertChannels, alertTelegramToken, alertTelegramChatID, alertDiscordWebhook]);
+  }, [
+    params,
+    strategyScore,
+    alertChannels,
+    alertTelegramToken,
+    alertTelegramChatID,
+    alertDiscordWebhook,
+  ]);
 
   const handleScan = useCallback(async () => {
     if (scanning) {
@@ -1036,7 +1057,8 @@ function App() {
             }
           }
         } catch (err) {
-          const reason = err instanceof Error ? err.message : t("watchlistError");
+          const reason =
+            err instanceof Error ? err.message : t("watchlistError");
           addToast(`${t("watchlistError")}: ${reason}`, "error", 3000);
         }
       };
@@ -1112,8 +1134,7 @@ function App() {
               ? (row.DayNowProfit ?? row.TotalProfit ?? 0) / row.UnitsToBuy
               : 0),
           DailyVolume:
-            row.DailyVolume ??
-            Math.round(row.DayTargetDemandPerDay ?? 0),
+            row.DailyVolume ?? Math.round(row.DayTargetDemandPerDay ?? 0),
         }));
         await triggerDesktopAlerts(flatRows);
       } else {
@@ -1281,7 +1302,8 @@ function App() {
       next.min_period_roi = 0;
       if (next.min_demand_per_day == null) next.min_demand_per_day = 1;
       if (next.max_dos == null) next.max_dos = 180;
-      if ((next.purchase_demand_days ?? 0) <= 0) next.purchase_demand_days = 0.5;
+      if ((next.purchase_demand_days ?? 0) <= 0)
+        next.purchase_demand_days = 0.5;
       return next;
     });
     regionDefaultsAppliedRef.current = true;
@@ -1296,149 +1318,296 @@ function App() {
             : "opacity-0 scale-[0.995] blur-[1px]"
         } ${bootSplashState !== "hidden" ? "pointer-events-none" : ""}`}
       >
-      {/* Header */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <div className="min-w-0 flex items-center gap-2 sm:gap-2.5 px-2 sm:px-2.5 py-1 bg-eve-panel border border-eve-border rounded-sm">
-            <div className="flex items-center justify-center w-6 h-6 rounded-sm bg-eve-dark border border-eve-border/70">
-              <img
-                src={logo}
-                alt="EVE Flipper logo"
-                className="w-4 h-4 shrink-0"
-              />
-            </div>
-            <div className="flex items-center gap-2 min-w-0">
-              <h1 className="text-sm sm:text-lg font-semibold text-eve-accent tracking-wide uppercase whitespace-nowrap">
-                {t("appTitle")}
-              </h1>
-              <span
-                className="hidden sm:inline-flex px-1.5 py-0.5 text-[10px] font-mono bg-eve-accent/10 text-eve-accent border border-eve-accent/30 rounded-sm"
-                title={
-                  hasUpdate && latestVersion
-                    ? t("versionUpdateHint", { latest: latestVersion })
-                    : ""
-                }
-              >
-                {appVersion}
-              </span>
-              {hasUpdate && latestVersion && (
-                <a
-                  href={releaseURL || "https://github.com/ilyaux/Eve-flipper/releases/latest"}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hidden sm:inline-flex px-1.5 py-0.5 text-[9px] uppercase tracking-wide rounded-sm bg-eve-warning/10 text-eve-warning border border-eve-warning/40 hover:bg-eve-warning/20 transition-colors"
+        {/* Header */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="min-w-0 flex items-center gap-2 sm:gap-2.5 px-2 sm:px-2.5 py-1 bg-eve-panel border border-eve-border rounded-sm">
+              <div className="flex items-center justify-center w-6 h-6 rounded-sm bg-eve-dark border border-eve-border/70">
+                <img
+                  src={logo}
+                  alt="EVE Flipper logo"
+                  className="w-4 h-4 shrink-0"
+                />
+              </div>
+              <div className="flex items-center gap-2 min-w-0">
+                <h1 className="text-sm sm:text-lg font-semibold text-eve-accent tracking-wide uppercase whitespace-nowrap">
+                  {t("appTitle")}
+                </h1>
+                <span
+                  className="hidden sm:inline-flex px-1.5 py-0.5 text-[10px] font-mono bg-eve-accent/10 text-eve-accent border border-eve-accent/30 rounded-sm"
+                  title={
+                    hasUpdate && latestVersion
+                      ? t("versionUpdateHint", { latest: latestVersion })
+                      : ""
+                  }
                 >
-                  {t("versionUpdateAvailable")}
-                </a>
-              )}
+                  {appVersion}
+                </span>
+                {hasUpdate && latestVersion && (
+                  <a
+                    href={
+                      releaseURL ||
+                      "https://github.com/ilyaux/Eve-flipper/releases/latest"
+                    }
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hidden sm:inline-flex px-1.5 py-0.5 text-[9px] uppercase tracking-wide rounded-sm bg-eve-warning/10 text-eve-warning border border-eve-warning/40 hover:bg-eve-warning/20 transition-colors"
+                  >
+                    {t("versionUpdateAvailable")}
+                  </a>
+                )}
+              </div>
+            </div>
+            <div className="hidden sm:flex items-center gap-1.5 text-eve-dim">
+              <a
+                href="https://github.com/ilyaux/Eve-flipper"
+                target="_blank"
+                rel="noreferrer"
+                className="p-1 rounded-sm hover:bg-eve-panel hover:text-eve-accent transition-colors"
+                aria-label="GitHub"
+              >
+                <svg
+                  className="w-4 h-4"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8" />
+                </svg>
+              </a>
+              <a
+                href="https://www.patreon.com/cw/EVEFlipper"
+                target="_blank"
+                rel="noreferrer"
+                className="p-1 rounded-sm hover:bg-eve-panel hover:text-eve-accent transition-colors"
+                aria-label={t("supportPatreon")}
+                title={t("supportPatreon")}
+              >
+                <svg
+                  className="w-4 h-4"
+                  viewBox="0 0 1080 1080"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M1033.05 324.45c-.19-137.9-107.59-250.92-233.6-291.7-156.48-50.64-362.86-43.3-512.28 27.2-181.1 85.46-237.99 272.66-240.11 459.36-1.74 153.5 13.58 557.79 241.62 560.67 169.44 2.15 194.67-216.18 273.07-321.33 55.78-74.81 127.6-95.94 216.01-117.82 151.95-37.61 255.51-157.53 255.29-316.38z" />
+                </svg>
+              </a>
+              <button
+                type="button"
+                onClick={() => setShowPatrons(true)}
+                className="p-1 rounded-sm hover:bg-eve-panel hover:text-eve-accent transition-colors"
+                aria-label={t("patronsOpenList")}
+                title={t("patronsOpenList")}
+              >
+                <svg
+                  className="w-4 h-4"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M16 11a4 4 0 1 0-3.999-4A4 4 0 0 0 16 11zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.67 0-8 1.34-8 4v2h10v-2c0-1.2.53-2.29 1.4-3.16A12.6 12.6 0 0 0 8 13zm8 0c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                </svg>
+              </button>
+              <a
+                href="https://discord.gg/rnR2bw6XXX"
+                target="_blank"
+                rel="noreferrer"
+                className="p-1 rounded-sm hover:bg-eve-panel hover:text-eve-accent transition-colors"
+                aria-label="Discord"
+              >
+                <svg
+                  className="w-4 h-4 discord-icon-animated"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M13.545 2.907a13.2 13.2 0 0 0-3.257-1.011.05.05 0 0 0-.052.025c-.141.25-.297.577-.406.833a12.2 12.2 0 0 0-3.658 0 8 8 0 0 0-.412-.833.05.05 0 0 0-.052-.025c-1.125.194-2.22.534-3.257 1.011a.04.04 0 0 0-.021.018C.356 6.024-.213 9.047.066 12.032q.003.022.021.037a13.3 13.3 0 0 0 3.995 2.02.05.05 0 0 0 .056-.019q.463-.63.818-1.329a.05.05 0 0 0-.01-.059l-.018-.011a9 9 0 0 1-1.248-.595.05.05 0 0 1-.02-.066l.015-.019q.127-.095.248-.195a.05.05 0 0 1 .051-.007c2.619 1.196 5.454 1.196 8.041 0a.05.05 0 0 1 .053.007q.121.1.248.195a.05.05 0 0 1-.004.085 8 8 0 0 1-1.249.594.05.05 0 0 0-.03.03.05.05 0 0 0 .003.041c.24.465.515.909.817 1.329a.05.05 0 0 0 .056.019 13.2 13.2 0 0 0 4.001-2.02.05.05 0 0 0 .021-.037c.334-3.451-.559-6.449-2.366-9.106a.03.03 0 0 0-.02-.019m-8.198 7.307c-.789 0-1.438-.724-1.438-1.612s.637-1.613 1.438-1.613c.807 0 1.45.73 1.438 1.613 0 .888-.637 1.612-1.438 1.612m5.316 0c-.788 0-1.438-.724-1.438-1.612s.637-1.613 1.438-1.613c.807 0 1.451.73 1.438 1.613 0 .888-.631 1.612-1.438 1.612" />
+                </svg>
+              </a>
+              <a
+                href="https://discord.gg/rnR2bw6XXX"
+                target="_blank"
+                rel="noreferrer"
+                className="group inline-flex items-center gap-1.5 h-7 px-2 rounded-sm border border-[#5865F2]/45 bg-[#5865F2]/12 text-[#9ca8ff] hover:bg-[#5865F2]/20 hover:text-[#c7ceff] transition-colors"
+                aria-label={t("discordCta")}
+                title={t("discordPitch")}
+              >
+                <span className="text-[10px] uppercase tracking-[0.14em]">
+                  {t("discordCta")}
+                </span>
+              </a>
             </div>
           </div>
-          <div className="hidden sm:flex items-center gap-1.5 text-eve-dim">
-            <a
-              href="https://github.com/ilyaux/Eve-flipper"
-              target="_blank"
-              rel="noreferrer"
-              className="p-1 rounded-sm hover:bg-eve-panel hover:text-eve-accent transition-colors"
-              aria-label="GitHub"
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {/* Desktop controls — hidden on mobile */}
+            <div className="hidden sm:flex items-center gap-2">
+              <TopActionButtons
+                watchlistLabel={t("tabWatchlist")}
+                verifierLabel={t("batchPriceVerify")}
+                onOpenWatchlist={() => setShowWatchlist(true)}
+                verifierOpen={showVerifierModal}
+                initialManifestText={verifierInitialManifestText}
+                onOpenVerifier={() => {
+                  setVerifierInitialManifestText("");
+                  setShowVerifierModal(true);
+                }}
+                onCloseVerifier={() => setShowVerifierModal(false)}
+              />
+              {/* History button */}
+              <button
+                onClick={() => setShowHistory(true)}
+                className="flex items-center gap-1.5 h-[34px] px-3 bg-eve-panel border border-eve-border rounded-sm text-xs text-eve-dim hover:text-eve-accent hover:border-eve-accent/50 transition-colors"
+                title={t("tabHistory")}
+                aria-label={t("tabHistory")}
+              >
+                <span aria-hidden="true">&#128203;</span>
+                <span>{t("tabHistory")}</span>
+              </button>
+              {/* Auth chip */}
+              <div className="flex items-center gap-1 h-[34px] px-3 bg-eve-panel border border-eve-border rounded-sm text-xs">
+                {authStatus.logged_in ? (
+                  <>
+                    <button
+                      onClick={() => setShowCharacter(true)}
+                      className="flex items-center gap-2 hover:bg-eve-dark/50 rounded-sm px-1 py-0.5 transition-colors"
+                      title={t("charViewInfo")}
+                    >
+                      <img
+                        src={`https://images.evetech.net/characters/${authStatus.character_id}/portrait?size=32`}
+                        alt=""
+                        className="w-5 h-5 rounded-sm"
+                      />
+                      <span className="text-eve-accent font-medium">
+                        {authStatus.character_name}
+                      </span>
+                      {characterCount > 1 && (
+                        <span className="text-[10px] text-eve-dim bg-eve-dark px-1.5 py-0.5 rounded-sm">
+                          {characterCount}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      onClick={handleLogin}
+                      disabled={loginPolling}
+                      className="ml-1 p-1 text-eve-dim hover:text-eve-accent hover:bg-eve-dark/50 rounded-sm transition-colors disabled:opacity-60"
+                      title={t("charAddCharacter")}
+                      aria-label={t("charAddCharacter")}
+                    >
+                      <svg
+                        className="w-3.5 h-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 5v14m-7-7h14"
+                        />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={handleLogout}
+                      className="ml-1 p-1 text-eve-dim hover:text-eve-error hover:bg-eve-dark/50 rounded-sm transition-colors"
+                      title={t("logout")}
+                      aria-label={t("logout")}
+                    >
+                      <svg
+                        className="w-3.5 h-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                        />
+                      </svg>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={handleLogin}
+                    disabled={loginPolling}
+                    className="text-eve-accent hover:text-eve-accent-hover transition-colors disabled:opacity-60"
+                  >
+                    {loginPolling ? t("loginWaiting") : t("loginEve")}
+                  </button>
+                )}
+              </div>
+              <StatusBar />
+            </div>
+            <ThemeSwitcher />
+            <LanguageSwitcher />
+            {/* Hamburger menu — visible only on mobile */}
+            <button
+              onClick={() => setMobileMenuOpen((v) => !v)}
+              className="sm:hidden flex items-center justify-center h-[34px] w-[34px] rounded-sm
+                       bg-eve-panel border border-eve-border hover:border-eve-accent/50 transition-colors"
+              aria-label="Menu"
             >
               <svg
-                className="w-4 h-4"
-                viewBox="0 0 16 16"
-                fill="currentColor"
-                aria-hidden="true"
+                className="w-4 h-4 text-eve-dim"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                strokeWidth={2}
               >
-                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8" />
-              </svg>
-            </a>
-            <a
-              href="https://www.patreon.com/cw/EVEFlipper"
-              target="_blank"
-              rel="noreferrer"
-              className="p-1 rounded-sm hover:bg-eve-panel hover:text-eve-accent transition-colors"
-              aria-label={t("supportPatreon")}
-              title={t("supportPatreon")}
-            >
-            <svg
-              className="w-4 h-4"
-              viewBox="0 0 1080 1080"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <path d="M1033.05 324.45c-.19-137.9-107.59-250.92-233.6-291.7-156.48-50.64-362.86-43.3-512.28 27.2-181.1 85.46-237.99 272.66-240.11 459.36-1.74 153.5 13.58 557.79 241.62 560.67 169.44 2.15 194.67-216.18 273.07-321.33 55.78-74.81 127.6-95.94 216.01-117.82 151.95-37.61 255.51-157.53 255.29-316.38z" />
-            </svg>
-          </a>
-            <button
-              type="button"
-              onClick={() => setShowPatrons(true)}
-              className="p-1 rounded-sm hover:bg-eve-panel hover:text-eve-accent transition-colors"
-              aria-label={t("patronsOpenList")}
-              title={t("patronsOpenList")}
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M16 11a4 4 0 1 0-3.999-4A4 4 0 0 0 16 11zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.67 0-8 1.34-8 4v2h10v-2c0-1.2.53-2.29 1.4-3.16A12.6 12.6 0 0 0 8 13zm8 0c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                {mobileMenuOpen ? (
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                ) : (
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M4 6h16M4 12h16M4 18h16"
+                  />
+                )}
               </svg>
             </button>
-            <a
-              href="https://discord.gg/rnR2bw6XXX"
-              target="_blank"
-              rel="noreferrer"
-              className="p-1 rounded-sm hover:bg-eve-panel hover:text-eve-accent transition-colors"
-              aria-label="Discord"
-            >
-              <svg
-                className="w-4 h-4 discord-icon-animated"
-                viewBox="0 0 16 16"
-                fill="currentColor"
-                aria-hidden="true"
-              >
-                <path d="M13.545 2.907a13.2 13.2 0 0 0-3.257-1.011.05.05 0 0 0-.052.025c-.141.25-.297.577-.406.833a12.2 12.2 0 0 0-3.658 0 8 8 0 0 0-.412-.833.05.05 0 0 0-.052-.025c-1.125.194-2.22.534-3.257 1.011a.04.04 0 0 0-.021.018C.356 6.024-.213 9.047.066 12.032q.003.022.021.037a13.3 13.3 0 0 0 3.995 2.02.05.05 0 0 0 .056-.019q.463-.63.818-1.329a.05.05 0 0 0-.01-.059l-.018-.011a9 9 0 0 1-1.248-.595.05.05 0 0 1-.02-.066l.015-.019q.127-.095.248-.195a.05.05 0 0 1 .051-.007c2.619 1.196 5.454 1.196 8.041 0a.05.05 0 0 1 .053.007q.121.1.248.195a.05.05 0 0 1-.004.085 8 8 0 0 1-1.249.594.05.05 0 0 0-.03.03.05.05 0 0 0 .003.041c.24.465.515.909.817 1.329a.05.05 0 0 0 .056.019 13.2 13.2 0 0 0 4.001-2.02.05.05 0 0 0 .021-.037c.334-3.451-.559-6.449-2.366-9.106a.03.03 0 0 0-.02-.019m-8.198 7.307c-.789 0-1.438-.724-1.438-1.612s.637-1.613 1.438-1.613c.807 0 1.45.73 1.438 1.613 0 .888-.637 1.612-1.438 1.612m5.316 0c-.788 0-1.438-.724-1.438-1.612s.637-1.613 1.438-1.613c.807 0 1.451.73 1.438 1.613 0 .888-.631 1.612-1.438 1.612" />
-              </svg>
-            </a>
-            <a
-              href="https://discord.gg/rnR2bw6XXX"
-              target="_blank"
-              rel="noreferrer"
-              className="group inline-flex items-center gap-1.5 h-7 px-2 rounded-sm border border-[#5865F2]/45 bg-[#5865F2]/12 text-[#9ca8ff] hover:bg-[#5865F2]/20 hover:text-[#c7ceff] transition-colors"
-              aria-label={t("discordCta")}
-              title={t("discordPitch")}
-            >
-              <span className="text-[10px] uppercase tracking-[0.14em]">{t("discordCta")}</span>
-            </a>
           </div>
         </div>
-        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-          {/* Desktop controls — hidden on mobile */}
-          <div className="hidden sm:flex items-center gap-2">
-            <TopActionButtons
-              watchlistLabel={t("tabWatchlist")}
-              verifierLabel={t("batchPriceVerify")}
-              onOpenWatchlist={() => setShowWatchlist(true)}
-              verifierOpen={showVerifierModal}
-              initialManifestText={verifierInitialManifestText}
-              onOpenVerifier={() => {
-                setVerifierInitialManifestText("");
-                setShowVerifierModal(true);
-              }}
-              onCloseVerifier={() => setShowVerifierModal(false)}
-            />
-            {/* History button */}
+
+        {/* Mobile menu dropdown */}
+        {mobileMenuOpen && (
+          <div className="sm:hidden flex flex-wrap items-center gap-1.5 px-1 pb-1 -mt-0.5 animate-in fade-in">
             <button
-              onClick={() => setShowHistory(true)}
-              className="flex items-center gap-1.5 h-[34px] px-3 bg-eve-panel border border-eve-border rounded-sm text-xs text-eve-dim hover:text-eve-accent hover:border-eve-accent/50 transition-colors"
-              title={t("tabHistory")}
-              aria-label={t("tabHistory")}
+              onClick={() => {
+                setShowWatchlist(true);
+                setMobileMenuOpen(false);
+              }}
+              className="flex items-center gap-1.5 h-9 px-3 bg-eve-panel border border-eve-border rounded-sm text-xs text-eve-dim"
             >
-              <span aria-hidden="true">&#128203;</span>
+              <span>&#11088;</span>
+              <span>{t("tabWatchlist")}</span>
+            </button>
+            <button
+              onClick={() => {
+                setShowHistory(true);
+                setMobileMenuOpen(false);
+              }}
+              className="flex items-center gap-1.5 h-9 px-3 bg-eve-panel border border-eve-border rounded-sm text-xs text-eve-dim"
+            >
+              <span>&#128203;</span>
               <span>{t("tabHistory")}</span>
             </button>
-            {/* Auth chip */}
-            <div className="flex items-center gap-1 h-[34px] px-3 bg-eve-panel border border-eve-border rounded-sm text-xs">
+            <div className="flex items-center gap-1 h-9 px-3 bg-eve-panel border border-eve-border rounded-sm text-xs">
               {authStatus.logged_in ? (
                 <>
                   <button
-                    onClick={() => setShowCharacter(true)}
-                    className="flex items-center gap-2 hover:bg-eve-dark/50 rounded-sm px-1 py-0.5 transition-colors"
-                    title={t("charViewInfo")}
+                    onClick={() => {
+                      setShowCharacter(true);
+                      setMobileMenuOpen(false);
+                    }}
+                    className="flex items-center gap-2"
                   >
                     <img
                       src={`https://images.evetech.net/characters/${authStatus.character_id}/portrait?size=32`}
@@ -1457,26 +1626,33 @@ function App() {
                   <button
                     onClick={handleLogin}
                     disabled={loginPolling}
-                    className="ml-1 p-1 text-eve-dim hover:text-eve-accent hover:bg-eve-dark/50 rounded-sm transition-colors disabled:opacity-60"
+                    className="ml-1 p-1 text-eve-dim hover:text-eve-accent disabled:opacity-60"
                     title={t("charAddCharacter")}
                     aria-label={t("charAddCharacter")}
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v14m-7-7h14" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={handleLogout}
-                    className="ml-1 p-1 text-eve-dim hover:text-eve-error hover:bg-eve-dark/50 rounded-sm transition-colors"
-                    title={t("logout")}
-                    aria-label={t("logout")}
                   >
                     <svg
                       className="w-3.5 h-3.5"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
-                      aria-hidden="true"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 5v14m-7-7h14"
+                      />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="ml-1 p-1 text-eve-dim hover:text-eve-error"
+                  >
+                    <svg
+                      className="w-3.5 h-3.5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
                     >
                       <path
                         strokeLinecap="round"
@@ -1491,883 +1667,814 @@ function App() {
                 <button
                   onClick={handleLogin}
                   disabled={loginPolling}
-                  className="text-eve-accent hover:text-eve-accent-hover transition-colors disabled:opacity-60"
+                  className="text-eve-accent disabled:opacity-60"
                 >
                   {loginPolling ? t("loginWaiting") : t("loginEve")}
                 </button>
               )}
             </div>
+            <a
+              href="https://github.com/ilyaux/Eve-flipper"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center justify-center h-9 w-9 bg-eve-panel border border-eve-border rounded-sm text-eve-dim hover:text-eve-accent"
+              aria-label="GitHub"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8" />
+              </svg>
+            </a>
+            <a
+              href="https://www.patreon.com/cw/EVEFlipper"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center justify-center h-9 w-9 bg-eve-panel border border-eve-border rounded-sm text-eve-dim hover:text-eve-accent"
+              aria-label={t("supportPatreon")}
+              title={t("supportPatreon")}
+            >
+              <svg
+                className="w-4 h-4"
+                viewBox="0 0 1080 1080"
+                fill="currentColor"
+              >
+                <path d="M1033.05 324.45c-.19-137.9-107.59-250.92-233.6-291.7-156.48-50.64-362.86-43.3-512.28 27.2-181.1 85.46-237.99 272.66-240.11 459.36-1.74 153.5 13.58 557.79 241.62 560.67 169.44 2.15 194.67-216.18 273.07-321.33 55.78-74.81 127.6-95.94 216.01-117.82 151.95-37.61 255.51-157.53 255.29-316.38z" />
+              </svg>
+            </a>
+            <button
+              type="button"
+              onClick={() => {
+                setShowPatrons(true);
+                setMobileMenuOpen(false);
+              }}
+              className="flex items-center justify-center h-9 w-9 bg-eve-panel border border-eve-border rounded-sm text-eve-dim hover:text-eve-accent"
+              aria-label={t("patronsOpenList")}
+              title={t("patronsOpenList")}
+            >
+              <svg
+                className="w-4 h-4"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M16 11a4 4 0 1 0-3.999-4A4 4 0 0 0 16 11zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.67 0-8 1.34-8 4v2h10v-2c0-1.2.53-2.29 1.4-3.16A12.6 12.6 0 0 0 8 13zm8 0c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+              </svg>
+            </button>
+            <a
+              href="https://discord.gg/rnR2bw6XXX"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center justify-center h-9 w-9 bg-eve-panel border border-eve-border rounded-sm text-eve-dim hover:text-eve-accent"
+              aria-label="Discord"
+            >
+              <svg
+                className="w-4 h-4 discord-icon-animated"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+              >
+                <path d="M13.545 2.907a13.2 13.2 0 0 0-3.257-1.011.05.05 0 0 0-.052.025c-.141.25-.297.577-.406.833a12.2 12.2 0 0 0-3.658 0 8 8 0 0 0-.412-.833.05.05 0 0 0-.052-.025c-1.125.194-2.22.534-3.257 1.011a.04.04 0 0 0-.021.018C.356 6.024-.213 9.047.066 12.032q.003.022.021.037a13.3 13.3 0 0 0 3.995 2.02.05.05 0 0 0 .056-.019q.463-.63.818-1.329a.05.05 0 0 0-.01-.059l-.018-.011a9 9 0 0 1-1.248-.595.05.05 0 0 1-.02-.066l.015-.019q.127-.095.248-.195a.05.05 0 0 1 .051-.007c2.619 1.196 5.454 1.196 8.041 0a.05.05 0 0 1 .053.007q.121.1.248.195a.05.05 0 0 1-.004.085 8 8 0 0 1-1.249.594.05.05 0 0 0-.03.03.05.05 0 0 0 .003.041c.24.465.515.909.817 1.329a.05.05 0 0 0 .056.019 13.2 13.2 0 0 0 4.001-2.02.05.05 0 0 0 .021-.037c.334-3.451-.559-6.449-2.366-9.106a.03.03 0 0 0-.02-.019m-8.198 7.307c-.789 0-1.438-.724-1.438-1.612s.637-1.613 1.438-1.613c.807 0 1.45.73 1.438 1.613 0 .888-.637 1.612-1.438 1.612m5.316 0c-.788 0-1.438-.724-1.438-1.612s.637-1.613 1.438-1.613c.807 0 1.451.73 1.438 1.613 0 .888-.631 1.612-1.438 1.612" />
+              </svg>
+            </a>
+            <a
+              href="https://discord.gg/rnR2bw6XXX"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center h-9 px-3 rounded-sm border border-[#5865F2]/45 bg-[#5865F2]/12 text-[#9ca8ff] text-[11px] uppercase tracking-[0.12em]"
+              aria-label={t("discordCta")}
+              title={t("discordPitch")}
+            >
+              {t("discordCta")}
+            </a>
             <StatusBar />
           </div>
-          <ThemeSwitcher />
-          <LanguageSwitcher />
-          {/* Hamburger menu — visible only on mobile */}
-          <button
-            onClick={() => setMobileMenuOpen((v) => !v)}
-            className="sm:hidden flex items-center justify-center h-[34px] w-[34px] rounded-sm
-                       bg-eve-panel border border-eve-border hover:border-eve-accent/50 transition-colors"
-            aria-label="Menu"
-          >
-            <svg
-              className="w-4 h-4 text-eve-dim"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-            >
-              {mobileMenuOpen ? (
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              ) : (
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
-              )}
-            </svg>
-          </button>
-        </div>
-      </div>
+        )}
 
-      {/* Mobile menu dropdown */}
-      {mobileMenuOpen && (
-        <div className="sm:hidden flex flex-wrap items-center gap-1.5 px-1 pb-1 -mt-0.5 animate-in fade-in">
-          <button
-            onClick={() => {
-              setShowWatchlist(true);
-              setMobileMenuOpen(false);
-            }}
-            className="flex items-center gap-1.5 h-9 px-3 bg-eve-panel border border-eve-border rounded-sm text-xs text-eve-dim"
-          >
-            <span>&#11088;</span>
-            <span>{t("tabWatchlist")}</span>
-          </button>
-          <button
-            onClick={() => {
-              setShowHistory(true);
-              setMobileMenuOpen(false);
-            }}
-            className="flex items-center gap-1.5 h-9 px-3 bg-eve-panel border border-eve-border rounded-sm text-xs text-eve-dim"
-          >
-            <span>&#128203;</span>
-            <span>{t("tabHistory")}</span>
-          </button>
-          <div className="flex items-center gap-1 h-9 px-3 bg-eve-panel border border-eve-border rounded-sm text-xs">
-            {authStatus.logged_in ? (
-              <>
-                <button
-                  onClick={() => {
-                    setShowCharacter(true);
-                    setMobileMenuOpen(false);
-                  }}
-                  className="flex items-center gap-2"
-                >
-                  <img
-                    src={`https://images.evetech.net/characters/${authStatus.character_id}/portrait?size=32`}
-                    alt=""
-                    className="w-5 h-5 rounded-sm"
-                  />
-                  <span className="text-eve-accent font-medium">
-                    {authStatus.character_name}
-                  </span>
-                  {characterCount > 1 && (
-                    <span className="text-[10px] text-eve-dim bg-eve-dark px-1.5 py-0.5 rounded-sm">
-                      {characterCount}
-                    </span>
-                  )}
-                </button>
-                <button
-                  onClick={handleLogin}
-                  disabled={loginPolling}
-                  className="ml-1 p-1 text-eve-dim hover:text-eve-accent disabled:opacity-60"
-                  title={t("charAddCharacter")}
-                  aria-label={t("charAddCharacter")}
-                >
-                  <svg
-                    className="w-3.5 h-3.5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 5v14m-7-7h14"
-                    />
-                  </svg>
-                </button>
-                <button
-                  onClick={handleLogout}
-                  className="ml-1 p-1 text-eve-dim hover:text-eve-error"
-                >
-                  <svg
-                    className="w-3.5 h-3.5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                    />
-                  </svg>
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={handleLogin}
-                disabled={loginPolling}
-                className="text-eve-accent disabled:opacity-60"
-              >
-                {loginPolling ? t("loginWaiting") : t("loginEve")}
-              </button>
-            )}
-          </div>
-          <a
-            href="https://github.com/ilyaux/Eve-flipper"
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center justify-center h-9 w-9 bg-eve-panel border border-eve-border rounded-sm text-eve-dim hover:text-eve-accent"
-            aria-label="GitHub"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8" />
-            </svg>
-          </a>
-          <a
-            href="https://www.patreon.com/cw/EVEFlipper"
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center justify-center h-9 w-9 bg-eve-panel border border-eve-border rounded-sm text-eve-dim hover:text-eve-accent"
-            aria-label={t("supportPatreon")}
-            title={t("supportPatreon")}
-          >
-            <svg className="w-4 h-4" viewBox="0 0 1080 1080" fill="currentColor">
-              <path d="M1033.05 324.45c-.19-137.9-107.59-250.92-233.6-291.7-156.48-50.64-362.86-43.3-512.28 27.2-181.1 85.46-237.99 272.66-240.11 459.36-1.74 153.5 13.58 557.79 241.62 560.67 169.44 2.15 194.67-216.18 273.07-321.33 55.78-74.81 127.6-95.94 216.01-117.82 151.95-37.61 255.51-157.53 255.29-316.38z" />
-            </svg>
-          </a>
-          <button
-            type="button"
-            onClick={() => {
-              setShowPatrons(true);
-              setMobileMenuOpen(false);
-            }}
-            className="flex items-center justify-center h-9 w-9 bg-eve-panel border border-eve-border rounded-sm text-eve-dim hover:text-eve-accent"
-            aria-label={t("patronsOpenList")}
-            title={t("patronsOpenList")}
-          >
-            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M16 11a4 4 0 1 0-3.999-4A4 4 0 0 0 16 11zm-8 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3zm0 2c-2.67 0-8 1.34-8 4v2h10v-2c0-1.2.53-2.29 1.4-3.16A12.6 12.6 0 0 0 8 13zm8 0c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-            </svg>
-          </button>
-          <a
-            href="https://discord.gg/rnR2bw6XXX"
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center justify-center h-9 w-9 bg-eve-panel border border-eve-border rounded-sm text-eve-dim hover:text-eve-accent"
-            aria-label="Discord"
-          >
-            <svg className="w-4 h-4 discord-icon-animated" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M13.545 2.907a13.2 13.2 0 0 0-3.257-1.011.05.05 0 0 0-.052.025c-.141.25-.297.577-.406.833a12.2 12.2 0 0 0-3.658 0 8 8 0 0 0-.412-.833.05.05 0 0 0-.052-.025c-1.125.194-2.22.534-3.257 1.011a.04.04 0 0 0-.021.018C.356 6.024-.213 9.047.066 12.032q.003.022.021.037a13.3 13.3 0 0 0 3.995 2.02.05.05 0 0 0 .056-.019q.463-.63.818-1.329a.05.05 0 0 0-.01-.059l-.018-.011a9 9 0 0 1-1.248-.595.05.05 0 0 1-.02-.066l.015-.019q.127-.095.248-.195a.05.05 0 0 1 .051-.007c2.619 1.196 5.454 1.196 8.041 0a.05.05 0 0 1 .053.007q.121.1.248.195a.05.05 0 0 1-.004.085 8 8 0 0 1-1.249.594.05.05 0 0 0-.03.03.05.05 0 0 0 .003.041c.24.465.515.909.817 1.329a.05.05 0 0 0 .056.019 13.2 13.2 0 0 0 4.001-2.02.05.05 0 0 0 .021-.037c.334-3.451-.559-6.449-2.366-9.106a.03.03 0 0 0-.02-.019m-8.198 7.307c-.789 0-1.438-.724-1.438-1.612s.637-1.613 1.438-1.613c.807 0 1.45.73 1.438 1.613 0 .888-.637 1.612-1.438 1.612m5.316 0c-.788 0-1.438-.724-1.438-1.612s.637-1.613 1.438-1.613c.807 0 1.451.73 1.438 1.613 0 .888-.631 1.612-1.438 1.612" />
-            </svg>
-          </a>
-          <a
-            href="https://discord.gg/rnR2bw6XXX"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center h-9 px-3 rounded-sm border border-[#5865F2]/45 bg-[#5865F2]/12 text-[#9ca8ff] text-[11px] uppercase tracking-[0.12em]"
-            aria-label={t("discordCta")}
-            title={t("discordPitch")}
-          >
-            {t("discordCta")}
-          </a>
-          <StatusBar />
-        </div>
-      )}
+        {/* Parameters - shown for tabs that use global scan params (Flipper, Regional, Contracts, Route) */}
+        {(tab === "radius" ||
+          tab === "region" ||
+          tab === "contracts" ||
+          tab === "route") && (
+          <ParametersPanel
+            params={params}
+            onChange={setParams}
+            strategyScore={strategyScore}
+            onStrategyScoreChange={setStrategyScore}
+            isLoggedIn={authStatus.logged_in}
+            tab={tab}
+          />
+        )}
 
-      {/* Parameters - shown for tabs that use global scan params (Flipper, Regional, Contracts, Route) */}
-      {(tab === "radius" ||
-        tab === "region" ||
-        tab === "contracts" ||
-        tab === "route") && (
-        <ParametersPanel
-          params={params}
-          onChange={setParams}
-          isLoggedIn={authStatus.logged_in}
-          tab={tab}
-        />
-      )}
+        {/* Industry doesn't use global params - has its own settings panel */}
 
-      {/* Industry doesn't use global params - has its own settings panel */}
-
-      {/* Tabs */}
-      <div className="flex-1 flex flex-col min-h-0 bg-eve-panel border border-eve-border rounded-sm">
-        <div className="flex items-stretch border-b border-eve-border">
-          <div className="flex-1 min-w-0 overflow-x-auto scrollbar-thin snap-x snap-mandatory sm:snap-none">
-            <div
-              className="flex items-center min-w-max"
-              role="tablist"
-              aria-label="Scan modes"
-            >
-              <TabButton
-                active={tab === "radius"}
-                onClick={() => setTab("radius")}
-                label={t("tabRadius")}
-              />
-              <TabButton
-                active={tab === "region"}
-                onClick={() => setTab("region")}
-                label={t("tabRegion")}
-              />
-              <TabButton
-                active={tab === "contracts"}
-                onClick={() => setTab("contracts")}
-                label={t("tabContracts")}
-              />
-              <TabButton
-                active={tab === "route"}
-                onClick={() => setTab("route")}
-                label={t("tabRoute")}
-              />
-              {/* Visual separator: scan group vs station/industry */}
+        {/* Tabs */}
+        <div className="flex-1 flex flex-col min-h-0 bg-eve-panel border border-eve-border rounded-sm">
+          <div className="flex items-stretch border-b border-eve-border">
+            <div className="flex-1 min-w-0 overflow-x-auto scrollbar-thin snap-x snap-mandatory sm:snap-none">
               <div
-                className="h-6 w-px bg-eve-border mx-1 flex-shrink-0"
-                aria-hidden="true"
-              />
-              <TabButton
-                active={tab === "station"}
-                onClick={() => setTab("station")}
-                label={t("tabStation")}
-              />
-              <TabButton
-                active={tab === "industry"}
-                onClick={() => setTab("industry")}
-                label={t("tabIndustry")}
-              />
-              <TabButton
-                active={tab === "demand"}
-                onClick={() => setTab("demand")}
-                label={t("tabDemand") || "War Tracker"}
-              />
-              <TabButton
-                active={tab === "plex"}
-                onClick={() => setTab("plex")}
-                label={t("tabPlex") || "PLEX+"}
-              />
-              <div className="w-2 sm:w-4 shrink-0" />
+                className="flex items-center min-w-max"
+                role="tablist"
+                aria-label="Scan modes"
+              >
+                <TabButton
+                  active={tab === "radius"}
+                  onClick={() => setTab("radius")}
+                  label={t("tabRadius")}
+                />
+                <TabButton
+                  active={tab === "region"}
+                  onClick={() => setTab("region")}
+                  label={t("tabRegion")}
+                />
+                <TabButton
+                  active={tab === "contracts"}
+                  onClick={() => setTab("contracts")}
+                  label={t("tabContracts")}
+                />
+                <TabButton
+                  active={tab === "route"}
+                  onClick={() => setTab("route")}
+                  label={t("tabRoute")}
+                />
+                {/* Visual separator: scan group vs station/industry */}
+                <div
+                  className="h-6 w-px bg-eve-border mx-1 flex-shrink-0"
+                  aria-hidden="true"
+                />
+                <TabButton
+                  active={tab === "station"}
+                  onClick={() => setTab("station")}
+                  label={t("tabStation")}
+                />
+                <TabButton
+                  active={tab === "industry"}
+                  onClick={() => setTab("industry")}
+                  label={t("tabIndustry")}
+                />
+                <TabButton
+                  active={tab === "demand"}
+                  onClick={() => setTab("demand")}
+                  label={t("tabDemand") || "War Tracker"}
+                />
+                <TabButton
+                  active={tab === "plex"}
+                  onClick={() => setTab("plex")}
+                  label={t("tabPlex") || "PLEX+"}
+                />
+                <div className="w-2 sm:w-4 shrink-0" />
+              </div>
             </div>
-          </div>
 
-          {tab !== "route" &&
-            tab !== "station" &&
-            tab !== "industry" &&
-            tab !== "demand" &&
-            tab !== "plex" && (
-              <div className="shrink-0 border-l border-eve-border px-1.5 sm:px-2 py-1 flex items-center">
-                <div className="inline-flex items-center gap-1.5">
-                  <button
-                    data-scan-button
-                    onClick={handleScan}
-                    disabled={
-                      (tab === "region"
-                        ? !params.target_market_system?.trim()
-                        : !params.system_name) || scanAndRefreshing
-                    }
-                    title="Ctrl+S"
-                    className={`px-3 sm:px-4 py-1.5 rounded-sm text-[10px] sm:text-xs font-semibold uppercase tracking-wider transition-all
+            {tab !== "route" &&
+              tab !== "station" &&
+              tab !== "industry" &&
+              tab !== "demand" &&
+              tab !== "plex" && (
+                <div className="shrink-0 border-l border-eve-border px-1.5 sm:px-2 py-1 flex items-center">
+                  <div className="inline-flex items-center gap-1.5">
+                    <button
+                      data-scan-button
+                      onClick={handleScan}
+                      disabled={
+                        (tab === "region"
+                          ? !params.target_market_system?.trim()
+                          : !params.system_name) || scanAndRefreshing
+                      }
+                      title="Ctrl+S"
+                      className={`px-3 sm:px-4 py-1.5 rounded-sm text-[10px] sm:text-xs font-semibold uppercase tracking-wider transition-all
                     ${
                       scanning
                         ? "bg-eve-error/80 text-white hover:bg-eve-error"
                         : "bg-eve-accent text-eve-dark hover:bg-eve-accent-hover shadow-eve-glow"
                     }
                     disabled:bg-eve-input disabled:text-eve-dim disabled:cursor-not-allowed disabled:shadow-none`}
-                  >
-                    {scanning ? t("stop") : t("scan")}
-                  </button>
-                  <button
-                    data-scan-refresh-button
-                    onClick={handleScanAndRefresh}
-                    disabled={
-                      (tab === "region"
-                        ? !params.target_market_system?.trim()
-                        : !params.system_name) || scanning || scanAndRefreshing
-                    }
-                    className="px-3 sm:px-4 py-1.5 rounded-sm text-[10px] sm:text-xs font-semibold uppercase tracking-wider transition-all bg-eve-dark text-eve-text border border-eve-border hover:border-eve-border-light disabled:bg-eve-input disabled:text-eve-dim disabled:cursor-not-allowed"
-                  >
-                    {scanAndRefreshing ? t("scanAndRefreshProcessing") : t("scanAndRefresh")}
-                  </button>
+                    >
+                      {scanning ? t("stop") : t("scan")}
+                    </button>
+                    <button
+                      data-scan-refresh-button
+                      onClick={handleScanAndRefresh}
+                      disabled={
+                        (tab === "region"
+                          ? !params.target_market_system?.trim()
+                          : !params.system_name) ||
+                        scanning ||
+                        scanAndRefreshing
+                      }
+                      className="px-3 sm:px-4 py-1.5 rounded-sm text-[10px] sm:text-xs font-semibold uppercase tracking-wider transition-all bg-eve-dark text-eve-text border border-eve-border hover:border-eve-border-light disabled:bg-eve-input disabled:text-eve-dim disabled:cursor-not-allowed"
+                    >
+                      {scanAndRefreshing
+                        ? t("scanAndRefreshProcessing")
+                        : t("scanAndRefresh")}
+                    </button>
+                  </div>
+                </div>
+              )}
+          </div>
+
+          {/* Results — all tabs stay mounted to preserve state */}
+          <div className="flex-1 min-h-0 flex flex-col p-1.5 sm:p-2">
+            <div
+              className={`flex-1 min-h-0 flex flex-col ${tab === "radius" ? "" : "hidden"}`}
+            >
+              {tab === "radius" && (
+                <div className="shrink-0 flex items-center gap-2 px-2 py-1 text-xs border-b border-eve-border/20">
+                  <label className="inline-flex items-center gap-1.5 cursor-pointer select-none text-eve-dim hover:text-eve-text transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={autoRefreshRadius}
+                      onChange={(e) => setAutoRefreshRadius(e.target.checked)}
+                      className="accent-eve-accent"
+                    />
+                    Auto-refresh
+                  </label>
+                  {autoRefreshRadius && (
+                    <span className="flex items-center gap-1 text-eve-accent">
+                      <span className="w-1.5 h-1.5 rounded-full bg-eve-accent animate-pulse" />
+                      active
+                    </span>
+                  )}
+                </div>
+              )}
+              <ScanResultsTable
+                results={radiusResults}
+                scanning={scanning && tab === "radius"}
+                progress={tab === "radius" ? progress : ""}
+                cacheMeta={radiusCacheMeta}
+                tradeStateTab="radius"
+                salesTaxPercent={params.sales_tax_percent}
+                brokerFeePercent={params.broker_fee_percent}
+                splitTradeFees={params.split_trade_fees}
+                buyBrokerFeePercent={params.buy_broker_fee_percent}
+                sellBrokerFeePercent={params.sell_broker_fee_percent}
+                buySalesTaxPercent={params.buy_sales_tax_percent}
+                sellSalesTaxPercent={params.sell_sales_tax_percent}
+                isLoggedIn={authStatus.logged_in}
+                cargoLimit={params.cargo_capacity}
+                originSystemName={params.system_name}
+                minRouteSecurity={params.min_route_security}
+                includeStructures={params.include_structures}
+                routeMaxJumps={params.route_max_hops}
+                maxDetourJumpsPerNode={params.max_detour_jumps_per_node}
+                allowLowsec={(params.min_route_security ?? 0.45) < 0.45}
+                allowNullsec={(params.min_route_security ?? 0.45) <= 0}
+                allowWormhole={false}
+                onOpenPriceValidation={(manifestText) => {
+                  setVerifierInitialManifestText(manifestText);
+                  setShowVerifierModal(true);
+                }}
+              />
+            </div>
+            <div
+              className={`flex-1 min-h-0 flex flex-col ${tab === "region" ? "" : "hidden"}`}
+            >
+              {/* Auto-refresh toggle for region tab */}
+              {tab === "region" && (
+                <div className="shrink-0 flex items-center gap-2 px-2 py-1 text-xs border-b border-eve-border/20">
+                  <label className="inline-flex items-center gap-1.5 cursor-pointer select-none text-eve-dim hover:text-eve-text transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={autoRefreshRegion}
+                      onChange={(e) => setAutoRefreshRegion(e.target.checked)}
+                      className="accent-eve-accent"
+                    />
+                    Auto-refresh
+                  </label>
+                  {autoRefreshRegion && (
+                    <span className="flex items-center gap-1 text-eve-accent">
+                      <span className="w-1.5 h-1.5 rounded-full bg-eve-accent animate-pulse" />
+                      active
+                    </span>
+                  )}
+                </div>
+              )}
+              {/* Restore prompt: offer to reload last scan from localStorage */}
+              {regionRestorePrompt &&
+                regionResults.length === 0 &&
+                !scanning && (
+                  <div className="shrink-0 flex items-center gap-3 px-3 py-2 bg-eve-accent/10 border-b border-eve-accent/30 text-xs">
+                    <span className="text-eve-accent">💾</span>
+                    <span className="text-eve-text flex-1">
+                      Previous scan saved{" "}
+                      <span className="text-eve-dim">
+                        (
+                        {new Date(regionRestorePrompt.ts).toLocaleTimeString(
+                          [],
+                          { hour: "2-digit", minute: "2-digit" },
+                        )}
+                        , {regionRestorePrompt.results.length} items)
+                      </span>
+                      . Restore it?
+                    </span>
+                    <button
+                      className="px-2 py-0.5 rounded bg-eve-accent/20 text-eve-accent hover:bg-eve-accent/40 transition-colors"
+                      onClick={() => {
+                        setRegionResults(regionRestorePrompt.results);
+                        setRegionRestorePrompt(null);
+                      }}
+                    >
+                      Restore
+                    </button>
+                    <button
+                      className="px-2 py-0.5 rounded bg-transparent text-eve-dim hover:text-eve-text transition-colors"
+                      onClick={() => {
+                        setRegionRestorePrompt(null);
+                        localStorage.removeItem("eve_flipper_region_scan");
+                      }}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+              <ScanResultsTable
+                results={regionResults}
+                scanning={scanning && tab === "region"}
+                progress={tab === "region" ? progress : ""}
+                cacheMeta={regionCacheMeta}
+                tradeStateTab="region"
+                salesTaxPercent={params.sales_tax_percent}
+                brokerFeePercent={params.broker_fee_percent}
+                splitTradeFees={params.split_trade_fees}
+                buyBrokerFeePercent={params.buy_broker_fee_percent}
+                sellBrokerFeePercent={params.sell_broker_fee_percent}
+                buySalesTaxPercent={params.buy_sales_tax_percent}
+                sellSalesTaxPercent={params.sell_sales_tax_percent}
+                isLoggedIn={authStatus.logged_in}
+                showRegions
+                columnProfile="region_eveguru"
+                cargoLimit={params.cargo_capacity}
+                originSystemName={params.system_name}
+                minRouteSecurity={params.min_route_security}
+                includeStructures={params.include_structures}
+                routeMaxJumps={params.route_max_hops}
+                maxDetourJumpsPerNode={params.max_detour_jumps_per_node}
+                allowLowsec={(params.min_route_security ?? 0.45) < 0.45}
+                allowNullsec={(params.min_route_security ?? 0.45) <= 0}
+                allowWormhole={false}
+                onOpenPriceValidation={(manifestText) => {
+                  setVerifierInitialManifestText(manifestText);
+                  setShowVerifierModal(true);
+                }}
+              />
+            </div>
+            <div
+              className={`flex-1 min-h-0 flex flex-col ${tab === "contracts" ? "" : "hidden"}`}
+            >
+              {/* Contract-specific settings */}
+              <div className="shrink-0 mb-2">
+                <ContractParametersPanel
+                  params={params}
+                  onChange={setParams}
+                  strategyScore={strategyScore}
+                  onStrategyScoreChange={setStrategyScore}
+                />
+              </div>
+              <ContractResultsTable
+                results={contractResults}
+                scanning={scanning && tab === "contracts"}
+                progress={tab === "contracts" ? progress : ""}
+                cacheMeta={contractCacheMeta}
+                tradeStateTab="contracts"
+                excludeRigPriceIfShip={params.exclude_rigs_with_ship ?? true}
+                filterHints={contractFilterHints}
+                isLoggedIn={authStatus.logged_in}
+              />
+            </div>
+            <div
+              className={`flex-1 min-h-0 flex flex-col ${tab === "station" ? "" : "hidden"}`}
+            >
+              <StationTrading
+                params={params}
+                onChange={setParams}
+                strategyScore={strategyScore}
+                onStrategyScoreChange={setStrategyScore}
+                isLoggedIn={authStatus.logged_in}
+                loadedResults={stationLoadedResults}
+              />
+            </div>
+            <div
+              className={`flex-1 min-h-0 flex flex-col ${tab === "route" ? "" : "hidden"}`}
+            >
+              <RouteBuilder
+                params={params}
+                onChange={setParams}
+                loadedResults={routeLoadedResults}
+                isLoggedIn={authStatus.logged_in}
+              />
+            </div>
+            <div
+              className={`flex-1 min-h-0 flex flex-col ${tab === "industry" ? "" : "hidden"}`}
+            >
+              <IndustryTab isLoggedIn={authStatus.logged_in} />
+            </div>
+            <div
+              className={`flex-1 min-h-0 flex flex-col ${tab === "demand" ? "" : "hidden"}`}
+            >
+              <WarTracker
+                onError={(msg) => addToast(msg, "error")}
+                onOpenRegionArbitrage={(regionName) => {
+                  // Switch to Regional Trade tab and set target region
+                  setParams((p) => ({ ...p, target_region: regionName }));
+                  setTab("region");
+                  addToast(
+                    `${t("targetRegionSet") || "Target region set to"} ${regionName}`,
+                    "success",
+                  );
+                }}
+              />
+            </div>
+            <div
+              className={`flex-1 min-h-0 flex flex-col ${tab === "plex" ? "" : "hidden"}`}
+            >
+              <PlexTab />
+            </div>
+          </div>
+        </div>
+
+        {/* App Update Modal */}
+        <Modal
+          open={showUpdateModal}
+          onClose={() => {
+            if (!updateApplying) handleSkipUpdate();
+          }}
+          title={t("updateModalTitle")}
+          width="max-w-xl"
+        >
+          <div className="p-4 sm:p-5 space-y-3">
+            <p className="text-sm text-eve-text">{t("updateModalBody")}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <div className="px-2.5 py-2 rounded-sm border border-eve-border bg-eve-panel/60 text-eve-dim">
+                {t("updateModalCurrent")}:{" "}
+                <span className="text-eve-text">{appVersion}</span>
+              </div>
+              <div className="px-2.5 py-2 rounded-sm border border-eve-border bg-eve-panel/60 text-eve-dim">
+                {t("updateModalLatest")}:{" "}
+                <span className="text-eve-accent">{latestVersion ?? "-"}</span>
+              </div>
+            </div>
+            <div className="text-[11px] text-eve-dim">
+              {t("updateModalPlatform")}:{" "}
+              {autoUpdateSupported
+                ? t("updateModalAuto")
+                : t("updateModalManual")}{" "}
+              ({updatePlatform || "unknown"})
+            </div>
+
+            {updateApplyStarted && (
+              <div className="text-xs text-eve-warning border border-eve-warning/40 bg-eve-warning/10 rounded-sm px-2.5 py-2">
+                {t("updateModalWillRestart")}
+              </div>
+            )}
+            {updateApplyError && (
+              <div className="text-xs text-eve-error border border-eve-error/40 bg-eve-error/10 rounded-sm px-2.5 py-2">
+                {t("updateModalFailed")}: {updateApplyError}
+              </div>
+            )}
+
+            <div className="pt-2 flex flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                className="px-3 py-1.5 rounded-sm border border-eve-border text-eve-dim hover:text-eve-text disabled:opacity-60"
+                onClick={handleSkipUpdate}
+                disabled={updateApplying}
+              >
+                {t("updateModalSkip")}
+              </button>
+              <a
+                href={
+                  releaseURL ||
+                  "https://github.com/ilyaux/Eve-flipper/releases/latest"
+                }
+                target="_blank"
+                rel="noreferrer"
+                className="px-3 py-1.5 rounded-sm border border-eve-border text-eve-dim hover:text-eve-accent"
+              >
+                {t("updateModalOpenRelease")}
+              </a>
+              {autoUpdateSupported && (
+                <button
+                  type="button"
+                  className="px-3 py-1.5 rounded-sm bg-eve-accent text-black font-medium hover:brightness-110 disabled:opacity-60"
+                  onClick={() => void handleStartUpdate()}
+                  disabled={updateApplying || updateApplyStarted}
+                >
+                  {updateApplying
+                    ? t("updateModalStarting")
+                    : t("updateModalStart")}
+                </button>
+              )}
+            </div>
+          </div>
+        </Modal>
+
+        {/* Watchlist Modal */}
+        <Modal
+          open={showWatchlist}
+          onClose={() => setShowWatchlist(false)}
+          title={t("tabWatchlist")}
+          width="max-w-3xl"
+        >
+          <WatchlistTab
+            latestResults={[...radiusResults, ...regionResults]}
+            alertChannels={alertChannels}
+            toggleAlertChannel={toggleAlertChannel}
+            alertTelegramToken={alertTelegramToken}
+            setAlertTelegramToken={setAlertTelegramToken}
+            alertTelegramChatID={alertTelegramChatID}
+            setAlertTelegramChatID={setAlertTelegramChatID}
+            alertDiscordWebhook={alertDiscordWebhook}
+            setAlertDiscordWebhook={setAlertDiscordWebhook}
+            handleTestAlert={handleTestAlert}
+            alertTestLoading={alertTestLoading}
+          />
+        </Modal>
+
+        {/* History Modal */}
+        <Modal
+          open={showHistory}
+          onClose={() => setShowHistory(false)}
+          title={t("tabHistory")}
+          width="max-w-6xl"
+        >
+          <ScanHistory
+            onLoadResults={(resultTab, results, loadedParams) => {
+              // Load historical results into appropriate tab
+              if (resultTab === "radius") {
+                setRadiusResults(results as FlipResult[]);
+                setTab("radius");
+              } else if (resultTab === "region") {
+                setRegionResults(normalizeRegionalResults(results));
+                setTab("region");
+              } else if (resultTab === "contracts") {
+                setContractResults(results as ContractResult[]);
+                setTab("contracts");
+              } else if (resultTab === "station") {
+                setStationLoadedResults(results as StationTrade[]);
+                setTab("station");
+              } else if (resultTab === "route") {
+                setRouteLoadedResults(results as RouteResult[]);
+                setTab("route");
+              }
+              // Restore only global ScanParams-compatible fields (avoid leaking tab-specific params)
+              if (
+                loadedParams &&
+                (resultTab === "radius" ||
+                  resultTab === "region" ||
+                  resultTab === "contracts" ||
+                  resultTab === "route")
+              ) {
+                const safeKeys = [
+                  "system_name",
+                  "ignored_system_ids",
+                  "cargo_capacity",
+                  "buy_radius",
+                  "sell_radius",
+                  "min_margin",
+                  "sales_tax_percent",
+                  "broker_fee_percent",
+                  "split_trade_fees",
+                  "buy_broker_fee_percent",
+                  "sell_broker_fee_percent",
+                  "buy_sales_tax_percent",
+                  "sell_sales_tax_percent",
+                  "min_daily_volume",
+                  "max_investment",
+                  "min_item_profit",
+                  "min_period_roi",
+                  "max_dos",
+                  "min_demand_per_day",
+                  "purchase_demand_days",
+                  "min_s2b_per_day",
+                  "min_bfs_per_day",
+                  "min_s2b_bfs_ratio",
+                  "max_s2b_bfs_ratio",
+                  "avg_price_period",
+                  "shipping_cost_per_m3_jump",
+                  "min_route_security",
+                  "source_regions",
+                  "min_contract_price",
+                  "max_contract_margin",
+                  "min_priced_ratio",
+                  "require_history",
+                  "contract_instant_liquidation",
+                  "contract_hold_days",
+                  "contract_target_confidence",
+                  "exclude_rigs_with_ship",
+                  "target_region",
+                  "target_market_system",
+                  "target_market_location_id",
+                  "category_ids",
+                  "sell_order_mode",
+                  "include_structures",
+                  "route_min_hops",
+                  "route_max_hops",
+                  "max_detour_jumps_per_node",
+                  "route_target_system_name",
+                  "route_min_isk_per_jump",
+                  "route_allow_empty_hops",
+                ];
+                const filtered: Record<string, unknown> = {};
+                for (const k of safeKeys) {
+                  if (k in loadedParams) filtered[k] = loadedParams[k];
+                }
+                // Backward compatibility: older route history stores min_hops/max_hops.
+                if (
+                  !("route_min_hops" in filtered) &&
+                  "min_hops" in loadedParams
+                ) {
+                  filtered.route_min_hops = loadedParams.min_hops;
+                }
+                if (
+                  !("route_max_hops" in filtered) &&
+                  "max_hops" in loadedParams
+                ) {
+                  filtered.route_max_hops = loadedParams.max_hops;
+                }
+                if (Object.keys(filtered).length > 0) {
+                  setParams((p) => ({
+                    ...p,
+                    ...(filtered as Partial<ScanParams>),
+                  }));
+                }
+              }
+              // Close modal after loading
+              setShowHistory(false);
+            }}
+          />
+        </Modal>
+
+        <Modal
+          open={showPatrons}
+          onClose={() => setShowPatrons(false)}
+          title={t("patronsTitle")}
+          width="max-w-3xl"
+        >
+          <div className="p-4 sm:p-5">
+            <div className="flex flex-wrap items-center justify-end gap-2 mb-3">
+              <button
+                type="button"
+                onClick={() => void loadPatrons()}
+                disabled={patronsLoading}
+                className="px-2.5 py-1 text-xs bg-eve-panel border border-eve-border rounded-sm text-eve-dim hover:text-eve-accent disabled:opacity-60"
+              >
+                {t("patronsRefresh")}
+              </button>
+            </div>
+
+            {patronsLoading && (
+              <div className="py-8 text-center text-sm text-eve-dim">
+                {t("patronsLoading")}
+              </div>
+            )}
+
+            {!patronsLoading && patronsError !== "" && (
+              <div className="py-4 px-3 rounded-sm border border-eve-error/50 bg-eve-error/10 text-sm text-eve-error">
+                {t("patronsFetchError")}: {patronsError}
+              </div>
+            )}
+
+            {!patronsLoading && patronsError === "" && patrons.length === 0 && (
+              <div className="py-8 text-center text-sm text-eve-dim">
+                {t("patronsEmpty")}
+              </div>
+            )}
+
+            {!patronsLoading && patronsError === "" && patrons.length > 0 && (
+              <div>
+                <div className="text-xs text-eve-dim mb-2">
+                  {t("patronsCountLabel", { count: patrons.length })}
+                  {patronsUpdatedAt
+                    ? ` • ${t("patronsUpdatedAt", { date: patronsUpdatedAt })}`
+                    : ""}
+                  {patronsProject ? ` • ${patronsProject}` : ""}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {patrons.map((patron, idx) => (
+                    <div
+                      key={`${patron.name}-${idx}`}
+                      className="rounded-sm border border-eve-border bg-eve-panel/60 px-3 py-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        {patron.url ? (
+                          <a
+                            href={patron.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-sm text-eve-accent hover:text-eve-accent-hover truncate"
+                          >
+                            {patron.name}
+                          </a>
+                        ) : (
+                          <span className="text-sm text-eve-text truncate">
+                            {patron.name}
+                          </span>
+                        )}
+                        {patron.tier && (
+                          <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-sm border border-eve-accent/35 text-eve-accent">
+                            {patron.tier}
+                          </span>
+                        )}
+                      </div>
+                      {patron.since && (
+                        <div className="mt-1 text-[11px] text-eve-dim">
+                          {t("patronsSince")}: {patron.since}
+                        </div>
+                      )}
+                      {patron.note && (
+                        <div className="mt-1 text-[11px] text-eve-dim">
+                          {patron.note}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
-        </div>
 
-        {/* Results — all tabs stay mounted to preserve state */}
-        <div className="flex-1 min-h-0 flex flex-col p-1.5 sm:p-2">
-          <div
-            className={`flex-1 min-h-0 flex flex-col ${tab === "radius" ? "" : "hidden"}`}
-          >
-            {tab === "radius" && (
-              <div className="shrink-0 flex items-center gap-2 px-2 py-1 text-xs border-b border-eve-border/20">
-                <label className="inline-flex items-center gap-1.5 cursor-pointer select-none text-eve-dim hover:text-eve-text transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={autoRefreshRadius}
-                    onChange={(e) => setAutoRefreshRadius(e.target.checked)}
-                    className="accent-eve-accent"
-                  />
-                  Auto-refresh
-                </label>
-                {autoRefreshRadius && (
-                  <span className="flex items-center gap-1 text-eve-accent">
-                    <span className="w-1.5 h-1.5 rounded-full bg-eve-accent animate-pulse" />
-                    active
-                  </span>
-                )}
-              </div>
-            )}
-            <ScanResultsTable
-              results={radiusResults}
-              scanning={scanning && tab === "radius"}
-              progress={tab === "radius" ? progress : ""}
-              cacheMeta={radiusCacheMeta}
-              tradeStateTab="radius"
-              salesTaxPercent={params.sales_tax_percent}
-              brokerFeePercent={params.broker_fee_percent}
-              splitTradeFees={params.split_trade_fees}
-              buyBrokerFeePercent={params.buy_broker_fee_percent}
-              sellBrokerFeePercent={params.sell_broker_fee_percent}
-              buySalesTaxPercent={params.buy_sales_tax_percent}
-              sellSalesTaxPercent={params.sell_sales_tax_percent}
-              isLoggedIn={authStatus.logged_in}
-              cargoLimit={params.cargo_capacity}
-              originSystemName={params.system_name}
-              minRouteSecurity={params.min_route_security}
-              includeStructures={params.include_structures}
-              routeMaxJumps={params.route_max_hops}
-              maxDetourJumpsPerNode={params.max_detour_jumps_per_node}
-              allowLowsec={(params.min_route_security ?? 0.45) < 0.45}
-              allowNullsec={(params.min_route_security ?? 0.45) <= 0}
-              allowWormhole={false}
-              onOpenPriceValidation={(manifestText) => {
-                setVerifierInitialManifestText(manifestText);
-                setShowVerifierModal(true);
-              }}
-            />
-          </div>
-          <div
-            className={`flex-1 min-h-0 flex flex-col ${tab === "region" ? "" : "hidden"}`}
-          >
-            {/* Auto-refresh toggle for region tab */}
-            {tab === "region" && (
-              <div className="shrink-0 flex items-center gap-2 px-2 py-1 text-xs border-b border-eve-border/20">
-                <label className="inline-flex items-center gap-1.5 cursor-pointer select-none text-eve-dim hover:text-eve-text transition-colors">
-                  <input
-                    type="checkbox"
-                    checked={autoRefreshRegion}
-                    onChange={(e) => setAutoRefreshRegion(e.target.checked)}
-                    className="accent-eve-accent"
-                  />
-                  Auto-refresh
-                </label>
-                {autoRefreshRegion && (
-                  <span className="flex items-center gap-1 text-eve-accent">
-                    <span className="w-1.5 h-1.5 rounded-full bg-eve-accent animate-pulse" />
-                    active
-                  </span>
-                )}
-              </div>
-            )}
-            {/* Restore prompt: offer to reload last scan from localStorage */}
-            {regionRestorePrompt && regionResults.length === 0 && !scanning && (
-              <div className="shrink-0 flex items-center gap-3 px-3 py-2 bg-eve-accent/10 border-b border-eve-accent/30 text-xs">
-                <span className="text-eve-accent">💾</span>
-                <span className="text-eve-text flex-1">
-                  Previous scan saved{" "}
-                  <span className="text-eve-dim">
-                    ({new Date(regionRestorePrompt.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })},{" "}
-                    {regionRestorePrompt.results.length} items)
-                  </span>
-                  . Restore it?
-                </span>
-                <button
-                  className="px-2 py-0.5 rounded bg-eve-accent/20 text-eve-accent hover:bg-eve-accent/40 transition-colors"
-                  onClick={() => {
-                    setRegionResults(regionRestorePrompt.results);
-                    setRegionRestorePrompt(null);
-                  }}
-                >
-                  Restore
-                </button>
-                <button
-                  className="px-2 py-0.5 rounded bg-transparent text-eve-dim hover:text-eve-text transition-colors"
-                  onClick={() => {
-                    setRegionRestorePrompt(null);
-                    localStorage.removeItem("eve_flipper_region_scan");
-                  }}
-                >
-                  Dismiss
-                </button>
-              </div>
-            )}
-            <ScanResultsTable
-              results={regionResults}
-              scanning={scanning && tab === "region"}
-              progress={tab === "region" ? progress : ""}
-              cacheMeta={regionCacheMeta}
-              tradeStateTab="region"
-              salesTaxPercent={params.sales_tax_percent}
-              brokerFeePercent={params.broker_fee_percent}
-              splitTradeFees={params.split_trade_fees}
-              buyBrokerFeePercent={params.buy_broker_fee_percent}
-              sellBrokerFeePercent={params.sell_broker_fee_percent}
-              buySalesTaxPercent={params.buy_sales_tax_percent}
-              sellSalesTaxPercent={params.sell_sales_tax_percent}
-              isLoggedIn={authStatus.logged_in}
-              showRegions
-              columnProfile="region_eveguru"
-              cargoLimit={params.cargo_capacity}
-              originSystemName={params.system_name}
-              minRouteSecurity={params.min_route_security}
-              includeStructures={params.include_structures}
-              routeMaxJumps={params.route_max_hops}
-              maxDetourJumpsPerNode={params.max_detour_jumps_per_node}
-              allowLowsec={(params.min_route_security ?? 0.45) < 0.45}
-              allowNullsec={(params.min_route_security ?? 0.45) <= 0}
-              allowWormhole={false}
-              onOpenPriceValidation={(manifestText) => {
-                setVerifierInitialManifestText(manifestText);
-                setShowVerifierModal(true);
-              }}
-            />
-          </div>
-          <div
-            className={`flex-1 min-h-0 flex flex-col ${tab === "contracts" ? "" : "hidden"}`}
-          >
-            {/* Contract-specific settings */}
-            <div className="shrink-0 mb-2">
-              <ContractParametersPanel params={params} onChange={setParams} />
-            </div>
-            <ContractResultsTable
-              results={contractResults}
-              scanning={scanning && tab === "contracts"}
-              progress={tab === "contracts" ? progress : ""}
-              cacheMeta={contractCacheMeta}
-              tradeStateTab="contracts"
-              excludeRigPriceIfShip={params.exclude_rigs_with_ship ?? true}
-              filterHints={contractFilterHints}
-              isLoggedIn={authStatus.logged_in}
-            />
-          </div>
-          <div
-            className={`flex-1 min-h-0 flex flex-col ${tab === "station" ? "" : "hidden"}`}
-          >
-            <StationTrading
-              params={params}
-              onChange={setParams}
-              isLoggedIn={authStatus.logged_in}
-              loadedResults={stationLoadedResults}
-            />
-          </div>
-          <div
-            className={`flex-1 min-h-0 flex flex-col ${tab === "route" ? "" : "hidden"}`}
-          >
-            <RouteBuilder
-              params={params}
-              onChange={setParams}
-              loadedResults={routeLoadedResults}
-              isLoggedIn={authStatus.logged_in}
-            />
-          </div>
-          <div
-            className={`flex-1 min-h-0 flex flex-col ${tab === "industry" ? "" : "hidden"}`}
-          >
-            <IndustryTab isLoggedIn={authStatus.logged_in} />
-          </div>
-          <div
-            className={`flex-1 min-h-0 flex flex-col ${tab === "demand" ? "" : "hidden"}`}
-          >
-            <WarTracker
-              onError={(msg) => addToast(msg, "error")}
-              onOpenRegionArbitrage={(regionName) => {
-                // Switch to Regional Trade tab and set target region
-                setParams((p) => ({ ...p, target_region: regionName }));
-                setTab("region");
-                addToast(
-                  `${t("targetRegionSet") || "Target region set to"} ${regionName}`,
-                  "success",
-                );
-              }}
-            />
-          </div>
-          <div
-            className={`flex-1 min-h-0 flex flex-col ${tab === "plex" ? "" : "hidden"}`}
-          >
-            <PlexTab />
-          </div>
-        </div>
-      </div>
-
-      {/* App Update Modal */}
-      <Modal
-        open={showUpdateModal}
-        onClose={() => {
-          if (!updateApplying) handleSkipUpdate();
-        }}
-        title={t("updateModalTitle")}
-        width="max-w-xl"
-      >
-        <div className="p-4 sm:p-5 space-y-3">
-          <p className="text-sm text-eve-text">{t("updateModalBody")}</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-            <div className="px-2.5 py-2 rounded-sm border border-eve-border bg-eve-panel/60 text-eve-dim">
-              {t("updateModalCurrent")}: <span className="text-eve-text">{appVersion}</span>
-            </div>
-            <div className="px-2.5 py-2 rounded-sm border border-eve-border bg-eve-panel/60 text-eve-dim">
-              {t("updateModalLatest")}: <span className="text-eve-accent">{latestVersion ?? "-"}</span>
-            </div>
-          </div>
-          <div className="text-[11px] text-eve-dim">
-            {t("updateModalPlatform")}: {autoUpdateSupported ? t("updateModalAuto") : t("updateModalManual")} ({updatePlatform || "unknown"})
-          </div>
-
-          {updateApplyStarted && (
-            <div className="text-xs text-eve-warning border border-eve-warning/40 bg-eve-warning/10 rounded-sm px-2.5 py-2">
-              {t("updateModalWillRestart")}
-            </div>
-          )}
-          {updateApplyError && (
-            <div className="text-xs text-eve-error border border-eve-error/40 bg-eve-error/10 rounded-sm px-2.5 py-2">
-              {t("updateModalFailed")}: {updateApplyError}
-            </div>
-          )}
-
-          <div className="pt-2 flex flex-wrap items-center justify-end gap-2">
-            <button
-              type="button"
-              className="px-3 py-1.5 rounded-sm border border-eve-border text-eve-dim hover:text-eve-text disabled:opacity-60"
-              onClick={handleSkipUpdate}
-              disabled={updateApplying}
-            >
-              {t("updateModalSkip")}
-            </button>
-            <a
-              href={releaseURL || "https://github.com/ilyaux/Eve-flipper/releases/latest"}
-              target="_blank"
-              rel="noreferrer"
-              className="px-3 py-1.5 rounded-sm border border-eve-border text-eve-dim hover:text-eve-accent"
-            >
-              {t("updateModalOpenRelease")}
-            </a>
-            {autoUpdateSupported && (
-              <button
-                type="button"
-                className="px-3 py-1.5 rounded-sm bg-eve-accent text-black font-medium hover:brightness-110 disabled:opacity-60"
-                onClick={() => void handleStartUpdate()}
-                disabled={updateApplying || updateApplyStarted}
+            <div className="mt-4 pt-3 border-t border-eve-border/50">
+              <a
+                href="https://www.patreon.com/cw/EVEFlipper"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 text-sm text-eve-accent hover:text-eve-accent-hover"
               >
-                {updateApplying ? t("updateModalStarting") : t("updateModalStart")}
-              </button>
-            )}
+                <svg
+                  className="w-4 h-4"
+                  viewBox="0 0 1080 1080"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M1033.05 324.45c-.19-137.9-107.59-250.92-233.6-291.7-156.48-50.64-362.86-43.3-512.28 27.2-181.1 85.46-237.99 272.66-240.11 459.36-1.74 153.5 13.58 557.79 241.62 560.67 169.44 2.15 194.67-216.18 273.07-321.33 55.78-74.81 127.6-95.94 216.01-117.82 151.95-37.61 255.51-157.53 255.29-316.38z" />
+                </svg>
+                <span>{t("supportPatreon")}</span>
+              </a>
+            </div>
           </div>
-        </div>
-      </Modal>
+        </Modal>
 
-      {/* Watchlist Modal */}
-      <Modal
-        open={showWatchlist}
-        onClose={() => setShowWatchlist(false)}
-        title={t("tabWatchlist")}
-        width="max-w-3xl"
-      >
-        <WatchlistTab
-          latestResults={[...radiusResults, ...regionResults]}
-          alertChannels={alertChannels}
-          toggleAlertChannel={toggleAlertChannel}
-          alertTelegramToken={alertTelegramToken}
-          setAlertTelegramToken={setAlertTelegramToken}
-          alertTelegramChatID={alertTelegramChatID}
-          setAlertTelegramChatID={setAlertTelegramChatID}
-          alertDiscordWebhook={alertDiscordWebhook}
-          setAlertDiscordWebhook={setAlertDiscordWebhook}
-          handleTestAlert={handleTestAlert}
-          alertTestLoading={alertTestLoading}
+        {/* Character Info Modal */}
+        {authStatus.logged_in && (
+          <CharacterPopup
+            open={showCharacter}
+            onClose={() => setShowCharacter(false)}
+            activeCharacterId={authStatus.character_id}
+            characters={authStatus.characters ?? []}
+            onSelectCharacter={handleSelectCharacter}
+            onDeleteCharacter={handleDeleteCharacter}
+            onAddCharacter={handleLogin}
+            onAuthRefresh={refreshAuthStatus}
+          />
+        )}
+
+        {/* Keyboard Shortcuts Help */}
+        <KeyboardShortcutsHelp
+          open={showShortcutsHelp}
+          onClose={() => setShowShortcutsHelp(false)}
         />
-      </Modal>
 
-      {/* History Modal */}
-      <Modal
-        open={showHistory}
-        onClose={() => setShowHistory(false)}
-        title={t("tabHistory")}
-        width="max-w-6xl"
-      >
-        <ScanHistory
-          onLoadResults={(resultTab, results, loadedParams) => {
-            // Load historical results into appropriate tab
-            if (resultTab === "radius") {
-              setRadiusResults(results as FlipResult[]);
-              setTab("radius");
-            } else if (resultTab === "region") {
-              setRegionResults(normalizeRegionalResults(results));
-              setTab("region");
-            } else if (resultTab === "contracts") {
-              setContractResults(results as ContractResult[]);
-              setTab("contracts");
-            } else if (resultTab === "station") {
-              setStationLoadedResults(results as StationTrade[]);
-              setTab("station");
-            } else if (resultTab === "route") {
-              setRouteLoadedResults(results as RouteResult[]);
-              setTab("route");
-            }
-            // Restore only global ScanParams-compatible fields (avoid leaking tab-specific params)
-            if (
-              loadedParams &&
-              (resultTab === "radius" ||
-                resultTab === "region" ||
-                resultTab === "contracts" ||
-                resultTab === "route")
-            ) {
-              const safeKeys = [
-                "system_name",
-                "ignored_system_ids",
-                "cargo_capacity",
-                "buy_radius",
-                "sell_radius",
-                "min_margin",
-                "sales_tax_percent",
-                "broker_fee_percent",
-                "split_trade_fees",
-                "buy_broker_fee_percent",
-                "sell_broker_fee_percent",
-                "buy_sales_tax_percent",
-                "sell_sales_tax_percent",
-                "min_daily_volume",
-                "max_investment",
-                "min_item_profit",
-                "min_period_roi",
-                "max_dos",
-                "min_demand_per_day",
-                "purchase_demand_days",
-                "min_s2b_per_day",
-                "min_bfs_per_day",
-                "min_s2b_bfs_ratio",
-                "max_s2b_bfs_ratio",
-                "avg_price_period",
-                "shipping_cost_per_m3_jump",
-                "min_route_security",
-                "source_regions",
-                "min_contract_price",
-                "max_contract_margin",
-                "min_priced_ratio",
-                "require_history",
-                "contract_instant_liquidation",
-                "contract_hold_days",
-                "contract_target_confidence",
-                "exclude_rigs_with_ship",
-                "target_region",
-                "target_market_system",
-                "target_market_location_id",
-                "category_ids",
-                "sell_order_mode",
-                "include_structures",
-                "route_min_hops",
-                "route_max_hops",
-                "max_detour_jumps_per_node",
-                "route_target_system_name",
-                "route_min_isk_per_jump",
-                "route_allow_empty_hops",
-              ];
-              const filtered: Record<string, unknown> = {};
-              for (const k of safeKeys) {
-                if (k in loadedParams) filtered[k] = loadedParams[k];
-              }
-              // Backward compatibility: older route history stores min_hops/max_hops.
-              if (!("route_min_hops" in filtered) && "min_hops" in loadedParams) {
-                filtered.route_min_hops = loadedParams.min_hops;
-              }
-              if (!("route_max_hops" in filtered) && "max_hops" in loadedParams) {
-                filtered.route_max_hops = loadedParams.max_hops;
-              }
-              if (Object.keys(filtered).length > 0) {
-                setParams((p) => ({
-                  ...p,
-                  ...(filtered as Partial<ScanParams>),
-                }));
-              }
-            }
-            // Close modal after loading
-            setShowHistory(false);
-          }}
+        {/* Command Palette */}
+        <CommandPalette
+          open={showCommandPalette}
+          onClose={() => setShowCommandPalette(false)}
+          onSwitchTab={(t) => setTab(t)}
+          onOpenWatchlist={() => setShowWatchlist(true)}
+          onOpenHistory={() => setShowHistory(true)}
+          onOpenCharacter={() => setShowCharacter(true)}
+          onStartScan={() =>
+            document
+              .querySelector<HTMLButtonElement>("[data-scan-button]")
+              ?.click()
+          }
         />
-      </Modal>
 
-      <Modal
-        open={showPatrons}
-        onClose={() => setShowPatrons(false)}
-        title={t("patronsTitle")}
-        width="max-w-3xl"
-      >
-        <div className="p-4 sm:p-5">
-          <div className="flex flex-wrap items-center justify-end gap-2 mb-3">
-            <button
-              type="button"
-              onClick={() => void loadPatrons()}
-              disabled={patronsLoading}
-              className="px-2.5 py-1 text-xs bg-eve-panel border border-eve-border rounded-sm text-eve-dim hover:text-eve-accent disabled:opacity-60"
-            >
-              {t("patronsRefresh")}
-            </button>
-          </div>
-
-          {patronsLoading && (
-            <div className="py-8 text-center text-sm text-eve-dim">
-              {t("patronsLoading")}
-            </div>
-          )}
-
-          {!patronsLoading && patronsError !== "" && (
-            <div className="py-4 px-3 rounded-sm border border-eve-error/50 bg-eve-error/10 text-sm text-eve-error">
-              {t("patronsFetchError")}: {patronsError}
-            </div>
-          )}
-
-          {!patronsLoading && patronsError === "" && patrons.length === 0 && (
-            <div className="py-8 text-center text-sm text-eve-dim">
-              {t("patronsEmpty")}
-            </div>
-          )}
-
-          {!patronsLoading && patronsError === "" && patrons.length > 0 && (
-            <div>
-              <div className="text-xs text-eve-dim mb-2">
-                {t("patronsCountLabel", { count: patrons.length })}
-                {patronsUpdatedAt ? ` • ${t("patronsUpdatedAt", { date: patronsUpdatedAt })}` : ""}
-                {patronsProject ? ` • ${patronsProject}` : ""}
+        {/* ESI Unavailable Overlay */}
+        {esiAvailable === false && (
+          <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center">
+            <div className="bg-eve-panel border border-eve-error/50 rounded-lg p-8 max-w-md mx-4 text-center shadow-2xl">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-eve-error/20 flex items-center justify-center">
+                <svg
+                  className="w-8 h-8 text-eve-error animate-pulse"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {patrons.map((patron, idx) => (
-                  <div
-                    key={`${patron.name}-${idx}`}
-                    className="rounded-sm border border-eve-border bg-eve-panel/60 px-3 py-2"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      {patron.url ? (
-                        <a
-                          href={patron.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-sm text-eve-accent hover:text-eve-accent-hover truncate"
-                        >
-                          {patron.name}
-                        </a>
-                      ) : (
-                        <span className="text-sm text-eve-text truncate">{patron.name}</span>
-                      )}
-                      {patron.tier && (
-                        <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded-sm border border-eve-accent/35 text-eve-accent">
-                          {patron.tier}
-                        </span>
-                      )}
-                    </div>
-                    {patron.since && (
-                      <div className="mt-1 text-[11px] text-eve-dim">
-                        {t("patronsSince")}: {patron.since}
-                      </div>
-                    )}
-                    {patron.note && (
-                      <div className="mt-1 text-[11px] text-eve-dim">{patron.note}</div>
-                    )}
-                  </div>
-                ))}
+              <h2 className="text-xl font-bold text-eve-error mb-2">
+                {t("esiUnavailable")}
+              </h2>
+              <p className="text-eve-dim mb-4">{t("esiUnavailableDesc")}</p>
+              <div className="flex items-center justify-center gap-2 text-sm text-eve-dim">
+                <div className="w-2 h-2 bg-eve-accent rounded-full animate-pulse" />
+                <span>{t("esiWaiting")}</span>
               </div>
             </div>
-          )}
-
-          <div className="mt-4 pt-3 border-t border-eve-border/50">
-            <a
-              href="https://www.patreon.com/cw/EVEFlipper"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-2 text-sm text-eve-accent hover:text-eve-accent-hover"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 1080 1080" fill="currentColor" aria-hidden="true">
-                <path d="M1033.05 324.45c-.19-137.9-107.59-250.92-233.6-291.7-156.48-50.64-362.86-43.3-512.28 27.2-181.1 85.46-237.99 272.66-240.11 459.36-1.74 153.5 13.58 557.79 241.62 560.67 169.44 2.15 194.67-216.18 273.07-321.33 55.78-74.81 127.6-95.94 216.01-117.82 151.95-37.61 255.51-157.53 255.29-316.38z" />
-              </svg>
-              <span>{t("supportPatreon")}</span>
-            </a>
           </div>
-        </div>
-      </Modal>
-
-      {/* Character Info Modal */}
-      {authStatus.logged_in && (
-        <CharacterPopup
-          open={showCharacter}
-          onClose={() => setShowCharacter(false)}
-          activeCharacterId={authStatus.character_id}
-          characters={authStatus.characters ?? []}
-          onSelectCharacter={handleSelectCharacter}
-          onDeleteCharacter={handleDeleteCharacter}
-          onAddCharacter={handleLogin}
-          onAuthRefresh={refreshAuthStatus}
-        />
-      )}
-
-      {/* Keyboard Shortcuts Help */}
-      <KeyboardShortcutsHelp
-        open={showShortcutsHelp}
-        onClose={() => setShowShortcutsHelp(false)}
-      />
-
-      {/* Command Palette */}
-      <CommandPalette
-        open={showCommandPalette}
-        onClose={() => setShowCommandPalette(false)}
-        onSwitchTab={(t) => setTab(t)}
-        onOpenWatchlist={() => setShowWatchlist(true)}
-        onOpenHistory={() => setShowHistory(true)}
-        onOpenCharacter={() => setShowCharacter(true)}
-        onStartScan={() => document.querySelector<HTMLButtonElement>("[data-scan-button]")?.click()}
-      />
-
-      {/* ESI Unavailable Overlay */}
-      {esiAvailable === false && (
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center">
-          <div className="bg-eve-panel border border-eve-error/50 rounded-lg p-8 max-w-md mx-4 text-center shadow-2xl">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-eve-error/20 flex items-center justify-center">
-              <svg
-                className="w-8 h-8 text-eve-error animate-pulse"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-            </div>
-            <h2 className="text-xl font-bold text-eve-error mb-2">
-              {t("esiUnavailable")}
-            </h2>
-            <p className="text-eve-dim mb-4">{t("esiUnavailableDesc")}</p>
-            <div className="flex items-center justify-center gap-2 text-sm text-eve-dim">
-              <div className="w-2 h-2 bg-eve-accent rounded-full animate-pulse" />
-              <span>{t("esiWaiting")}</span>
-            </div>
-          </div>
-        </div>
-      )}
+        )}
       </div>
       {showBootSplash && (
         <div
@@ -2400,7 +2507,9 @@ function App() {
                       <img src={logo} alt="" className="eve-preloader-logo" />
                     </div>
                   </div>
-                  <div className="eve-preloader-core-caption">Neocom uplink</div>
+                  <div className="eve-preloader-core-caption">
+                    Neocom uplink
+                  </div>
                 </div>
                 <div className="eve-preloader-copy">
                   <div className="eve-preloader-kicker">
@@ -2421,7 +2530,9 @@ function App() {
                     </div>
                     <div className="eve-preloader-line">
                       <span className="eve-preloader-label">Uplink</span>
-                      <span className="eve-preloader-value eve-preloader-value--accent">Stable</span>
+                      <span className="eve-preloader-value eve-preloader-value--accent">
+                        Stable
+                      </span>
                     </div>
                     <div className="eve-preloader-line">
                       <span className="eve-preloader-label">Session</span>
@@ -2430,7 +2541,9 @@ function App() {
                   </div>
                   <div className="eve-preloader-footer">
                     <span className="eve-preloader-label">Node</span>
-                    <span className="eve-preloader-value eve-preloader-value--accent">Jita relay</span>
+                    <span className="eve-preloader-value eve-preloader-value--accent">
+                      Jita relay
+                    </span>
                   </div>
                 </div>
               </div>
