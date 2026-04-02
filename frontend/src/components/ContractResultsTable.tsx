@@ -16,7 +16,7 @@ import {
 import { handleEveUIError } from "@/lib/handleEveUIError";
 import { ContractDetailsPopup } from "./ContractDetailsPopup";
 import { scoreContractResult } from "@/lib/opportunityScore";
-import { OpportunityScoreDetails, OpportunityScorePopover } from "./OpportunityScorePopover";
+import { OpportunityScoreDetails } from "./OpportunityScorePopover";
 
 type SyntheticSortKey = "OpportunityScore";
 type SortKey = keyof ContractResult | SyntheticSortKey;
@@ -873,12 +873,9 @@ export function ContractResultsTable({
                     }`}
                   >
                     {col.key === "OpportunityScore" ? (
-                      <div className="flex items-center gap-1.5">
-                        <span className="inline-flex items-center justify-center min-w-[44px] px-1.5 py-0.5 rounded-sm bg-eve-accent/15 border border-eve-accent/35 text-eve-accent font-mono">
-                          {scoreContractResult(row).finalScore.toFixed(1)}
-                        </span>
-                        <OpportunityScorePopover explanation={scoreContractResult(row)} />
-                      </div>
+                      <span className="inline-flex items-center justify-center min-w-[44px] px-1.5 py-0.5 rounded-sm bg-eve-accent/15 border border-eve-accent/35 text-eve-accent font-mono">
+                        {scoreContractResult(row).finalScore.toFixed(1)}
+                      </span>
                     ) : (
                       formatCell(col, row)
                     )}

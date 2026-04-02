@@ -39,7 +39,7 @@ import { handleEveUIError } from "@/lib/handleEveUIError";
 import { BatchBuilderPopup } from "./BatchBuilderPopup";
 import { RouteSafetyModal } from "./RouteSafetyModal";
 import { scoreFlipResult } from "@/lib/opportunityScore";
-import { OpportunityScorePopover } from "./OpportunityScorePopover";
+import { OpportunityScoreDetails } from "./OpportunityScorePopover";
 
 const PAGE_SIZE = 100;
 const GROUP_PAGE_SIZE = 50; // rows shown per group before "Show all" button
@@ -1129,6 +1129,7 @@ export function ScanResultsTable({
   const keyNavRootRef = useRef<HTMLDivElement>(null);
   const [execPlanRow, setExecPlanRow] = useState<FlipResult | null>(null);
   const [batchPlanRow, setBatchPlanRow] = useState<FlipResult | null>(null);
+  const [scoreExplainRow, setScoreExplainRow] = useState<FlipResult | null>(null);
   const [dayDetailRow, setDayDetailRow] = useState<FlipResult | null>(null);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [filterSearch, setFilterSearch] = useState("");
@@ -2999,6 +3000,29 @@ export function ScanResultsTable({
         </div>
       )}
 
+      {scoreExplainRow && (
+        <div
+          className="fixed inset-0 z-[210] flex items-center justify-center bg-black/45 p-4"
+          onClick={() => setScoreExplainRow(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="max-w-[92vw] w-[520px] rounded-sm border border-eve-border bg-eve-dark shadow-eve-glow-strong p-3"
+          >
+            <OpportunityScoreDetails explanation={scoreFlipResult(scoreExplainRow)} />
+            <div className="mt-2 text-center">
+              <button
+                type="button"
+                className="text-xs text-eve-dim hover:text-eve-accent"
+                onClick={() => setScoreExplainRow(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Context menu */}
       {contextMenu && (
         <>
@@ -3035,6 +3059,13 @@ export function ScanResultsTable({
               label={t("buildBatch")}
               onClick={() => {
                 setBatchPlanRow(contextMenu.row);
+                setContextMenu(null);
+              }}
+            />
+            <ContextItem
+              label="Why this score?"
+              onClick={() => {
+                setScoreExplainRow(contextMenu.row);
                 setContextMenu(null);
               }}
             />
@@ -3649,12 +3680,9 @@ const DataRow = memo(
             ) : col.key === "DayTradeScore" ? (
               <TradeScoreBadge score={ir.row.DayTradeScore ?? 0} />
             ) : col.key === "OpportunityScore" ? (
-              <div className="flex items-center gap-1.5">
-                <span className="inline-flex items-center justify-center min-w-[44px] px-1.5 py-0.5 rounded-sm bg-eve-accent/15 border border-eve-accent/35 text-eve-accent font-mono">
-                  {scoreFlipResult(ir.row).finalScore.toFixed(1)}
-                </span>
-                <OpportunityScorePopover explanation={scoreFlipResult(ir.row)} />
-              </div>
+              <span className="inline-flex items-center justify-center min-w-[44px] px-1.5 py-0.5 rounded-sm bg-eve-accent/15 border border-eve-accent/35 text-eve-accent font-mono">
+                {scoreFlipResult(ir.row).finalScore.toFixed(1)}
+              </span>
             ) : col.key === ("RouteSafety" as SortKey) ? (
               <RouteSafetyCell
                 entry={routeSafetyEntry}

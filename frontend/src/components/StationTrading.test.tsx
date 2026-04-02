@@ -92,6 +92,7 @@ describe("StationTrading opportunity score", () => {
       </I18nProvider>,
     );
     expect(screen.getAllByText("Score").length).toBeGreaterThan(0);
+    fireEvent.contextMenu(await screen.findByText("Tritanium"));
     fireEvent.click(await screen.findByText("Why this score?"));
     expect(await screen.findByText("Final score")).toBeInTheDocument();
   });

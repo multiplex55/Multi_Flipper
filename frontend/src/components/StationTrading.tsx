@@ -47,7 +47,7 @@ import { StationAIAssistant } from "./StationAIAssistant";
 import { SystemBlacklistButton } from "./SystemBlacklistButton";
 import { ScoringProfileEditor } from "./ScoringProfileEditor";
 import { scoreStationTrade } from "@/lib/opportunityScore";
-import { OpportunityScorePopover } from "./OpportunityScorePopover";
+import { OpportunityScoreDetails } from "./OpportunityScorePopover";
 import { DEFAULT_STRATEGY_SCORE } from "@/lib/scoringPresets";
 import {
   STATION_BUILTIN_PRESETS,
@@ -496,6 +496,7 @@ export function StationTrading({
     y: number;
     row: StationTrade;
   } | null>(null);
+  const [scoreExplainRow, setScoreExplainRow] = useState<StationTrade | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
 
@@ -3015,12 +3016,9 @@ export function StationTrading({
                             )}
                           </div>
                         ) : col.key === "OpportunityScore" ? (
-                          <div className="flex items-center gap-1.5">
-                            <span className="inline-flex items-center justify-center min-w-[44px] px-1.5 py-0.5 rounded-sm bg-eve-accent/15 border border-eve-accent/35 text-eve-accent font-mono">
-                              {scoreStationTrade(row).finalScore.toFixed(1)}
-                            </span>
-                            <OpportunityScorePopover explanation={scoreStationTrade(row)} />
-                          </div>
+                          <span className="inline-flex items-center justify-center min-w-[44px] px-1.5 py-0.5 rounded-sm bg-eve-accent/15 border border-eve-accent/35 text-eve-accent font-mono">
+                            {scoreStationTrade(row).finalScore.toFixed(1)}
+                          </span>
                         ) : (
                           formatCell(col, row)
                         )}
@@ -3105,6 +3103,29 @@ export function StationTrading({
       )}
 
       {/* Context menu (right-click) */}
+      {scoreExplainRow && (
+        <div
+          className="fixed inset-0 z-[210] flex items-center justify-center bg-black/45 p-4"
+          onClick={() => setScoreExplainRow(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="max-w-[92vw] w-[520px] rounded-sm border border-eve-border bg-eve-dark shadow-eve-glow-strong p-3"
+          >
+            <OpportunityScoreDetails explanation={scoreStationTrade(scoreExplainRow)} />
+            <div className="mt-2 text-center">
+              <button
+                type="button"
+                className="text-xs text-eve-dim hover:text-eve-accent"
+                onClick={() => setScoreExplainRow(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {contextMenu && (
         <>
           <div
@@ -3131,6 +3152,13 @@ export function StationTrading({
                   `${contextMenu.row.TypeName} @ ${contextMenu.row.StationName}`,
                 )
               }
+            />
+            <ContextItem
+              label="Why this score?"
+              onClick={() => {
+                setScoreExplainRow(contextMenu.row);
+                setContextMenu(null);
+              }}
             />
             <div className="h-px bg-eve-border my-1" />
             <ContextItem
