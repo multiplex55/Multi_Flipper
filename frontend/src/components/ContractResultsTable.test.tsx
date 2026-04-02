@@ -54,8 +54,7 @@ describe("ContractResultsTable opportunity score", () => {
   it("renders score and shows explanation popover", async () => {
     renderTable([row()]);
     expect(screen.getAllByText("Score").length).toBeGreaterThan(0);
-    fireEvent.contextMenu(screen.getByText("Contract"));
-    fireEvent.click(await screen.findByText("Why this score?"));
+    fireEvent.click(screen.getByLabelText("Why this score?"));
     expect(await screen.findByText("Final score")).toBeInTheDocument();
     expect(screen.getByText("Factor")).toBeInTheDocument();
   });

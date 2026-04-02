@@ -2213,6 +2213,7 @@ export function ScanResultsTable({
         tFn={t}
         routeSafetyEntry={routeSafetyMap[`${ir.row.BuySystemID}:${ir.row.SellSystemID}`]}
         onRouteSafetyClick={handleRouteSafetyClick}
+        onOpenScore={setScoreExplainRow}
         batchMetricsByRow={batchMetricsByRow}
       />
     ),
@@ -3009,6 +3010,7 @@ export function ScanResultsTable({
             onClick={(e) => e.stopPropagation()}
             className="max-w-[92vw] w-[520px] rounded-sm border border-eve-border bg-eve-dark shadow-eve-glow-strong p-3"
           >
+            <div className="mb-2 text-sm font-medium text-eve-text">Why this score?</div>
             <OpportunityScoreDetails explanation={scoreFlipResult(scoreExplainRow)} />
             <div className="mt-2 text-center">
               <button
@@ -3059,13 +3061,6 @@ export function ScanResultsTable({
               label={t("buildBatch")}
               onClick={() => {
                 setBatchPlanRow(contextMenu.row);
-                setContextMenu(null);
-              }}
-            />
-            <ContextItem
-              label="Why this score?"
-              onClick={() => {
-                setScoreExplainRow(contextMenu.row);
                 setContextMenu(null);
               }}
             />
@@ -3501,6 +3496,7 @@ interface DataRowProps {
   tFn: (key: TranslationKey, vars?: Record<string, string | number>) => string;
   routeSafetyEntry: RouteState | undefined;
   onRouteSafetyClick: (from: number, to: number, e: import("react").MouseEvent) => void;
+  onOpenScore: (row: FlipResult) => void;
   batchMetricsByRow: Record<
     string,
     { batchNumber: number; batchProfit: number; batchTotalCapital: number; batchIskPerJump: number }
@@ -3577,7 +3573,7 @@ const DataRow = memo(
     isItemGrouped, isRegionGrouped, variantExpandable, variantExpanded,
     onToggleVariantGroup, onContextMenu, onLmbClick,
     onToggleSelect, onTogglePin, tFn,
-    routeSafetyEntry, onRouteSafetyClick,
+    routeSafetyEntry, onRouteSafetyClick, onOpenScore,
     batchMetricsByRow,
   }: DataRowProps) {
     return (
@@ -3680,9 +3676,17 @@ const DataRow = memo(
             ) : col.key === "DayTradeScore" ? (
               <TradeScoreBadge score={ir.row.DayTradeScore ?? 0} />
             ) : col.key === "OpportunityScore" ? (
-              <span className="inline-flex items-center justify-center min-w-[44px] px-1.5 py-0.5 rounded-sm bg-eve-accent/15 border border-eve-accent/35 text-eve-accent font-mono">
+              <button
+                type="button"
+                className="inline-flex items-center justify-center min-w-[44px] px-1.5 py-0.5 rounded-sm bg-eve-accent/15 border border-eve-accent/35 text-eve-accent font-mono hover:border-eve-accent/60"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenScore(ir.row);
+                }}
+                aria-label="Why this score?"
+              >
                 {scoreFlipResult(ir.row).finalScore.toFixed(1)}
-              </span>
+              </button>
             ) : col.key === ("RouteSafety" as SortKey) ? (
               <RouteSafetyCell
                 entry={routeSafetyEntry}
@@ -3721,7 +3725,8 @@ const DataRow = memo(
     prev.onToggleSelect === next.onToggleSelect &&
     prev.onTogglePin === next.onTogglePin &&
     prev.routeSafetyEntry === next.routeSafetyEntry &&
-    prev.onRouteSafetyClick === next.onRouteSafetyClick,
+    prev.onRouteSafetyClick === next.onRouteSafetyClick &&
+    prev.onOpenScore === next.onOpenScore,
 );
 
 /* ─── EVE category name lookup ─── */

@@ -873,9 +873,17 @@ export function ContractResultsTable({
                     }`}
                   >
                     {col.key === "OpportunityScore" ? (
-                      <span className="inline-flex items-center justify-center min-w-[44px] px-1.5 py-0.5 rounded-sm bg-eve-accent/15 border border-eve-accent/35 text-eve-accent font-mono">
+                      <button
+                        type="button"
+                        className="inline-flex items-center justify-center min-w-[44px] px-1.5 py-0.5 rounded-sm bg-eve-accent/15 border border-eve-accent/35 text-eve-accent font-mono hover:border-eve-accent/60"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setScoreExplainRow(row);
+                        }}
+                        aria-label="Why this score?"
+                      >
                         {scoreContractResult(row).finalScore.toFixed(1)}
-                      </span>
+                      </button>
                     ) : (
                       formatCell(col, row)
                     )}
@@ -932,6 +940,7 @@ export function ContractResultsTable({
       {scoreExplainRow && (
         <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/45 p-4" onClick={() => setScoreExplainRow(null)}>
           <div onClick={(e) => e.stopPropagation()} className="max-w-[92vw] w-[520px] rounded-sm border border-eve-border bg-eve-dark shadow-eve-glow-strong p-3">
+            <div className="mb-2 text-sm font-medium text-eve-text">Why this score?</div>
             <OpportunityScoreDetails explanation={scoreContractResult(scoreExplainRow)} />
             <div className="mt-2 text-center">
               <button type="button" className="text-xs text-eve-dim hover:text-eve-accent" onClick={() => setScoreExplainRow(null)}>Close</button>
@@ -951,13 +960,6 @@ export function ContractResultsTable({
             <ContextItem label={t("copyItem")} onClick={() => copyText(effectiveTitle(contextMenu.row))} />
             <ContextItem label={t("copyStation")} onClick={() => copyText(contextMenu.row.StationName)} />
             <ContextItem label={t("copyContractID")} onClick={() => copyText(String(contextMenu.row.ContractID))} />
-            <ContextItem
-              label="Why this score?"
-              onClick={() => {
-                setScoreExplainRow(contextMenu.row);
-                setContextMenu(null);
-              }}
-            />
             <div className="h-px bg-eve-border my-1" />
             {contextHiddenEntry ? (
               <ContextItem

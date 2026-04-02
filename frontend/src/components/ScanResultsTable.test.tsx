@@ -172,8 +172,7 @@ describe("ScanResultsTable opportunity score", () => {
     const rows = screen.getAllByRole("row");
     expect(rows[2]).toHaveTextContent("High");
 
-    fireEvent.contextMenu(screen.getByText("High"));
-    fireEvent.click(await screen.findByText("Why this score?"));
+    fireEvent.click(screen.getAllByLabelText("Why this score?")[0]);
     expect(await screen.findByText("Final score")).toBeInTheDocument();
     expect(screen.getByText("Top positives")).toBeInTheDocument();
     expect(screen.getByText("Main penalties")).toBeInTheDocument();

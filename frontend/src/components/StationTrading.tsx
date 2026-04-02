@@ -3016,9 +3016,17 @@ export function StationTrading({
                             )}
                           </div>
                         ) : col.key === "OpportunityScore" ? (
-                          <span className="inline-flex items-center justify-center min-w-[44px] px-1.5 py-0.5 rounded-sm bg-eve-accent/15 border border-eve-accent/35 text-eve-accent font-mono">
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center min-w-[44px] px-1.5 py-0.5 rounded-sm bg-eve-accent/15 border border-eve-accent/35 text-eve-accent font-mono hover:border-eve-accent/60"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setScoreExplainRow(row);
+                            }}
+                            aria-label="Why this score?"
+                          >
                             {scoreStationTrade(row).finalScore.toFixed(1)}
-                          </span>
+                          </button>
                         ) : (
                           formatCell(col, row)
                         )}
@@ -3112,6 +3120,7 @@ export function StationTrading({
             onClick={(e) => e.stopPropagation()}
             className="max-w-[92vw] w-[520px] rounded-sm border border-eve-border bg-eve-dark shadow-eve-glow-strong p-3"
           >
+            <div className="mb-2 text-sm font-medium text-eve-text">Why this score?</div>
             <OpportunityScoreDetails explanation={scoreStationTrade(scoreExplainRow)} />
             <div className="mt-2 text-center">
               <button
@@ -3152,13 +3161,6 @@ export function StationTrading({
                   `${contextMenu.row.TypeName} @ ${contextMenu.row.StationName}`,
                 )
               }
-            />
-            <ContextItem
-              label="Why this score?"
-              onClick={() => {
-                setScoreExplainRow(contextMenu.row);
-                setContextMenu(null);
-              }}
             />
             <div className="h-px bg-eve-border my-1" />
             <ContextItem
