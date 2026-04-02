@@ -154,7 +154,10 @@ describe("App character-scoped fee snapshots", () => {
       expect(mockUpdateConfig).toHaveBeenCalled();
     });
 
-    const lastPayload = mockUpdateConfig.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    const lastCallIndex = mockUpdateConfig.mock.calls.length - 1;
+    const lastPayload = (
+      lastCallIndex >= 0 ? mockUpdateConfig.mock.calls[lastCallIndex]?.[0] : undefined
+    ) as Record<string, unknown>;
     expect(lastPayload.strategy_score).toEqual({
       profit_weight: 50,
       risk_weight: 20,
