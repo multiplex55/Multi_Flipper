@@ -1,0 +1,87 @@
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { I18nProvider } from "@/lib/i18n";
+import { ToastProvider } from "@/components/Toast";
+import { StationTrading } from "@/components/StationTrading";
+import type { ScanParams, StationTrade } from "@/lib/types";
+
+vi.mock("@/lib/api", () => ({
+  clearStationTradeStates: vi.fn(async () => undefined),
+  deleteStationTradeStates: vi.fn(async () => undefined),
+  getStationCommand: vi.fn(async () => ({ rows: [], summary: null })),
+  getStations: vi.fn(async () => ({ stations: [], region_id: 10000002, system_id: 30000142 })),
+  getStructures: vi.fn(async () => []),
+  getStationTradeStates: vi.fn(async () => []),
+  scanStation: vi.fn(async () => []),
+  setStationTradeState: vi.fn(async () => undefined),
+  getWatchlist: vi.fn(async () => []),
+  addToWatchlist: vi.fn(async () => undefined),
+  removeFromWatchlist: vi.fn(async () => undefined),
+  openMarketInGame: vi.fn(async () => undefined),
+  setWaypointInGame: vi.fn(async () => undefined),
+  rebootStationCache: vi.fn(async () => ({ cleared: 0 })),
+}));
+
+const params: ScanParams = {
+  system_name: "Jita",
+  cargo_capacity: 1000,
+  buy_radius: 0,
+  sell_radius: 0,
+  min_margin: 0,
+  sales_tax_percent: 0,
+  broker_fee_percent: 0,
+};
+
+function makeTrade(overrides: Partial<StationTrade> = {}): StationTrade {
+  return {
+    TypeID: 34,
+    TypeName: "Tritanium",
+    StationID: 60003760,
+    StationName: "Jita IV - Moon 4",
+    RegionID: 10000002,
+    RegionName: "The Forge",
+    SystemID: 30000142,
+    SystemName: "Jita",
+    BuyPrice: 1,
+    SellPrice: 2,
+    Spread: 1,
+    ProfitPerUnit: 1,
+    MarginPercent: 10,
+    DailyVolume: 1000,
+    TotalProfit: 100,
+    DailyProfit: 100,
+    RealizableDailyProfit: 100,
+    CapitalRequired: 10000,
+    CTS: 40,
+    SDS: 10,
+    PVI: 10,
+    OBDS: 10,
+    DOS: 5,
+    S2BPerDay: 100,
+    BfSPerDay: 50,
+    S2BBfSRatio: 2,
+    PeriodROI: 3,
+    NowROI: 2,
+    VWAP: 1.5,
+    IsHighRiskFlag: false,
+    IsExtremePriceFlag: false,
+    ...overrides,
+  };
+}
+
+describe("StationTrading opportunity score", () => {
+  afterEach(() => cleanup());
+
+  it("renders score column and explanation popover", async () => {
+    render(
+      <I18nProvider>
+        <ToastProvider>
+          <StationTrading params={params} loadedResults={[makeTrade()]} />
+        </ToastProvider>
+      </I18nProvider>,
+    );
+    expect(screen.getAllByText("Score").length).toBeGreaterThan(0);
+    fireEvent.click(await screen.findByText("Why this score?"));
+    expect(await screen.findByText("Final score")).toBeInTheDocument();
+  });
+});

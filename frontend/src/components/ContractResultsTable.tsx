@@ -15,8 +15,11 @@ import {
 } from "@/lib/api";
 import { handleEveUIError } from "@/lib/handleEveUIError";
 import { ContractDetailsPopup } from "./ContractDetailsPopup";
+import { scoreContractResult } from "@/lib/opportunityScore";
+import { OpportunityScoreDetails, OpportunityScorePopover } from "./OpportunityScorePopover";
 
-type SortKey = keyof ContractResult;
+type SyntheticSortKey = "OpportunityScore";
+type SortKey = keyof ContractResult | SyntheticSortKey;
 type SortDir = "asc" | "desc";
 type HiddenMode = "done" | "ignored";
 type HiddenFilterTab = "all" | "done" | "ignored";
@@ -55,6 +58,7 @@ interface Props {
 }
 
 const columnDefs: { key: SortKey; labelKey: TranslationKey; width: string; numeric: boolean }[] = [
+  { key: "OpportunityScore", labelKey: "colTradeScore", width: "min-w-[95px]", numeric: true },
   { key: "Title", labelKey: "colTitle", width: "min-w-[200px]", numeric: false },
   { key: "Price", labelKey: "colContractPrice", width: "min-w-[120px]", numeric: true },
   { key: "MarketValue", labelKey: "colMarketValue", width: "min-w-[120px]", numeric: true },
@@ -168,9 +172,10 @@ function mapServerCacheMeta(
 }
 
 function numericCellValue(row: ContractResult, key: SortKey): number {
+  if (key === "OpportunityScore") return scoreContractResult(row).finalScore;
   if (key === "MarginPercent") return row.ExpectedMarginPercent ?? row.MarginPercent ?? 0;
   if (key === "ExpectedProfit") return row.ExpectedProfit ?? row.Profit ?? 0;
-  const val = row[key];
+  const val = row[key as keyof ContractResult];
   return typeof val === "number" ? val : 0;
 }
 
@@ -207,6 +212,7 @@ export function ContractResultsTable({
 
   // Contract details popup
   const [selectedContract, setSelectedContract] = useState<ContractResult | null>(null);
+  const [scoreExplainRow, setScoreExplainRow] = useState<ContractResult | null>(null);
 
   // Context menu
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; row: ContractResult } | null>(null);
@@ -329,8 +335,8 @@ export function ContractResultsTable({
     const currentCol = columnDefs.find((c) => c.key === sortKey);
     const numericSort = !!currentCol?.numeric;
     copy.sort((a, b) => {
-      const av = sortKey === "Title" ? effectiveTitle(a) : a[sortKey];
-      const bv = sortKey === "Title" ? effectiveTitle(b) : b[sortKey];
+      const av = sortKey === "Title" ? effectiveTitle(a) : (sortKey === "OpportunityScore" ? scoreContractResult(a).finalScore : a[sortKey as keyof ContractResult]);
+      const bv = sortKey === "Title" ? effectiveTitle(b) : (sortKey === "OpportunityScore" ? scoreContractResult(b).finalScore : b[sortKey as keyof ContractResult]);
       if (numericSort) {
         const an = numericCellValue(a, sortKey);
         const bn = numericCellValue(b, sortKey);
@@ -858,7 +864,16 @@ export function ContractResultsTable({
                       col.numeric ? "text-eve-accent font-mono" : "text-eve-text"
                     }`}
                   >
-                    {formatCell(col, row)}
+                    {col.key === "OpportunityScore" ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="inline-flex items-center justify-center min-w-[44px] px-1.5 py-0.5 rounded-sm bg-eve-accent/15 border border-eve-accent/35 text-eve-accent font-mono">
+                          {scoreContractResult(row).finalScore.toFixed(1)}
+                        </span>
+                        <OpportunityScorePopover explanation={scoreContractResult(row)} />
+                      </div>
+                    ) : (
+                      formatCell(col, row)
+                    )}
                   </td>
                 ))}
               </tr>
@@ -909,6 +924,17 @@ export function ContractResultsTable({
       )}
 
       {/* Context menu */}
+      {scoreExplainRow && (
+        <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/45 p-4" onClick={() => setScoreExplainRow(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="max-w-[92vw] w-[520px] rounded-sm border border-eve-border bg-eve-dark shadow-eve-glow-strong p-3">
+            <OpportunityScoreDetails explanation={scoreContractResult(scoreExplainRow)} />
+            <div className="mt-2 text-center">
+              <button type="button" className="text-xs text-eve-dim hover:text-eve-accent" onClick={() => setScoreExplainRow(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {contextMenu && (
         <>
           <div className="fixed inset-0 z-50" onClick={() => setContextMenu(null)} />
@@ -920,6 +946,13 @@ export function ContractResultsTable({
             <ContextItem label={t("copyItem")} onClick={() => copyText(effectiveTitle(contextMenu.row))} />
             <ContextItem label={t("copyStation")} onClick={() => copyText(contextMenu.row.StationName)} />
             <ContextItem label={t("copyContractID")} onClick={() => copyText(String(contextMenu.row.ContractID))} />
+            <ContextItem
+              label="Why this score?"
+              onClick={() => {
+                setScoreExplainRow(contextMenu.row);
+                setContextMenu(null);
+              }}
+            />
             <div className="h-px bg-eve-border my-1" />
             {contextHiddenEntry ? (
               <ContextItem

@@ -38,6 +38,8 @@ import { ExecutionPlannerPopup } from "./ExecutionPlannerPopup";
 import { handleEveUIError } from "@/lib/handleEveUIError";
 import { BatchBuilderPopup } from "./BatchBuilderPopup";
 import { RouteSafetyModal } from "./RouteSafetyModal";
+import { scoreFlipResult } from "@/lib/opportunityScore";
+import { OpportunityScorePopover } from "./OpportunityScorePopover";
 
 const PAGE_SIZE = 100;
 const GROUP_PAGE_SIZE = 50; // rows shown per group before "Show all" button
@@ -53,7 +55,8 @@ type SyntheticSortKey =
   | "BatchNumber"
   | "BatchProfit"
   | "BatchTotalCapital"
-  | "BatchIskPerJump";
+  | "BatchIskPerJump"
+  | "OpportunityScore";
 type SortKey = keyof FlipResult | SyntheticSortKey;
 type SortDir = "asc" | "desc";
 type RegionGroupSortMode = "period_profit" | "now_profit" | "trade_score";
@@ -251,6 +254,12 @@ const baseColumnDefs: ColumnDef[] = [
     key: "BatchIskPerJump",
     labelKey: "colBatchIskPerJump",
     width: "min-w-[130px]",
+    numeric: true,
+  },
+  {
+    key: "OpportunityScore",
+    labelKey: "colTradeScore",
+    width: "min-w-[100px]",
     numeric: true,
   },
   {
@@ -753,6 +762,7 @@ function getCellValue(
   if (key === "BfSPerDay") return rowBfSPerDay(row);
   if (key === "S2BBfSRatio") return rowS2BBfSRatio(row);
   if (key === "RouteSafety") return null;
+  if (key === "OpportunityScore") return scoreFlipResult(row).finalScore;
   return row[key as keyof FlipResult];
 }
 
@@ -796,6 +806,10 @@ function fmtCell(
     col.key === "BatchIskPerJump"
   ) {
     return formatBatchSyntheticCell(col.key, val as number | null);
+  }
+  if (col.key === "OpportunityScore") {
+    const v = Number(val ?? 0);
+    return Number.isFinite(v) ? v.toFixed(1) : "—";
   }
   if (
     col.key === "ExpectedProfit" ||
@@ -1343,7 +1357,9 @@ export function ScanResultsTable({
         return sortDir === "asc" ? diff : -diff;
       }
       const cmp = String(av ?? "").localeCompare(String(bv ?? ""));
-      return sortDir === "asc" ? cmp : -cmp;
+      const primary = sortDir === "asc" ? cmp : -cmp;
+      if (primary !== 0) return primary;
+      return a.id - b.id;
     });
 
     const totalByType = new Map<number, number>();
@@ -3632,6 +3648,13 @@ const DataRow = memo(
               </div>
             ) : col.key === "DayTradeScore" ? (
               <TradeScoreBadge score={ir.row.DayTradeScore ?? 0} />
+            ) : col.key === "OpportunityScore" ? (
+              <div className="flex items-center gap-1.5">
+                <span className="inline-flex items-center justify-center min-w-[44px] px-1.5 py-0.5 rounded-sm bg-eve-accent/15 border border-eve-accent/35 text-eve-accent font-mono">
+                  {scoreFlipResult(ir.row).finalScore.toFixed(1)}
+                </span>
+                <OpportunityScorePopover explanation={scoreFlipResult(ir.row)} />
+              </div>
             ) : col.key === ("RouteSafety" as SortKey) ? (
               <RouteSafetyCell
                 entry={routeSafetyEntry}
