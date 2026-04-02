@@ -457,16 +457,23 @@ func TestDB_ConfigRoundTrip(t *testing.T) {
 		TargetMarketSystem:     "Jita",
 		TargetMarketLocationID: 60003760,
 		CategoryIDs:            []int32{6, 8},
-		SellOrderMode:          true,
-		AlertTelegram:          true,
-		AlertDiscord:           true,
-		AlertDesktop:           false,
-		AlertTelegramToken:     "tg-token",
-		AlertTelegramChatID:    "123456",
-		AlertDiscordWebhook:    "https://discord.example/webhook",
-		Opacity:                200,
-		WindowW:                1024,
-		WindowH:                768,
+		StrategyScore: config.StrategyScoreConfig{
+			ProfitWeight:   40,
+			RiskWeight:     22,
+			VelocityWeight: 18,
+			JumpWeight:     12,
+			CapitalWeight:  8,
+		},
+		SellOrderMode:       true,
+		AlertTelegram:       true,
+		AlertDiscord:        true,
+		AlertDesktop:        false,
+		AlertTelegramToken:  "tg-token",
+		AlertTelegramChatID: "123456",
+		AlertDiscordWebhook: "https://discord.example/webhook",
+		Opacity:             200,
+		WindowW:             1024,
+		WindowH:             768,
 	}
 	if err := d.SaveConfig(cfg); err != nil {
 		t.Fatalf("SaveConfig: %v", err)
@@ -495,6 +502,9 @@ func TestDB_ConfigRoundTrip(t *testing.T) {
 	}
 	if !got.SellOrderMode || len(got.CategoryIDs) != 2 || len(got.SourceRegions) != 2 {
 		t.Errorf("LoadConfig region arrays/flags mismatch: sell_mode=%v categories=%v sources=%v", got.SellOrderMode, got.CategoryIDs, got.SourceRegions)
+	}
+	if got.StrategyScore != cfg.StrategyScore {
+		t.Errorf("LoadConfig strategy score mismatch: got=%+v want=%+v", got.StrategyScore, cfg.StrategyScore)
 	}
 }
 

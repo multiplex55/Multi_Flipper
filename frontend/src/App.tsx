@@ -53,6 +53,7 @@ import type {
   RegionalDayTradeItem,
   RouteResult,
   ScanParams,
+  StrategyScoreConfig,
   StationCacheMeta,
   StationTrade,
 } from "./lib/types";
@@ -92,6 +93,13 @@ const defaultPatronsURL = "https://ilyaux.github.io/eve-flipper-data/patrons.jso
 const patronsDataURL =
   (import.meta.env.VITE_PATRONS_URL as string | undefined)?.trim() ||
   defaultPatronsURL;
+const DEFAULT_STRATEGY_SCORE: StrategyScoreConfig = {
+  profit_weight: 35,
+  risk_weight: 25,
+  velocity_weight: 20,
+  jump_weight: 10,
+  capital_weight: 10,
+};
 
 type DesktopRuntimeWindow = Window & {
   __TAURI_INTERNALS__?: unknown;
@@ -348,6 +356,9 @@ function App() {
     route_allow_empty_hops: false,
     sell_order_mode: false,
   });
+  const [strategyScore, setStrategyScore] = useState<StrategyScoreConfig>(
+    DEFAULT_STRATEGY_SCORE,
+  );
   const globalFeeSnapshotRef = useRef(extractCharacterFeeSnapshot(params));
   const previousCharacterIdRef = useRef<number | null>(null);
   const configLoadedRef = useRef(false);
@@ -817,6 +828,7 @@ function App() {
         setAlertTelegramToken(cfg.alert_telegram_token ?? "");
         setAlertTelegramChatID(cfg.alert_telegram_chat_id ?? "");
         setAlertDiscordWebhook(cfg.alert_discord_webhook ?? "");
+        setStrategyScore(cfg.strategy_score ?? DEFAULT_STRATEGY_SCORE);
       })
       .catch(() => {})
       .finally(() => {
@@ -901,6 +913,7 @@ function App() {
     saveTimerRef.current = setTimeout(() => {
       updateConfig({
         ...params,
+        strategy_score: strategyScore,
         alert_telegram: alertChannels.telegram,
         alert_discord: alertChannels.discord,
         alert_desktop: alertChannels.desktop,
@@ -910,7 +923,7 @@ function App() {
       }).catch(() => {});
     }, 500);
     return () => clearTimeout(saveTimerRef.current);
-  }, [params, alertChannels, alertTelegramToken, alertTelegramChatID, alertDiscordWebhook]);
+  }, [params, strategyScore, alertChannels, alertTelegramToken, alertTelegramChatID, alertDiscordWebhook]);
 
   const handleScan = useCallback(async () => {
     if (scanning) {

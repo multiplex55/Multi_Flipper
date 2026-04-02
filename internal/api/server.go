@@ -1620,6 +1620,12 @@ func (s *Server) handleSetConfig(w http.ResponseWriter, r *http.Request) {
 	if v, ok := patch["category_ids"]; ok {
 		json.Unmarshal(v, &cfg.CategoryIDs)
 	}
+	if v, ok := patch["strategy_score"]; ok {
+		var strategyScore config.StrategyScoreConfig
+		if err := json.Unmarshal(v, &strategyScore); err == nil {
+			cfg.StrategyScore = strategyScore
+		}
+	}
 	if v, ok := patch["sell_order_mode"]; ok {
 		json.Unmarshal(v, &cfg.SellOrderMode)
 	}
@@ -1746,6 +1752,31 @@ func (s *Server) handleSetConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	if cfg.ShippingCostPerM3Jump < 0 {
 		cfg.ShippingCostPerM3Jump = 0
+	}
+	if cfg.StrategyScore.ProfitWeight < 0 {
+		cfg.StrategyScore.ProfitWeight = 0
+	} else if cfg.StrategyScore.ProfitWeight > 100 {
+		cfg.StrategyScore.ProfitWeight = 100
+	}
+	if cfg.StrategyScore.RiskWeight < 0 {
+		cfg.StrategyScore.RiskWeight = 0
+	} else if cfg.StrategyScore.RiskWeight > 100 {
+		cfg.StrategyScore.RiskWeight = 100
+	}
+	if cfg.StrategyScore.VelocityWeight < 0 {
+		cfg.StrategyScore.VelocityWeight = 0
+	} else if cfg.StrategyScore.VelocityWeight > 100 {
+		cfg.StrategyScore.VelocityWeight = 100
+	}
+	if cfg.StrategyScore.JumpWeight < 0 {
+		cfg.StrategyScore.JumpWeight = 0
+	} else if cfg.StrategyScore.JumpWeight > 100 {
+		cfg.StrategyScore.JumpWeight = 100
+	}
+	if cfg.StrategyScore.CapitalWeight < 0 {
+		cfg.StrategyScore.CapitalWeight = 0
+	} else if cfg.StrategyScore.CapitalWeight > 100 {
+		cfg.StrategyScore.CapitalWeight = 100
 	}
 	if cfg.TargetMarketLocationID < 0 {
 		cfg.TargetMarketLocationID = 0

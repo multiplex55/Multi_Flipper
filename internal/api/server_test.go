@@ -38,6 +38,53 @@ func TestHandleGetConfig_ReturnsConfig(t *testing.T) {
 	}
 }
 
+func TestHandleSetConfig_StrategyScorePatchRoundTripAndClamp(t *testing.T) {
+	cfg := config.Default()
+	srv := NewServer(cfg, &esi.Client{}, nil, nil, nil)
+
+	body := strings.NewReader(`{
+		"strategy_score": {
+			"profit_weight": 130,
+			"risk_weight": -5,
+			"velocity_weight": 30,
+			"jump_weight": 20,
+			"capital_weight": 10
+		}
+	}`)
+	postReq := httptest.NewRequest(http.MethodPost, "/api/config", body)
+	postRec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(postRec, postReq)
+	if postRec.Code != http.StatusOK {
+		t.Fatalf("POST /api/config status = %d, want 200; body=%s", postRec.Code, postRec.Body.String())
+	}
+
+	var postOut config.Config
+	if err := json.NewDecoder(postRec.Body).Decode(&postOut); err != nil {
+		t.Fatalf("decode post config: %v", err)
+	}
+	if postOut.StrategyScore.ProfitWeight != 100 || postOut.StrategyScore.RiskWeight != 0 {
+		t.Fatalf("strategy score clamping failed: %+v", postOut.StrategyScore)
+	}
+	if postOut.StrategyScore.VelocityWeight != 30 || postOut.StrategyScore.JumpWeight != 20 || postOut.StrategyScore.CapitalWeight != 10 {
+		t.Fatalf("strategy score values mismatch: %+v", postOut.StrategyScore)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/config", nil)
+	getRec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("GET /api/config status = %d, want 200", getRec.Code)
+	}
+
+	var getOut config.Config
+	if err := json.NewDecoder(getRec.Body).Decode(&getOut); err != nil {
+		t.Fatalf("decode get config: %v", err)
+	}
+	if getOut.StrategyScore != postOut.StrategyScore {
+		t.Fatalf("GET strategy score mismatch: got=%+v want=%+v", getOut.StrategyScore, postOut.StrategyScore)
+	}
+}
+
 func TestReadBodyWithLimit(t *testing.T) {
 	t.Parallel()
 
