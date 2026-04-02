@@ -47,3 +47,37 @@ func TestLoadConfigForUser_InvalidScalarValuesKeepDefaults(t *testing.T) {
 		t.Fatalf("AlertDesktop = %v, want default %v", got.AlertDesktop, defaultCfg.AlertDesktop)
 	}
 }
+
+func TestLoadConfigForUser_MissingStrategyScoreKeyUsesDefaults(t *testing.T) {
+	d := openTestDB(t)
+	defer d.Close()
+
+	userID := "missing-strategy-score-user"
+	defaultCfg := config.Default()
+
+	got := d.LoadConfigForUser(userID)
+	if got.StrategyScore != defaultCfg.StrategyScore {
+		t.Fatalf("StrategyScore = %+v, want defaults %+v", got.StrategyScore, defaultCfg.StrategyScore)
+	}
+}
+
+func TestLoadConfigForUser_MalformedStrategyScoreUsesDefaults(t *testing.T) {
+	d := openTestDB(t)
+	defer d.Close()
+
+	userID := "bad-strategy-score-user"
+	defaultCfg := config.Default()
+
+	if _, err := d.sql.Exec(
+		"INSERT OR REPLACE INTO config (user_id, key, value) VALUES (?, 'strategy_score', ?)",
+		userID,
+		"{not-json}",
+	); err != nil {
+		t.Fatalf("insert malformed strategy_score: %v", err)
+	}
+
+	got := d.LoadConfigForUser(userID)
+	if got.StrategyScore != defaultCfg.StrategyScore {
+		t.Fatalf("StrategyScore = %+v, want defaults %+v", got.StrategyScore, defaultCfg.StrategyScore)
+	}
+}

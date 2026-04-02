@@ -137,6 +137,12 @@ func (d *DB) LoadConfigForUser(userID string) *config.Config {
 			cfg.CategoryIDs = ids
 		}
 	}
+	if v, ok := m["strategy_score"]; ok {
+		var strategyScore config.StrategyScoreConfig
+		if err := json.Unmarshal([]byte(v), &strategyScore); err == nil {
+			cfg.StrategyScore = strategyScore
+		}
+	}
 	cfg.SellOrderMode = parseBool("sell_order_mode", cfg.SellOrderMode)
 	cfg.AlertTelegram = parseBool("alert_telegram", cfg.AlertTelegram)
 	cfg.AlertDiscord = parseBool("alert_discord", cfg.AlertDiscord)
@@ -180,6 +186,10 @@ func (d *DB) SaveConfigForUser(userID string, cfg *config.Config) error {
 	if b, err := json.Marshal(cfg.CategoryIDs); err == nil {
 		categoryIDsJSON = string(b)
 	}
+	strategyScoreJSON := "{}"
+	if b, err := json.Marshal(cfg.StrategyScore); err == nil {
+		strategyScoreJSON = string(b)
+	}
 
 	pairs := map[string]string{
 		"system_name":               cfg.SystemName,
@@ -214,6 +224,7 @@ func (d *DB) SaveConfigForUser(userID string, cfg *config.Config) error {
 		"target_market_system":      cfg.TargetMarketSystem,
 		"target_market_location_id": strconv.FormatInt(cfg.TargetMarketLocationID, 10),
 		"category_ids":              categoryIDsJSON,
+		"strategy_score":            strategyScoreJSON,
 		"sell_order_mode":           strconv.FormatBool(cfg.SellOrderMode),
 		"alert_telegram":            strconv.FormatBool(cfg.AlertTelegram),
 		"alert_discord":             strconv.FormatBool(cfg.AlertDiscord),

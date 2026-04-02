@@ -136,6 +136,34 @@ afterEach(() => {
 });
 
 describe("App character-scoped fee snapshots", () => {
+  it("hydrates strategy score from config and includes it in update patches", async () => {
+    mockGetConfig.mockResolvedValueOnce({
+      strategy_score: {
+        profit_weight: 50,
+        risk_weight: 20,
+        velocity_weight: 15,
+        jump_weight: 10,
+        capital_weight: 5,
+      },
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "set-fees" }));
+
+    await waitFor(() => {
+      expect(mockUpdateConfig).toHaveBeenCalled();
+    });
+
+    const lastPayload = mockUpdateConfig.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+    expect(lastPayload.strategy_score).toEqual({
+      profit_weight: 50,
+      risk_weight: 20,
+      velocity_weight: 15,
+      jump_weight: 10,
+      capital_weight: 5,
+    });
+  });
+
   it("restores stored fee snapshots when switching active character", async () => {
     localStorage.setItem(
       CHARACTER_FEE_PREFS_STORAGE_KEY,

@@ -39,4 +39,18 @@ func TestDefault_Values(t *testing.T) {
 	if c.WindowW != 800 || c.WindowH != 600 {
 		t.Errorf("Window = %dx%d, want 800x600", c.WindowW, c.WindowH)
 	}
+	if c.StrategyScore.ProfitWeight <= 0 ||
+		c.StrategyScore.RiskWeight <= 0 ||
+		c.StrategyScore.VelocityWeight <= 0 ||
+		c.StrategyScore.JumpWeight <= 0 ||
+		c.StrategyScore.CapitalWeight <= 0 {
+		t.Fatalf("StrategyScore should have positive defaults, got %+v", c.StrategyScore)
+	}
+	if c.StrategyScore.ProfitWeight > 100 ||
+		c.StrategyScore.RiskWeight > 100 ||
+		c.StrategyScore.VelocityWeight > 100 ||
+		c.StrategyScore.JumpWeight > 100 ||
+		c.StrategyScore.CapitalWeight > 100 {
+		t.Fatalf("StrategyScore should be clamped to 0..100 defaults, got %+v", c.StrategyScore)
+	}
 }

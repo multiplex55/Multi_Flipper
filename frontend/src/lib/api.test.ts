@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { batchCreateRoute } from "@/lib/api";
-import type { BatchCreateRouteRequest, BatchCreateRouteResponse } from "@/lib/types";
+import { batchCreateRoute, getConfig, updateConfig } from "@/lib/api";
+import type { AppConfig, BatchCreateRouteRequest, BatchCreateRouteResponse } from "@/lib/types";
 
 function makeRequest(overrides: Partial<BatchCreateRouteRequest> = {}): BatchCreateRouteRequest {
   return {
@@ -130,5 +130,81 @@ describe("batchCreateRoute", () => {
     expect(result).toEqual(response);
     expect(result.request.origin_system_name).toBe("Jita");
     expect(result.deterministic_sort_applied).toBe(true);
+  });
+});
+
+describe("config API", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  it("getConfig returns strategy_score when present", async () => {
+    const response: Partial<AppConfig> = {
+      system_name: "Jita",
+      cargo_capacity: 5000,
+      buy_radius: 5,
+      sell_radius: 10,
+      min_margin: 5,
+      sales_tax_percent: 8,
+      broker_fee_percent: 0,
+      alert_telegram: false,
+      alert_discord: false,
+      alert_desktop: true,
+      alert_telegram_token: "",
+      alert_telegram_chat_id: "",
+      alert_discord_webhook: "",
+      opacity: 100,
+      window_x: 0,
+      window_y: 0,
+      window_w: 800,
+      window_h: 600,
+      strategy_score: {
+        profit_weight: 35,
+        risk_weight: 25,
+        velocity_weight: 20,
+        jump_weight: 10,
+        capital_weight: 10,
+      },
+    };
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue(response),
+    } satisfies Partial<Response>);
+
+    const got = await getConfig();
+    expect(got.strategy_score?.profit_weight).toBe(35);
+    expect(got.strategy_score?.risk_weight).toBe(25);
+  });
+
+  it("updateConfig sends strategy_score inside patch payload", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({}),
+    } satisfies Partial<Response>);
+
+    await updateConfig({
+      strategy_score: {
+        profit_weight: 40,
+        risk_weight: 20,
+        velocity_weight: 20,
+        jump_weight: 10,
+        capital_weight: 10,
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({
+      strategy_score: {
+        profit_weight: 40,
+        risk_weight: 20,
+        velocity_weight: 20,
+        jump_weight: 10,
+        capital_weight: 10,
+      },
+    });
   });
 });

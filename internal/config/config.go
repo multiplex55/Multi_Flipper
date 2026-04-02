@@ -11,6 +11,15 @@ type WatchlistItem struct {
 	AlertThreshold float64 `json:"alert_threshold"` // threshold for selected metric
 }
 
+// StrategyScoreConfig controls weighting used by strategy scoring.
+type StrategyScoreConfig struct {
+	ProfitWeight   float64 `json:"profit_weight"`
+	RiskWeight     float64 `json:"risk_weight"`
+	VelocityWeight float64 `json:"velocity_weight"`
+	JumpWeight     float64 `json:"jump_weight"`
+	CapitalWeight  float64 `json:"capital_weight"`
+}
+
 // Config holds application settings (in-memory representation).
 // Persistence is handled by internal/db package.
 type Config struct {
@@ -39,18 +48,19 @@ type Config struct {
 	MinRouteSecurity float64 `json:"min_route_security"`
 
 	// Regional day-trader parameters.
-	AvgPricePeriod         int      `json:"avg_price_period"`
-	MinPeriodROI           float64  `json:"min_period_roi"`
-	MaxDOS                 float64  `json:"max_dos"`
-	MinDemandPerDay        float64  `json:"min_demand_per_day"`
-	PurchaseDemandDays     float64  `json:"purchase_demand_days"`
-	ShippingCostPerM3Jump  float64  `json:"shipping_cost_per_m3_jump"`
-	SourceRegions          []string `json:"source_regions"`
-	TargetRegion           string   `json:"target_region"`
-	TargetMarketSystem     string   `json:"target_market_system"`
-	TargetMarketLocationID int64    `json:"target_market_location_id"`
-	CategoryIDs            []int32  `json:"category_ids"`
-	SellOrderMode          bool     `json:"sell_order_mode"`
+	AvgPricePeriod         int                 `json:"avg_price_period"`
+	MinPeriodROI           float64             `json:"min_period_roi"`
+	MaxDOS                 float64             `json:"max_dos"`
+	MinDemandPerDay        float64             `json:"min_demand_per_day"`
+	PurchaseDemandDays     float64             `json:"purchase_demand_days"`
+	ShippingCostPerM3Jump  float64             `json:"shipping_cost_per_m3_jump"`
+	SourceRegions          []string            `json:"source_regions"`
+	TargetRegion           string              `json:"target_region"`
+	TargetMarketSystem     string              `json:"target_market_system"`
+	TargetMarketLocationID int64               `json:"target_market_location_id"`
+	CategoryIDs            []int32             `json:"category_ids"`
+	SellOrderMode          bool                `json:"sell_order_mode"`
+	StrategyScore          StrategyScoreConfig `json:"strategy_score"`
 
 	AlertTelegram       bool   `json:"alert_telegram"`
 	AlertDiscord        bool   `json:"alert_discord"`
@@ -90,9 +100,16 @@ func Default() *Config {
 			"Heimatar",
 		},
 		TargetMarketSystem: "Jita",
-		AlertDesktop:       true,
-		Opacity:            230,
-		WindowW:            800,
-		WindowH:            600,
+		StrategyScore: StrategyScoreConfig{
+			ProfitWeight:   35,
+			RiskWeight:     25,
+			VelocityWeight: 20,
+			JumpWeight:     10,
+			CapitalWeight:  10,
+		},
+		AlertDesktop: true,
+		Opacity:      230,
+		WindowW:      800,
+		WindowH:      600,
 	}
 }

@@ -658,6 +658,14 @@ export interface ScanParams {
   restrict_to_target_market?: boolean;
 }
 
+export interface StrategyScoreConfig {
+  profit_weight: number;
+  risk_weight: number;
+  velocity_weight: number;
+  jump_weight: number;
+  capital_weight: number;
+}
+
 export interface AppConfig {
   system_name: string;
   ignored_system_ids?: number[];
@@ -691,6 +699,7 @@ export interface AppConfig {
   target_market_system?: string;
   target_market_location_id?: number;
   category_ids?: number[];
+  strategy_score?: StrategyScoreConfig;
   sell_order_mode?: boolean;
   alert_telegram: boolean;
   alert_discord: boolean;
