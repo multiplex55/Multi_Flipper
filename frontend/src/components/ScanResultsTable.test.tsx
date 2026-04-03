@@ -158,3 +158,34 @@ describe("ScanResultsTable filter visibility defaults", () => {
     expect(screen.getAllByPlaceholderText("Filter...").length).toBeGreaterThan(0);
   });
 });
+
+describe("ScanResultsTable opportunity score", () => {
+  afterEach(() => cleanup());
+
+  it("renders score column, sorts by score, and shows explanation popover", async () => {
+    const low = makeRow({ TypeID: 1, TypeName: "Low", ExpectedProfit: 1_000_000, DayCapitalRequired: 900_000_000 });
+    const high = makeRow({ TypeID: 2, TypeName: "High", ExpectedProfit: 120_000_000, DayCapitalRequired: 80_000_000 });
+    renderTable({ scanning: false, results: [low, high] });
+
+    expect(screen.getAllByText("Score").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByText("Score")[0]);
+    const rows = screen.getAllByRole("row");
+    expect(rows[2]).toHaveTextContent("High");
+
+    fireEvent.click(screen.getAllByLabelText("Why this score?")[0]);
+    expect(await screen.findByText("Final score")).toBeInTheDocument();
+    expect(screen.getByText("Top positives")).toBeInTheDocument();
+    expect(screen.getByText("Main penalties")).toBeInTheDocument();
+    expect(screen.getByText("Factor")).toBeInTheDocument();
+  });
+
+  it("keeps score sort deterministic for ties", () => {
+    const a = makeRow({ TypeID: 10, TypeName: "Alpha", ExpectedProfit: 20_000_000, DayCapitalRequired: 200_000_000 });
+    const b = makeRow({ TypeID: 20, TypeName: "Beta", ExpectedProfit: 20_000_000, DayCapitalRequired: 200_000_000 });
+    renderTable({ scanning: false, results: [a, b] });
+    fireEvent.click(screen.getAllByText("Score")[0]);
+    const rows = screen.getAllByRole("row");
+    expect(rows[2]).toHaveTextContent("Alpha");
+    expect(rows[3]).toHaveTextContent("Beta");
+  });
+});

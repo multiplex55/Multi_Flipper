@@ -352,7 +352,7 @@ function App() {
     contract_target_confidence: 80,
     exclude_rigs_with_ship: true,
     route_min_hops: 2,
-    route_max_hops: 5,
+    route_max_hops: 50,
     max_detour_jumps_per_node: 0,
     route_target_system_name: "",
     route_min_isk_per_jump: 0,

@@ -46,13 +46,16 @@ import { PresetPicker } from "./PresetPicker";
 import { StationAIAssistant } from "./StationAIAssistant";
 import { SystemBlacklistButton } from "./SystemBlacklistButton";
 import { ScoringProfileEditor } from "./ScoringProfileEditor";
+import { scoreStationTrade } from "@/lib/opportunityScore";
+import { OpportunityScoreDetails } from "./OpportunityScorePopover";
 import { DEFAULT_STRATEGY_SCORE } from "@/lib/scoringPresets";
 import {
   STATION_BUILTIN_PRESETS,
   type StationTradingSettings,
 } from "@/lib/presets";
 
-type SortKey = keyof StationTrade;
+type SyntheticSortKey = "OpportunityScore";
+type SortKey = keyof StationTrade | SyntheticSortKey;
 type SortDir = "asc" | "desc";
 type CTSProfile = "balanced" | "aggressive" | "defensive";
 type BatchPreset = "safe" | "balanced" | "aggressive";
@@ -130,6 +133,7 @@ const columnDefs: {
   width: string;
   numeric: boolean;
 }[] = [
+  { key: "OpportunityScore", labelKey: "colTradeScore", width: "min-w-[95px]", numeric: true },
   {
     key: "TypeName",
     labelKey: "colItem",
@@ -215,6 +219,12 @@ function stationDailyProfit(row: StationTrade): number {
     row.TheoreticalDailyProfit ??
     0
   );
+}
+
+function stationSortValue(row: StationTrade, key: SortKey): string | number {
+  if (key === "OpportunityScore") return scoreStationTrade(row).finalScore;
+  const value = row[key as keyof StationTrade];
+  return typeof value === "number" || typeof value === "string" ? value : "";
 }
 
 function formatCountdown(totalSec: number): string {
@@ -486,6 +496,7 @@ export function StationTrading({
     y: number;
     row: StationTrade;
   } | null>(null);
+  const [scoreExplainRow, setScoreExplainRow] = useState<StationTrade | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
 
@@ -1223,14 +1234,18 @@ export function StationTrading({
   const sorted = useMemo(() => {
     const copy = [...results];
     copy.sort((a, b) => {
-      const av = a[sortKey];
-      const bv = b[sortKey];
+      const av = stationSortValue(a, sortKey);
+      const bv = stationSortValue(b, sortKey);
       if (typeof av === "number" && typeof bv === "number") {
-        return sortDir === "asc" ? av - bv : bv - av;
+        const diff = sortDir === "asc" ? av - bv : bv - av;
+        if (diff !== 0) return diff;
+        return stationRowKey(a).localeCompare(stationRowKey(b));
       }
-      return sortDir === "asc"
+      const cmp = sortDir === "asc"
         ? String(av).localeCompare(String(bv))
         : String(bv).localeCompare(String(av));
+      if (cmp !== 0) return cmp;
+      return stationRowKey(a).localeCompare(stationRowKey(b));
     });
     return copy;
   }, [results, sortKey, sortDir]);
@@ -1683,7 +1698,9 @@ export function StationTrading({
     col: (typeof columnDefs)[number],
     row: StationTrade,
   ): string => {
-    const val = row[col.key];
+    const val = col.key === "OpportunityScore"
+      ? scoreStationTrade(row).finalScore
+      : row[col.key as keyof StationTrade];
     if (
       col.key === "BuyPrice" ||
       col.key === "SellPrice" ||
@@ -1714,6 +1731,9 @@ export function StationTrading({
     }
     if (col.key === "CTS") {
       return (val as number).toFixed(1);
+    }
+    if (col.key === "OpportunityScore") {
+      return scoreStationTrade(row).finalScore.toFixed(1);
     }
     if (typeof val === "number") return formatNumber(val);
     return String(val);
@@ -2995,6 +3015,18 @@ export function StationTrading({
                               </button>
                             )}
                           </div>
+                        ) : col.key === "OpportunityScore" ? (
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center min-w-[44px] px-1.5 py-0.5 rounded-sm bg-eve-accent/15 border border-eve-accent/35 text-eve-accent font-mono hover:border-eve-accent/60"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setScoreExplainRow(row);
+                            }}
+                            aria-label="Why this score?"
+                          >
+                            {scoreStationTrade(row).finalScore.toFixed(1)}
+                          </button>
                         ) : (
                           formatCell(col, row)
                         )}
@@ -3079,6 +3111,30 @@ export function StationTrading({
       )}
 
       {/* Context menu (right-click) */}
+      {scoreExplainRow && (
+        <div
+          className="fixed inset-0 z-[210] flex items-center justify-center bg-black/45 p-4"
+          onClick={() => setScoreExplainRow(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="max-w-[92vw] w-[520px] rounded-sm border border-eve-border bg-eve-dark shadow-eve-glow-strong p-3"
+          >
+            <div className="mb-2 text-sm font-medium text-eve-text">Why this score?</div>
+            <OpportunityScoreDetails explanation={scoreStationTrade(scoreExplainRow)} />
+            <div className="mt-2 text-center">
+              <button
+                type="button"
+                className="text-xs text-eve-dim hover:text-eve-accent"
+                onClick={() => setScoreExplainRow(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {contextMenu && (
         <>
           <div

@@ -38,6 +38,8 @@ import { ExecutionPlannerPopup } from "./ExecutionPlannerPopup";
 import { handleEveUIError } from "@/lib/handleEveUIError";
 import { BatchBuilderPopup } from "./BatchBuilderPopup";
 import { RouteSafetyModal } from "./RouteSafetyModal";
+import { scoreFlipResult } from "@/lib/opportunityScore";
+import { OpportunityScoreDetails } from "./OpportunityScorePopover";
 
 const PAGE_SIZE = 100;
 const GROUP_PAGE_SIZE = 50; // rows shown per group before "Show all" button
@@ -53,7 +55,8 @@ type SyntheticSortKey =
   | "BatchNumber"
   | "BatchProfit"
   | "BatchTotalCapital"
-  | "BatchIskPerJump";
+  | "BatchIskPerJump"
+  | "OpportunityScore";
 type SortKey = keyof FlipResult | SyntheticSortKey;
 type SortDir = "asc" | "desc";
 type RegionGroupSortMode = "period_profit" | "now_profit" | "trade_score";
@@ -251,6 +254,12 @@ const baseColumnDefs: ColumnDef[] = [
     key: "BatchIskPerJump",
     labelKey: "colBatchIskPerJump",
     width: "min-w-[130px]",
+    numeric: true,
+  },
+  {
+    key: "OpportunityScore",
+    labelKey: "colTradeScore",
+    width: "min-w-[100px]",
     numeric: true,
   },
   {
@@ -753,6 +762,7 @@ function getCellValue(
   if (key === "BfSPerDay") return rowBfSPerDay(row);
   if (key === "S2BBfSRatio") return rowS2BBfSRatio(row);
   if (key === "RouteSafety") return null;
+  if (key === "OpportunityScore") return scoreFlipResult(row).finalScore;
   return row[key as keyof FlipResult];
 }
 
@@ -796,6 +806,10 @@ function fmtCell(
     col.key === "BatchIskPerJump"
   ) {
     return formatBatchSyntheticCell(col.key, val as number | null);
+  }
+  if (col.key === "OpportunityScore") {
+    const v = Number(val ?? 0);
+    return Number.isFinite(v) ? v.toFixed(1) : "—";
   }
   if (
     col.key === "ExpectedProfit" ||
@@ -1115,6 +1129,7 @@ export function ScanResultsTable({
   const keyNavRootRef = useRef<HTMLDivElement>(null);
   const [execPlanRow, setExecPlanRow] = useState<FlipResult | null>(null);
   const [batchPlanRow, setBatchPlanRow] = useState<FlipResult | null>(null);
+  const [scoreExplainRow, setScoreExplainRow] = useState<FlipResult | null>(null);
   const [dayDetailRow, setDayDetailRow] = useState<FlipResult | null>(null);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [filterSearch, setFilterSearch] = useState("");
@@ -1343,7 +1358,9 @@ export function ScanResultsTable({
         return sortDir === "asc" ? diff : -diff;
       }
       const cmp = String(av ?? "").localeCompare(String(bv ?? ""));
-      return sortDir === "asc" ? cmp : -cmp;
+      const primary = sortDir === "asc" ? cmp : -cmp;
+      if (primary !== 0) return primary;
+      return a.id - b.id;
     });
 
     const totalByType = new Map<number, number>();
@@ -2196,6 +2213,7 @@ export function ScanResultsTable({
         tFn={t}
         routeSafetyEntry={routeSafetyMap[`${ir.row.BuySystemID}:${ir.row.SellSystemID}`]}
         onRouteSafetyClick={handleRouteSafetyClick}
+        onOpenScore={setScoreExplainRow}
         batchMetricsByRow={batchMetricsByRow}
       />
     ),
@@ -2983,6 +3001,30 @@ export function ScanResultsTable({
         </div>
       )}
 
+      {scoreExplainRow && (
+        <div
+          className="fixed inset-0 z-[210] flex items-center justify-center bg-black/45 p-4"
+          onClick={() => setScoreExplainRow(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="max-w-[92vw] w-[520px] rounded-sm border border-eve-border bg-eve-dark shadow-eve-glow-strong p-3"
+          >
+            <div className="mb-2 text-sm font-medium text-eve-text">Why this score?</div>
+            <OpportunityScoreDetails explanation={scoreFlipResult(scoreExplainRow)} />
+            <div className="mt-2 text-center">
+              <button
+                type="button"
+                className="text-xs text-eve-dim hover:text-eve-accent"
+                onClick={() => setScoreExplainRow(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Context menu */}
       {contextMenu && (
         <>
@@ -3454,6 +3496,7 @@ interface DataRowProps {
   tFn: (key: TranslationKey, vars?: Record<string, string | number>) => string;
   routeSafetyEntry: RouteState | undefined;
   onRouteSafetyClick: (from: number, to: number, e: import("react").MouseEvent) => void;
+  onOpenScore: (row: FlipResult) => void;
   batchMetricsByRow: Record<
     string,
     { batchNumber: number; batchProfit: number; batchTotalCapital: number; batchIskPerJump: number }
@@ -3530,7 +3573,7 @@ const DataRow = memo(
     isItemGrouped, isRegionGrouped, variantExpandable, variantExpanded,
     onToggleVariantGroup, onContextMenu, onLmbClick,
     onToggleSelect, onTogglePin, tFn,
-    routeSafetyEntry, onRouteSafetyClick,
+    routeSafetyEntry, onRouteSafetyClick, onOpenScore,
     batchMetricsByRow,
   }: DataRowProps) {
     return (
@@ -3632,6 +3675,18 @@ const DataRow = memo(
               </div>
             ) : col.key === "DayTradeScore" ? (
               <TradeScoreBadge score={ir.row.DayTradeScore ?? 0} />
+            ) : col.key === "OpportunityScore" ? (
+              <button
+                type="button"
+                className="inline-flex items-center justify-center min-w-[44px] px-1.5 py-0.5 rounded-sm bg-eve-accent/15 border border-eve-accent/35 text-eve-accent font-mono hover:border-eve-accent/60"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenScore(ir.row);
+                }}
+                aria-label="Why this score?"
+              >
+                {scoreFlipResult(ir.row).finalScore.toFixed(1)}
+              </button>
             ) : col.key === ("RouteSafety" as SortKey) ? (
               <RouteSafetyCell
                 entry={routeSafetyEntry}
@@ -3670,7 +3725,8 @@ const DataRow = memo(
     prev.onToggleSelect === next.onToggleSelect &&
     prev.onTogglePin === next.onTogglePin &&
     prev.routeSafetyEntry === next.routeSafetyEntry &&
-    prev.onRouteSafetyClick === next.onRouteSafetyClick,
+    prev.onRouteSafetyClick === next.onRouteSafetyClick &&
+    prev.onOpenScore === next.onOpenScore,
 );
 
 /* ─── EVE category name lookup ─── */
