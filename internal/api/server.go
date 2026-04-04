@@ -745,6 +745,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/pinned-opportunities", s.handleListPinnedOpportunities)
 	mux.HandleFunc("POST /api/pinned-opportunities", s.handleAddPinnedOpportunity)
 	mux.HandleFunc("DELETE /api/pinned-opportunities/{opportunityKey}", s.handleDeletePinnedOpportunity)
+	mux.HandleFunc("GET /api/pinned-opportunities/snapshots", s.handleListPinnedSnapshots)
 	mux.HandleFunc("POST /api/pinned-opportunities/snapshots", s.handleUpsertPinnedSnapshots)
 	mux.HandleFunc("GET /api/alerts/history", s.handleGetAlertHistory)
 	mux.HandleFunc("POST /api/scan/station", s.handleScanStation)

@@ -12,6 +12,7 @@ import { StationTrading } from "./components/StationTrading";
 import { IndustryTab } from "./components/IndustryTab";
 import { WarTracker } from "./components/WarTracker";
 import { PlexTab } from "./components/PlexTab";
+import { PinnedOpportunitiesTab } from "./components/PinnedOpportunitiesTab";
 // import { MarketMakingTab } from "./components/MarketMakingTab";
 import { ScanHistory } from "./components/ScanHistory";
 import { CommandPalette } from "./components/CommandPalette";
@@ -77,7 +78,8 @@ type Tab =
   | "route"
   | "industry"
   | "demand"
-  | "plex";
+  | "plex"
+  | "pinned";
 
 type AlertChannels = {
   telegram: boolean;
@@ -390,6 +392,7 @@ function App() {
           "industry",
           "demand",
           "plex",
+          "pinned",
         ].includes(saved)
       ) {
         return saved as Tab;
@@ -1872,6 +1875,11 @@ function App() {
                   onClick={() => setTab("plex")}
                   label={t("tabPlex") || "PLEX+"}
                 />
+                <TabButton
+                  active={tab === "pinned"}
+                  onClick={() => setTab("pinned")}
+                  label={t("tabPinned") || "Pinned"}
+                />
                 <div className="w-2 sm:w-4 shrink-0" />
               </div>
             </div>
@@ -1880,7 +1888,8 @@ function App() {
               tab !== "station" &&
               tab !== "industry" &&
               tab !== "demand" &&
-              tab !== "plex" && (
+              tab !== "plex" &&
+              tab !== "pinned" && (
                 <div className="shrink-0 border-l border-eve-border px-1.5 sm:px-2 py-1 flex items-center">
                   <div className="inline-flex items-center gap-1.5">
                     <button
@@ -2144,6 +2153,11 @@ function App() {
               className={`flex-1 min-h-0 flex flex-col ${tab === "plex" ? "" : "hidden"}`}
             >
               <PlexTab />
+            </div>
+            <div
+              className={`flex-1 min-h-0 flex flex-col ${tab === "pinned" ? "" : "hidden"}`}
+            >
+              <PinnedOpportunitiesTab />
             </div>
           </div>
         </div>

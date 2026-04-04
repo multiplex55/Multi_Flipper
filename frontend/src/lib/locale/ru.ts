@@ -123,6 +123,7 @@ export const ru = {
     tabRadius: "Флипер (радиус)",
     tabRegion: "Регионал Трейд",
     tabContracts: "Арбитраж контрактов",
+    tabPinned: "Закреплённые",
 
     // Buttons
     scan: "Сканировать",

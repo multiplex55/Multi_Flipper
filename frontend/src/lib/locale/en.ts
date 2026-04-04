@@ -123,6 +123,7 @@ export const en = {
     tabRadius: "Flipper (radius)",
     tabRegion: "Regional Trade",
     tabContracts: "Contract Arbitrage",
+    tabPinned: "Pinned",
 
     // Buttons
     scan: "Scan",

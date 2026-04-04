@@ -118,6 +118,27 @@ func (s *Server) handleDeletePinnedOpportunity(w http.ResponseWriter, r *http.Re
 	writeJSON(w, map[string]string{"status": "deleted"})
 }
 
+func (s *Server) handleListPinnedSnapshots(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromRequest(r)
+	opportunityKey := strings.TrimSpace(r.URL.Query().Get("opportunity_key"))
+	if opportunityKey == "" {
+		writeError(w, http.StatusBadRequest, "opportunity_key is required")
+		return
+	}
+	limit := 50
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	items, err := s.db.ListPinnedOpportunitySnapshotsForUser(userID, opportunityKey, limit)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list pinned snapshots")
+		return
+	}
+	writeJSON(w, items)
+}
+
 func (s *Server) handleUpsertPinnedSnapshots(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromRequest(r)
 	var req struct {
