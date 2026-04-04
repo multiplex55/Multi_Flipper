@@ -2,7 +2,12 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import type { RegionalDayTradeHub, RegionalDayTradeItem, StationCacheMeta } from "@/lib/types";
 import { formatISK, formatISKFull, formatMargin } from "@/lib/format";
 import { EmptyState } from "./EmptyState";
-import { addPinnedOpportunity, listPinnedOpportunities, removePinnedOpportunity } from "@/lib/api";
+import {
+  addPinnedOpportunity,
+  listPinnedOpportunities,
+  removePinnedOpportunity,
+  subscribePinnedOpportunityChanges,
+} from "@/lib/api";
 import { mapRegionalRowToPinnedOpportunity } from "@/lib/pinnedOpportunityMapper";
 import { useGlobalToast } from "./Toast";
 
@@ -349,11 +354,21 @@ export function RegionalDayTraderTable({
 }: Props) {
   const { addToast } = useGlobalToast();
   const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
-  useEffect(() => {
+  const reloadPinnedKeys = useCallback(() => {
     listPinnedOpportunities("regional_day")
       .then((rows) => setPinnedKeys(new Set(rows.map((row) => row.opportunity_key))))
       .catch(() => {});
   }, []);
+  useEffect(() => {
+    reloadPinnedKeys();
+    return subscribePinnedOpportunityChanges((detail) => {
+      if (detail.tab && detail.tab !== "regional_day") return;
+      if (import.meta.env.DEV) {
+        console.debug("[RegionalDayTraderTable] pin state refresh", detail);
+      }
+      reloadPinnedKeys();
+    });
+  }, [reloadPinnedKeys]);
   const togglePinned = useCallback((row: RegionalDayTradeItem) => {
     const mapped = mapRegionalRowToPinnedOpportunity(row);
     const key = mapped.opportunity_key;

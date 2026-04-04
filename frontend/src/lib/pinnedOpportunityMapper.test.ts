@@ -91,4 +91,44 @@ describe("pinnedOpportunityMapper", () => {
     const contract = mapContractRowToPinnedOpportunity({ ContractID: 12, Title: "c", Price: 1, MarketValue: 1, Profit: 1, MarginPercent: 1, Volume: 0, StationName: "Jita", ItemCount: 1, Jumps: 0, ProfitPerJump: 1, LiquidationJumps: undefined, ExpectedProfit: undefined, ExpectedMarginPercent: undefined } as ContractResult);
     expect(contract.metrics.route_risk).toBe(0);
   });
+
+  it("does not include volatile ranking-like fields in key composition", () => {
+    const base = {
+      TypeID: 34,
+      BuySystemID: 30000142,
+      BuyLocationID: 60003760,
+      SellSystemID: 30002187,
+      SellLocationID: 60008494,
+      TypeName: "Tritanium",
+      BuyStation: "Jita",
+      SellStation: "Amarr",
+      MarginPercent: 10,
+      DailyVolume: 100,
+      TotalJumps: 9,
+      Volume: 0.01,
+      BuyPrice: 1,
+      SellPrice: 2,
+      ProfitPerUnit: 1,
+      UnitsToBuy: 1,
+      BuyOrderRemain: 1,
+      SellOrderRemain: 1,
+      TotalProfit: 1,
+      ProfitPerJump: 1,
+      BuyJumps: 0,
+      SellJumps: 0,
+      Velocity: 1,
+      PriceTrend: 0,
+      BuyCompetitors: 0,
+      SellCompetitors: 0,
+      DailyProfit: 1,
+    } as FlipResult;
+    const a = mapScanRowToPinnedOpportunity(base);
+    const b = mapScanRowToPinnedOpportunity({
+      ...base,
+      DailyVolume: 9_999,
+      TotalProfit: 999_999,
+      MarginPercent: 1,
+    } as FlipResult);
+    expect(a.opportunity_key).toBe(b.opportunity_key);
+  });
 });

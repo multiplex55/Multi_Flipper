@@ -22,6 +22,7 @@ vi.mock("@/lib/api", () => ({
   addToWatchlist: vi.fn(async () => undefined),
   listPinnedOpportunities: vi.fn(async () => []),
   removePinnedOpportunity: vi.fn(async () => ({ status: "deleted" })),
+  subscribePinnedOpportunityChanges: vi.fn(() => () => undefined),
   removeFromWatchlist: vi.fn(async () => undefined),
   openMarketInGame: vi.fn(async () => undefined),
   setWaypointInGame: vi.fn(async () => undefined),
@@ -115,7 +116,10 @@ describe("StationTrading pinning", () => {
     const pinBtn = await screen.findByLabelText("Pin row");
     fireEvent.click(pinBtn);
     expect(addPinnedOpportunity).toHaveBeenCalled();
-    const key = vi.mocked(addPinnedOpportunity).mock.calls[0][0].opportunity_key;
+    const payload = vi.mocked(addPinnedOpportunity).mock.calls[0][0];
+    const key = payload.opportunity_key;
+    expect(payload.source).toBe("station");
+    expect(payload.metrics.volume).toBeGreaterThanOrEqual(0);
     fireEvent.click(await screen.findByLabelText("Unpin row"));
     expect(removePinnedOpportunity).toHaveBeenCalledWith(key);
   });

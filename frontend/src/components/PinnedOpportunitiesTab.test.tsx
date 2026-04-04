@@ -1,11 +1,16 @@
 import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PinnedOpportunitiesTab } from "@/components/PinnedOpportunitiesTab";
-import { listPinnedOpportunities, listPinnedOpportunitySnapshots } from "@/lib/api";
+import {
+  listPinnedOpportunities,
+  listPinnedOpportunitySnapshots,
+  subscribePinnedOpportunityChanges,
+} from "@/lib/api";
 
 vi.mock("@/lib/api", () => ({
   listPinnedOpportunities: vi.fn(async () => []),
   listPinnedOpportunitySnapshots: vi.fn(async () => []),
+  subscribePinnedOpportunityChanges: vi.fn(() => () => undefined),
 }));
 
 const pinned = [
@@ -70,5 +75,20 @@ describe("PinnedOpportunitiesTab", () => {
     await screen.findAllByText("station:34:60003760");
     expect(err.mock.calls.join("\n")).not.toContain("Each child in a list should have a unique \"key\"");
     err.mockRestore();
+  });
+
+  it("reloads rows when pin-change event subscription fires", async () => {
+    const handlers: Array<(detail: { action: "add" | "remove"; opportunity_key: string; tab?: string }) => void> = [];
+    vi.mocked(subscribePinnedOpportunityChanges).mockImplementation((handler) => {
+      handlers.push(handler);
+      return () => undefined;
+    });
+    render(<PinnedOpportunitiesTab />);
+    await screen.findByText("station:34:60003760");
+    const callsBefore = vi.mocked(listPinnedOpportunities).mock.calls.length;
+    handlers[0]?.({ action: "add", opportunity_key: "station:34:60003760", tab: "station" });
+    await waitFor(() =>
+      expect(vi.mocked(listPinnedOpportunities).mock.calls.length).toBeGreaterThan(callsBefore),
+    );
   });
 });

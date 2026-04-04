@@ -1,5 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import { listPinnedOpportunities, listPinnedOpportunitySnapshots } from "@/lib/api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  listPinnedOpportunities,
+  listPinnedOpportunitySnapshots,
+  subscribePinnedOpportunityChanges,
+} from "@/lib/api";
 import { formatISK, formatMargin, formatNumber } from "@/lib/format";
 import type { PinnedOpportunityRecord, PinnedOpportunitySnapshotRecord } from "@/lib/types";
 import { TrendIndicator } from "@/components/TrendIndicator";
@@ -17,6 +21,14 @@ export function PinnedOpportunitiesTab() {
   const [snapshots, setSnapshots] = useState<Record<string, PinnedOpportunitySnapshotRecord[]>>({});
   const [compareMode, setCompareMode] = useState<CompareMode>(getModeFromURL);
   const [customLabel, setCustomLabel] = useState("");
+  const reloadPinnedRows = useCallback(async () => {
+    const items = await listPinnedOpportunities();
+    setRows(items);
+    const byKey = await Promise.all(
+      items.map(async (item) => [item.opportunity_key, await listPinnedOpportunitySnapshots(item.opportunity_key, 100)] as const),
+    );
+    setSnapshots(Object.fromEntries(byKey));
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -28,14 +40,14 @@ export function PinnedOpportunitiesTab() {
   }, [compareMode, customLabel]);
 
   useEffect(() => {
-    void listPinnedOpportunities().then(async (items) => {
-      setRows(items);
-      const byKey = await Promise.all(
-        items.map(async (item) => [item.opportunity_key, await listPinnedOpportunitySnapshots(item.opportunity_key, 100)] as const),
-      );
-      setSnapshots(Object.fromEntries(byKey));
+    void reloadPinnedRows();
+    return subscribePinnedOpportunityChanges((detail) => {
+      if (import.meta.env.DEV) {
+        console.debug("[PinnedOpportunitiesTab] pin change received", detail);
+      }
+      void reloadPinnedRows();
     });
-  }, []);
+  }, [reloadPinnedRows]);
 
   const customOptions = useMemo(() => {
     const all = Object.values(snapshots).flat();

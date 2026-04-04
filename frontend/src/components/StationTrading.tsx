@@ -29,6 +29,7 @@ import {
   addPinnedOpportunity,
   removePinnedOpportunity,
   listPinnedOpportunities,
+  subscribePinnedOpportunityChanges,
   openMarketInGame,
   setWaypointInGame,
 } from "@/lib/api";
@@ -509,11 +510,22 @@ export function StationTrading({
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
+  const reloadPinnedKeys = useCallback(() => {
     listPinnedOpportunities("station")
-      .then((rows) => setPinnedKeys(new Set(rows.map((row) => row.opportunity_key))) )
+      .then((rows) => setPinnedKeys(new Set(rows.map((row) => row.opportunity_key))))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    reloadPinnedKeys();
+    return subscribePinnedOpportunityChanges((detail) => {
+      if (detail.tab && detail.tab !== "station") return;
+      if (import.meta.env.DEV) {
+        console.debug("[StationTrading] pin state refresh", detail);
+      }
+      reloadPinnedKeys();
+    });
+  }, [reloadPinnedKeys]);
 
   useEffect(() => {
     Promise.all([getBanlistItems(), getBannedStations()])

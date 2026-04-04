@@ -20,6 +20,7 @@ vi.mock("@/lib/api", () => ({
   rebootStationCache: vi.fn(async () => undefined),
   removeFromWatchlist: vi.fn(async () => undefined),
   removePinnedOpportunity: vi.fn(async () => ({ status: "deleted" })),
+  subscribePinnedOpportunityChanges: vi.fn(() => () => undefined),
   setStationTradeState: vi.fn(async () => undefined),
   setWaypointInGame: vi.fn(async () => undefined),
 }));
@@ -202,6 +203,13 @@ describe("ScanResultsTable pinning", () => {
     expect(addPinnedOpportunity).toHaveBeenCalled();
     const payload = vi.mocked(addPinnedOpportunity).mock.calls[0][0];
     expect(payload.opportunity_key).toContain("flip:");
+    expect(payload.source).toBe("scan");
+    expect(payload.metrics).toEqual(expect.objectContaining({
+      profit: expect.any(Number),
+      margin: expect.any(Number),
+      volume: expect.any(Number),
+      route_risk: expect.any(Number),
+    }));
 
     fireEvent.click(await screen.findByTitle("Unpin"));
     expect(removePinnedOpportunity).toHaveBeenCalledWith(payload.opportunity_key);

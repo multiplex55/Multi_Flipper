@@ -15,6 +15,7 @@ import {
   rebootStationCache,
   removePinnedOpportunity,
   setStationTradeState,
+  subscribePinnedOpportunityChanges,
 } from "@/lib/api";
 import { handleEveUIError } from "@/lib/handleEveUIError";
 import { ContractDetailsPopup } from "./ContractDetailsPopup";
@@ -224,11 +225,22 @@ export function ContractResultsTable({
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const titleFetchInFlightRef = useRef<Set<number>>(new Set());
 
-  useEffect(() => {
+  const reloadPinnedKeys = useCallback(() => {
     listPinnedOpportunities("contracts")
       .then((rows) => setPinnedKeys(new Set(rows.map((row) => row.opportunity_key))))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    reloadPinnedKeys();
+    return subscribePinnedOpportunityChanges((detail) => {
+      if (detail.tab && detail.tab !== "contracts") return;
+      if (import.meta.env.DEV) {
+        console.debug("[ContractResultsTable] pin state refresh", detail);
+      }
+      reloadPinnedKeys();
+    });
+  }, [reloadPinnedKeys]);
 
   const togglePinned = useCallback((row: ContractResult) => {
     const mapped = mapContractRowToPinnedOpportunity(row);

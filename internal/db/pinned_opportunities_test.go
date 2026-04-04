@@ -3,6 +3,8 @@ package db
 import (
 	"database/sql"
 	"testing"
+
+	"eve-flipper/internal/engine"
 )
 
 func TestDB_Migrate_PinnedOpportunityTablesAndIndexesExist(t *testing.T) {
@@ -139,5 +141,51 @@ func TestDB_MigrateV28ToLatest_PinnedOpportunityTablesUsable(t *testing.T) {
 	}
 	if err := d.AddPinnedOpportunityForUser("migrated-user", PinnedOpportunity{OpportunityKey: "contract:1", Tab: PinnedTabContracts, PayloadJSON: `{"contract_id":1}`}); err != nil {
 		t.Fatalf("insert pinned after migration: %v", err)
+	}
+}
+
+func TestPinnedOpportunitiesRemainAfterScanHistoryAndResultInserts(t *testing.T) {
+	d := openTestDB(t)
+	defer d.Close()
+
+	key := "flip:34:60003760:60008494"
+	if err := d.AddPinnedOpportunityForUser("user-a", PinnedOpportunity{
+		OpportunityKey: key,
+		Tab:            PinnedTabScan,
+		PayloadJSON:    `{"source":"scan","opportunity_key":"flip:34:60003760:60008494","type_id":34,"metrics":{"profit":1,"margin":1,"volume":1,"route_risk":1}}`,
+	}); err != nil {
+		t.Fatalf("seed pin: %v", err)
+	}
+
+	scanID := d.InsertHistoryFull("scan", "Jita", 1, 12345, 12345, 250, map[string]any{})
+	if scanID == 0 {
+		t.Fatalf("insert history returned zero scan id")
+	}
+	d.InsertFlipResults(scanID, []engine.FlipResult{{
+		TypeID:         34,
+		TypeName:       "Tritanium",
+		Volume:         0.01,
+		BuyPrice:       1,
+		BuyStation:     "Jita",
+		BuySystemName:  "Jita",
+		BuySystemID:    30000142,
+		BuyLocationID:  60003760,
+		SellPrice:      2,
+		SellStation:    "Amarr",
+		SellSystemName: "Amarr",
+		SellSystemID:   30002187,
+		SellLocationID: 60008494,
+		TotalProfit:    100,
+		MarginPercent:  5,
+		DailyVolume:    10,
+		TotalJumps:     9,
+	}})
+
+	items, err := d.ListPinnedOpportunitiesForUser("user-a", PinnedTabScan)
+	if err != nil {
+		t.Fatalf("list pinned: %v", err)
+	}
+	if len(items) != 1 || items[0].OpportunityKey != key {
+		t.Fatalf("pins changed after scan writes: %#v", items)
 	}
 }
