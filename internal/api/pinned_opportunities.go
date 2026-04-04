@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +28,16 @@ type pinnedSnapshotBatchRequest struct {
 	Metrics        json.RawMessage `json:"metrics"`
 }
 
+func pinnedDebugEnabled() bool {
+	return os.Getenv("EVE_FLIPPER_DEBUG_PINNED") == "1"
+}
+
+func logPinnedDebug(format string, args ...any) {
+	if pinnedDebugEnabled() {
+		log.Printf("[DEBUG][PINNED] "+format, args...)
+	}
+}
+
 func normalizePinnedTab(tab string) string {
 	tab = strings.ToLower(strings.TrimSpace(tab))
 	switch tab {
@@ -36,19 +48,60 @@ func normalizePinnedTab(tab string) string {
 	}
 }
 
-func normalizeJSONObject(raw json.RawMessage) (string, error) {
+func normalizeJSONObject(raw json.RawMessage) (map[string]any, string, error) {
 	if len(raw) == 0 {
-		return "", fmt.Errorf("payload is required")
+		return nil, "", fmt.Errorf("payload is required")
 	}
 	var obj map[string]any
 	if err := json.Unmarshal(raw, &obj); err != nil {
-		return "", fmt.Errorf("payload must be valid json object")
+		return nil, "", fmt.Errorf("payload must be valid json object")
 	}
 	encoded, err := json.Marshal(obj)
 	if err != nil {
-		return "", fmt.Errorf("payload encode failed")
+		return nil, "", fmt.Errorf("payload encode failed")
 	}
-	return string(encoded), nil
+	return obj, string(encoded), nil
+}
+
+func validatePinnedPayload(tab, key string, payload map[string]any) error {
+	source, _ := payload["source"].(string)
+	if source != tab {
+		return fmt.Errorf("payload.source must match tab")
+	}
+	payloadKey, _ := payload["opportunity_key"].(string)
+	if payloadKey != key {
+		return fmt.Errorf("payload.opportunity_key must match opportunity_key")
+	}
+	metrics, ok := payload["metrics"].(map[string]any)
+	if !ok {
+		return fmt.Errorf("payload.metrics is required")
+	}
+	required := []string{"profit", "margin", "volume", "route_risk"}
+	for _, field := range required {
+		value, ok := metrics[field]
+		if !ok {
+			return fmt.Errorf("payload.metrics.%s is required", field)
+		}
+		number, ok := value.(float64)
+		if !ok || math.IsNaN(number) || math.IsInf(number, 0) {
+			return fmt.Errorf("payload.metrics.%s must be a finite number", field)
+		}
+	}
+	switch tab {
+	case db.PinnedTabScan, db.PinnedTabRegionalDay:
+		if !strings.HasPrefix(key, "flip:") {
+			return fmt.Errorf("invalid opportunity_key for tab")
+		}
+	case db.PinnedTabStation:
+		if !strings.HasPrefix(key, "station:") {
+			return fmt.Errorf("invalid opportunity_key for tab")
+		}
+	case db.PinnedTabContracts:
+		if !strings.HasPrefix(key, "contract:") {
+			return fmt.Errorf("invalid opportunity_key for tab")
+		}
+	}
+	return nil
 }
 
 func (s *Server) handleListPinnedOpportunities(w http.ResponseWriter, r *http.Request) {
@@ -63,6 +116,7 @@ func (s *Server) handleListPinnedOpportunities(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusInternalServerError, "failed to list pinned opportunities")
 		return
 	}
+	logPinnedDebug("list user_id=%s tab=%s count=%d", userID, tab, len(items))
 	writeJSON(w, items)
 }
 
@@ -83,8 +137,12 @@ func (s *Server) handleAddPinnedOpportunity(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusBadRequest, "opportunity_key is required")
 		return
 	}
-	payloadJSON, err := normalizeJSONObject(req.Payload)
+	payloadObj, payloadJSON, err := normalizeJSONObject(req.Payload)
 	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := validatePinnedPayload(tab, req.OpportunityKey, payloadObj); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -101,6 +159,7 @@ func (s *Server) handleAddPinnedOpportunity(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusInternalServerError, "failed to list pinned opportunities")
 		return
 	}
+	logPinnedDebug("add user_id=%s tab=%s key=%s count=%d", userID, tab, req.OpportunityKey, len(items))
 	writeJSON(w, items)
 }
 
@@ -115,6 +174,7 @@ func (s *Server) handleDeletePinnedOpportunity(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusInternalServerError, "failed to delete pinned opportunity")
 		return
 	}
+	logPinnedDebug("delete user_id=%s key=%s", userID, opportunityKey)
 	writeJSON(w, map[string]string{"status": "deleted"})
 }
 
@@ -136,6 +196,7 @@ func (s *Server) handleListPinnedSnapshots(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusInternalServerError, "failed to list pinned snapshots")
 		return
 	}
+	logPinnedDebug("list snapshots user_id=%s key=%s limit=%d count=%d", userID, opportunityKey, limit, len(items))
 	writeJSON(w, items)
 }
 
@@ -158,7 +219,7 @@ func (s *Server) handleUpsertPinnedSnapshots(w http.ResponseWriter, r *http.Requ
 		if key == "" {
 			continue
 		}
-		metricsJSON, err := normalizeJSONObject(snap.Metrics)
+		_, metricsJSON, err := normalizeJSONObject(snap.Metrics)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
@@ -179,6 +240,7 @@ func (s *Server) handleUpsertPinnedSnapshots(w http.ResponseWriter, r *http.Requ
 			writeError(w, http.StatusInternalServerError, "failed to save snapshot")
 			return
 		}
+		logPinnedDebug("upsert snapshot user_id=%s key=%s label=%s", userID, key, label)
 		count++
 	}
 	writeJSON(w, map[string]int{"upserted": count})

@@ -66,6 +66,8 @@ import type {
 } from "./types";
 
 const BASE = import.meta.env.VITE_API_URL || "";
+const PINNED_EVENT = "eveflipper:pinned-opportunities-changed";
+const PINNED_DEBUG = Boolean(import.meta.env.DEV);
 
 const USER_ID_STORAGE_KEY = "eveflipper_uid_v1";
 const USER_ID_HEADER_NAME = "X-EveFlipper-UID";
@@ -120,6 +122,32 @@ function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Respons
   const headers = new Headers(init?.headers ?? undefined);
   headers.set(USER_ID_HEADER_NAME, getClientUserID());
   return window.fetch(input, { credentials: "include", ...init, headers });
+}
+
+export type PinnedChangeDetail = {
+  action: "add" | "remove";
+  tab?: PinnedOpportunitySource;
+  opportunity_key: string;
+};
+
+function emitPinnedChanged(detail: PinnedChangeDetail): void {
+  if (PINNED_DEBUG) {
+    console.debug("[PinnedAPI] changed", detail);
+  }
+  window.dispatchEvent(new CustomEvent<PinnedChangeDetail>(PINNED_EVENT, { detail }));
+}
+
+export function subscribePinnedOpportunityChanges(
+  listener: (detail: PinnedChangeDetail) => void,
+): () => void {
+  const onChange = (event: Event) => {
+    const custom = event as CustomEvent<PinnedChangeDetail>;
+    if (custom.detail) {
+      listener(custom.detail);
+    }
+  };
+  window.addEventListener(PINNED_EVENT, onChange);
+  return () => window.removeEventListener(PINNED_EVENT, onChange);
 }
 
 // Helper to handle HTTP errors consistently
@@ -467,12 +495,16 @@ export async function addPinnedOpportunity(payload: PinnedOpportunityPayload): P
       payload,
     }),
   });
-  return handleResponse<PinnedOpportunityRecord[]>(res);
+  const rows = await handleResponse<PinnedOpportunityRecord[]>(res);
+  emitPinnedChanged({ action: "add", tab: payload.source, opportunity_key: payload.opportunity_key });
+  return rows;
 }
 
 export async function removePinnedOpportunity(opportunityKey: string): Promise<{ status: string }> {
   const res = await apiFetch(`${BASE}/api/pinned-opportunities/${encodeURIComponent(opportunityKey)}`, { method: "DELETE" });
-  return handleResponse<{ status: string }>(res);
+  const out = await handleResponse<{ status: string }>(res);
+  emitPinnedChanged({ action: "remove", opportunity_key: opportunityKey });
+  return out;
 }
 
 export async function upsertPinnedSnapshots(payload: PinnedSnapshotPayload[]): Promise<{ upserted: number }> {

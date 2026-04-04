@@ -32,6 +32,7 @@ import {
   removeFromWatchlist,
   removePinnedOpportunity,
   listPinnedOpportunities,
+  subscribePinnedOpportunityChanges,
   setStationTradeState,
   setWaypointInGame,
 } from "@/lib/api";
@@ -1060,12 +1061,22 @@ export function ScanResultsTable({
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
+  const reloadPinnedKeys = useCallback(() => {
     listPinnedOpportunities("scan")
-      .then((rows) => setPinnedKeys(new Set(rows.map((row) => row.opportunity_key)))
-      )
+      .then((rows) => setPinnedKeys(new Set(rows.map((row) => row.opportunity_key))))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    reloadPinnedKeys();
+    return subscribePinnedOpportunityChanges((detail) => {
+      if (detail.tab && detail.tab !== "scan") return;
+      if (import.meta.env.DEV) {
+        console.debug("[ScanResultsTable] pin state refresh", detail);
+      }
+      reloadPinnedKeys();
+    });
+  }, [reloadPinnedKeys]);
 
   // ── Route Safety batch fetch ──
   // Fires only when scanning finishes (scanning goes false) with results

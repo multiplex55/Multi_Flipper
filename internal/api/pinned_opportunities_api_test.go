@@ -33,7 +33,7 @@ func TestPinnedOpportunityHandlers_AddListDeleteAndUserScoping(t *testing.T) {
 	srv, _ := newPinnedAPITestServer(t)
 	h := srv.Handler()
 
-	add := `{"tab":"station","opportunity_key":"station:34:60003760","payload":{"type_id":34}}`
+	add := `{"tab":"station","opportunity_key":"station:34:60003760","payload":{"source":"station","opportunity_key":"station:34:60003760","type_id":34,"metrics":{"profit":1000,"margin":10,"volume":200,"route_risk":1}}}`
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, pinnedReq(http.MethodPost, "/api/pinned-opportunities", add, "user-a"))
 	if rec.Code != http.StatusOK {
@@ -73,9 +73,11 @@ func TestPinnedOpportunityHandlers_InvalidPayloadOrTabReturns400(t *testing.T) {
 	h := srv.Handler()
 
 	cases := []string{
-		`{"tab":"bad-tab","opportunity_key":"x","payload":{"x":1}}`,
+		`{"tab":"bad-tab","opportunity_key":"x","payload":{"source":"scan","opportunity_key":"x","type_id":1,"metrics":{"profit":1,"margin":1,"volume":1,"route_risk":1}}}`,
 		`{"tab":"scan","opportunity_key":"x","payload":[]}`,
-		`{"tab":"scan","opportunity_key":"","payload":{"x":1}}`,
+		`{"tab":"scan","opportunity_key":"","payload":{"source":"scan","opportunity_key":"","type_id":1,"metrics":{"profit":1,"margin":1,"volume":1,"route_risk":1}}}`,
+		`{"tab":"scan","opportunity_key":"flip:1:2:3","payload":{"source":"scan","opportunity_key":"flip:1:2:3","type_id":1}}`,
+		`{"tab":"contracts","opportunity_key":"flip:1:2:3","payload":{"source":"contracts","opportunity_key":"flip:1:2:3","type_id":0,"metrics":{"profit":1,"margin":1,"volume":1,"route_risk":1}}}`,
 	}
 	for _, body := range cases {
 		rec := httptest.NewRecorder()
@@ -83,6 +85,37 @@ func TestPinnedOpportunityHandlers_InvalidPayloadOrTabReturns400(t *testing.T) {
 		if rec.Code != http.StatusBadRequest {
 			t.Fatalf("expected 400 for %s got %d", body, rec.Code)
 		}
+	}
+}
+
+func TestPinnedOpportunityHandlers_RescanSnapshotUpdateDoesNotDeletePins(t *testing.T) {
+	srv, database := newPinnedAPITestServer(t)
+	const userID = "user-rescan"
+
+	if err := database.AddPinnedOpportunityForUser(userID, db.PinnedOpportunity{
+		OpportunityKey: "flip:34:60003760:60008494",
+		Tab:            db.PinnedTabScan,
+		PayloadJSON:    `{"source":"scan","opportunity_key":"flip:34:60003760:60008494","type_id":34,"metrics":{"profit":1,"margin":1,"volume":1,"route_risk":1}}`,
+	}); err != nil {
+		t.Fatalf("seed pinned row: %v", err)
+	}
+
+	before, err := database.ListPinnedOpportunitiesForUser(userID, db.PinnedTabScan)
+	if err != nil {
+		t.Fatalf("list before: %v", err)
+	}
+	if len(before) != 1 {
+		t.Fatalf("expected 1 pin before rescan, got %d", len(before))
+	}
+
+	srv.updatePinnedSnapshotsForFlipResults(userID, db.PinnedTabScan, 101, nil)
+
+	after, err := database.ListPinnedOpportunitiesForUser(userID, db.PinnedTabScan)
+	if err != nil {
+		t.Fatalf("list after: %v", err)
+	}
+	if len(after) != len(before) {
+		t.Fatalf("pin count changed after rescan snapshot update: before=%d after=%d", len(before), len(after))
 	}
 }
 

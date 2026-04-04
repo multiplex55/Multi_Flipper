@@ -17,6 +17,7 @@ vi.mock("@/lib/api", () => ({
   rebootStationCache: vi.fn(async () => ({ cleared: 0 })),
   removePinnedOpportunity: vi.fn(async () => ({ status: "deleted" })),
   setStationTradeState: vi.fn(async () => undefined),
+  subscribePinnedOpportunityChanges: vi.fn(() => () => undefined),
 }));
 
 function row(overrides: Partial<ContractResult> = {}): ContractResult {
@@ -70,7 +71,10 @@ describe("ContractResultsTable pinning", () => {
     const pinBtn = await screen.findByLabelText("Pin row");
     fireEvent.click(pinBtn);
     expect(addPinnedOpportunity).toHaveBeenCalled();
-    const key = vi.mocked(addPinnedOpportunity).mock.calls[0][0].opportunity_key;
+    const payload = vi.mocked(addPinnedOpportunity).mock.calls[0][0];
+    const key = payload.opportunity_key;
+    expect(payload.source).toBe("contracts");
+    expect(payload.metrics).toEqual(expect.objectContaining({ route_risk: expect.any(Number) }));
     fireEvent.click(await screen.findByLabelText("Unpin row"));
     expect(removePinnedOpportunity).toHaveBeenCalledWith(key);
   });
