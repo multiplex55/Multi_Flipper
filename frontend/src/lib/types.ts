@@ -441,6 +441,20 @@ export interface WatchlistItem {
   alert_threshold?: number;
 }
 
+export interface BanlistItem {
+  type_id: number;
+  type_name: string;
+  added_at: string;
+}
+
+export interface BannedStation {
+  location_id: number;
+  station_name: string;
+  system_id?: number;
+  system_name?: string;
+  added_at: string;
+}
+
 export interface AlertHistoryEntry {
   id: number;
   watchlist_type_id: number;
