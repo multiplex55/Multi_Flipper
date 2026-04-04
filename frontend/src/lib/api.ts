@@ -62,6 +62,7 @@ import type {
   PinnedOpportunityRecord,
   PinnedOpportunitySource,
   PinnedSnapshotPayload,
+  PinnedOpportunitySnapshotRecord,
 } from "./types";
 
 const BASE = import.meta.env.VITE_API_URL || "";
@@ -481,6 +482,23 @@ export async function upsertPinnedSnapshots(payload: PinnedSnapshotPayload[]): P
     body: JSON.stringify({ snapshots: payload }),
   });
   return handleResponse<{ upserted: number }>(res);
+}
+
+
+export async function listPinnedOpportunitySnapshots(opportunityKey: string, limit = 50): Promise<PinnedOpportunitySnapshotRecord[]> {
+  const params = new URLSearchParams({ opportunity_key: opportunityKey, limit: String(limit) });
+  const res = await apiFetch(`${BASE}/api/pinned-opportunities/snapshots?${params.toString()}`);
+  const rows = await handleResponse<PinnedOpportunitySnapshotRecord[]>(res);
+  return rows.map((row) => ({
+    ...row,
+    metrics: (() => {
+      try {
+        return JSON.parse(row.metrics_json);
+      } catch {
+        return undefined;
+      }
+    })(),
+  }));
 }
 
 // --- Watchlist ---

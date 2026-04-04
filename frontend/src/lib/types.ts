@@ -476,6 +476,17 @@ export interface PinnedSnapshotPayload {
   metrics: PinnedOpportunityMetrics;
 }
 
+
+export interface PinnedOpportunitySnapshotRecord {
+  id: number;
+  user_id: string;
+  opportunity_key: string;
+  snapshot_label: string;
+  snapshot_at: string;
+  metrics_json: string;
+  metrics?: PinnedOpportunityMetrics;
+}
+
 export interface WatchlistItem {
   type_id: number;
   type_name: string;
