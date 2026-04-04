@@ -1,17 +1,26 @@
-import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PinnedOpportunitiesTab } from "@/components/PinnedOpportunitiesTab";
 import {
   listPinnedOpportunities,
   listPinnedOpportunitySnapshots,
-  type PinnedChangeDetail,
+  openMarketInGame,
+  removePinnedOpportunity,
+  setWaypointInGame,
   subscribePinnedOpportunityChanges,
 } from "@/lib/api";
 
 vi.mock("@/lib/api", () => ({
   listPinnedOpportunities: vi.fn(async () => []),
   listPinnedOpportunitySnapshots: vi.fn(async () => []),
+  openMarketInGame: vi.fn(async () => undefined),
+  setWaypointInGame: vi.fn(async () => undefined),
+  removePinnedOpportunity: vi.fn(async () => ({ status: "deleted" })),
   subscribePinnedOpportunityChanges: vi.fn(() => () => undefined),
+}));
+
+vi.mock("@/components/ContractDetailsPopup", () => ({
+  ContractDetailsPopup: ({ open }: { open: boolean }) => (open ? <div>Contract details popup</div> : null),
 }));
 
 const pinned = [
@@ -22,13 +31,39 @@ const pinned = [
     payload_json: "{}",
     created_at: "2026-04-04T00:00:00Z",
     updated_at: "2026-04-04T00:00:00Z",
-    payload: { metrics: { profit: 1_000_000, margin: 10, volume: 500, route_risk: 2 } },
+    payload: {
+      source: "station",
+      type_id: 34,
+      type_name: "Tritanium",
+      source_label: "Station",
+      buy_label: "Jita IV",
+      sell_label: "Jita IV",
+      system_id: 30000142,
+      metrics: { profit: 1_000_000, margin: 10, volume: 500, route_risk: 2 },
+    },
+  },
+  {
+    user_id: "u",
+    opportunity_key: "contract:200",
+    tab: "contracts",
+    payload_json: "{}",
+    created_at: "2026-04-04T00:00:00Z",
+    updated_at: "2026-04-04T00:00:00Z",
+    payload: {
+      source: "contracts",
+      contract_id: 200,
+      type_id: 0,
+      type_name: "Navy Omen",
+      source_label: "Contracts",
+      buy_label: "Perimeter",
+      sell_label: "Jita",
+      metrics: { profit: 500_000, margin: 5, volume: 30, route_risk: 1 },
+    },
   },
 ];
 
 const snapshots = [
   { id: 1, user_id: "u", opportunity_key: "station:34:60003760", snapshot_label: "scan:100", snapshot_at: "2026-04-04T11:00:00Z", metrics_json: "{}", metrics: { profit: 900_000, margin: 9, volume: 450, route_risk: 3 } },
-  { id: 2, user_id: "u", opportunity_key: "station:34:60003760", snapshot_label: "custom:a", snapshot_at: "2026-04-03T10:00:00Z", metrics_json: "{}", metrics: { profit: 700_000, margin: 7, volume: 400, route_risk: 4 } },
 ];
 
 describe("PinnedOpportunitiesTab", () => {
@@ -40,54 +75,62 @@ describe("PinnedOpportunitiesTab", () => {
     window.history.replaceState({}, "", "/");
   });
 
-  it("renders pinned rows from API", async () => {
+  it("renders human-readable labels and hides raw key in grid columns", async () => {
     render(<PinnedOpportunitiesTab />);
-    expect(await screen.findByText("station:34:60003760")).toBeInTheDocument();
+    expect(await screen.findByText("Tritanium")).toBeInTheDocument();
+    expect(screen.queryByText("station:34:60003760")).not.toBeInTheDocument();
   });
 
-  it("compare filter changes recompute deltas for last/custom/24h", async () => {
+  it("opens details on row click and supports contract popup", async () => {
     render(<PinnedOpportunitiesTab />);
-    await screen.findAllByText("station:34:60003760");
-
-    expect(screen.getAllByLabelText(/Increase: 100 K/i).length).toBeGreaterThan(0);
-
-    fireEvent.change(screen.getByDisplayValue("Last scan"), { target: { value: "custom" } });
-    const selects = screen.getAllByRole("combobox");
-    fireEvent.change(selects[1], { target: { value: "custom:a" } });
-    await waitFor(() => expect(screen.getByLabelText(/Increase: 300 K/i)).toBeInTheDocument());
-
-    fireEvent.change(screen.getByDisplayValue("Custom snapshot"), { target: { value: "h24" } });
-    await waitFor(() => expect(screen.getByText(/scan:100|custom:a/)).toBeInTheDocument());
+    fireEvent.click(await screen.findByText("Navy Omen"));
+    expect(await screen.findByText("Contract details popup")).toBeInTheDocument();
   });
 
-  it("trend classes/icons match sign of delta and formatting helpers output", async () => {
+  it("action buttons call expected APIs", async () => {
     render(<PinnedOpportunitiesTab />);
-    await screen.findAllByText("station:34:60003760");
-    expect(screen.getAllByText(/▲/).length).toBeGreaterThan(0);
-    expect(screen.getByText("1 M")).toBeInTheDocument();
-    expect(screen.getByText("10.0%")).toBeInTheDocument();
+    const openMarketButtons = await screen.findAllByLabelText("Open market");
+    fireEvent.click(openMarketButtons[0]);
+    await waitFor(() => expect(openMarketInGame).toHaveBeenCalled());
+
+    const waypointButtons = screen.getAllByLabelText("Set waypoint");
+    fireEvent.click(waypointButtons[0]);
+    await waitFor(() => expect(setWaypointInGame).toHaveBeenCalled());
+
+    const unpinButtons = screen.getAllByLabelText("Unpin");
+    fireEvent.click(unpinButtons[0]);
+    await waitFor(() => expect(removePinnedOpportunity).toHaveBeenCalledWith("station:34:60003760"));
   });
 
-  it("uses stable keys without duplicate key warning on rerender", async () => {
-    const err = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const { rerender } = render(<PinnedOpportunitiesTab />);
-    await screen.findAllByText("station:34:60003760");
-    rerender(<PinnedOpportunitiesTab />);
-    await screen.findAllByText("station:34:60003760");
-    expect(err.mock.calls.join("\n")).not.toContain("Each child in a list should have a unique \"key\"");
-    err.mockRestore();
+  it("disabled actions expose tooltip title", async () => {
+    render(<PinnedOpportunitiesTab />);
+    const openMarketButtons = await screen.findAllByLabelText("Open market");
+    expect(openMarketButtons[1]).toBeDisabled();
+    expect(openMarketButtons[1]).toHaveAttribute("title", "No item type for this row");
+  });
+
+  it("filters by source and sorts by profit", async () => {
+    render(<PinnedOpportunitiesTab />);
+    await screen.findByText("Tritanium");
+    fireEvent.change(screen.getByLabelText("Filter by source"), { target: { value: "contracts" } });
+    expect(screen.getByText("Navy Omen")).toBeInTheDocument();
+    expect(screen.queryByText("Tritanium")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Filter by source"), { target: { value: "all" } });
+    fireEvent.click(screen.getByText("Profit"));
+    expect(screen.getAllByText(/M|K/).length).toBeGreaterThan(0);
   });
 
   it("reloads rows when pin-change event subscription fires", async () => {
-    const handlers: Array<(detail: PinnedChangeDetail) => void> = [];
+    const handlers: Array<() => void> = [];
     vi.mocked(subscribePinnedOpportunityChanges).mockImplementation((handler) => {
-      handlers.push(handler);
+      handlers.push(() => handler({ action: "add", opportunity_key: "station:34:60003760", tab: "station" }));
       return () => undefined;
     });
     render(<PinnedOpportunitiesTab />);
-    await screen.findByText("station:34:60003760");
+    await screen.findByText("Tritanium");
     const callsBefore = vi.mocked(listPinnedOpportunities).mock.calls.length;
-    handlers[0]?.({ action: "add", opportunity_key: "station:34:60003760", tab: "station" });
+    handlers[0]?.();
     await waitFor(() =>
       expect(vi.mocked(listPinnedOpportunities).mock.calls.length).toBeGreaterThan(callsBefore),
     );

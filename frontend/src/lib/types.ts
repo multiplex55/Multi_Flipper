@@ -445,16 +445,27 @@ export interface PinnedOpportunityPayload {
   source: PinnedOpportunitySource;
   opportunity_key: string;
   type_id: number;
+  type_name?: string;
+  source_label?: string;
+  buy_label?: string;
+  sell_label?: string;
   contract_id?: number;
   station_id?: number;
   system_id?: number;
+  system_name?: string;
   region_id?: number;
+  region_name?: string;
   buy_system_id?: number;
+  buy_system_name?: string;
   sell_system_id?: number;
+  sell_system_name?: string;
   buy_location_id?: number;
   sell_location_id?: number;
   buy_region_id?: number;
   sell_region_id?: number;
+  buy_station_name?: string;
+  sell_station_name?: string;
+  updated_at?: string;
   metrics: PinnedOpportunityMetrics;
   metadata?: Record<string, string | number | boolean | null | undefined>;
 }
