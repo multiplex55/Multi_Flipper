@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { findRoutes, setWaypointInGame } from "@/lib/api";
+import { findRoutes, getBannedStations, getBanlistItems, setWaypointInGame } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import type { RouteResult, RouteHop, ScanParams } from "@/lib/types";
+import { filterRouteResults } from "@/lib/banlistFilters";
 import { ExecutionPlannerPopup } from "./ExecutionPlannerPopup";
 import { useGlobalToast } from "./Toast";
 import { handleEveUIError } from "@/lib/handleEveUIError";
@@ -47,13 +48,24 @@ export function RouteBuilder({ params, onChange, loadedResults, isLoggedIn = fal
   const [minISKPerJump, setMinISKPerJump] = useState<number | "">(params.route_min_isk_per_jump ?? 0);
   const [allowEmptyHops, setAllowEmptyHops] = useState<boolean>(params.route_allow_empty_hops ?? false);
   const [results, setResults] = useState<RouteResult[]>([]);
+  const [bannedTypeIDs, setBannedTypeIDs] = useState<number[]>([]);
+  const [bannedStationIDs, setBannedStationIDs] = useState<number[]>([]);
+
+  useEffect(() => {
+    Promise.all([getBanlistItems(), getBannedStations()])
+      .then(([items, stations]) => {
+        setBannedTypeIDs(items.map((item) => item.type_id).filter((id) => id > 0));
+        setBannedStationIDs(stations.map((station) => station.location_id).filter((id) => id > 0));
+      })
+      .catch(() => {});
+  }, []);
 
   // Accept externally loaded results (from history)
   useEffect(() => {
     if (loadedResults && loadedResults.length > 0) {
-      setResults(loadedResults);
+      setResults(filterRouteResults(loadedResults, bannedTypeIDs, bannedStationIDs));
     }
-  }, [loadedResults]);
+  }, [loadedResults, bannedStationIDs, bannedTypeIDs]);
 
   useEffect(() => {
     setMinHops(params.route_min_hops ?? 2);
@@ -189,7 +201,7 @@ export function RouteBuilder({ params, onChange, loadedResults, isLoggedIn = fal
         route_max_hops: searchMaxHops,
       };
       const res = await findRoutes(searchParams, searchMinHops, searchMaxHops, setProgress, controller.signal);
-      setResults(res);
+      setResults(filterRouteResults(res, bannedTypeIDs, bannedStationIDs));
     } catch (e: unknown) {
       if (e instanceof Error && e.name !== "AbortError") {
         setProgress(t("errorPrefix") + e.message);
@@ -197,7 +209,7 @@ export function RouteBuilder({ params, onChange, loadedResults, isLoggedIn = fal
     } finally {
       setScanning(false);
     }
-  }, [scanning, params, minHops, maxHops, minISKPerJump, targetSystemName, allowEmptyHops, t]);
+  }, [scanning, params, minHops, maxHops, minISKPerJump, targetSystemName, allowEmptyHops, t, bannedTypeIDs, bannedStationIDs]);
 
   const routeSummary = (route: RouteResult) =>
     route.Hops

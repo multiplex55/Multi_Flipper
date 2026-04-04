@@ -15,6 +15,7 @@ import { useGlobalToast } from "@/components/Toast";
 
 type Props = {
   latestResults: FlipResult[];
+  onBanlistChanged?: () => void;
 };
 
 type StationCandidate = {
@@ -24,7 +25,7 @@ type StationCandidate = {
   system_name?: string;
 };
 
-export function BanlistTab({ latestResults }: Props) {
+export function BanlistTab({ latestResults, onBanlistChanged }: Props) {
   const { t } = useI18n();
   const { addToast } = useGlobalToast();
   const [items, setItems] = useState<BanlistItem[]>([]);
@@ -43,11 +44,12 @@ export function BanlistTab({ latestResults }: Props) {
       .then(([nextItems, nextStations]) => {
         setItems(nextItems);
         setStations(nextStations);
+        onBanlistChanged?.();
       })
       .catch(() => {
         addToast(t("banlistLoadError"), "error", 3000);
       });
-  }, [addToast, t]);
+  }, [addToast, t, onBanlistChanged]);
 
   useEffect(() => {
     reload();
@@ -189,6 +191,7 @@ export function BanlistTab({ latestResults }: Props) {
         "success",
         2000,
       );
+      onBanlistChanged?.();
     } catch {
       setItems(previous);
       addToast(t("banlistAddItemError"), "error", 3000);
@@ -202,6 +205,7 @@ export function BanlistTab({ latestResults }: Props) {
       const next = await removeBanlistItem(typeId);
       setItems(next);
       addToast(t("banlistItemRemoved"), "success", 2000);
+      onBanlistChanged?.();
     } catch {
       setItems(previous);
       addToast(t("banlistRemoveItemError"), "error", 3000);
@@ -245,6 +249,7 @@ export function BanlistTab({ latestResults }: Props) {
         "success",
         2000,
       );
+      onBanlistChanged?.();
     } catch {
       setStations(previous);
       addToast(t("banlistAddStationError"), "error", 3000);
@@ -258,6 +263,7 @@ export function BanlistTab({ latestResults }: Props) {
       const next = await removeBannedStation(locationId);
       setStations(next);
       addToast(t("banlistStationRemoved"), "success", 2000);
+      onBanlistChanged?.();
     } catch {
       setStations(previous);
       addToast(t("banlistRemoveStationError"), "error", 3000);
