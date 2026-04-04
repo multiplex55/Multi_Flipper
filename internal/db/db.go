@@ -1244,6 +1244,39 @@ func (d *DB) migrate() error {
 		logger.Info("DB", "Applied migration v28 (user-scoped banlist persistence)")
 	}
 
+	if version < 29 {
+		_, err := d.sql.Exec(`
+			CREATE TABLE IF NOT EXISTS pinned_opportunities (
+				user_id         TEXT NOT NULL,
+				opportunity_key TEXT NOT NULL,
+				tab             TEXT NOT NULL,
+				payload_json    TEXT NOT NULL,
+				created_at      TEXT NOT NULL,
+				updated_at      TEXT NOT NULL,
+				PRIMARY KEY (user_id, opportunity_key)
+			);
+			CREATE INDEX IF NOT EXISTS idx_pinned_opportunities_user_tab ON pinned_opportunities(user_id, tab);
+			CREATE INDEX IF NOT EXISTS idx_pinned_opportunities_user_updated ON pinned_opportunities(user_id, updated_at DESC);
+
+			CREATE TABLE IF NOT EXISTS pinned_opportunity_snapshots (
+				id              INTEGER PRIMARY KEY,
+				user_id         TEXT NOT NULL,
+				opportunity_key TEXT NOT NULL,
+				snapshot_label  TEXT NOT NULL,
+				snapshot_at     TEXT NOT NULL,
+				metrics_json    TEXT NOT NULL,
+				UNIQUE (user_id, opportunity_key, snapshot_label)
+			);
+			CREATE INDEX IF NOT EXISTS idx_pinned_opportunity_snapshots_lookup ON pinned_opportunity_snapshots(user_id, opportunity_key, snapshot_at DESC);
+
+			INSERT OR IGNORE INTO schema_version (version) VALUES (29);
+		`)
+		if err != nil {
+			return fmt.Errorf("migration v29: %w", err)
+		}
+		logger.Info("DB", "Applied migration v29 (pinned opportunities)")
+	}
+
 	return nil
 }
 
