@@ -31,6 +31,61 @@ It combines live ESI order books, historical market behavior, and execution-awar
 - `Auto-refresh`: cache-aware refresh for Flipper and Regional tabs.
 - `Player structures support`: optional structure inclusion (requires EVE login and access).
 - `Watchlist + Scan History`: persist and revisit tracked items and previous scans.
+- `Pinned Opportunities`: keep user-scoped opportunities pinned across Scan, Station Trading, Regional Trade, and Contract Arbitrage flows.
+
+## Pinned Opportunities Tab
+
+### What it is
+Pinned Opportunities is persistent, user-scoped tracking for selected opportunities across `scan`, `station`, `regional_day`, and `contracts` views. You can pin in each source table, then review all tracked rows in one compare-focused tab.
+
+### How to use
+1. Run any supported scan/tab and identify an opportunity to track.
+2. Click **Pin** in the relevant source table:
+   - `ScanResultsTable`
+   - `StationTrading` table
+   - `RegionalDayTraderTable`
+   - `ContractResultsTable`
+3. Open the **Pinned Opportunities** tab to review the latest normalized metrics.
+4. Use the compare filter to switch baseline:
+   - `Last scan`
+   - `24h`
+   - `Custom snapshot`
+5. Interpret delta columns and trend colors/icons.
+6. Use **Unpin** on rows you no longer want to track.
+
+### Metric semantics
+- **Profit**: current normalized profit value, plus delta versus the selected baseline.
+- **Margin**: current normalized margin percent, with both absolute percentage-point delta and relative percent change where available.
+- **Volume**: normalized liquidity/turnover indicator for the source row.
+- **Route risk**: normalized route/safety risk proxy for the source row; increases indicate more risk and decreases indicate reduced risk.
+
+Trend indicators use shared direction semantics:
+- **Green / ▲**: positive increase versus baseline.
+- **Red / ▼**: negative decrease versus baseline.
+- **Dim / •**: neutral/no change.
+- **—**: no baseline available yet.
+
+Formatting and rounding use existing frontend formatter helpers for consistency:
+- ISK values use the same `formatISK` conventions.
+- Margin/percent values use `formatMargin`.
+- Counts/other numeric values use `formatNumber`.
+
+### Source-specific pinning notes
+- Rows from all supported tabs are normalized into one pinned payload schema (`source`, `opportunity_key`, normalized `metrics`, optional metadata).
+- Stable identity is preserved with deterministic keys where possible:
+  - Scan + Regional: `flip:{type_id}:{buy_location_id}:{sell_location_id}`
+  - Station: `station:{type_id}:{station_id}`
+  - Contracts: `contract:{contract_id}`
+- Source caveats:
+  - Contract rows may include contract-specific context (for example liquidation-jump-style risk fields).
+  - Station rows can include station/system-scoped liquidity and station-specific risk proxies.
+  - Scan/regional rows include route-oriented buy/sell location identity and jump/risk proxies.
+
+### Troubleshooting
+- **Pin button missing**: confirm you are in a supported table/view and (where required) using the correct auth/user scope for that workflow.
+- **No delta shown**: a baseline snapshot does not exist yet for the selected compare mode.
+- **Unexpected trend**: confirm the compare filter (`Last scan`, `24h`, `Custom snapshot`) matches the baseline you intended.
+- **Row disappeared**: the opportunity may no longer exist in the latest scan result set; pinned records and snapshots remain source-of-truth history for comparisons.
 
 ### Local-First Runtime
 - Single backend binary with embedded frontend.
@@ -174,6 +229,41 @@ Production frontend build check:
 
 ```bash
 npm -C frontend run build
+```
+
+Docs validation check:
+
+```bash
+make docs-check
+```
+
+## Pinned Opportunities API / Dev Notes
+
+Pinned opportunity endpoints (user-scoped):
+- `GET /api/pinned-opportunities`
+- `POST /api/pinned-opportunities`
+- `DELETE /api/pinned-opportunities/{opportunityKey}`
+- `GET /api/pinned-opportunities/snapshots`
+- `POST /api/pinned-opportunities/snapshots`
+
+Minimal add-pin payload example:
+
+```json
+{
+  "opportunity_key": "flip:34:60003760:60008494",
+  "tab": "scan",
+  "payload": {
+    "source": "scan",
+    "opportunity_key": "flip:34:60003760:60008494",
+    "type_id": 34,
+    "metrics": {
+      "profit": 1250000,
+      "margin": 12.4,
+      "volume": 8500,
+      "route_risk": 3
+    }
+  }
+}
 ```
 
 ## Documentation
