@@ -742,6 +742,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/banlist/stations", s.handleGetBannedStations)
 	mux.HandleFunc("POST /api/banlist/stations", s.handleAddBannedStation)
 	mux.HandleFunc("DELETE /api/banlist/stations/{locationID}", s.handleDeleteBannedStation)
+	mux.HandleFunc("GET /api/pinned-opportunities", s.handleListPinnedOpportunities)
+	mux.HandleFunc("POST /api/pinned-opportunities", s.handleAddPinnedOpportunity)
+	mux.HandleFunc("DELETE /api/pinned-opportunities/{opportunityKey}", s.handleDeletePinnedOpportunity)
+	mux.HandleFunc("POST /api/pinned-opportunities/snapshots", s.handleUpsertPinnedSnapshots)
 	mux.HandleFunc("GET /api/alerts/history", s.handleGetAlertHistory)
 	mux.HandleFunc("POST /api/scan/station", s.handleScanStation)
 	mux.HandleFunc("GET /api/stations", s.handleGetStations)
@@ -2573,6 +2577,9 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 	}
 	scanID := s.db.InsertHistoryFull("radius", req.SystemName, len(results), topProfit, totalProfit, durationMs, req)
 	go s.db.InsertFlipResults(scanID, results)
+	if scanID > 0 {
+		go s.updatePinnedSnapshotsForFlipResults(userID, db.PinnedTabScan, scanID, results)
+	}
 	var scanIDPtr *int64
 	if scanID > 0 {
 		scanIDPtr = &scanID
@@ -2683,6 +2690,9 @@ func (s *Server) handleScanMultiRegion(w http.ResponseWriter, r *http.Request) {
 	}
 	scanID := s.db.InsertHistoryFull("region", req.SystemName, len(results), topProfit, totalProfit, durationMs, req)
 	go s.db.InsertFlipResults(scanID, results)
+	if scanID > 0 {
+		go s.updatePinnedSnapshotsForFlipResults(userID, db.PinnedTabScan, scanID, results)
+	}
 	var scanIDPtr *int64
 	if scanID > 0 {
 		scanIDPtr = &scanID
@@ -2833,6 +2843,7 @@ func (s *Server) handleScanRegionalDay(w http.ResponseWriter, r *http.Request) {
 	scanID := s.db.InsertHistoryFull("region", req.SystemName, historyCount, topProfit, totalProfit, durationMs, req)
 	if scanID > 0 && len(dayRows) > 0 {
 		go s.db.InsertRegionalDayResults(scanID, dayRows)
+		go s.updatePinnedSnapshotsForFlipResults(userID, db.PinnedTabRegionalDay, scanID, dayRows)
 	}
 	var scanIDPtr *int64
 	if scanID > 0 {
@@ -3129,6 +3140,9 @@ func (s *Server) handleScanContracts(w http.ResponseWriter, r *http.Request) {
 	scanID := s.db.InsertHistoryFull("contracts", req.SystemName, len(results), topProfit, totalProfit, durationMs, req)
 	if ctx.Err() == nil {
 		go s.db.InsertContractResults(scanID, results)
+		if scanID > 0 {
+			go s.updatePinnedSnapshotsForContractResults(userIDFromRequest(r), scanID, results)
+		}
 	}
 
 	line, marshalErr := json.Marshal(map[string]interface{}{
@@ -4077,6 +4091,7 @@ func (s *Server) handleScanStation(w http.ResponseWriter, r *http.Request) {
 	scanID := s.db.InsertHistoryFull("station", historyLabel, len(allResults), topProfit, totalProfit, durationMs, req)
 	if scanID > 0 {
 		go s.db.InsertStationResults(scanID, allResults)
+		go s.updatePinnedSnapshotsForStationResults(userID, scanID, allResults)
 	}
 	var scanIDPtr *int64
 	if scanID > 0 {
