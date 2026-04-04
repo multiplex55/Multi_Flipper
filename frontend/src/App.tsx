@@ -7,6 +7,7 @@ import { ScanResultsTable } from "./components/ScanResultsTable";
 import { ContractResultsTable } from "./components/ContractResultsTable";
 import { RouteBuilder } from "./components/RouteBuilder";
 import { WatchlistTab } from "./components/WatchlistTab";
+import { BanlistTab } from "./components/BanlistTab";
 import { StationTrading } from "./components/StationTrading";
 import { IndustryTab } from "./components/IndustryTab";
 import { WarTracker } from "./components/WarTracker";
@@ -450,6 +451,7 @@ function App() {
   const [autoRefreshRegion, setAutoRefreshRegion] = useState(false);
 
   const [showWatchlist, setShowWatchlist] = useState(false);
+  const [showBanlist, setShowBanlist] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showPatrons, setShowPatrons] = useState(false);
   const [showCharacter, setShowCharacter] = useState(false);
@@ -1443,8 +1445,10 @@ function App() {
             <div className="hidden sm:flex items-center gap-2">
               <TopActionButtons
                 watchlistLabel={t("tabWatchlist")}
+                banlistLabel={t("tabBanlist")}
                 verifierLabel={t("batchPriceVerify")}
                 onOpenWatchlist={() => setShowWatchlist(true)}
+                onOpenBanlist={() => setShowBanlist(true)}
                 verifierOpen={showVerifierModal}
                 initialManifestText={verifierInitialManifestText}
                 onOpenVerifier={() => {
@@ -1588,6 +1592,16 @@ function App() {
             >
               <span>&#11088;</span>
               <span>{t("tabWatchlist")}</span>
+            </button>
+            <button
+              onClick={() => {
+                setShowBanlist(true);
+                setMobileMenuOpen(false);
+              }}
+              className="flex items-center gap-1.5 h-9 px-3 bg-eve-panel border border-eve-border rounded-sm text-xs text-eve-dim"
+            >
+              <span>&#128683;</span>
+              <span>{t("tabBanlist")}</span>
             </button>
             <button
               onClick={() => {
@@ -2185,6 +2199,15 @@ function App() {
             handleTestAlert={handleTestAlert}
             alertTestLoading={alertTestLoading}
           />
+        </Modal>
+
+        <Modal
+          open={showBanlist}
+          onClose={() => setShowBanlist(false)}
+          title={t("tabBanlist")}
+          width="max-w-4xl"
+        >
+          <BanlistTab latestResults={[...radiusResults, ...regionResults]} />
         </Modal>
 
         {/* History Modal */}

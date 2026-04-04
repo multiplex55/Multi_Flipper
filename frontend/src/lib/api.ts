@@ -5,6 +5,8 @@ import type {
   AuthStatus,
   BatchCreateRouteRequest,
   BatchCreateRouteResponse,
+  BannedStation,
+  BanlistItem,
   CharacterInfo,
   CharacterRoles,
   ContractDetails,
@@ -483,6 +485,64 @@ export async function getAlertHistory(typeId?: number, limit?: number, offset?: 
   const query = params.toString();
   const res = await apiFetch(`${BASE}/api/alerts/history${query ? `?${query}` : ""}`);
   return handleResponse<AlertHistoryEntry[]>(res);
+}
+
+// --- Banlist ---
+
+export interface AddBanlistItemResult {
+  items: BanlistItem[];
+  inserted: boolean;
+}
+
+export async function getBanlistItems(): Promise<BanlistItem[]> {
+  const res = await apiFetch(`${BASE}/api/banlist/items`);
+  return handleResponse<BanlistItem[]>(res);
+}
+
+export async function addBanlistItem(typeId: number, typeName?: string): Promise<AddBanlistItemResult> {
+  const res = await apiFetch(`${BASE}/api/banlist/items`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      type_id: typeId,
+      ...(typeName ? { type_name: typeName } : {}),
+    }),
+  });
+  return handleResponse<AddBanlistItemResult>(res);
+}
+
+export async function removeBanlistItem(typeId: number): Promise<BanlistItem[]> {
+  const res = await apiFetch(`${BASE}/api/banlist/items/${typeId}`, { method: "DELETE" });
+  return handleResponse<BanlistItem[]>(res);
+}
+
+export interface AddBannedStationResult {
+  stations: BannedStation[];
+  inserted: boolean;
+}
+
+export async function getBannedStations(): Promise<BannedStation[]> {
+  const res = await apiFetch(`${BASE}/api/banlist/stations`);
+  return handleResponse<BannedStation[]>(res);
+}
+
+export async function addBannedStation(params: {
+  location_id: number;
+  station_name: string;
+  system_id?: number;
+  system_name?: string;
+}): Promise<AddBannedStationResult> {
+  const res = await apiFetch(`${BASE}/api/banlist/stations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  return handleResponse<AddBannedStationResult>(res);
+}
+
+export async function removeBannedStation(locationId: number): Promise<BannedStation[]> {
+  const res = await apiFetch(`${BASE}/api/banlist/stations/${locationId}`, { method: "DELETE" });
+  return handleResponse<BannedStation[]>(res);
 }
 
 // --- Station Trading ---
