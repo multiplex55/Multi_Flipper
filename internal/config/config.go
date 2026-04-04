@@ -11,6 +11,22 @@ type WatchlistItem struct {
 	AlertThreshold float64 `json:"alert_threshold"` // threshold for selected metric
 }
 
+// BanlistItem represents a type that should be excluded from scanning/results.
+type BanlistItem struct {
+	TypeID   int32  `json:"type_id"`
+	TypeName string `json:"type_name"`
+	AddedAt  string `json:"added_at"`
+}
+
+// BannedStation represents a station/location that should be excluded.
+type BannedStation struct {
+	LocationID  int64  `json:"location_id"`
+	StationName string `json:"station_name"`
+	SystemID    int32  `json:"system_id,omitempty"`
+	SystemName  string `json:"system_name,omitempty"`
+	AddedAt     string `json:"added_at"`
+}
+
 // StrategyScoreConfig controls weighting used by strategy scoring.
 type StrategyScoreConfig struct {
 	ProfitWeight   float64 `json:"profit_weight"`
