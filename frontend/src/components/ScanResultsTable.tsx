@@ -19,6 +19,7 @@ import {
   passesBatchNumericFilter,
 } from "@/lib/scanTableBatchColumns";
 import {
+  addPinnedOpportunity,
   addToWatchlist,
   clearStationTradeStates,
   deleteStationTradeStates,
@@ -29,6 +30,8 @@ import {
   openMarketInGame,
   rebootStationCache,
   removeFromWatchlist,
+  removePinnedOpportunity,
+  listPinnedOpportunities,
   setStationTradeState,
   setWaypointInGame,
 } from "@/lib/api";
@@ -40,6 +43,7 @@ import { BatchBuilderPopup } from "./BatchBuilderPopup";
 import { RouteSafetyModal } from "./RouteSafetyModal";
 import { scoreFlipResult } from "@/lib/opportunityScore";
 import { OpportunityScoreDetails } from "./OpportunityScorePopover";
+import { mapScanRowToPinnedOpportunity } from "@/lib/pinnedOpportunityMapper";
 
 const PAGE_SIZE = 100;
 const GROUP_PAGE_SIZE = 50; // rows shown per group before "Show all" button
@@ -945,7 +949,7 @@ export function ScanResultsTable({
   );
   const [hiddenColumns, setHiddenColumns] = useState<Set<SortKey>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [pinnedIds, setPinnedIds] = useState<Set<number>>(new Set());
+  const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
   const [compactMode, setCompactMode] = useState(false);
   const previousScanningRef = useRef(scanning);
@@ -1053,6 +1057,13 @@ export function ScanResultsTable({
   useEffect(() => {
     getWatchlist()
       .then(setWatchlist)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    listPinnedOpportunities("scan")
+      .then((rows) => setPinnedKeys(new Set(rows.map((row) => row.opportunity_key)))
+      )
       .catch(() => {});
   }, []);
 
@@ -1331,8 +1342,8 @@ export function ScanResultsTable({
 
     const sorted = filtered.slice();
     sorted.sort((a, b) => {
-      const aPin = pinnedIds.has(a.id);
-      const bPin = pinnedIds.has(b.id);
+      const aPin = pinnedKeys.has(mapScanRowToPinnedOpportunity(a.row).opportunity_key);
+      const bPin = pinnedKeys.has(mapScanRowToPinnedOpportunity(b.row).opportunity_key);
       if (aPin !== bPin) return aPin ? -1 : 1;
 
       if (sortKey === ("RouteSafety" as SortKey)) {
@@ -1385,7 +1396,7 @@ export function ScanResultsTable({
     columnDefs,
     sortKey,
     sortDir,
-    pinnedIds,
+    pinnedKeys,
     routeSafetyMap,
     batchMetricsByRow,
   ]);
@@ -1647,7 +1658,7 @@ export function ScanResultsTable({
   // Reset selection/pins/context menu/group limits when results change
   useEffect(() => {
     setSelectedIds(new Set());
-    setPinnedIds(new Set());
+    setPinnedKeys(new Set());
     setContextMenu(null);
     setGroupRowLimit(new Map());
     if (!scanning && results.length > 0) {
@@ -1838,14 +1849,26 @@ export function ScanResultsTable({
     });
   }, [visibleRows]);
 
-  const togglePin = useCallback((id: number) => {
-    setPinnedIds((prev) => {
+  const togglePin = useCallback((row: FlipResult) => {
+    const mapped = mapScanRowToPinnedOpportunity(row);
+    const stableKey = mapped.opportunity_key;
+    const removing = pinnedKeys.has(stableKey);
+    setPinnedKeys((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(stableKey)) next.delete(stableKey);
+      else next.add(stableKey);
       return next;
     });
-  }, []);
+    (removing ? removePinnedOpportunity(stableKey) : addPinnedOpportunity(mapped)).catch(() => {
+      setPinnedKeys((prev) => {
+        const next = new Set(prev);
+        if (removing) next.add(stableKey);
+        else next.delete(stableKey);
+        return next;
+      });
+      addToast(t("watchlistError"), "error", 3000);
+    });
+  }, [addToast, pinnedKeys, t]);
 
   const toggleItemGroupExpanded = useCallback((typeID: number) => {
     const key = String(typeID ?? 0);
@@ -2196,7 +2219,7 @@ export function ScanResultsTable({
         globalIdx={globalIdx}
         columnDefs={columnDefs}
         compactMode={compactMode}
-        isPinned={pinnedIds.has(ir.id)}
+        isPinned={pinnedKeys.has(mapScanRowToPinnedOpportunity(ir.row).opportunity_key)}
         isSelected={selectedIds.has(ir.id)}
         isFocused={focusedRowId === ir.id}
         variant={variantByRowId.get(ir.id)}
@@ -2226,7 +2249,7 @@ export function ScanResultsTable({
       isItemGrouped,
       isRegionGrouped,
       onLmbClick,
-      pinnedIds,
+      pinnedKeys,
       selectedIds,
       t,
       toggleItemGroupExpanded,
@@ -2266,9 +2289,9 @@ export function ScanResultsTable({
               })}
             </span>
           )}
-          {pinnedIds.size > 0 && (
+          {pinnedKeys.size > 0 && (
             <span className="text-eve-accent">
-              📌 {t("pinned", { count: pinnedIds.size })}
+              📌 {t("pinned", { count: pinnedKeys.size })}
             </span>
           )}
           {selectedIds.size > 0 && (
@@ -3206,10 +3229,10 @@ export function ScanResultsTable({
             <div className="h-px bg-eve-border my-1" />
             <ContextItem
               label={
-                pinnedIds.has(contextMenu.id) ? t("unpinRow") : t("pinRow")
+                pinnedKeys.has(mapScanRowToPinnedOpportunity(contextMenu.row).opportunity_key) ? t("unpinRow") : t("pinRow")
               }
               onClick={() => {
-                togglePin(contextMenu.id);
+                togglePin(contextMenu.row);
                 setContextMenu(null);
               }}
             />
@@ -3492,7 +3515,7 @@ interface DataRowProps {
   onContextMenu: (e: import("react").MouseEvent, id: number, row: FlipResult) => void;
   onLmbClick: (row: FlipResult) => void;
   onToggleSelect: (id: number) => void;
-  onTogglePin: (id: number) => void;
+  onTogglePin: (row: FlipResult) => void;
   tFn: (key: TranslationKey, vars?: Record<string, string | number>) => string;
   routeSafetyEntry: RouteState | undefined;
   onRouteSafetyClick: (from: number, to: number, e: import("react").MouseEvent) => void;
@@ -3608,7 +3631,7 @@ const DataRow = memo(
         </td>
         <td className={`w-8 px-1 text-center ${compactMode ? "py-1" : "py-1.5"}`}>
           <button
-            onClick={() => onTogglePin(ir.id)}
+            onClick={() => onTogglePin(ir.row)}
             className={`text-xs cursor-pointer transition-opacity ${isPinned ? "opacity-100" : "opacity-30 hover:opacity-70"}`}
             title={isPinned ? tFn("unpinRow") : tFn("pinRow")}
           >

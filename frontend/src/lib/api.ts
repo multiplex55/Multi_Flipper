@@ -58,6 +58,10 @@ import type {
   SystemDanger,
   KillSummary,
   RouteSafetySummary,
+  PinnedOpportunityPayload,
+  PinnedOpportunityRecord,
+  PinnedOpportunitySource,
+  PinnedSnapshotPayload,
 } from "./types";
 
 const BASE = import.meta.env.VITE_API_URL || "";
@@ -428,6 +432,55 @@ export async function batchCreateRoute(
     signal,
   });
   return handleResponse<BatchCreateRouteResponse>(res);
+}
+
+
+
+export async function listPinnedOpportunities(tab?: PinnedOpportunitySource): Promise<PinnedOpportunityRecord[]> {
+  if (tab) {
+    const res = await apiFetch(`${BASE}/api/pinned-opportunities?tab=${encodeURIComponent(tab)}`);
+    const rows = await handleResponse<PinnedOpportunityRecord[]>(res);
+    return rows.map((row) => ({
+      ...row,
+      payload: (() => {
+        try {
+          return JSON.parse(row.payload_json) as PinnedOpportunityPayload;
+        } catch {
+          return undefined;
+        }
+      })(),
+    }));
+  }
+  const tabs: PinnedOpportunitySource[] = ["scan", "station", "regional_day", "contracts"];
+  const all = await Promise.all(tabs.map((t) => listPinnedOpportunities(t)));
+  return all.flat();
+}
+
+export async function addPinnedOpportunity(payload: PinnedOpportunityPayload): Promise<PinnedOpportunityRecord[]> {
+  const res = await apiFetch(`${BASE}/api/pinned-opportunities`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      opportunity_key: payload.opportunity_key,
+      tab: payload.source,
+      payload,
+    }),
+  });
+  return handleResponse<PinnedOpportunityRecord[]>(res);
+}
+
+export async function removePinnedOpportunity(opportunityKey: string): Promise<{ status: string }> {
+  const res = await apiFetch(`${BASE}/api/pinned-opportunities/${encodeURIComponent(opportunityKey)}`, { method: "DELETE" });
+  return handleResponse<{ status: string }>(res);
+}
+
+export async function upsertPinnedSnapshots(payload: PinnedSnapshotPayload[]): Promise<{ upserted: number }> {
+  const res = await apiFetch(`${BASE}/api/pinned-opportunities/snapshots`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ snapshots: payload }),
+  });
+  return handleResponse<{ upserted: number }>(res);
 }
 
 // --- Watchlist ---

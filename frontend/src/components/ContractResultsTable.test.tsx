@@ -4,14 +4,18 @@ import { I18nProvider } from "@/lib/i18n";
 import { ToastProvider } from "@/components/Toast";
 import { ContractResultsTable } from "@/components/ContractResultsTable";
 import type { ContractResult } from "@/lib/types";
+import { addPinnedOpportunity, removePinnedOpportunity } from "@/lib/api";
 
 vi.mock("@/lib/api", () => ({
+  addPinnedOpportunity: vi.fn(async () => []),
   clearStationTradeStates: vi.fn(async () => undefined),
   deleteStationTradeStates: vi.fn(async () => undefined),
   getContractDetails: vi.fn(async () => ({ contract_id: 1, items: [] })),
   getStationTradeStates: vi.fn(async () => []),
   openContractInGame: vi.fn(async () => undefined),
+  listPinnedOpportunities: vi.fn(async () => []),
   rebootStationCache: vi.fn(async () => ({ cleared: 0 })),
+  removePinnedOpportunity: vi.fn(async () => ({ status: "deleted" })),
   setStationTradeState: vi.fn(async () => undefined),
 }));
 
@@ -57,5 +61,17 @@ describe("ContractResultsTable opportunity score", () => {
     fireEvent.click(screen.getByLabelText("Why this score?"));
     expect(await screen.findByText("Final score")).toBeInTheDocument();
     expect(screen.getByText("Factor")).toBeInTheDocument();
+  });
+});
+
+describe("ContractResultsTable pinning", () => {
+  it("renders pin and calls add/remove pinned opportunity", async () => {
+    renderTable([row()]);
+    const pinBtn = await screen.findByLabelText("Pin row");
+    fireEvent.click(pinBtn);
+    expect(addPinnedOpportunity).toHaveBeenCalled();
+    const key = vi.mocked(addPinnedOpportunity).mock.calls[0][0].opportunity_key;
+    fireEvent.click(await screen.findByLabelText("Unpin row"));
+    expect(removePinnedOpportunity).toHaveBeenCalledWith(key);
   });
 });

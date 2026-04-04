@@ -5,18 +5,22 @@ import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { useGlobalToast } from "./Toast";
 import { EmptyState, type EmptyReason } from "./EmptyState";
 import {
+  addPinnedOpportunity,
   clearStationTradeStates,
   deleteStationTradeStates,
   getContractDetails,
+  listPinnedOpportunities,
   getStationTradeStates,
   openContractInGame,
   rebootStationCache,
+  removePinnedOpportunity,
   setStationTradeState,
 } from "@/lib/api";
 import { handleEveUIError } from "@/lib/handleEveUIError";
 import { ContractDetailsPopup } from "./ContractDetailsPopup";
 import { scoreContractResult } from "@/lib/opportunityScore";
 import { OpportunityScoreDetails } from "./OpportunityScorePopover";
+import { mapContractRowToPinnedOpportunity } from "@/lib/pinnedOpportunityMapper";
 
 type SyntheticSortKey = "OpportunityScore";
 type SortKey = keyof ContractResult | SyntheticSortKey;
@@ -209,6 +213,7 @@ export function ContractResultsTable({
   const [lastScanTs, setLastScanTs] = useState<number>(Date.now());
   const [cacheRebooting, setCacheRebooting] = useState(false);
   const [resolvedTitles, setResolvedTitles] = useState<Record<number, string>>({});
+  const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
 
   // Contract details popup
   const [selectedContract, setSelectedContract] = useState<ContractResult | null>(null);
@@ -218,6 +223,33 @@ export function ContractResultsTable({
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; row: ContractResult } | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const titleFetchInFlightRef = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    listPinnedOpportunities("contracts")
+      .then((rows) => setPinnedKeys(new Set(rows.map((row) => row.opportunity_key))))
+      .catch(() => {});
+  }, []);
+
+  const togglePinned = useCallback((row: ContractResult) => {
+    const mapped = mapContractRowToPinnedOpportunity(row);
+    const key = mapped.opportunity_key;
+    const removing = pinnedKeys.has(key);
+    setPinnedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+    (removing ? removePinnedOpportunity(key) : addPinnedOpportunity(mapped)).catch(() => {
+      setPinnedKeys((prev) => {
+        const next = new Set(prev);
+        if (removing) next.add(key);
+        else next.delete(key);
+        return next;
+      });
+      addToast(t("watchlistError"), "error", 3000);
+    });
+  }, [addToast, pinnedKeys, t]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, row: ContractResult) => {
     e.preventDefault();
@@ -820,6 +852,7 @@ export function ContractResultsTable({
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10">
             <tr className="bg-eve-dark border-b border-eve-border">
+              <th className="w-10 px-2 py-2 text-center text-[11px] uppercase tracking-wider text-eve-dim font-medium">📌</th>
               {columnDefs.map((col) => (
                 <th
                   key={col.key}
@@ -839,6 +872,7 @@ export function ContractResultsTable({
             </tr>
             {showFilters && (
               <tr className="bg-eve-dark/80 border-b border-eve-border">
+                <th className="w-10 px-1 py-1" />
                 {columnDefs.map((col) => (
                   <th key={col.key} className={`${col.width} px-1 py-1`}>
                     <input
@@ -865,6 +899,19 @@ export function ContractResultsTable({
                   i % 2 === 0 ? "bg-eve-panel" : "bg-eve-dark"
                 } ${hiddenMap[rowKey(row)] ? "opacity-60" : ""}`}
               >
+                <td className="px-2 py-1.5 text-center">
+                  <button
+                    type="button"
+                    aria-label={pinnedKeys.has(mapContractRowToPinnedOpportunity(row).opportunity_key) ? "Unpin row" : "Pin row"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      togglePinned(row);
+                    }}
+                    className={`text-xs transition-opacity ${pinnedKeys.has(mapContractRowToPinnedOpportunity(row).opportunity_key) ? "opacity-100" : "opacity-40 hover:opacity-80"}`}
+                  >
+                    📌
+                  </button>
+                </td>
                 {columnDefs.map((col) => (
                   <td
                     key={col.key}
@@ -893,7 +940,7 @@ export function ContractResultsTable({
             ))}
             {displaySorted.length === 0 && !scanning && (
               <tr>
-                <td colSpan={columnDefs.length} className="p-0">
+                <td colSpan={columnDefs.length + 1} className="p-0">
                   {results.length > 0 && hiddenCounts.total > 0 && !showHiddenRows ? (
                     <div className="p-6 text-center text-sm text-eve-dim">
                       {t("hiddenAllRowsPrefix")}{" "}

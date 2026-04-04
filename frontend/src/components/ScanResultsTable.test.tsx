@@ -4,9 +4,11 @@ import { I18nProvider } from "@/lib/i18n";
 import { ToastProvider } from "@/components/Toast";
 import { ScanResultsTable } from "@/components/ScanResultsTable";
 import type { FlipResult } from "@/lib/types";
+import { addPinnedOpportunity, removePinnedOpportunity } from "@/lib/api";
 
 vi.mock("@/lib/api", () => ({
   addToWatchlist: vi.fn(async () => undefined),
+  addPinnedOpportunity: vi.fn(async () => []),
   clearStationTradeStates: vi.fn(async () => undefined),
   deleteStationTradeStates: vi.fn(async () => undefined),
   getStationTradeStates: vi.fn(async () => []),
@@ -14,8 +16,10 @@ vi.mock("@/lib/api", () => ({
   getGankCheckBatch: vi.fn(async () => []),
   getWatchlist: vi.fn(async () => []),
   openMarketInGame: vi.fn(async () => undefined),
+  listPinnedOpportunities: vi.fn(async () => []),
   rebootStationCache: vi.fn(async () => undefined),
   removeFromWatchlist: vi.fn(async () => undefined),
+  removePinnedOpportunity: vi.fn(async () => ({ status: "deleted" })),
   setStationTradeState: vi.fn(async () => undefined),
   setWaypointInGame: vi.fn(async () => undefined),
 }));
@@ -187,5 +191,19 @@ describe("ScanResultsTable opportunity score", () => {
     const rows = screen.getAllByRole("row");
     expect(rows[2]).toHaveTextContent("Alpha");
     expect(rows[3]).toHaveTextContent("Beta");
+  });
+});
+
+describe("ScanResultsTable pinning", () => {
+  it("pins and unpins using normalized key", async () => {
+    renderTable({ scanning: false, results: [makeRow()] });
+    const pinBtn = await screen.findByTitle("Pin");
+    fireEvent.click(pinBtn);
+    expect(addPinnedOpportunity).toHaveBeenCalled();
+    const payload = vi.mocked(addPinnedOpportunity).mock.calls[0][0];
+    expect(payload.opportunity_key).toContain("flip:");
+
+    fireEvent.click(await screen.findByTitle("Unpin"));
+    expect(removePinnedOpportunity).toHaveBeenCalledWith(payload.opportunity_key);
   });
 });

@@ -431,6 +431,51 @@ export interface BatchCreateRouteResponse {
   sort_signature: string;
 }
 
+
+export type PinnedOpportunitySource = "scan" | "station" | "regional_day" | "contracts";
+
+export interface PinnedOpportunityMetrics {
+  profit: number;
+  margin: number;
+  volume: number;
+  route_risk: number;
+}
+
+export interface PinnedOpportunityPayload {
+  source: PinnedOpportunitySource;
+  opportunity_key: string;
+  type_id: number;
+  contract_id?: number;
+  station_id?: number;
+  system_id?: number;
+  region_id?: number;
+  buy_system_id?: number;
+  sell_system_id?: number;
+  buy_location_id?: number;
+  sell_location_id?: number;
+  buy_region_id?: number;
+  sell_region_id?: number;
+  metrics: PinnedOpportunityMetrics;
+  metadata?: Record<string, string | number | boolean | null | undefined>;
+}
+
+export interface PinnedOpportunityRecord {
+  user_id: string;
+  opportunity_key: string;
+  tab: PinnedOpportunitySource;
+  payload_json: string;
+  created_at: string;
+  updated_at: string;
+  payload?: PinnedOpportunityPayload;
+}
+
+export interface PinnedSnapshotPayload {
+  opportunity_key: string;
+  snapshot_label?: string;
+  snapshot_at?: string;
+  metrics: PinnedOpportunityMetrics;
+}
+
 export interface WatchlistItem {
   type_id: number;
   type_name: string;
