@@ -3,7 +3,7 @@ VERSION   := $(shell git describe --tags --always --dirty 2>/dev/null || echo de
 BUILD_DIR := build
 LDFLAGS   := -s -w -X main.version=$(VERSION)
 
-.PHONY: all build run test frontend-test clean frontend frontend-wails wails wails-run cross
+.PHONY: all build run test frontend-test docs-check clean frontend frontend-wails wails wails-run cross
 
 ## build: build frontend + backend into a single binary
 build: frontend
@@ -24,6 +24,10 @@ run: build
 ## test: run all Go tests
 test:
 	go test ./...
+
+## docs-check: validate README headings/labels/links for pinned docs
+docs-check:
+	python3 scripts/validate_readme.py
 
 
 ## frontend-test: install deps and run frontend tests
