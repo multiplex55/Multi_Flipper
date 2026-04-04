@@ -1212,6 +1212,38 @@ func (d *DB) migrate() error {
 		logger.Info("DB", "Applied migration v27 (regional day-trader history rows)")
 	}
 
+	if version < 28 {
+		_, err := d.sql.Exec(`
+			CREATE TABLE IF NOT EXISTS banlist_items (
+				user_id   TEXT NOT NULL,
+				type_id   INTEGER NOT NULL,
+				type_name TEXT NOT NULL,
+				added_at  TEXT NOT NULL,
+				PRIMARY KEY (user_id, type_id)
+			);
+			CREATE INDEX IF NOT EXISTS idx_banlist_items_user ON banlist_items(user_id);
+			CREATE INDEX IF NOT EXISTS idx_banlist_items_user_type ON banlist_items(user_id, type_id);
+
+			CREATE TABLE IF NOT EXISTS banlist_stations (
+				user_id      TEXT NOT NULL,
+				location_id  INTEGER NOT NULL,
+				station_name TEXT NOT NULL,
+				system_id    INTEGER,
+				system_name  TEXT,
+				added_at     TEXT NOT NULL,
+				PRIMARY KEY (user_id, location_id)
+			);
+			CREATE INDEX IF NOT EXISTS idx_banlist_stations_user ON banlist_stations(user_id);
+			CREATE INDEX IF NOT EXISTS idx_banlist_stations_user_location ON banlist_stations(user_id, location_id);
+
+			INSERT OR IGNORE INTO schema_version (version) VALUES (28);
+		`)
+		if err != nil {
+			return fmt.Errorf("migration v28: %w", err)
+		}
+		logger.Info("DB", "Applied migration v28 (user-scoped banlist persistence)")
+	}
+
 	return nil
 }
 

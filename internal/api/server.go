@@ -736,6 +736,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/watchlist", s.handleAddWatchlist)
 	mux.HandleFunc("DELETE /api/watchlist/{typeID}", s.handleDeleteWatchlist)
 	mux.HandleFunc("PUT /api/watchlist/{typeID}", s.handleUpdateWatchlist)
+	mux.HandleFunc("GET /api/banlist/items", s.handleGetBanlistItems)
+	mux.HandleFunc("POST /api/banlist/items", s.handleAddBanlistItem)
+	mux.HandleFunc("DELETE /api/banlist/items/{typeID}", s.handleDeleteBanlistItem)
+	mux.HandleFunc("GET /api/banlist/stations", s.handleGetBannedStations)
+	mux.HandleFunc("POST /api/banlist/stations", s.handleAddBannedStation)
+	mux.HandleFunc("DELETE /api/banlist/stations/{locationID}", s.handleDeleteBannedStation)
 	mux.HandleFunc("GET /api/alerts/history", s.handleGetAlertHistory)
 	mux.HandleFunc("POST /api/scan/station", s.handleScanStation)
 	mux.HandleFunc("GET /api/stations", s.handleGetStations)
@@ -3557,6 +3563,121 @@ func (s *Server) handleUpdateWatchlist(w http.ResponseWriter, r *http.Request) {
 		filtered = append(filtered, it)
 	}
 	writeJSON(w, filtered)
+}
+
+func normalizeBanlistStationName(name string) string {
+	return strings.TrimSpace(name)
+}
+
+func (s *Server) handleGetBanlistItems(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromRequest(r)
+	writeJSON(w, s.db.GetBanlistItemsForUser(userID))
+}
+
+func (s *Server) handleAddBanlistItem(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromRequest(r)
+
+	var item config.BanlistItem
+	if err := json.NewDecoder(r.Body).Decode(&item); err != nil {
+		writeError(w, 400, "invalid json")
+		return
+	}
+	if item.TypeID <= 0 {
+		writeError(w, 400, "type_id must be > 0")
+		return
+	}
+
+	s.mu.RLock()
+	sdeData := s.sdeData
+	s.mu.RUnlock()
+	if sdeData != nil {
+		t, ok := sdeData.Types[item.TypeID]
+		if !ok {
+			writeError(w, 400, fmt.Sprintf("unknown type_id %d", item.TypeID))
+			return
+		}
+		if strings.TrimSpace(item.TypeName) == "" {
+			item.TypeName = t.Name
+		}
+	}
+	item.TypeName = strings.TrimSpace(item.TypeName)
+	if item.TypeName == "" {
+		writeError(w, 400, "type_name is required")
+		return
+	}
+
+	item.AddedAt = time.Now().Format(time.RFC3339)
+	inserted := s.db.AddBanlistItemForUser(userID, item)
+	type addBanlistItemResponse struct {
+		Items    []config.BanlistItem `json:"items"`
+		Inserted bool                 `json:"inserted"`
+	}
+	writeJSON(w, addBanlistItemResponse{
+		Items:    s.db.GetBanlistItemsForUser(userID),
+		Inserted: inserted,
+	})
+}
+
+func (s *Server) handleDeleteBanlistItem(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromRequest(r)
+	id, err := strconv.Atoi(r.PathValue("typeID"))
+	if err != nil || id <= 0 {
+		writeError(w, 400, "invalid type_id")
+		return
+	}
+	s.db.DeleteBanlistItemForUser(userID, int32(id))
+	writeJSON(w, s.db.GetBanlistItemsForUser(userID))
+}
+
+func (s *Server) handleGetBannedStations(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromRequest(r)
+	writeJSON(w, s.db.GetBannedStationsForUser(userID))
+}
+
+func (s *Server) handleAddBannedStation(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromRequest(r)
+
+	var station config.BannedStation
+	if err := json.NewDecoder(r.Body).Decode(&station); err != nil {
+		writeError(w, 400, "invalid json")
+		return
+	}
+	if station.LocationID <= 0 {
+		writeError(w, 400, "location_id must be > 0")
+		return
+	}
+	station.StationName = normalizeBanlistStationName(station.StationName)
+	if station.StationName == "" {
+		writeError(w, 400, "station_name is required")
+		return
+	}
+	if station.SystemID < 0 {
+		writeError(w, 400, "system_id must be >= 0")
+		return
+	}
+	station.SystemName = strings.TrimSpace(station.SystemName)
+	station.AddedAt = time.Now().Format(time.RFC3339)
+
+	inserted := s.db.AddBannedStationForUser(userID, station)
+	type addBannedStationsResponse struct {
+		Stations []config.BannedStation `json:"stations"`
+		Inserted bool                   `json:"inserted"`
+	}
+	writeJSON(w, addBannedStationsResponse{
+		Stations: s.db.GetBannedStationsForUser(userID),
+		Inserted: inserted,
+	})
+}
+
+func (s *Server) handleDeleteBannedStation(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromRequest(r)
+	locationID, err := strconv.ParseInt(r.PathValue("locationID"), 10, 64)
+	if err != nil || locationID <= 0 {
+		writeError(w, 400, "invalid location_id")
+		return
+	}
+	s.db.DeleteBannedStationForUser(userID, locationID)
+	writeJSON(w, s.db.GetBannedStationsForUser(userID))
 }
 
 func (s *Server) handleGetAlertHistory(w http.ResponseWriter, r *http.Request) {
