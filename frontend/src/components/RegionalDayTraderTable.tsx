@@ -1,7 +1,10 @@
-import { Fragment, useCallback, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import type { RegionalDayTradeHub, RegionalDayTradeItem, StationCacheMeta } from "@/lib/types";
 import { formatISK, formatISKFull, formatMargin } from "@/lib/format";
 import { EmptyState } from "./EmptyState";
+import { addPinnedOpportunity, listPinnedOpportunities, removePinnedOpportunity } from "@/lib/api";
+import { mapRegionalRowToPinnedOpportunity } from "@/lib/pinnedOpportunityMapper";
+import { useGlobalToast } from "./Toast";
 
 interface Props {
   hubs: RegionalDayTradeHub[];
@@ -344,6 +347,33 @@ export function RegionalDayTraderTable({
   targetRegionName = "",
   periodDays = 14,
 }: Props) {
+  const { addToast } = useGlobalToast();
+  const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    listPinnedOpportunities("regional_day")
+      .then((rows) => setPinnedKeys(new Set(rows.map((row) => row.opportunity_key))))
+      .catch(() => {});
+  }, []);
+  const togglePinned = useCallback((row: RegionalDayTradeItem) => {
+    const mapped = mapRegionalRowToPinnedOpportunity(row);
+    const key = mapped.opportunity_key;
+    const removing = pinnedKeys.has(key);
+    setPinnedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+    (removing ? removePinnedOpportunity(key) : addPinnedOpportunity(mapped)).catch(() => {
+      setPinnedKeys((prev) => {
+        const next = new Set(prev);
+        if (removing) next.add(key);
+        else next.delete(key);
+        return next;
+      });
+      addToast("Operation failed", "error", 2500);
+    });
+  }, [addToast, pinnedKeys]);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>("period_profit");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -419,6 +449,7 @@ export function RegionalDayTraderTable({
               <th className="text-left px-2 py-1.5 w-[200px] cursor-pointer select-none hover:text-eve-accent" onClick={() => handleSort("name")}>
                 Source Hub / Item {sortKey === "name" && <span className="text-[9px]">{sortDir === "desc" ? "▼" : "▲"}</span>}
               </th>
+              <th className="w-[40px] px-2 py-1.5 text-center">📌</th>
               <th className="text-right px-2 py-1.5 w-[52px]">Sec</th>
               <SortTh label="Buy Units"    sortKey="purchase_units"    className="w-[90px]"  {...thProps} />
               <SortTh label="Src Units"    sortKey="source_units"      className="w-[90px]"  {...thProps} />
@@ -467,6 +498,7 @@ export function RegionalDayTraderTable({
                       <span className="text-eve-accent mr-1">{isOpen ? "▼" : "►"}</span>
                       {hub.source_system_name}
                     </td>
+                    <td className="px-2 py-1.5 text-center text-eve-dim">—</td>
                     <td className="px-2 py-1.5 text-right">{hub.security.toFixed(1)}</td>
                     <td className="px-2 py-1.5 text-right">{hub.purchase_units.toLocaleString()}</td>
                     <td className="px-2 py-1.5 text-right">{hub.source_units.toLocaleString()}</td>
@@ -512,6 +544,18 @@ export function RegionalDayTraderTable({
                                 </span>
                               ))}
                             </span>
+                          </td>
+                          <td className="px-2 py-1.5 text-center">
+                            <button
+                              type="button"
+                              aria-label={pinnedKeys.has(mapRegionalRowToPinnedOpportunity(item).opportunity_key) ? "Unpin row" : "Pin row"}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                togglePinned(item);
+                              }}
+                            >
+                              📌
+                            </button>
                           </td>
                           <td className="px-2 py-1.5 text-right">{hub.security.toFixed(1)}</td>
                           <td className="px-2 py-1.5 text-right">{item.purchase_units.toLocaleString()}</td>

@@ -26,6 +26,9 @@ import {
   getBannedStations,
   addToWatchlist,
   removeFromWatchlist,
+  addPinnedOpportunity,
+  removePinnedOpportunity,
+  listPinnedOpportunities,
   openMarketInGame,
   setWaypointInGame,
 } from "@/lib/api";
@@ -50,6 +53,7 @@ import { SystemBlacklistButton } from "./SystemBlacklistButton";
 import { ScoringProfileEditor } from "./ScoringProfileEditor";
 import { scoreStationTrade } from "@/lib/opportunityScore";
 import { OpportunityScoreDetails } from "./OpportunityScorePopover";
+import { mapStationRowToPinnedOpportunity } from "@/lib/pinnedOpportunityMapper";
 import { DEFAULT_STRATEGY_SCORE } from "@/lib/scoringPresets";
 import {
   STATION_BUILTIN_PRESETS,
@@ -504,6 +508,12 @@ export function StationTrading({
   const [scoreExplainRow, setScoreExplainRow] = useState<StationTrade | null>(null);
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    listPinnedOpportunities("station")
+      .then((rows) => setPinnedKeys(new Set(rows.map((row) => row.opportunity_key))) )
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     Promise.all([getBanlistItems(), getBannedStations()])
@@ -1001,14 +1011,26 @@ export function StationTrading({
     refreshHiddenStates,
   ]);
 
-  const togglePin = useCallback((key: string) => {
+  const togglePin = useCallback((row: StationTrade) => {
+    const mapped = mapStationRowToPinnedOpportunity(row);
+    const key = mapped.opportunity_key;
+    const removing = pinnedKeys.has(key);
     setPinnedKeys((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
-  }, []);
+    (removing ? removePinnedOpportunity(key) : addPinnedOpportunity(mapped)).catch(() => {
+      setPinnedKeys((prev) => {
+        const next = new Set(prev);
+        if (removing) next.add(key);
+        else next.delete(key);
+        return next;
+      });
+      addToast(t("watchlistError"), "error", 3000);
+    });
+  }, [addToast, pinnedKeys, t]);
 
   const copyText = useCallback(
     (text: string) => {
@@ -2871,6 +2893,7 @@ export function StationTrading({
                   </th>
                 )}
                 <th className="min-w-[24px] px-1 py-2"></th>
+                <th className="min-w-[24px] px-1 py-2 text-center text-[10px] uppercase tracking-wider text-eve-dim">📌</th>
                 <th
                   className="min-w-[32px] px-1 py-2 text-center text-[10px] uppercase tracking-wider text-eve-dim"
                   title={t("execPlanTitle")}
@@ -2925,7 +2948,7 @@ export function StationTrading({
                   <tr
                     key={key}
                     className={`${getRowClass(row, safePage * STATION_PAGE_SIZE + i, commandRow)} ${
-                      pinnedKeys.has(key)
+                      pinnedKeys.has(mapStationRowToPinnedOpportunity(row).opportunity_key)
                         ? "bg-eve-accent/10 border-l-2 border-l-eve-accent"
                         : ""
                     } ${hiddenEntry ? "opacity-60" : ""}`}
@@ -2955,6 +2978,16 @@ export function StationTrading({
                           : row.IsExtremePriceFlag
                             ? "⚠️"
                             : ""}
+                    </td>
+                    <td className="px-1 py-1 text-center">
+                      <button
+                        type="button"
+                        aria-label={pinnedKeys.has(mapStationRowToPinnedOpportunity(row).opportunity_key) ? "Unpin row" : "Pin row"}
+                        onClick={() => togglePin(row)}
+                        className={`text-xs transition-opacity ${pinnedKeys.has(mapStationRowToPinnedOpportunity(row).opportunity_key) ? "opacity-100" : "opacity-35 hover:opacity-80"}`}
+                      >
+                        📌
+                      </button>
                     </td>
                     <td className="px-1 py-1 text-center">
                       {rowRegionID(row, regionId) > 0 && (
@@ -3309,12 +3342,12 @@ export function StationTrading({
             <div className="h-px bg-eve-border my-1" />
             <ContextItem
               label={
-                pinnedKeys.has(stationRowKey(contextMenu.row))
+                pinnedKeys.has(mapStationRowToPinnedOpportunity(contextMenu.row).opportunity_key)
                   ? t("unpinRow")
                   : t("pinRow")
               }
               onClick={() => {
-                togglePin(stationRowKey(contextMenu.row));
+                togglePin(contextMenu.row);
                 setContextMenu(null);
               }}
             />

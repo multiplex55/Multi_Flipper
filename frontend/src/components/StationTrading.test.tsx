@@ -4,6 +4,7 @@ import { I18nProvider } from "@/lib/i18n";
 import { ToastProvider } from "@/components/Toast";
 import { StationTrading } from "@/components/StationTrading";
 import type { ScanParams, StationTrade } from "@/lib/types";
+import { addPinnedOpportunity, removePinnedOpportunity } from "@/lib/api";
 
 vi.mock("@/lib/api", () => ({
   clearStationTradeStates: vi.fn(async () => undefined),
@@ -15,7 +16,12 @@ vi.mock("@/lib/api", () => ({
   scanStation: vi.fn(async () => []),
   setStationTradeState: vi.fn(async () => undefined),
   getWatchlist: vi.fn(async () => []),
+  getBanlistItems: vi.fn(async () => []),
+  getBannedStations: vi.fn(async () => []),
+  addPinnedOpportunity: vi.fn(async () => []),
   addToWatchlist: vi.fn(async () => undefined),
+  listPinnedOpportunities: vi.fn(async () => []),
+  removePinnedOpportunity: vi.fn(async () => ({ status: "deleted" })),
   removeFromWatchlist: vi.fn(async () => undefined),
   openMarketInGame: vi.fn(async () => undefined),
   setWaypointInGame: vi.fn(async () => undefined),
@@ -94,5 +100,23 @@ describe("StationTrading opportunity score", () => {
     expect(screen.getAllByText("Score").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByLabelText("Why this score?"));
     expect(await screen.findByText("Final score")).toBeInTheDocument();
+  });
+});
+
+describe("StationTrading pinning", () => {
+  it("renders pin button and pins/unpins with stable key", async () => {
+    render(
+      <I18nProvider>
+        <ToastProvider>
+          <StationTrading params={params} loadedResults={[makeTrade()]} />
+        </ToastProvider>
+      </I18nProvider>,
+    );
+    const pinBtn = await screen.findByLabelText("Pin row");
+    fireEvent.click(pinBtn);
+    expect(addPinnedOpportunity).toHaveBeenCalled();
+    const key = vi.mocked(addPinnedOpportunity).mock.calls[0][0].opportunity_key;
+    fireEvent.click(await screen.findByLabelText("Unpin row"));
+    expect(removePinnedOpportunity).toHaveBeenCalledWith(key);
   });
 });
