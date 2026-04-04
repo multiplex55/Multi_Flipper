@@ -4,6 +4,7 @@ import { PinnedOpportunitiesTab } from "@/components/PinnedOpportunitiesTab";
 import {
   listPinnedOpportunities,
   listPinnedOpportunitySnapshots,
+  type PinnedChangeDetail,
   subscribePinnedOpportunityChanges,
 } from "@/lib/api";
 
@@ -78,7 +79,7 @@ describe("PinnedOpportunitiesTab", () => {
   });
 
   it("reloads rows when pin-change event subscription fires", async () => {
-    const handlers: Array<(detail: { action: "add" | "remove"; opportunity_key: string; tab?: string }) => void> = [];
+    const handlers: Array<(detail: PinnedChangeDetail) => void> = [];
     vi.mocked(subscribePinnedOpportunityChanges).mockImplementation((handler) => {
       handlers.push(handler);
       return () => undefined;
