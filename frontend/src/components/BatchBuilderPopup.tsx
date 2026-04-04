@@ -24,6 +24,7 @@ import type {
 } from "@/lib/types";
 import { Modal } from "./Modal";
 import { useGlobalToast } from "./Toast";
+import { filterFlipResults } from "@/lib/banlistFilters";
 
 interface BatchBuilderPopupProps {
   open: boolean;
@@ -50,6 +51,8 @@ interface BatchBuilderPopupProps {
   cacheMeta?: StationCacheMeta | null;
   scanSourceTab?: "radius" | "region" | "contracts";
   onOpenPriceValidation?: (manifestText: string) => void;
+  bannedTypeIDs?: number[];
+  bannedStationIDs?: number[];
 }
 
 type RouteState = "idle" | "searching" | "results" | "selected";
@@ -134,6 +137,8 @@ export function BatchBuilderPopup({
   cacheMeta = null,
   scanSourceTab = "radius",
   onOpenPriceValidation,
+  bannedTypeIDs = [],
+  bannedStationIDs = [],
 }: BatchBuilderPopupProps) {
   const { t } = useI18n();
   const { addToast } = useGlobalToast();
@@ -162,8 +167,19 @@ export function BatchBuilderPopup({
     setRouteDiagnostics([]);
   }, [open, defaultCargoM3]);
 
+  const allowedRows = useMemo(
+    () => filterFlipResults(rows, bannedTypeIDs, bannedStationIDs),
+    [rows, bannedTypeIDs, bannedStationIDs],
+  );
+
+  const safeAnchorRow = useMemo(() => {
+    if (!anchorRow) return null;
+    const anchorAllowed = filterFlipResults([anchorRow], bannedTypeIDs, bannedStationIDs);
+    return anchorAllowed.length > 0 ? anchorAllowed[0] : null;
+  }, [anchorRow, bannedTypeIDs, bannedStationIDs]);
+
   const batch = useMemo(() => {
-    if (!anchorRow) {
+    if (!safeAnchorRow) {
       const emptyBatch: BatchBuildResult = {
         lines: [],
         totalVolume: 0,
@@ -175,16 +191,16 @@ export function BatchBuilderPopup({
       };
       return emptyBatch;
     }
-    return buildBatch(anchorRow, rows, cargoLimitM3);
-  }, [anchorRow, rows, cargoLimitM3]);
+    return buildBatch(safeAnchorRow, allowedRows, cargoLimitM3);
+  }, [safeAnchorRow, allowedRows, cargoLimitM3]);
 
   const baseBatchManifest = useMemo<BaseBatchManifest | null>(() => {
-    if (!anchorRow || batch.lines.length === 0 || cargoLimitM3 <= 0) return null;
+    if (!safeAnchorRow || batch.lines.length === 0 || cargoLimitM3 <= 0) return null;
 
-    const resolvedOriginSystemId = originSystemId ?? anchorRow.BuySystemID;
-    const resolvedOriginSystemName = originSystemName?.trim() || anchorRow.BuySystemName;
-    const resolvedOriginLocationId = originLocationId ?? anchorRow.BuyLocationID ?? 0;
-    const resolvedOriginLocationName = originLocationName?.trim() || anchorRow.BuyStation;
+    const resolvedOriginSystemId = originSystemId ?? safeAnchorRow.BuySystemID;
+    const resolvedOriginSystemName = originSystemName?.trim() || safeAnchorRow.BuySystemName;
+    const resolvedOriginLocationId = originLocationId ?? safeAnchorRow.BuyLocationID ?? 0;
+    const resolvedOriginLocationName = originLocationName?.trim() || safeAnchorRow.BuyStation;
     if (
       !Number.isFinite(resolvedOriginSystemId) ||
       resolvedOriginSystemId <= 0 ||
@@ -231,10 +247,10 @@ export function BatchBuilderPopup({
       origin_system_name: resolvedOriginSystemName,
       origin_location_id: resolvedOriginLocationId,
       origin_location_name: resolvedOriginLocationName,
-      base_buy_system_id: anchorRow.BuySystemID,
-      base_buy_location_id: anchorRow.BuyLocationID ?? 0,
-      base_sell_system_id: anchorRow.SellSystemID,
-      base_sell_location_id: anchorRow.SellLocationID ?? 0,
+      base_buy_system_id: safeAnchorRow.BuySystemID,
+      base_buy_location_id: safeAnchorRow.BuyLocationID ?? 0,
+      base_sell_system_id: safeAnchorRow.SellSystemID,
+      base_sell_location_id: safeAnchorRow.SellLocationID ?? 0,
       base_lines: baseLines,
       base_line_count: baseLines.length,
       total_units: totalUnits,
@@ -246,7 +262,7 @@ export function BatchBuilderPopup({
       remaining_capacity_m3: remainingCapacity,
     };
   }, [
-    anchorRow,
+    safeAnchorRow,
     batch,
     cargoLimitM3,
     originSystemId,
@@ -256,11 +272,11 @@ export function BatchBuilderPopup({
   ]);
 
   const createRouteError = useMemo(() => {
-    if (!anchorRow) return null;
+    if (!safeAnchorRow) return null;
     if (!baseBatchManifest) return t("batchBuilderRouteMissingOrigin");
     if (baseBatchManifest.remaining_capacity_m3 <= 0) return t("batchBuilderRouteNoRemainingCargo");
     return null;
-  }, [anchorRow, baseBatchManifest, t]);
+  }, [safeAnchorRow, baseBatchManifest, t]);
 
   const getBaseManifestText = useCallback((): string => {
     if (!anchorRow || batch.lines.length === 0) return "";
@@ -300,7 +316,7 @@ export function BatchBuilderPopup({
     if (!baseBatchManifest || !mergedManifest) return;
     const selectedOption = routeOptions.find((option) => option.option_id === selectedOptionId);
     if (!selectedOption) return;
-    const routeRows = rows.filter((row) => row.TypeID > 0);
+    const routeRows = allowedRows.filter((row) => row.TypeID > 0);
     const buyLocationNameById = new Map<number, string>();
     const locationNameMetaById = new Map<number, string>();
     for (const row of routeRows) {
@@ -564,7 +580,7 @@ export function BatchBuilderPopup({
     }
     await navigator.clipboard.writeText(manifestParts.join("\n"));
     addToast(t("batchBuilderCopiedMerged"), "success", 2200);
-  }, [baseBatchManifest, mergedManifest, addToast, t, routeOptions, selectedOptionId, rows, anchorRow]);
+  }, [baseBatchManifest, mergedManifest, addToast, t, routeOptions, selectedOptionId, allowedRows, anchorRow]);
 
   const startBatchCreateRoute = useCallback(async () => {
     if (!baseBatchManifest) {
@@ -619,7 +635,7 @@ export function BatchBuilderPopup({
       },
       candidate_snapshot:
         scanSourceTab === "radius"
-          ? rows
+          ? allowedRows
               .filter(
                 (row) => row.TypeID > 0 && (row.BuyLocationID ?? 0) > 0 && (row.SellLocationID ?? 0) > 0,
               )
@@ -708,7 +724,7 @@ export function BatchBuilderPopup({
     currentLocationId,
     cacheMeta,
     scanSourceTab,
-    rows,
+    allowedRows,
     t,
     addToast,
   ]);

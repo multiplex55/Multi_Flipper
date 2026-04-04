@@ -264,12 +264,16 @@ function renderPopup({
   routeMaxJumps = 12,
   maxDetourJumpsPerNode = 3,
   onOpenPriceValidation,
+  bannedTypeIDs,
+  bannedStationIDs,
 }: {
   anchorRow: FlipResult | null;
   rows: FlipResult[];
   routeMaxJumps?: number;
   maxDetourJumpsPerNode?: number;
   onOpenPriceValidation?: (manifestText: string) => void;
+  bannedTypeIDs?: number[];
+  bannedStationIDs?: number[];
 }) {
   return render(
     <I18nProvider>
@@ -300,6 +304,8 @@ function renderPopup({
           }}
           scanSourceTab="radius"
           onOpenPriceValidation={onOpenPriceValidation}
+          bannedTypeIDs={bannedTypeIDs}
+          bannedStationIDs={bannedStationIDs}
         />
       </ToastProvider>
     </I18nProvider>,
@@ -413,6 +419,33 @@ describe("BatchBuilderPopup route creation", () => {
       buy_system_id: expect.any(Number),
       sell_system_id: expect.any(Number),
     });
+  });
+
+  it("excludes banned types and stations from candidate snapshot payload", async () => {
+    batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
+    const stationBannedRow = makeRow({
+      TypeID: 44,
+      TypeName: "Banned Station Candidate",
+      BuyLocationID: 60009999,
+      BuyStation: "Dodixie IX",
+      UnitsToBuy: 100,
+      ProfitPerUnit: 20,
+    });
+    renderPopup({
+      anchorRow,
+      rows: [...rows, stationBannedRow],
+      bannedTypeIDs: [22],
+      bannedStationIDs: [60009999],
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    await screen.findByTestId("route-option-rank-1");
+
+    const [payload] = batchCreateRouteMock.mock.calls[0] ?? [];
+    const typeIDs = payload?.candidate_snapshot?.map((line) => line.type_id) ?? [];
+    const buyStations = payload?.candidate_snapshot?.map((line) => line.buy_location_id) ?? [];
+    expect(typeIDs).not.toContain(22);
+    expect(buyStations).not.toContain(60009999);
   });
 
   it("surfaces fallback diagnostics from planner responses", async () => {

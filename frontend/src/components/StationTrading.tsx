@@ -22,6 +22,8 @@ import {
   scanStation,
   setStationTradeState,
   getWatchlist,
+  getBanlistItems,
+  getBannedStations,
   addToWatchlist,
   removeFromWatchlist,
   openMarketInGame,
@@ -53,6 +55,7 @@ import {
   STATION_BUILTIN_PRESETS,
   type StationTradingSettings,
 } from "@/lib/presets";
+import { filterStationTrades } from "@/lib/banlistFilters";
 
 type SyntheticSortKey = "OpportunityScore";
 type SortKey = keyof StationTrade | SyntheticSortKey;
@@ -377,6 +380,8 @@ export function StationTrading({
   const [radius, setRadius] = useState(0);
   const [minDailyVolume, setMinDailyVolume] = useState(5);
   const [results, setResults] = useState<StationTrade[]>([]);
+  const [bannedTypeIDs, setBannedTypeIDs] = useState<number[]>([]);
+  const [bannedStationIDs, setBannedStationIDs] = useState<number[]>([]);
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState("");
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
@@ -500,16 +505,31 @@ export function StationTrading({
   const contextMenuRef = useRef<HTMLDivElement>(null);
   const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
 
+  useEffect(() => {
+    Promise.all([getBanlistItems(), getBannedStations()])
+      .then(([items, stations]) => {
+        setBannedTypeIDs(items.map((item) => item.type_id).filter((id) => id > 0));
+        setBannedStationIDs(stations.map((station) => station.location_id).filter((id) => id > 0));
+      })
+      .catch(() => {});
+  }, []);
+
   // Accept externally loaded results (from history)
   useEffect(() => {
     if (loadedResults !== undefined && loadedResults !== null) {
-      setResults(normalizeStationResults(loadedResults));
+      setResults(
+        filterStationTrades(
+          normalizeStationResults(loadedResults),
+          bannedTypeIDs,
+          bannedStationIDs,
+        ),
+      );
       setCommandRowsByKey({});
       setOrderDeskByKey({});
       setCommandSummary(null);
       setSelectedBatchKeys(new Set());
     }
-  }, [loadedResults]);
+  }, [loadedResults, bannedStationIDs, bannedTypeIDs]);
 
   useEffect(() => {
     if ((!isLoggedIn || !operatorModeDevOnly) && operatorMode) {
@@ -1116,7 +1136,7 @@ export function StationTrading({
         setOrderDeskByKey(nextDeskMap);
         setCommandSummary(commandRes.command.summary);
         setSelectedBatchKeys(new Set());
-        setResults(normalizedTrades);
+        setResults(filterStationTrades(normalizedTrades, bannedTypeIDs, bannedStationIDs));
         const scanFinishedAt = Date.now();
         const cacheView = mapServerCacheMeta(
           commandRes.cache_meta,
@@ -1148,7 +1168,7 @@ export function StationTrading({
         setOrderDeskByKey({});
         setCommandSummary(null);
         setSelectedBatchKeys(new Set());
-        setResults(normalizedResults);
+        setResults(filterStationTrades(normalizedResults, bannedTypeIDs, bannedStationIDs));
         const scanFinishedAt = Date.now();
         const scopeLabel =
           radius > 0
@@ -1201,6 +1221,8 @@ export function StationTrading({
     flagExtremePrices,
     includeStructures,
     structureStations,
+    bannedTypeIDs,
+    bannedStationIDs,
     operatorMode,
     isLoggedIn,
     refreshHiddenStates,

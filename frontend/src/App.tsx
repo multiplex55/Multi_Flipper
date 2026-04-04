@@ -34,6 +34,8 @@ import {
   scanContracts,
   testAlertChannels,
   getWatchlist,
+  getBanlistItems,
+  getBannedStations,
   rebootStationCache,
 } from "./lib/api";
 import { useI18n } from "./lib/i18n";
@@ -60,6 +62,12 @@ import type {
 } from "./lib/types";
 import logo from "./assets/logo.svg";
 import { DEFAULT_STRATEGY_SCORE } from "@/lib/scoringPresets";
+import {
+  filterContractResults,
+  filterFlipResults,
+  filterRouteResults,
+  filterStationTrades,
+} from "@/lib/banlistFilters";
 
 type Tab =
   | "radius"
@@ -439,6 +447,8 @@ function App() {
   const [routeLoadedResults, setRouteLoadedResults] = useState<
     RouteResult[] | null
   >(null);
+  const [bannedTypeIDs, setBannedTypeIDs] = useState<number[]>([]);
+  const [bannedStationIDs, setBannedStationIDs] = useState<number[]>([]);
 
   const [scanning, setScanning] = useState(false);
   const [scanAndRefreshing, setScanAndRefreshing] = useState(false);
@@ -484,6 +494,31 @@ function App() {
   const regionAutoRefreshSignatureRef = useRef<string>("");
   const regionAutoRefreshLastRunRef = useRef<number>(0);
   const { addToast } = useGlobalToast();
+
+  const refreshBanlistFilters = useCallback(async () => {
+    try {
+      const [items, stations] = await Promise.all([
+        getBanlistItems(),
+        getBannedStations(),
+      ]);
+      setBannedTypeIDs(
+        items
+          .map((item) => item.type_id)
+          .filter((id) => Number.isFinite(id) && id > 0),
+      );
+      setBannedStationIDs(
+        stations
+          .map((station) => station.location_id)
+          .filter((id) => Number.isFinite(id) && id > 0),
+      );
+    } catch {
+      // non-blocking: scan flow can continue without frontend banlist prefetch
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshBanlistFilters();
+  }, [refreshBanlistFilters]);
 
   const openExternalURL = useCallback(async (url: string) => {
     const { runtime, isTauri, isWails } = getDesktopRuntimeFlags();
@@ -914,12 +949,12 @@ function App() {
       if (ageMs > 4 * 60 * 60 * 1000) return; // older than 4 hours → skip
       setRegionRestorePrompt({
         ts: parsed.ts ?? Date.now(),
-        results: normalized,
+        results: filterFlipResults(normalized, bannedTypeIDs, bannedStationIDs),
       });
     } catch {
       // ignore parse errors
     }
-  }, []);
+  }, [bannedStationIDs, bannedTypeIDs]);
 
   // Save config on param change (debounced) — only after initial config is loaded
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -1075,7 +1110,7 @@ function App() {
             meta = m;
           },
         );
-        setContractResults(results);
+        setContractResults(filterContractResults(results, bannedStationIDs));
         setContractCacheMeta(meta ?? null);
         setContractScanCompleted(true);
       } else if (currentTab === "radius") {
@@ -1092,7 +1127,7 @@ function App() {
             meta = m;
           },
         );
-        setRadiusResults(results);
+        setRadiusResults(filterFlipResults(results, bannedTypeIDs, bannedStationIDs));
         setRadiusCacheMeta(meta ?? null);
         await triggerDesktopAlerts(results);
       } else if (currentTab === "region") {
@@ -1105,7 +1140,11 @@ function App() {
             meta = m;
           },
         );
-        const normalizedRows = normalizeRegionalResults(rows as unknown[]);
+        const normalizedRows = filterFlipResults(
+          normalizeRegionalResults(rows as unknown[]),
+          bannedTypeIDs,
+          bannedStationIDs,
+        );
         // Persist region scan results to localStorage for cross-session restore
         try {
           localStorage.setItem(
@@ -1150,7 +1189,7 @@ function App() {
             meta = m;
           },
         );
-        setRegionResults(results);
+        setRegionResults(filterFlipResults(results, bannedTypeIDs, bannedStationIDs));
         setRegionCacheMeta(meta ?? null);
         await triggerDesktopAlerts(results);
       }
@@ -1161,7 +1200,7 @@ function App() {
     } finally {
       setScanning(false);
     }
-  }, [scanning, tab, params, t, addToast, alertChannels]);
+  }, [scanning, tab, params, t, addToast, alertChannels, bannedStationIDs, bannedTypeIDs]);
 
   const handleScanAndRefresh = useCallback(async () => {
     if (scanning || scanAndRefreshing) return;
@@ -1981,7 +2020,13 @@ function App() {
                     <button
                       className="px-2 py-0.5 rounded bg-eve-accent/20 text-eve-accent hover:bg-eve-accent/40 transition-colors"
                       onClick={() => {
-                        setRegionResults(regionRestorePrompt.results);
+                        setRegionResults(
+                          filterFlipResults(
+                            regionRestorePrompt.results,
+                            bannedTypeIDs,
+                            bannedStationIDs,
+                          ),
+                        );
                         setRegionRestorePrompt(null);
                       }}
                     >
@@ -2207,7 +2252,12 @@ function App() {
           title={t("tabBanlist")}
           width="max-w-4xl"
         >
-          <BanlistTab latestResults={[...radiusResults, ...regionResults]} />
+          <BanlistTab
+            latestResults={[...radiusResults, ...regionResults]}
+            onBanlistChanged={() => {
+              void refreshBanlistFilters();
+            }}
+          />
         </Modal>
 
         {/* History Modal */}
@@ -2221,19 +2271,48 @@ function App() {
             onLoadResults={(resultTab, results, loadedParams) => {
               // Load historical results into appropriate tab
               if (resultTab === "radius") {
-                setRadiusResults(results as FlipResult[]);
+                setRadiusResults(
+                  filterFlipResults(
+                    results as FlipResult[],
+                    bannedTypeIDs,
+                    bannedStationIDs,
+                  ),
+                );
                 setTab("radius");
               } else if (resultTab === "region") {
-                setRegionResults(normalizeRegionalResults(results));
+                setRegionResults(
+                  filterFlipResults(
+                    normalizeRegionalResults(results),
+                    bannedTypeIDs,
+                    bannedStationIDs,
+                  ),
+                );
                 setTab("region");
               } else if (resultTab === "contracts") {
-                setContractResults(results as ContractResult[]);
+                setContractResults(
+                  filterContractResults(
+                    results as ContractResult[],
+                    bannedStationIDs,
+                  ),
+                );
                 setTab("contracts");
               } else if (resultTab === "station") {
-                setStationLoadedResults(results as StationTrade[]);
+                setStationLoadedResults(
+                  filterStationTrades(
+                    results as StationTrade[],
+                    bannedTypeIDs,
+                    bannedStationIDs,
+                  ),
+                );
                 setTab("station");
               } else if (resultTab === "route") {
-                setRouteLoadedResults(results as RouteResult[]);
+                setRouteLoadedResults(
+                  filterRouteResults(
+                    results as RouteResult[],
+                    bannedTypeIDs,
+                    bannedStationIDs,
+                  ),
+                );
                 setTab("route");
               }
               // Restore only global ScanParams-compatible fields (avoid leaking tab-specific params)

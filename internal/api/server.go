@@ -1195,6 +1195,100 @@ func filterStationTradesMarketDisabled(results []engine.StationTrade) []engine.S
 	return filtered
 }
 
+type banlistPredicates struct {
+	typeIDs    map[int32]struct{}
+	stationIDs map[int64]struct{}
+}
+
+func (s *Server) loadBanlistPredicates(userID string) banlistPredicates {
+	out := banlistPredicates{
+		typeIDs:    map[int32]struct{}{},
+		stationIDs: map[int64]struct{}{},
+	}
+	if s == nil || s.db == nil {
+		return out
+	}
+	for _, item := range s.db.GetBanlistItemsForUser(userID) {
+		if item.TypeID > 0 {
+			out.typeIDs[item.TypeID] = struct{}{}
+		}
+	}
+	for _, station := range s.db.GetBannedStationsForUser(userID) {
+		if station.LocationID > 0 {
+			out.stationIDs[station.LocationID] = struct{}{}
+		}
+	}
+	return out
+}
+
+func (b banlistPredicates) isTypeBanned(typeID int32) bool {
+	if typeID <= 0 || len(b.typeIDs) == 0 {
+		return false
+	}
+	_, ok := b.typeIDs[typeID]
+	return ok
+}
+
+func (b banlistPredicates) isStationBanned(locationID int64) bool {
+	if locationID <= 0 || len(b.stationIDs) == 0 {
+		return false
+	}
+	_, ok := b.stationIDs[locationID]
+	return ok
+}
+
+func filterFlipResultsByBanlist(results []engine.FlipResult, banned banlistPredicates) []engine.FlipResult {
+	if len(results) == 0 {
+		return results
+	}
+	filtered := results[:0]
+	for _, row := range results {
+		if banned.isTypeBanned(row.TypeID) {
+			continue
+		}
+		if banned.isStationBanned(row.BuyLocationID) || banned.isStationBanned(row.SellLocationID) {
+			continue
+		}
+		filtered = append(filtered, row)
+	}
+	return filtered
+}
+
+func filterRouteResultsByBanlist(results []engine.RouteResult, banned banlistPredicates) []engine.RouteResult {
+	if len(results) == 0 {
+		return results
+	}
+	filtered := results[:0]
+	for _, route := range results {
+		blocked := false
+		for _, hop := range route.Hops {
+			if banned.isTypeBanned(hop.TypeID) || banned.isStationBanned(hop.LocationID) || banned.isStationBanned(hop.DestLocationID) {
+				blocked = true
+				break
+			}
+		}
+		if blocked {
+			continue
+		}
+		filtered = append(filtered, route)
+	}
+	return filtered
+}
+
+func filterStationTradesByBanlist(results []engine.StationTrade, banned banlistPredicates) []engine.StationTrade {
+	if len(results) == 0 {
+		return results
+	}
+	filtered := results[:0]
+	for _, row := range results {
+		if banned.isTypeBanned(row.TypeID) || banned.isStationBanned(row.StationID) {
+			continue
+		}
+		filtered = append(filtered, row)
+	}
+	return filtered
+}
+
 type stationCacheMeta struct {
 	CurrentRevision int64  `json:"current_revision"`
 	LastRefreshAt   string `json:"last_refresh_at,omitempty"`
@@ -2402,6 +2496,7 @@ func (s *Server) regionScopeForContractScan(params engine.ScanParams) map[int32]
 func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromRequest(r)
 	userCfg := s.loadConfigForUser(userID)
+	banned := s.loadBanlistPredicates(userID)
 
 	var req scanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -2460,6 +2555,7 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 		results = filterFlipResultsExcludeStructures(results)
 	}
 	results = filterFlipResultsMarketDisabled(results)
+	results = filterFlipResultsByBanlist(results, banned)
 	cacheMeta := s.stationCacheMetaForFlipScan(
 		params,
 		false,
@@ -2504,6 +2600,7 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleScanMultiRegion(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromRequest(r)
 	userCfg := s.loadConfigForUser(userID)
+	banned := s.loadBanlistPredicates(userID)
 
 	var req scanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -2568,6 +2665,7 @@ func (s *Server) handleScanMultiRegion(w http.ResponseWriter, r *http.Request) {
 		results = filterFlipResultsExcludeStructures(results)
 	}
 	results = filterFlipResultsMarketDisabled(results)
+	results = filterFlipResultsByBanlist(results, banned)
 	cacheMeta := s.stationCacheMetaForFlipScan(
 		params,
 		true,
@@ -2612,6 +2710,7 @@ func (s *Server) handleScanMultiRegion(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleScanRegionalDay(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromRequest(r)
 	userCfg := s.loadConfigForUser(userID)
+	banned := s.loadBanlistPredicates(userID)
 
 	var req scanRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -2680,6 +2779,7 @@ func (s *Server) handleScanRegionalDay(w http.ResponseWriter, r *http.Request) {
 		results = filterFlipResultsExcludeStructures(results)
 	}
 	results = filterFlipResultsMarketDisabled(results)
+	results = filterFlipResultsByBanlist(results, banned)
 
 	inventory := s.loadRegionalInventorySnapshot(
 		userID,
@@ -2690,6 +2790,7 @@ func (s *Server) handleScanRegionalDay(w http.ResponseWriter, r *http.Request) {
 	)
 	hubs, totalItems, targetRegionName, periodDays := scanner.BuildRegionalDayTrader(params, results, inventory, sendProgress)
 	dayRows := engine.FlattenRegionalDayHubs(hubs)
+	dayRows = filterFlipResultsByBanlist(dayRows, banned)
 
 	durationMs := time.Since(startTime).Milliseconds()
 	log.Printf("[API] ScanRegionalDay complete: hubs=%d items=%d rows=%d raw=%d in %dms",
@@ -3053,6 +3154,7 @@ func (s *Server) handleScanContracts(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleRouteFind(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromRequest(r)
+	banned := s.loadBanlistPredicates(userID)
 
 	var req struct {
 		SystemName           string  `json:"system_name"`
@@ -3173,6 +3275,7 @@ func (s *Server) handleRouteFind(w http.ResponseWriter, r *http.Request) {
 		results = filterRouteResultsExcludeStructures(results)
 	}
 	results = filterRouteResultsMarketDisabled(results)
+	results = filterRouteResultsByBanlist(results, banned)
 	if len(results) != rawCount {
 		log.Printf("[API] RouteFind post-filter: raw=%d final=%d (include_structures=%t)", rawCount, len(results), req.IncludeStructures)
 		line, _ := json.Marshal(map[string]string{
@@ -3736,6 +3839,7 @@ func (s *Server) handleGetAlertHistory(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleScanStation(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromRequest(r)
 	userCfg := s.loadConfigForUser(userID)
+	banned := s.loadBanlistPredicates(userID)
 
 	var req struct {
 		StationID            int64   `json:"station_id"`  // 0 = all stations
@@ -3956,6 +4060,7 @@ func (s *Server) handleScanStation(w http.ResponseWriter, r *http.Request) {
 		allResults = filterStationTradesExcludeStructures(allResults)
 	}
 	allResults = filterStationTradesMarketDisabled(allResults)
+	allResults = filterStationTradesByBanlist(allResults, banned)
 
 	// Calculate totals
 	topProfit := 0.0
