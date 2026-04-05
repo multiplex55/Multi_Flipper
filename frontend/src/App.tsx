@@ -310,15 +310,15 @@ export function normalizeFlipResultLike(value: unknown): FlipResult | null {
 
   const assignNum = (key: keyof FlipResult, aliases: string[]) => {
     const value = numberFromAliases(rec, aliases);
-    if (value != null) row[key] = value;
+    if (value != null) (row as unknown as Record<string, unknown>)[key] = value;
   };
   const assignInt = (key: keyof FlipResult, aliases: string[]) => {
     const value = intFromAliases(rec, aliases);
-    if (value != null) row[key] = value;
+    if (value != null) (row as unknown as Record<string, unknown>)[key] = value;
   };
   const assignText = (key: keyof FlipResult, aliases: string[]) => {
     const value = textFromAliases(rec, aliases);
-    if (value != null) row[key] = value;
+    if (value != null) (row as unknown as Record<string, unknown>)[key] = value;
   };
 
   assignNum("BestAskPrice", ["BestAskPrice", "best_ask_price"]);
