@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { batchCreateRoute, getConfig, updateConfig } from "@/lib/api";
-import type { AppConfig, BatchCreateRouteRequest, BatchCreateRouteResponse } from "@/lib/types";
+import { batchCreateRoute, getConfig, normalizeRouteResults, updateConfig } from "@/lib/api";
+import type { AppConfig, BatchCreateRouteRequest, BatchCreateRouteResponse, RouteResult } from "@/lib/types";
 
 function makeRequest(overrides: Partial<BatchCreateRouteRequest> = {}): BatchCreateRouteRequest {
   return {
@@ -206,5 +206,43 @@ describe("config API", () => {
         capital_weight: 10,
       },
     });
+  });
+});
+
+describe("normalizeRouteResults", () => {
+  it("maps enriched hop fields with safe defaults for stale payloads", () => {
+    const legacyRoute: RouteResult = {
+      Hops: [
+        {
+          SystemName: "Jita",
+          StationName: "Jita",
+          SystemID: 30000142,
+          DestSystemName: "Amarr",
+          DestStationName: "Amarr",
+          DestSystemID: 30002187,
+          TypeName: "Tritanium",
+          TypeID: 34,
+          BuyPrice: 5,
+          SellPrice: 6,
+          Units: 100,
+          Profit: 100,
+          Jumps: 8,
+        },
+      ],
+      TotalProfit: 100,
+      TotalJumps: 8,
+      ProfitPerJump: 12.5,
+      HopCount: 1,
+    };
+
+    const [route] = normalizeRouteResults([legacyRoute]);
+    const hop = route.Hops[0];
+    expect(hop.buy_location_id).toBe(0);
+    expect(hop.sell_location_id).toBe(0);
+    expect(hop.modeled_qty).toBe(100);
+    expect(hop.effective_buy).toBe(5);
+    expect(hop.effective_sell).toBe(6);
+    expect(hop.buy_station_name).toBe("Jita");
+    expect(hop.sell_station_name).toBe("Amarr");
   });
 });

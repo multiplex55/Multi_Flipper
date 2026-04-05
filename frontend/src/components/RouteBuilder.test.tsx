@@ -169,4 +169,23 @@ describe("RouteBuilder planner interactions", () => {
     expect(postPlannerRow).toHaveTextContent("Amarr");
     expect(postPlannerRow).toHaveTextContent("2.0K");
   });
+
+  it("renders station labels with enriched-field fallback when fields are missing", async () => {
+    const route = makeRouteResult();
+    route.Hops = [
+      {
+        ...route.Hops[0],
+        StationName: "",
+        DestStationName: "Legacy Sell Station",
+        buy_station_name: "Enriched Buy Station",
+        sell_station_name: "",
+      },
+    ];
+    renderRouteBuilder([route]);
+
+    fireEvent.doubleClick(await screen.findByTestId("route-result-row-0"));
+
+    expect(await screen.findByText("Enriched Buy Station")).toBeInTheDocument();
+    expect(screen.getByText("Legacy Sell Station")).toBeInTheDocument();
+  });
 });

@@ -119,20 +119,35 @@ type RouteHop struct {
 	SystemName      string
 	StationName     string
 	SystemID        int32
-	RegionID        int32 `json:"RegionID"` // Market region for execution plan / slippage
-	LocationID      int64 `json:"-"`
-	EmptyJumps      int   `json:"EmptyJumps,omitempty"` // optional deadhead jumps before this trade hop
+	RegionID        int32  `json:"RegionID"` // Market region for execution plan / slippage
+	LocationID      int64  `json:"-"`
+	BuyLocationID   int64  `json:"buy_location_id"`
+	SellLocationID  int64  `json:"sell_location_id"`
+	BuyStationName  string `json:"buy_station_name"`
+	SellStationName string `json:"sell_station_name"`
+	EmptyJumps      int    `json:"EmptyJumps,omitempty"` // optional deadhead jumps before this trade hop
 	DestSystemID    int32
 	DestSystemName  string
 	DestStationName string `json:"DestStationName,omitempty"`
 	DestLocationID  int64  `json:"-"`
 	TypeName        string
 	TypeID          int32
+	ItemVolume      float64 `json:"item_volume"`
 	BuyPrice        float64
 	SellPrice       float64
 	Units           int32
 	Profit          float64
-	Jumps           int // jumps to destination
+	Jumps           int     // jumps to destination
+	BuyRemaining    int32   `json:"buy_remaining"`
+	SellRemaining   int32   `json:"sell_remaining"`
+	ModeledQty      int32   `json:"modeled_qty"`
+	EffectiveBuy    float64 `json:"effective_buy"`
+	EffectiveSell   float64 `json:"effective_sell"`
+	HopCapital      float64 `json:"hop_capital"`
+	HopGrossSell    float64 `json:"hop_gross_sell"`
+	HopNet          float64 `json:"hop_net"`
+	SnapshotTS      string  `json:"snapshot_ts"`
+	CacheRevision   int64   `json:"cache_revision"`
 }
 
 // RouteResult represents a complete multi-hop trade route with aggregated profit.

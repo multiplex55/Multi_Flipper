@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"eve-flipper/internal/esi"
 )
@@ -262,6 +263,7 @@ func (s *Scanner) findBestTradesFromSources(
 	}
 
 	var candidates []candidate
+	snapshotTS := time.Now().UTC().Format(time.RFC3339)
 	ignoredSystems := ignoredSystemSetFromIDs(params.IgnoredSystemIDs)
 	for _, source := range sources {
 		if len(ignoredSystems) > 0 && ignoredSystems[source.systemID] {
@@ -353,17 +355,30 @@ func (s *Scanner) findBestTradesFromSources(
 							SystemID:       source.systemID,
 							RegionID:       regionID,
 							LocationID:     sell.LocationID,
+							BuyLocationID:  sell.LocationID,
 							EmptyJumps:     source.emptyJumps,
 							DestSystemID:   buySystemID,
 							DestSystemName: s.systemName(buySystemID),
 							DestLocationID: buy.LocationID,
+							SellLocationID: buy.LocationID,
 							TypeName:       itemType.Name,
 							TypeID:         typeID,
+							ItemVolume:     itemType.Volume,
 							BuyPrice:       sell.Price,
 							SellPrice:      buy.Price,
 							Units:          actualUnits,
 							Profit:         profit,
 							Jumps:          tradeJumps,
+							BuyRemaining:   sell.VolumeRemain,
+							SellRemaining:  buy.VolumeRemain,
+							ModeledQty:     actualUnits,
+							EffectiveBuy:   effectiveBuy,
+							EffectiveSell:  effectiveSell,
+							HopCapital:     effectiveBuy * float64(actualUnits),
+							HopGrossSell:   effectiveSell * float64(actualUnits),
+							HopNet:         profit,
+							SnapshotTS:     snapshotTS,
+							CacheRevision:  0,
 						},
 						score: profit,
 					})
@@ -795,8 +810,10 @@ func (s *Scanner) FindRoutes(params RouteParams, progress func(string)) ([]Route
 		for i := range completedRoutes {
 			for j := range completedRoutes[i].Hops {
 				completedRoutes[i].Hops[j].StationName = s.ESI.StationName(completedRoutes[i].Hops[j].LocationID)
+				completedRoutes[i].Hops[j].BuyStationName = completedRoutes[i].Hops[j].StationName
 				if completedRoutes[i].Hops[j].DestLocationID != 0 {
 					completedRoutes[i].Hops[j].DestStationName = s.ESI.StationName(completedRoutes[i].Hops[j].DestLocationID)
+					completedRoutes[i].Hops[j].SellStationName = completedRoutes[i].Hops[j].DestStationName
 				}
 			}
 		}

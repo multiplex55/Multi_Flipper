@@ -540,7 +540,10 @@ function RouteDetailPopup({
 
         {/* Hops */}
         <div className="flex-1 overflow-y-auto p-4 space-y-0">
-          {route.Hops.map((hop, i) => (
+          {route.Hops.map((hop, i) => {
+            const buyStationLabel = hop.buy_station_name || hop.StationName || hop.SystemName;
+            const sellStationLabel = hop.sell_station_name || hop.DestStationName || hop.DestSystemName;
+            return (
             <div key={i}>
               {/* Hop card */}
               <div className="bg-eve-dark/50 border border-eve-border/50 rounded-sm p-3">
@@ -549,7 +552,7 @@ function RouteDetailPopup({
                     {i + 1}
                   </span>
                   <span className="text-xs font-medium text-eve-text">
-                    {hop.StationName || hop.SystemName}
+                    {buyStationLabel}
                   </span>
                   <div className="ml-auto flex items-center gap-1.5">
                     {isLoggedIn && hop.SystemID && (
@@ -583,7 +586,7 @@ function RouteDetailPopup({
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-eve-dim">→ {t("routeDeliverTo")}:</span>
-                    <span className="text-eve-text">{hop.DestStationName || hop.DestSystemName}</span>
+                    <span className="text-eve-text">{sellStationLabel}</span>
                     <span className="text-eve-dim font-mono">
                       ({hop.Jumps + (hop.EmptyJumps ?? 0)} {t("routeJumpsUnit")})
                     </span>
@@ -615,7 +618,8 @@ function RouteDetailPopup({
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Summary + actions footer */}
