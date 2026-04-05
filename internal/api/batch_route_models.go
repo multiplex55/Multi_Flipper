@@ -54,18 +54,23 @@ type BaseBatchManifest struct {
 }
 
 type RouteAdditionLine struct {
-	TypeID         int32   `json:"type_id"`
-	TypeName       string  `json:"type_name"`
-	Units          int64   `json:"units"`
-	UnitVolumeM3   float64 `json:"unit_volume_m3"`
-	BuySystemID    int32   `json:"buy_system_id"`
-	BuyLocationID  int64   `json:"buy_location_id"`
-	SellSystemID   int32   `json:"sell_system_id"`
-	SellLocationID int64   `json:"sell_location_id"`
-	BuyTotalISK    float64 `json:"buy_total_isk"`
-	SellTotalISK   float64 `json:"sell_total_isk"`
-	ProfitTotalISK float64 `json:"profit_total_isk"`
-	RouteJumps     int     `json:"route_jumps"`
+	TypeID             int32   `json:"type_id"`
+	TypeName           string  `json:"type_name"`
+	Units              int64   `json:"units"`
+	UnitVolumeM3       float64 `json:"unit_volume_m3"`
+	BuySystemID        int32   `json:"buy_system_id"`
+	BuyLocationID      int64   `json:"buy_location_id"`
+	SellSystemID       int32   `json:"sell_system_id"`
+	SellLocationID     int64   `json:"sell_location_id"`
+	BuyTotalISK        float64 `json:"buy_total_isk"`
+	SellTotalISK       float64 `json:"sell_total_isk"`
+	ProfitTotalISK     float64 `json:"profit_total_isk"`
+	RouteJumps         int     `json:"route_jumps"`
+	FillConfidence     float64 `json:"fill_confidence"`
+	StaleRisk          float64 `json:"stale_risk"`
+	Concentration      float64 `json:"concentration_risk"`
+	LineExecutionScore float64 `json:"line_execution_score"`
+	LineRole           string  `json:"line_role"`
 }
 
 type RouteOptionRankingInputs struct {
@@ -76,25 +81,31 @@ type RouteOptionRankingInputs struct {
 }
 
 type RouteAdditionOption struct {
-	OptionID              string                             `json:"option_id"`
-	Rank                  int                                `json:"rank"`
-	Lines                 []RouteAdditionLine                `json:"lines"`
-	LineCount             int                                `json:"line_count"`
-	AddedVolumeM3         float64                            `json:"added_volume_m3"`
-	UtilizationPct        float64                            `json:"utilization_pct"`
-	TotalBuyISK           float64                            `json:"total_buy_isk"`
-	TotalSellISK          float64                            `json:"total_sell_isk"`
-	TotalProfitISK        float64                            `json:"total_profit_isk"`
-	TotalJumps            int                                `json:"total_jumps"`
-	ISKPerJump            float64                            `json:"isk_per_jump"`
-	ExecutionScore        float64                            `json:"execution_score"`
-	ScoreBreakdown        []engine.RouteScoreFactorBreakdown `json:"score_breakdown,omitempty"`
-	RankingInputs         RouteOptionRankingInputs           `json:"ranking_inputs"`
-	RankingTieBreakValues []float64                          `json:"ranking_tie_break_values"`
-	RankingSortKey        string                             `json:"ranking_sort_key"`
-	OrderedBuySystems     []int32                            `json:"ordered_buy_systems,omitempty"`
-	RouteSequence         []int32                            `json:"route_sequence,omitempty"`
-	RouteTotalJumps       int                                `json:"route_total_jumps,omitempty"`
+	OptionID               string                             `json:"option_id"`
+	Rank                   int                                `json:"rank"`
+	Lines                  []RouteAdditionLine                `json:"lines"`
+	LineCount              int                                `json:"line_count"`
+	AddedVolumeM3          float64                            `json:"added_volume_m3"`
+	UtilizationPct         float64                            `json:"utilization_pct"`
+	TotalBuyISK            float64                            `json:"total_buy_isk"`
+	TotalSellISK           float64                            `json:"total_sell_isk"`
+	TotalProfitISK         float64                            `json:"total_profit_isk"`
+	TotalJumps             int                                `json:"total_jumps"`
+	ISKPerJump             float64                            `json:"isk_per_jump"`
+	ExecutionScore         float64                            `json:"execution_score"`
+	ScoreBreakdown         []engine.RouteScoreFactorBreakdown `json:"score_breakdown,omitempty"`
+	RankingInputs          RouteOptionRankingInputs           `json:"ranking_inputs"`
+	RankingTieBreakValues  []float64                          `json:"ranking_tie_break_values"`
+	RankingSortKey         string                             `json:"ranking_sort_key"`
+	OrderedBuySystems      []int32                            `json:"ordered_buy_systems,omitempty"`
+	RouteSequence          []int32                            `json:"route_sequence,omitempty"`
+	RouteTotalJumps        int                                `json:"route_total_jumps,omitempty"`
+	CoreLineCount          int                                `json:"core_line_count"`
+	SafeFillerLineCount    int                                `json:"safe_filler_line_count"`
+	StretchFillerLineCount int                                `json:"stretch_filler_line_count"`
+	CoreProfitTotalISK     float64                            `json:"core_profit_total_isk"`
+	SafeFillerProfitISK    float64                            `json:"safe_filler_profit_isk"`
+	StretchFillerProfitISK float64                            `json:"stretch_filler_profit_isk"`
 }
 
 type RouteExecutionScoreWeights struct {

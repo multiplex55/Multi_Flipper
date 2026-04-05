@@ -307,6 +307,11 @@ export interface RouteAdditionLine {
   sell_total_isk: number;
   profit_total_isk: number;
   route_jumps: number;
+  fill_confidence: number;
+  stale_risk: number;
+  concentration_risk: number;
+  line_execution_score: number;
+  line_role: "core" | "safe_filler" | "stretch_filler";
 }
 
 export interface RouteAdditionOption {
@@ -342,6 +347,12 @@ export interface RouteAdditionOption {
   ordered_buy_systems?: number[];
   route_sequence?: number[];
   route_total_jumps?: number;
+  core_line_count: number;
+  safe_filler_line_count: number;
+  stretch_filler_line_count: number;
+  core_profit_total_isk: number;
+  safe_filler_profit_isk: number;
+  stretch_filler_profit_isk: number;
 }
 
 export interface RouteManifestSummary {

@@ -3432,6 +3432,10 @@ func (s *Server) handleBatchCreateRoute(w http.ResponseWriter, r *http.Request) 
 				SellLocationID: candidate.SellLocationID,
 				BuyPriceISK:    candidate.BuyPriceISK,
 				SellPriceISK:   candidate.SellPriceISK,
+				FillConfidence: candidate.FillConfidence,
+				CapitalLockup:  candidate.CapitalLockup,
+				StaleRisk:      candidate.StaleRisk,
+				Concentration:  candidate.Concentration,
 			})
 		}
 	}
@@ -3479,18 +3483,23 @@ func (s *Server) handleBatchCreateRoute(w http.ResponseWriter, r *http.Request) 
 		lines := make([]RouteAdditionLine, 0, len(opt.Lines))
 		for _, line := range opt.Lines {
 			apiLine := RouteAdditionLine{
-				TypeID:         line.TypeID,
-				TypeName:       line.TypeName,
-				Units:          line.Units,
-				UnitVolumeM3:   line.UnitVolumeM3,
-				BuySystemID:    line.BuySystemID,
-				BuyLocationID:  line.BuyLocationID,
-				SellSystemID:   line.SellSystemID,
-				SellLocationID: line.SellLocationID,
-				BuyTotalISK:    line.BuyTotalISK,
-				SellTotalISK:   line.SellTotalISK,
-				ProfitTotalISK: line.ProfitTotalISK,
-				RouteJumps:     line.RouteJumps,
+				TypeID:             line.TypeID,
+				TypeName:           line.TypeName,
+				Units:              line.Units,
+				UnitVolumeM3:       line.UnitVolumeM3,
+				BuySystemID:        line.BuySystemID,
+				BuyLocationID:      line.BuyLocationID,
+				SellSystemID:       line.SellSystemID,
+				SellLocationID:     line.SellLocationID,
+				BuyTotalISK:        line.BuyTotalISK,
+				SellTotalISK:       line.SellTotalISK,
+				ProfitTotalISK:     line.ProfitTotalISK,
+				RouteJumps:         line.RouteJumps,
+				FillConfidence:     line.FillConfidence,
+				StaleRisk:          line.StaleRisk,
+				Concentration:      line.Concentration,
+				LineExecutionScore: line.LineExecutionScore,
+				LineRole:           line.LineRole,
 			}
 			lines = append(lines, apiLine)
 			if idx == 0 {
@@ -3521,10 +3530,16 @@ func (s *Server) handleBatchCreateRoute(w http.ResponseWriter, r *http.Request) 
 				ISKPerJump:     opt.ISKPerJump,
 				UtilizationPct: utilization,
 			},
-			RankingSortKey:    fmt.Sprintf("profit:%.2f|isk_per_jump:%.2f", opt.TotalProfitISK, opt.ISKPerJump),
-			OrderedBuySystems: append([]int32(nil), opt.OrderedBuySystems...),
-			RouteSequence:     append([]int32(nil), opt.RouteSequence...),
-			RouteTotalJumps:   opt.TotalJumps,
+			RankingSortKey:         fmt.Sprintf("profit:%.2f|isk_per_jump:%.2f", opt.TotalProfitISK, opt.ISKPerJump),
+			OrderedBuySystems:      append([]int32(nil), opt.OrderedBuySystems...),
+			RouteSequence:          append([]int32(nil), opt.RouteSequence...),
+			RouteTotalJumps:        opt.TotalJumps,
+			CoreLineCount:          opt.CoreLineCount,
+			SafeFillerLineCount:    opt.SafeFillerLineCount,
+			StretchFillerLineCount: opt.StretchFillerLineCount,
+			CoreProfitTotalISK:     opt.CoreProfitTotalISK,
+			SafeFillerProfitISK:    opt.SafeFillerProfitISK,
+			StretchFillerProfitISK: opt.StretchFillerProfitISK,
 		})
 	}
 

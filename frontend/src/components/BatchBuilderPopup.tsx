@@ -12,6 +12,7 @@ import {
   formatDetailedManifestItemLine,
   formatBaseBatchManifestText,
   formatOrderedRouteManifestText,
+  formatGroupedRouteSections,
 } from "@/lib/batchManifestFormat";
 import type {
   BaseBatchManifest,
@@ -61,7 +62,10 @@ function normalizeStationName(name: string | null | undefined): string {
   return (name ?? "").trim().toLocaleLowerCase().replace(/\s+/g, " ");
 }
 
-function formatStationFallback(line: { buy_location_id: number }, resolvedStationName?: string): string {
+function formatStationFallback(
+  line: { buy_location_id: number },
+  resolvedStationName?: string,
+): string {
   if (resolvedStationName?.trim()) return resolvedStationName.trim();
   if (line.buy_location_id > 0) return `Station ${line.buy_location_id}`;
   return "Unknown Station";
@@ -89,7 +93,10 @@ function buildMergedManifest(
   baseBatch: BaseBatchManifest,
   option: RouteAdditionOption,
 ): MergedBatchManifest {
-  const baseUnits = baseBatch.base_lines.reduce((sum, line) => sum + line.units, 0);
+  const baseUnits = baseBatch.base_lines.reduce(
+    (sum, line) => sum + line.units,
+    0,
+  );
   const addedUnits = option.lines.reduce((sum, line) => sum + line.units, 0);
   const totalVolume = baseBatch.total_volume_m3 + option.added_volume_m3;
   const remainingCapacity = Math.max(0, baseBatch.cargo_limit_m3 - totalVolume);
@@ -105,7 +112,10 @@ function buildMergedManifest(
     total_volume_m3: totalVolume,
     cargo_limit_m3: baseBatch.cargo_limit_m3,
     remaining_capacity_m3: remainingCapacity,
-    utilization_pct: baseBatch.cargo_limit_m3 > 0 ? (totalVolume / baseBatch.cargo_limit_m3) * 100 : 0,
+    utilization_pct:
+      baseBatch.cargo_limit_m3 > 0
+        ? (totalVolume / baseBatch.cargo_limit_m3) * 100
+        : 0,
     total_buy_isk: baseBatch.total_buy_isk + option.total_buy_isk,
     total_sell_isk: baseBatch.total_sell_isk + option.total_sell_isk,
     total_profit_isk: baseBatch.total_profit_isk + option.total_profit_isk,
@@ -147,12 +157,13 @@ export function BatchBuilderPopup({
   );
   const [routeState, setRouteState] = useState<RouteState>("idle");
   const [routeOptions, setRouteOptions] = useState<RouteAdditionOption[]>([]);
-  const [routeSortBy, setRouteSortBy] = useState<"execution_score" | "isk_per_jump" | "total_profit_isk">(
-    "execution_score",
-  );
+  const [routeSortBy, setRouteSortBy] = useState<
+    "execution_score" | "isk_per_jump" | "total_profit_isk"
+  >("execution_score");
   const [routeError, setRouteError] = useState<string | null>(null);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
-  const [mergedManifest, setMergedManifest] = useState<MergedBatchManifest | null>(null);
+  const [mergedManifest, setMergedManifest] =
+    useState<MergedBatchManifest | null>(null);
   const [lastProgress, setLastProgress] = useState<string>("");
   const [routeDiagnostics, setRouteDiagnostics] = useState<string[]>([]);
   const activeRequestRef = useRef(0);
@@ -178,7 +189,11 @@ export function BatchBuilderPopup({
 
   const safeAnchorRow = useMemo(() => {
     if (!anchorRow) return null;
-    const anchorAllowed = filterFlipResults([anchorRow], bannedTypeIDs, bannedStationIDs);
+    const anchorAllowed = filterFlipResults(
+      [anchorRow],
+      bannedTypeIDs,
+      bannedStationIDs,
+    );
     return anchorAllowed.length > 0 ? anchorAllowed[0] : null;
   }, [anchorRow, bannedTypeIDs, bannedStationIDs]);
 
@@ -199,12 +214,16 @@ export function BatchBuilderPopup({
   }, [safeAnchorRow, allowedRows, cargoLimitM3]);
 
   const baseBatchManifest = useMemo<BaseBatchManifest | null>(() => {
-    if (!safeAnchorRow || batch.lines.length === 0 || cargoLimitM3 <= 0) return null;
+    if (!safeAnchorRow || batch.lines.length === 0 || cargoLimitM3 <= 0)
+      return null;
 
     const resolvedOriginSystemId = originSystemId ?? safeAnchorRow.BuySystemID;
-    const resolvedOriginSystemName = originSystemName?.trim() || safeAnchorRow.BuySystemName;
-    const resolvedOriginLocationId = originLocationId ?? safeAnchorRow.BuyLocationID ?? 0;
-    const resolvedOriginLocationName = originLocationName?.trim() || safeAnchorRow.BuyStation;
+    const resolvedOriginSystemName =
+      originSystemName?.trim() || safeAnchorRow.BuySystemName;
+    const resolvedOriginLocationId =
+      originLocationId ?? safeAnchorRow.BuyLocationID ?? 0;
+    const resolvedOriginLocationName =
+      originLocationName?.trim() || safeAnchorRow.BuyStation;
     if (
       !Number.isFinite(resolvedOriginSystemId) ||
       resolvedOriginSystemId <= 0 ||
@@ -278,7 +297,8 @@ export function BatchBuilderPopup({
   const createRouteError = useMemo(() => {
     if (!safeAnchorRow) return null;
     if (!baseBatchManifest) return t("batchBuilderRouteMissingOrigin");
-    if (baseBatchManifest.remaining_capacity_m3 <= 0) return t("batchBuilderRouteNoRemainingCargo");
+    if (baseBatchManifest.remaining_capacity_m3 <= 0)
+      return t("batchBuilderRouteNoRemainingCargo");
     return null;
   }, [safeAnchorRow, baseBatchManifest, t]);
 
@@ -287,10 +307,16 @@ export function BatchBuilderPopup({
     decorated.sort((a, b) => {
       const left = a.option;
       const right = b.option;
-      if (routeSortBy === "isk_per_jump" && left.isk_per_jump !== right.isk_per_jump) {
+      if (
+        routeSortBy === "isk_per_jump" &&
+        left.isk_per_jump !== right.isk_per_jump
+      ) {
         return right.isk_per_jump - left.isk_per_jump;
       }
-      if (routeSortBy === "total_profit_isk" && left.total_profit_isk !== right.total_profit_isk) {
+      if (
+        routeSortBy === "total_profit_isk" &&
+        left.total_profit_isk !== right.total_profit_isk
+      ) {
         return right.total_profit_isk - left.total_profit_isk;
       }
       if (left.execution_score !== right.execution_score) {
@@ -337,7 +363,9 @@ export function BatchBuilderPopup({
 
   const copyMergedManifest = useCallback(async () => {
     if (!baseBatchManifest || !mergedManifest) return;
-    const selectedOption = routeOptions.find((option) => option.option_id === selectedOptionId);
+    const selectedOption = routeOptions.find(
+      (option) => option.option_id === selectedOptionId,
+    );
     if (!selectedOption) return;
     const routeRows = allowedRows.filter((row) => row.TypeID > 0);
     const buyLocationNameById = new Map<number, string>();
@@ -354,7 +382,11 @@ export function BatchBuilderPopup({
         }
       }
       const sellLocationId = safeNumber(row.SellLocationID);
-      if (sellLocationId > 0 && hasStationName(row.SellStation) && !locationNameMetaById.has(sellLocationId)) {
+      if (
+        sellLocationId > 0 &&
+        hasStationName(row.SellStation) &&
+        !locationNameMetaById.has(sellLocationId)
+      ) {
         locationNameMetaById.set(sellLocationId, row.SellStation.trim());
       }
     }
@@ -373,6 +405,7 @@ export function BatchBuilderPopup({
       profit_total_isk: number;
       route_jumps: number;
       source: "base" | "addition";
+      line_role?: "core" | "safe_filler" | "stretch_filler";
     };
     const combinedLines: CombinedLine[] = [
       ...baseBatchManifest.base_lines.map((line) => ({
@@ -389,8 +422,12 @@ export function BatchBuilderPopup({
         profit_total_isk: line.profit_total_isk,
         route_jumps: line.jumps,
         source: "base" as const,
+        line_role: "core" as const,
       })),
-      ...selectedOption.lines.map((line) => ({ ...line, source: "addition" as const })),
+      ...selectedOption.lines.map((line) => ({
+        ...line,
+        source: "addition" as const,
+      })),
     ];
 
     const findRowForLine = (line: CombinedLine): FlipResult | undefined => {
@@ -398,8 +435,16 @@ export function BatchBuilderPopup({
         if (row.TypeID !== line.type_id) return false;
         const rowBuyLocationId = safeNumber(row.BuyLocationID);
         const rowSellLocationId = safeNumber(row.SellLocationID);
-        if (line.buy_location_id > 0 && rowBuyLocationId !== line.buy_location_id) return false;
-        if (line.sell_location_id > 0 && rowSellLocationId !== line.sell_location_id) return false;
+        if (
+          line.buy_location_id > 0 &&
+          rowBuyLocationId !== line.buy_location_id
+        )
+          return false;
+        if (
+          line.sell_location_id > 0 &&
+          rowSellLocationId !== line.sell_location_id
+        )
+          return false;
         return true;
       });
       if (exact) return exact;
@@ -411,7 +456,10 @@ export function BatchBuilderPopup({
       matchedRow?: FlipResult,
     ): { stationName: string; usedIdFallback: boolean } => {
       if (hasStationName(matchedRow?.BuyStation)) {
-        return { stationName: matchedRow.BuyStation.trim(), usedIdFallback: false };
+        return {
+          stationName: matchedRow.BuyStation.trim(),
+          usedIdFallback: false,
+        };
       }
 
       const buyLocationId = safeNumber(line.buy_location_id);
@@ -422,22 +470,33 @@ export function BatchBuilderPopup({
         }
 
         if (
-          buyLocationId === safeNumber(baseBatchManifest.base_buy_location_id) &&
+          buyLocationId ===
+            safeNumber(baseBatchManifest.base_buy_location_id) &&
           hasStationName(anchorRow?.BuyStation)
         ) {
-          return { stationName: anchorRow.BuyStation.trim(), usedIdFallback: false };
+          return {
+            stationName: anchorRow.BuyStation.trim(),
+            usedIdFallback: false,
+          };
         }
         if (
           buyLocationId === safeNumber(baseBatchManifest.origin_location_id) &&
           hasStationName(baseBatchManifest.origin_location_name)
         ) {
-          return { stationName: baseBatchManifest.origin_location_name.trim(), usedIdFallback: false };
+          return {
+            stationName: baseBatchManifest.origin_location_name.trim(),
+            usedIdFallback: false,
+          };
         }
         if (
-          buyLocationId === safeNumber(baseBatchManifest.base_sell_location_id) &&
+          buyLocationId ===
+            safeNumber(baseBatchManifest.base_sell_location_id) &&
           hasStationName(anchorRow?.SellStation)
         ) {
-          return { stationName: anchorRow.SellStation.trim(), usedIdFallback: false };
+          return {
+            stationName: anchorRow.SellStation.trim(),
+            usedIdFallback: false,
+          };
         }
 
         const metaMappedName = locationNameMetaById.get(buyLocationId);
@@ -457,25 +516,36 @@ export function BatchBuilderPopup({
         routeIndexBySystemID.set(systemID, idx);
       }
     });
-    const stations = new Map<string, OrderedRouteManifest["stations"][number]>();
+    const stations = new Map<
+      string,
+      OrderedRouteManifest["stations"][number]
+    >();
     const stationSystemByKey = new Map<string, number>();
     for (const line of combinedLines) {
       const matchedRow = findRowForLine(line);
       const matchedSellRow =
         matchedRow ??
-        routeRows.find((row) => safeNumber(row.SellLocationID) === line.sell_location_id);
-      const { stationName, usedIdFallback } = resolveBuyStationName(line, matchedRow);
+        routeRows.find(
+          (row) => safeNumber(row.SellLocationID) === line.sell_location_id,
+        );
+      const { stationName, usedIdFallback } = resolveBuyStationName(
+        line,
+        matchedRow,
+      );
       if (usedIdFallback && line.buy_location_id > 0) {
         fallbackToIdStationIds.add(line.buy_location_id);
       }
-      const primaryKey = line.buy_location_id > 0 ? `id:${line.buy_location_id}` : "";
+      const primaryKey =
+        line.buy_location_id > 0 ? `id:${line.buy_location_id}` : "";
       const fallbackKey = normalizeStationName(stationName);
       const stationKey = primaryKey || `name:${fallbackKey}`;
       if (!stations.has(stationKey)) {
         stationOrder.push(stationKey);
         stationSystemByKey.set(stationKey, line.buy_system_id);
         const jumpsToBuy = toKnownJumpCount(matchedRow?.BuyJumps);
-        const jumpsBuyToSell = toKnownJumpCount(matchedRow?.SellJumps ?? matchedSellRow?.SellJumps);
+        const jumpsBuyToSell = toKnownJumpCount(
+          matchedRow?.SellJumps ?? matchedSellRow?.SellJumps,
+        );
         stations.set(stationKey, {
           station_key: stationKey,
           buy_station_name: stationName,
@@ -534,14 +604,20 @@ export function BatchBuilderPopup({
 
     if (fallbackToIdStationIds.size > 0) {
       const ids = Array.from(fallbackToIdStationIds).sort((a, b) => a - b);
-      console.warn("[BatchBuilderPopup] copyMergedManifest used station ID fallback labels", {
-        station_ids: ids,
-      });
+      console.warn(
+        "[BatchBuilderPopup] copyMergedManifest used station ID fallback labels",
+        {
+          station_ids: ids,
+        },
+      );
     }
 
     const orderedStations = stationOrder
       .map((key) => stations.get(key))
-      .filter((station): station is OrderedRouteManifest["stations"][number] => station != null);
+      .filter(
+        (station): station is OrderedRouteManifest["stations"][number] =>
+          station != null,
+      );
     orderedStations.sort((left, right) => {
       const leftSystem = stationSystemByKey.get(left.station_key) ?? 0;
       const rightSystem = stationSystemByKey.get(right.station_key) ?? 0;
@@ -565,7 +641,8 @@ export function BatchBuilderPopup({
         total_profit_isk: mergedManifest.total_profit_isk,
         total_jumps: selectedOption.total_jumps,
         isk_per_jump:
-          selectedOption.total_jumps > 0 && Number.isFinite(selectedOption.isk_per_jump)
+          selectedOption.total_jumps > 0 &&
+          Number.isFinite(selectedOption.isk_per_jump)
             ? selectedOption.isk_per_jump
             : undefined,
       },
@@ -578,32 +655,31 @@ export function BatchBuilderPopup({
       manifest: orderedManifest,
       t,
     });
-    const baseManifestItems = combinedLines.map((line) => {
-      const units = Math.max(0, Math.floor(safeNumber(line.units)));
-      const volume = safeNumber(line.unit_volume_m3) * units;
-      const buyTotal = safeNumber(line.buy_total_isk);
-      const sellTotal = safeNumber(line.sell_total_isk);
-      return formatDetailedManifestItemLine(
-        {
-          typeName: line.type_name,
-          qty: units,
-          buyTotal,
-          buyPer: units > 0 ? buyTotal / units : 0,
-          sellTotal,
-          sellPer: units > 0 ? sellTotal / units : 0,
-          volume,
-          profit: safeNumber(line.profit_total_isk),
-        },
-        t,
-      );
+    const groupedSections = formatGroupedRouteSections({
+      baseLines: baseBatchManifest.base_lines,
+      addedLines: selectedOption.lines,
+      formatDetailedLine: (line) => formatDetailedManifestItemLine(line, t),
     });
     const manifestParts = [routeManifestText];
-    if (baseManifestItems.length > 0) {
-      manifestParts.push("", t("batchBuilderMergedManifestBaseItemsHeader"), ...baseManifestItems);
+    if (groupedSections.length > 0) {
+      manifestParts.push(
+        "",
+        t("batchBuilderMergedManifestBaseItemsHeader"),
+        ...groupedSections,
+      );
     }
     await navigator.clipboard.writeText(manifestParts.join("\n"));
     addToast(t("batchBuilderCopiedMerged"), "success", 2200);
-  }, [baseBatchManifest, mergedManifest, addToast, t, routeOptions, selectedOptionId, allowedRows, anchorRow]);
+  }, [
+    baseBatchManifest,
+    mergedManifest,
+    addToast,
+    t,
+    routeOptions,
+    selectedOptionId,
+    allowedRows,
+    anchorRow,
+  ]);
 
   const startBatchCreateRoute = useCallback(async () => {
     if (!baseBatchManifest) {
@@ -623,8 +699,13 @@ export function BatchBuilderPopup({
 
     const requestId = activeRequestRef.current + 1;
     activeRequestRef.current = requestId;
-    const normalizedRouteMaxJumps = Math.max(0, Math.floor(safeNumber(routeMaxJumps)));
-    const normalizedMaxDetourJumpsPerNode = Number.isFinite(maxDetourJumpsPerNode)
+    const normalizedRouteMaxJumps = Math.max(
+      0,
+      Math.floor(safeNumber(routeMaxJumps)),
+    );
+    const normalizedMaxDetourJumpsPerNode = Number.isFinite(
+      maxDetourJumpsPerNode,
+    )
       ? Math.max(0, Math.floor(safeNumber(maxDetourJumpsPerNode)))
       : undefined;
 
@@ -634,7 +715,8 @@ export function BatchBuilderPopup({
       origin_location_id: baseBatchManifest.origin_location_id,
       origin_location_name: baseBatchManifest.origin_location_name,
       current_system_id: currentSystemId ?? baseBatchManifest.origin_system_id,
-      current_location_id: currentLocationId ?? baseBatchManifest.origin_location_id,
+      current_location_id:
+        currentLocationId ?? baseBatchManifest.origin_location_id,
       base_batch: baseBatchManifest,
       cargo_limit_m3: baseBatchManifest.cargo_limit_m3,
       remaining_capacity_m3: baseBatchManifest.remaining_capacity_m3,
@@ -660,7 +742,10 @@ export function BatchBuilderPopup({
         scanSourceTab === "radius"
           ? allowedRows
               .filter(
-                (row) => row.TypeID > 0 && (row.BuyLocationID ?? 0) > 0 && (row.SellLocationID ?? 0) > 0,
+                (row) =>
+                  row.TypeID > 0 &&
+                  (row.BuyLocationID ?? 0) > 0 &&
+                  (row.SellLocationID ?? 0) > 0,
               )
               .map((row) => ({
                 type_id: row.TypeID,
@@ -680,7 +765,10 @@ export function BatchBuilderPopup({
                     ? safeNumber(row.ExpectedSellPrice)
                     : safeNumber(row.SellPrice),
               }))
-              .filter((candidate) => candidate.units > 0 && candidate.unit_volume_m3 > 0)
+              .filter(
+                (candidate) =>
+                  candidate.units > 0 && candidate.unit_volume_m3 > 0,
+              )
           : undefined,
       deterministic_sort: {
         primary: "isk_per_jump",
@@ -710,7 +798,11 @@ export function BatchBuilderPopup({
       const options = response.ranked_options ?? [];
       const diagnostics = response.diagnostics ?? [];
       setRouteDiagnostics(diagnostics);
-      if (diagnostics.some((entry) => /fallback|stale|market-only|unavailable/i.test(entry))) {
+      if (
+        diagnostics.some((entry) =>
+          /fallback|stale|market-only|unavailable/i.test(entry),
+        )
+      ) {
         addToast(diagnostics[0], "warning", 3500);
       }
       setRouteOptions(options);
@@ -722,16 +814,24 @@ export function BatchBuilderPopup({
       setSelectedOptionId(null);
       setMergedManifest(null);
       setRouteState("results");
-      setLastProgress(t("batchBuilderRouteSearchComplete", { count: options.length }));
+      setLastProgress(
+        t("batchBuilderRouteSearchComplete", { count: options.length }),
+      );
     } catch (error) {
       const isAbort = controller.signal.aborted;
       setRouteState("results");
       setRouteError(
-        isAbort ? t("batchBuilderRouteStaleRequest") : t("batchBuilderRouteRequestFailed"),
+        isAbort
+          ? t("batchBuilderRouteStaleRequest")
+          : t("batchBuilderRouteRequestFailed"),
       );
       if (!isAbort) {
         const msg = error instanceof Error ? error.message : String(error);
-        addToast(`${t("batchBuilderRouteRequestFailed")}: ${msg}`, "error", 3000);
+        addToast(
+          `${t("batchBuilderRouteRequestFailed")}: ${msg}`,
+          "error",
+          3000,
+        );
       }
     }
   }, [
@@ -786,11 +886,15 @@ export function BatchBuilderPopup({
               step={1}
               value={cargoLimitM3}
               onChange={(e) =>
-                setCargoLimitM3(Math.max(0, Number.parseInt(e.target.value || "0", 10) || 0))
+                setCargoLimitM3(
+                  Math.max(0, Number.parseInt(e.target.value || "0", 10) || 0),
+                )
               }
               className="w-36 px-2 py-1 bg-eve-input border border-eve-border rounded-sm text-eve-text font-mono text-sm"
             />
-            <span className="text-[10px] text-eve-dim/80">{t("batchBuilderCargoHint")}</span>
+            <span className="text-[10px] text-eve-dim/80">
+              {t("batchBuilderCargoHint")}
+            </span>
           </label>
 
           <button
@@ -817,7 +921,11 @@ export function BatchBuilderPopup({
             onClick={() => {
               void startBatchCreateRoute();
             }}
-            disabled={routeState === "searching" || !!createRouteError || batch.lines.length === 0}
+            disabled={
+              routeState === "searching" ||
+              !!createRouteError ||
+              batch.lines.length === 0
+            }
             className="px-3 py-1.5 rounded-sm border border-blue-400/70 text-blue-300 hover:bg-blue-400/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold uppercase tracking-wider"
           >
             {t("batchBuilderBatchCreateRoute")}
@@ -848,15 +956,22 @@ export function BatchBuilderPopup({
             className="border border-eve-border rounded-sm p-3 text-sm text-eve-dim flex items-center gap-2"
           >
             <span className="inline-block w-3 h-3 border-2 border-eve-accent/40 border-t-eve-accent rounded-full animate-spin" />
-            <span>{lastProgress || t("batchBuilderRouteSearchingProgress")}</span>
+            <span>
+              {lastProgress || t("batchBuilderRouteSearchingProgress")}
+            </span>
           </div>
         )}
 
         {routeError && routeState !== "idle" && routeState !== "searching" && (
-          <div className="border border-red-500/40 rounded-sm p-2 text-xs text-red-300">{routeError}</div>
+          <div className="border border-red-500/40 rounded-sm p-2 text-xs text-red-300">
+            {routeError}
+          </div>
         )}
         {routeDiagnostics.length > 0 && (
-          <div className="border border-amber-500/40 rounded-sm p-2 text-xs text-amber-200" data-testid="route-diagnostics">
+          <div
+            className="border border-amber-500/40 rounded-sm p-2 text-xs text-amber-200"
+            data-testid="route-diagnostics"
+          >
             {routeDiagnostics.map((entry, idx) => (
               <p key={`${idx}-${entry}`}>{entry}</p>
             ))}
@@ -866,13 +981,20 @@ export function BatchBuilderPopup({
         {routeOptions.length > 0 && (
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-2">
-              <div className="text-xs text-eve-dim">{t("batchBuilderRouteOptionsTitle")}</div>
+              <div className="text-xs text-eve-dim">
+                {t("batchBuilderRouteOptionsTitle")}
+              </div>
               <label className="text-xs text-eve-dim flex items-center gap-2">
                 <span>Sort</span>
                 <select
                   value={routeSortBy}
                   onChange={(e) =>
-                    setRouteSortBy(e.target.value as "execution_score" | "isk_per_jump" | "total_profit_isk")
+                    setRouteSortBy(
+                      e.target.value as
+                        | "execution_score"
+                        | "isk_per_jump"
+                        | "total_profit_isk",
+                    )
                   }
                   className="px-2 py-1 bg-eve-input border border-eve-border rounded-sm text-eve-text"
                 >
@@ -884,7 +1006,9 @@ export function BatchBuilderPopup({
             </div>
             <div className="grid grid-cols-1 gap-2">
               {sortedRouteOptions.map((option) => {
-                const optionMerged = baseBatchManifest ? buildMergedManifest(baseBatchManifest, option) : null;
+                const optionMerged = baseBatchManifest
+                  ? buildMergedManifest(baseBatchManifest, option)
+                  : null;
                 const selected = option.option_id === selectedOptionId;
                 return (
                   <button
@@ -911,30 +1035,83 @@ export function BatchBuilderPopup({
                       Execution Score: {option.execution_score.toFixed(1)}
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-1 text-[11px] mt-2">
-                      <div className="text-eve-dim">{t("batchBuilderRouteAddedItems")}: {option.line_count}</div>
                       <div className="text-eve-dim">
-                        {t("batchBuilderRouteAddedVolume")}: {option.added_volume_m3.toLocaleString(undefined, {
+                        {t("batchBuilderRouteAddedItems")}: {option.line_count}
+                      </div>
+                      <div className="text-eve-dim">
+                        {t("batchBuilderRouteAddedVolume")}:{" "}
+                        {option.added_volume_m3.toLocaleString(undefined, {
                           maximumFractionDigits: 1,
                         })}
                       </div>
-                      <div className="text-eve-dim">{t("batchBuilderRouteAddedCapital")}: {formatISK(option.total_buy_isk)}</div>
-                      <div className="text-green-400">{t("batchBuilderRouteAddedProfit")}: {formatISK(option.total_profit_isk)}</div>
-                      <div className="text-eve-text">{t("batchBuilderRouteMergedVolume")}: {optionMerged?.total_volume_m3.toLocaleString(undefined, { maximumFractionDigits: 1 }) ?? "-"}</div>
-                      <div className="text-eve-text">{t("batchBuilderRouteMergedCapital")}: {optionMerged ? formatISK(optionMerged.total_buy_isk) : "-"}</div>
-                      <div className="text-eve-text">{t("batchBuilderRouteMergedGross")}: {optionMerged ? formatISK(optionMerged.total_sell_isk) : "-"}</div>
-                      <div className="text-green-300">{t("batchBuilderRouteMergedProfit")}: {optionMerged ? formatISK(optionMerged.total_profit_isk) : "-"}</div>
+                      <div className="text-eve-dim">
+                        {t("batchBuilderRouteAddedCapital")}:{" "}
+                        {formatISK(option.total_buy_isk)}
+                      </div>
+                      <div className="text-green-400">
+                        {t("batchBuilderRouteAddedProfit")}:{" "}
+                        {formatISK(option.total_profit_isk)}
+                      </div>
+                      <div className="text-eve-text">
+                        {t("batchBuilderRouteMergedVolume")}:{" "}
+                        {optionMerged?.total_volume_m3.toLocaleString(
+                          undefined,
+                          { maximumFractionDigits: 1 },
+                        ) ?? "-"}
+                      </div>
+                      <div className="text-eve-text">
+                        {t("batchBuilderRouteMergedCapital")}:{" "}
+                        {optionMerged
+                          ? formatISK(optionMerged.total_buy_isk)
+                          : "-"}
+                      </div>
+                      <div className="text-eve-text">
+                        {t("batchBuilderRouteMergedGross")}:{" "}
+                        {optionMerged
+                          ? formatISK(optionMerged.total_sell_isk)
+                          : "-"}
+                      </div>
+                      <div className="text-green-300">
+                        {t("batchBuilderRouteMergedProfit")}:{" "}
+                        {optionMerged
+                          ? formatISK(optionMerged.total_profit_isk)
+                          : "-"}
+                      </div>
                     </div>
                     <div className="mt-2 text-[11px] text-eve-dim">
-                      {t("batchBuilderRouteIskPerJump")}: {formatISK(option.isk_per_jump)} | {t("batchBuilderRouteJumpSegments")}: {option.total_jumps}
+                      {t("batchBuilderRouteIskPerJump")}:{" "}
+                      {formatISK(option.isk_per_jump)} |{" "}
+                      {t("batchBuilderRouteJumpSegments")}: {option.total_jumps}
+                    </div>
+                    <div className="mt-2 text-[11px] text-eve-dim grid grid-cols-1 md:grid-cols-3 gap-1">
+                      <div>
+                        Core: {option.core_line_count} items /{" "}
+                        {formatISK(option.core_profit_total_isk)}
+                      </div>
+                      <div>
+                        Safe filler: {option.safe_filler_line_count} /{" "}
+                        {formatISK(option.safe_filler_profit_isk)}
+                      </div>
+                      <div>
+                        Stretch: {option.stretch_filler_line_count} /{" "}
+                        {formatISK(option.stretch_filler_profit_isk)}
+                      </div>
                     </div>
                     {!!option.score_breakdown?.length && (
                       <details className="mt-2 text-[11px] text-eve-dim">
-                        <summary className="cursor-pointer">Why this rank?</summary>
+                        <summary className="cursor-pointer">
+                          Why this rank?
+                        </summary>
                         <div className="mt-1 grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-1">
                           {option.score_breakdown.map((factor) => (
-                            <div key={`${option.option_id}-${factor.key}`} className="font-mono">
-                              {factor.label}: {factor.contribution >= 0 ? "+" : ""}
-                              {factor.contribution.toFixed(3)} (w {factor.weight.toFixed(2)} · n{" "}
+                            <div
+                              key={`${option.option_id}-${factor.key}`}
+                              className="font-mono"
+                            >
+                              {factor.label}:{" "}
+                              {factor.contribution >= 0 ? "+" : ""}
+                              {factor.contribution.toFixed(3)} (w{" "}
+                              {factor.weight.toFixed(2)} · n{" "}
                               {factor.normalized.toFixed(2)})
                             </div>
                           ))}
@@ -956,21 +1133,36 @@ export function BatchBuilderPopup({
           <>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs">
               <div className="border border-eve-border rounded-sm p-2 bg-eve-panel">
-                <div className="text-eve-dim">{t("batchBuilderTotalVolume")}</div>
+                <div className="text-eve-dim">
+                  {t("batchBuilderTotalVolume")}
+                </div>
                 <div className="text-eve-accent font-mono mt-0.5">
-                  {batch.totalVolume.toLocaleString(undefined, { maximumFractionDigits: 1 })} m3
+                  {batch.totalVolume.toLocaleString(undefined, {
+                    maximumFractionDigits: 1,
+                  })}{" "}
+                  m3
                 </div>
               </div>
               <div className="border border-eve-border rounded-sm p-2 bg-eve-panel">
-                <div className="text-eve-dim">{t("batchBuilderTotalProfit")}</div>
-                <div className="text-green-400 font-mono mt-0.5">{formatISK(batch.totalProfit)}</div>
+                <div className="text-eve-dim">
+                  {t("batchBuilderTotalProfit")}
+                </div>
+                <div className="text-green-400 font-mono mt-0.5">
+                  {formatISK(batch.totalProfit)}
+                </div>
               </div>
               <div className="border border-eve-border rounded-sm p-2 bg-eve-panel">
-                <div className="text-eve-dim">{t("batchBuilderTotalCapital")}</div>
-                <div className="text-eve-text font-mono mt-0.5">{formatISK(batch.totalCapital)}</div>
+                <div className="text-eve-dim">
+                  {t("batchBuilderTotalCapital")}
+                </div>
+                <div className="text-eve-text font-mono mt-0.5">
+                  {formatISK(batch.totalCapital)}
+                </div>
               </div>
               <div className="border border-eve-border rounded-sm p-2 bg-eve-panel">
-                <div className="text-eve-dim">{t("batchBuilderCargoUsage")}</div>
+                <div className="text-eve-dim">
+                  {t("batchBuilderCargoUsage")}
+                </div>
                 <div className="text-yellow-300 font-mono mt-0.5">
                   {batch.usedPercent != null
                     ? `${batch.usedPercent.toFixed(1)}%`
@@ -978,7 +1170,7 @@ export function BatchBuilderPopup({
                 </div>
                 {batch.remainingM3 != null && (
                   <div className="text-[11px] text-eve-dim mt-0.5">
-                    {t("batchBuilderCargoRemaining")}: {" "}
+                    {t("batchBuilderCargoRemaining")}:{" "}
                     {batch.remainingM3.toLocaleString(undefined, {
                       maximumFractionDigits: 1,
                     })}{" "}
@@ -992,12 +1184,24 @@ export function BatchBuilderPopup({
               <table className="w-full text-xs">
                 <thead className="bg-eve-panel border-b border-eve-border text-eve-dim uppercase tracking-wider">
                   <tr>
-                    <th className="text-left px-2 py-1.5">{t("batchBuilderColItem")}</th>
-                    <th className="text-right px-2 py-1.5">{t("batchBuilderColQty")}</th>
-                    <th className="text-right px-2 py-1.5">{t("batchBuilderColVolume")}</th>
-                    <th className="text-right px-2 py-1.5">{t("batchBuilderColCapital")}</th>
-                    <th className="text-right px-2 py-1.5">{t("batchBuilderColProfit")}</th>
-                    <th className="text-right px-2 py-1.5">{t("batchBuilderColDensity")}</th>
+                    <th className="text-left px-2 py-1.5">
+                      {t("batchBuilderColItem")}
+                    </th>
+                    <th className="text-right px-2 py-1.5">
+                      {t("batchBuilderColQty")}
+                    </th>
+                    <th className="text-right px-2 py-1.5">
+                      {t("batchBuilderColVolume")}
+                    </th>
+                    <th className="text-right px-2 py-1.5">
+                      {t("batchBuilderColCapital")}
+                    </th>
+                    <th className="text-right px-2 py-1.5">
+                      {t("batchBuilderColProfit")}
+                    </th>
+                    <th className="text-right px-2 py-1.5">
+                      {t("batchBuilderColDensity")}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1006,12 +1210,16 @@ export function BatchBuilderPopup({
                       key={routeLineKey(line.row)}
                       className="border-b border-eve-border/50 last:border-b-0"
                     >
-                      <td className="px-2 py-1.5 text-eve-text">{line.row.TypeName}</td>
+                      <td className="px-2 py-1.5 text-eve-text">
+                        {line.row.TypeName}
+                      </td>
                       <td className="px-2 py-1.5 text-right font-mono text-eve-text">
                         {line.units.toLocaleString()}
                       </td>
                       <td className="px-2 py-1.5 text-right font-mono text-eve-dim">
-                        {line.volume.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                        {line.volume.toLocaleString(undefined, {
+                          maximumFractionDigits: 1,
+                        })}
                       </td>
                       <td className="px-2 py-1.5 text-right font-mono text-eve-dim">
                         {formatISK(line.capital)}
