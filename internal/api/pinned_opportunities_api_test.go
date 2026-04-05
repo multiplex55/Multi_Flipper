@@ -147,3 +147,35 @@ func TestPinnedOpportunityHandlers_SnapshotBatchEndpoint(t *testing.T) {
 		t.Fatalf("expected 1 snapshot, got %d", len(snaps))
 	}
 }
+
+
+func TestPinnedOpportunityHandlers_ListIncludesEnrichedPayloadFields(t *testing.T) {
+	srv, _ := newPinnedAPITestServer(t)
+	h := srv.Handler()
+
+	add := `{"tab":"scan","opportunity_key":"flip:34:1:2","payload":{"source":"scan","opportunity_key":"flip:34:1:2","type_id":34,"type_name":"Tritanium","source_label":"Scan","buy_label":"Jita","sell_label":"Amarr","metrics":{"profit":1000,"margin":10,"volume":20,"route_risk":3}}}`
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, pinnedReq(http.MethodPost, "/api/pinned-opportunities", add, "user-a"))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	listRec := httptest.NewRecorder()
+	h.ServeHTTP(listRec, pinnedReq(http.MethodGet, "/api/pinned-opportunities?tab=scan", "", "user-a"))
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("GET list status=%d body=%s", listRec.Code, listRec.Body.String())
+	}
+	var items []db.PinnedOpportunity
+	if err := json.NewDecoder(listRec.Body).Decode(&items); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items len=%d want 1", len(items))
+	}
+	if !bytes.Contains([]byte(items[0].PayloadJSON), []byte(`"type_name":"Tritanium"`)) {
+		t.Fatalf("expected type_name in payload_json: %s", items[0].PayloadJSON)
+	}
+	if !bytes.Contains([]byte(items[0].PayloadJSON), []byte(`"buy_label":"Jita"`)) {
+		t.Fatalf("expected buy_label in payload_json: %s", items[0].PayloadJSON)
+	}
+}

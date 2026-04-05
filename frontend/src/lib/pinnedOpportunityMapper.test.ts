@@ -85,6 +85,8 @@ describe("pinnedOpportunityMapper", () => {
     const station = mapStationRowToPinnedOpportunity({ TypeID: 1, TypeName: "A", Volume: 1, BuyPrice: 1, SellPrice: 2, Spread: 1, MarginPercent: 1, ProfitPerUnit: 1, DailyVolume: 1, BuyOrderCount: 1, SellOrderCount: 1, BuyVolume: 1, SellVolume: 1, TotalProfit: 1, ROI: 1, StationName: "X", StationID: 99, CapitalRequired: 1, NowROI: 1, PeriodROI: 1, BuyUnitsPerDay: 1, SellUnitsPerDay: 1, BvSRatio: 1, DOS: 1, VWAP: 1, PVI: 1, OBDS: 1, SDS: 1, CI: 1, CTS: 1, AvgPrice: 1, PriceHigh: 1, PriceLow: 1, IsExtremePriceFlag: false, IsHighRiskFlag: false } as StationTrade);
     expect(station.opportunity_key.length).toBeGreaterThan(0);
     expect(station.metrics).toEqual(expect.objectContaining({ profit: expect.any(Number), margin: expect.any(Number), volume: expect.any(Number), route_risk: expect.any(Number) }));
+    expect(station.source_label).toBe("Station");
+    expect(station.buy_label).toBeTruthy();
   });
 
   it("normalizes null/optional numerics to zero", () => {
