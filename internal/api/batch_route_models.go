@@ -82,6 +82,8 @@ type RouteOptionRankingInputs struct {
 
 type RouteAdditionOption struct {
 	OptionID               string                             `json:"option_id"`
+	StrategyID             string                             `json:"strategy_id,omitempty"`
+	StrategyLabel          string                             `json:"strategy_label,omitempty"`
 	Rank                   int                                `json:"rank"`
 	Lines                  []RouteAdditionLine                `json:"lines"`
 	LineCount              int                                `json:"line_count"`

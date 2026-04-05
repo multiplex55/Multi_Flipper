@@ -141,6 +141,47 @@ func TestBuildBatchRouteOptions_MultipleRankedOptionsDeterministic(t *testing.T)
 	}
 }
 
+func TestBuildBatchRouteOptions_ExpandedStrategiesProduceDistinctOptions(t *testing.T) {
+	scanner := testBatchRouteScanner()
+	params := BatchCreateRouteParams{
+		OriginSystemID:      10,
+		CurrentSystemID:     10,
+		FinalSellSystemID:   30,
+		RemainingCapacityM3: 10,
+		CargoLimitM3:        20,
+	}
+	lines := []BatchCreateRouteLine{
+		{TypeID: 1, Units: 3, UnitVolumeM3: 1, ProfitTotalISK: 220, BuyTotalISK: 300, SellTotalISK: 520, RouteJumps: 2, BuySystemID: 10, BuyLocationID: 101, SellSystemID: 30, SellLocationID: 201, FillConfidence: 0.95, StaleRisk: 0.05, Concentration: 0.1},
+		{TypeID: 2, Units: 5, UnitVolumeM3: 1, ProfitTotalISK: 210, BuyTotalISK: 900, SellTotalISK: 1110, RouteJumps: 5, BuySystemID: 20, BuyLocationID: 102, SellSystemID: 30, SellLocationID: 201, FillConfidence: 0.45, StaleRisk: 0.5, Concentration: 0.5},
+		{TypeID: 3, Units: 2, UnitVolumeM3: 1, ProfitTotalISK: 170, BuyTotalISK: 120, SellTotalISK: 290, RouteJumps: 1, BuySystemID: 10, BuyLocationID: 103, SellSystemID: 30, SellLocationID: 201, FillConfidence: 0.8, StaleRisk: 0.1, Concentration: 0.1},
+		{TypeID: 4, Units: 1, UnitVolumeM3: 4, ProfitTotalISK: 300, BuyTotalISK: 1700, SellTotalISK: 2000, RouteJumps: 9, BuySystemID: 40, BuyLocationID: 104, SellSystemID: 30, SellLocationID: 201, FillConfidence: 0.35, StaleRisk: 0.6, Concentration: 0.7},
+		{TypeID: 5, Units: 1, UnitVolumeM3: 3, ProfitTotalISK: 140, BuyTotalISK: 80, SellTotalISK: 220, RouteJumps: 2, BuySystemID: 20, BuyLocationID: 105, SellSystemID: 30, SellLocationID: 201, FillConfidence: 0.75, StaleRisk: 0.2, Concentration: 0.2},
+		{TypeID: 6, Units: 2, UnitVolumeM3: 1, ProfitTotalISK: 130, BuyTotalISK: 70, SellTotalISK: 200, RouteJumps: 3, BuySystemID: 10, BuyLocationID: 106, SellSystemID: 30, SellLocationID: 201, FillConfidence: 0.92, StaleRisk: 0.08, Concentration: 0.15},
+	}
+
+	options := scanner.buildBatchRouteOptionsFromCandidates(lines, params)
+	if len(options) < 7 {
+		t.Fatalf("expected broad strategy coverage, got %d options", len(options))
+	}
+	want := map[string]bool{
+		"safe_fillers_first":  false,
+		"low_attention":       false,
+		"capital_light":       false,
+		"balanced_practical":  false,
+		"anchor_plus_fillers": false,
+	}
+	for _, opt := range options {
+		if _, ok := want[opt.StrategyID]; ok {
+			want[opt.StrategyID] = true
+		}
+	}
+	for strategyID, seen := range want {
+		if !seen {
+			t.Fatalf("expected strategy option for %s", strategyID)
+		}
+	}
+}
+
 func TestBatchRouteCandidateLines_NoOptionsOnlyWhenNoProfitableReachableCandidates(t *testing.T) {
 	scanner := testBatchRouteScanner()
 	path := scanner.SDE.Universe.GetPath(10, 30, 0)

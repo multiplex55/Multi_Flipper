@@ -316,6 +316,8 @@ export interface RouteAdditionLine {
 
 export interface RouteAdditionOption {
   option_id: string;
+  strategy_id?: string;
+  strategy_label?: string;
   rank: number;
   lines: RouteAdditionLine[];
   line_count: number;
