@@ -228,4 +228,46 @@ describe("batchMetrics", () => {
     expect(byRoute[routeAKey].routeRiskNoHistoryCount).toBeGreaterThanOrEqual(0);
     expect(byRoute[routeBKey].routeItemCount).toBe(1);
   });
+
+  it("regresses route-pack ranking when weakest execution quality uses requested pre-execution units", () => {
+    const routeTrimmedLooksPerfect = makeRow({
+      TypeID: 4001,
+      BuyLocationID: 1001,
+      SellLocationID: 2001,
+      BuySystemID: 31000001,
+      SellSystemID: 31000002,
+      PreExecutionUnits: 100,
+      UnitsToBuy: 60,
+      FilledQty: 60,
+      BuyOrderRemain: 60,
+      SellOrderRemain: 60,
+      SlippageBuyPct: 0,
+      SlippageSellPct: 0,
+      DayTargetPeriodPrice: 120,
+    });
+    const routeActuallyPerfect = makeRow({
+      TypeID: 4002,
+      BuyLocationID: 1002,
+      SellLocationID: 2002,
+      BuySystemID: 32000001,
+      SellSystemID: 32000002,
+      PreExecutionUnits: 60,
+      UnitsToBuy: 60,
+      FilledQty: 60,
+      BuyOrderRemain: 60,
+      SellOrderRemain: 60,
+      SlippageBuyPct: 0,
+      SlippageSellPct: 0,
+      DayTargetPeriodPrice: 120,
+    });
+
+    const { byRoute } = buildRouteBatchMetadata([routeTrimmedLooksPerfect, routeActuallyPerfect], 1_000);
+    const rankedRouteKeys = Object.entries(byRoute)
+      .sort((a, b) => b[1].routeWeakestExecutionQuality - a[1].routeWeakestExecutionQuality)
+      .map(([key]) => key);
+
+    expect(byRoute[routeGroupKey(routeTrimmedLooksPerfect)].routeWeakestExecutionQuality).toBeLessThan(100);
+    expect(byRoute[routeGroupKey(routeActuallyPerfect)].routeWeakestExecutionQuality).toBe(100);
+    expect(rankedRouteKeys[0]).toBe(routeGroupKey(routeActuallyPerfect));
+  });
 });
