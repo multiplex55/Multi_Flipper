@@ -10,11 +10,13 @@ interface OpportunityScorePopoverProps {
 }
 
 const factorLabels: Record<string, string> = {
-  profit: "Profit",
-  risk: "Risk",
-  velocity: "Velocity",
-  jumps: "Jumps",
-  capital: "Capital",
+  expectedProfit: "Expected profit",
+  dailyRealizableProfit: "Daily realizable",
+  executionQuality: "Execution quality",
+  jumpBurden: "Jump burden",
+  capitalEfficiency: "Capital efficiency",
+  cargoEfficiency: "Cargo efficiency",
+  marketStability: "Market stability",
 };
 
 function formatRaw(value: number | null): string {
@@ -77,7 +79,7 @@ function OpportunityScoreDetailsBody({
           <div className="text-[10px] text-green-300 uppercase mb-1">Top positives</div>
           {explanation.topPositives.map((item) => (
             <div key={`p-${item.factor}`} className="text-green-200/90">
-              {factorLabels[item.factor]}: +{item.contribution.toFixed(1)}
+              {factorLabels[item.factor]}: +{Math.abs(item.contribution).toFixed(1)}
             </div>
           ))}
         </div>
@@ -107,7 +109,7 @@ function OpportunityScoreDetailsBody({
               <td className="py-1 text-right font-mono">{formatRaw(factor.rawMetric)}</td>
               <td className="py-1 text-right font-mono">{factor.normalized.toFixed(1)}</td>
               <td className="py-1 text-right font-mono">{(factor.weight * 100).toFixed(0)}%</td>
-              <td className="py-1 text-right font-mono">{factor.contribution.toFixed(1)}</td>
+              <td className="py-1 text-right font-mono">{factor.contribution > 0 ? `+${factor.contribution.toFixed(1)}` : factor.contribution.toFixed(1)}</td>
             </tr>
           ))}
         </tbody>

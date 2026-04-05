@@ -1,6 +1,14 @@
+import { executionQualityForFlip } from "@/lib/executionQuality";
 import type { ContractResult, FlipResult, StationTrade, StrategyScoreConfig } from "@/lib/types";
 
-export type OpportunityFactor = "profit" | "risk" | "velocity" | "jumps" | "capital";
+export type OpportunityFactor =
+  | "expectedProfit"
+  | "dailyRealizableProfit"
+  | "executionQuality"
+  | "jumpBurden"
+  | "capitalEfficiency"
+  | "cargoEfficiency"
+  | "marketStability";
 
 export interface OpportunityWeightProfile {
   profit?: number;
@@ -48,30 +56,137 @@ export interface OpportunityExplanation {
 }
 
 interface FactorMetricSet {
-  profit: number | null;
-  risk: number | null;
-  velocity: number | null;
-  jumps: number | null;
-  capital: number | null;
+  expectedProfit: number | null;
+  dailyRealizableProfit: number | null;
+  executionQuality: number | null;
+  jumpBurden: number | null;
+  capitalEfficiency: number | null;
+  cargoEfficiency: number | null;
+  marketStability: number | null;
+}
+
+interface FactorNormalizationConfig {
+  floor: number;
+  ceiling: number;
+  invert?: boolean;
+  curve?: "linear" | "sqrt" | "log";
+  fallbackNeutral?: number;
+  percentileLower: number;
+  percentileUpper: number;
+  minSpan: number;
+}
+
+interface FactorRangeContext {
+  low: number;
+  high: number;
+  floor: number;
+  ceiling: number;
+}
+
+export interface OpportunityScanContext {
+  ranges: Partial<Record<OpportunityFactor, FactorRangeContext>>;
 }
 
 const DEFAULT_BALANCED_WEIGHTS: NormalizedWeights = {
-  profit: 0.34,
-  risk: 0.2,
-  velocity: 0.2,
-  jumps: 0.13,
-  capital: 0.13,
+  expectedProfit: 0.24,
+  dailyRealizableProfit: 0.18,
+  executionQuality: 0.16,
+  jumpBurden: 0.1,
+  capitalEfficiency: 0.12,
+  cargoEfficiency: 0.08,
+  marketStability: 0.12,
 };
 
-const FACTOR_ORDER: OpportunityFactor[] = ["profit", "risk", "velocity", "jumps", "capital"];
+const FACTOR_ORDER: OpportunityFactor[] = [
+  "expectedProfit",
+  "dailyRealizableProfit",
+  "executionQuality",
+  "jumpBurden",
+  "capitalEfficiency",
+  "cargoEfficiency",
+  "marketStability",
+];
 
-const RISK_MISSING_RAW = 0.65;
-const JUMPS_MISSING_RAW = 14;
-const CAPITAL_MISSING_RAW = 350_000_000;
+const FACTOR_NORMALIZATION: Record<OpportunityFactor, FactorNormalizationConfig> = {
+  expectedProfit: {
+    floor: 0,
+    ceiling: 2_500_000_000,
+    curve: "log",
+    percentileLower: 0.1,
+    percentileUpper: 0.9,
+    minSpan: 25_000_000,
+  },
+  dailyRealizableProfit: {
+    floor: 0,
+    ceiling: 300_000_000,
+    curve: "log",
+    percentileLower: 0.1,
+    percentileUpper: 0.9,
+    minSpan: 5_000_000,
+  },
+  executionQuality: {
+    floor: 0,
+    ceiling: 100,
+    curve: "linear",
+    fallbackNeutral: 50,
+    percentileLower: 0.15,
+    percentileUpper: 0.9,
+    minSpan: 12,
+  },
+  jumpBurden: {
+    floor: 0,
+    ceiling: 40,
+    invert: true,
+    curve: "sqrt",
+    percentileLower: 0.1,
+    percentileUpper: 0.9,
+    minSpan: 3,
+  },
+  capitalEfficiency: {
+    floor: 0,
+    ceiling: 2.5,
+    curve: "sqrt",
+    percentileLower: 0.1,
+    percentileUpper: 0.9,
+    minSpan: 0.2,
+  },
+  cargoEfficiency: {
+    floor: 0,
+    ceiling: 2_000_000,
+    curve: "log",
+    percentileLower: 0.1,
+    percentileUpper: 0.9,
+    minSpan: 1000,
+  },
+  marketStability: {
+    floor: 0,
+    ceiling: 1,
+    curve: "linear",
+    percentileLower: 0.1,
+    percentileUpper: 0.9,
+    minSpan: 0.1,
+  },
+};
+
+function safeNumber(value: number | null | undefined): number | null {
+  return value != null && Number.isFinite(value) ? value : null;
+}
 
 export function clamp(value: number, min: number, max: number): number {
   if (Number.isNaN(value)) return min;
   return Math.min(max, Math.max(min, value));
+}
+
+export function percentile(values: number[], p: number): number {
+  if (values.length === 0) return NaN;
+  if (values.length === 1) return values[0];
+  const sorted = [...values].sort((a, b) => a - b);
+  const pos = clamp(p, 0, 1) * (sorted.length - 1);
+  const lo = Math.floor(pos);
+  const hi = Math.ceil(pos);
+  if (lo === hi) return sorted[lo];
+  const t = pos - lo;
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * t;
 }
 
 /**
@@ -102,24 +217,94 @@ export function normalizeTo100(value: number, options: NormalizeTo100Options): n
   return clamp(score, 0, 100);
 }
 
-export function normalizeWeights(profile?: OpportunityWeightProfile): NormalizedWeights {
-  const raw: Record<OpportunityFactor, number> = {
-    profit: Math.max(0, profile?.profit ?? DEFAULT_BALANCED_WEIGHTS.profit),
-    risk: Math.max(0, profile?.risk ?? DEFAULT_BALANCED_WEIGHTS.risk),
-    velocity: Math.max(0, profile?.velocity ?? DEFAULT_BALANCED_WEIGHTS.velocity),
-    jumps: Math.max(0, profile?.jumps ?? DEFAULT_BALANCED_WEIGHTS.jumps),
-    capital: Math.max(0, profile?.capital ?? DEFAULT_BALANCED_WEIGHTS.capital),
-  };
+function mapLegacyProfile(profile?: OpportunityWeightProfile): Record<OpportunityFactor, number> {
+  const p = Math.max(0, profile?.profit ?? 34);
+  const r = Math.max(0, profile?.risk ?? 20);
+  const v = Math.max(0, profile?.velocity ?? 20);
+  const j = Math.max(0, profile?.jumps ?? 13);
+  const c = Math.max(0, profile?.capital ?? 13);
 
-  const total = FACTOR_ORDER.reduce((sum, factor) => sum + raw[factor], 0);
+  return {
+    expectedProfit: p * 0.72 + v * 0.1,
+    dailyRealizableProfit: p * 0.18 + v * 0.62 + c * 0.06,
+    executionQuality: r * 0.5 + v * 0.25 + p * 0.1,
+    jumpBurden: j * 0.78 + r * 0.12,
+    capitalEfficiency: c * 0.74 + p * 0.18,
+    cargoEfficiency: c * 0.35 + j * 0.4 + v * 0.15,
+    marketStability: r * 0.72 + v * 0.18 + p * 0.06,
+  };
+}
+
+export function normalizeWeights(profile?: OpportunityWeightProfile): NormalizedWeights {
+  const mapped = mapLegacyProfile(profile);
+  const total = FACTOR_ORDER.reduce((sum, factor) => sum + mapped[factor], 0);
   if (total <= 0) {
     return { ...DEFAULT_BALANCED_WEIGHTS };
   }
 
   return FACTOR_ORDER.reduce((acc, factor) => {
-    acc[factor] = raw[factor] / total;
+    acc[factor] = mapped[factor] / total;
     return acc;
   }, {} as NormalizedWeights);
+}
+
+export function buildOpportunityScanContext(metricRows: FactorMetricSet[]): OpportunityScanContext {
+  const ranges: Partial<Record<OpportunityFactor, FactorRangeContext>> = {};
+
+  for (const factor of FACTOR_ORDER) {
+    const cfg = FACTOR_NORMALIZATION[factor];
+    const rawValues = metricRows
+      .map((row) => safeNumber(row[factor]))
+      .filter((v): v is number => v != null)
+      .map((v) => clamp(v, cfg.floor, cfg.ceiling));
+
+    if (rawValues.length < 2) continue;
+
+    let low = percentile(rawValues, cfg.percentileLower);
+    let high = percentile(rawValues, cfg.percentileUpper);
+
+    if (!Number.isFinite(low) || !Number.isFinite(high)) continue;
+    if (high < low) {
+      [low, high] = [high, low];
+    }
+
+    if (high - low < cfg.minSpan) {
+      const mid = (high + low) / 2;
+      low = clamp(mid - cfg.minSpan / 2, cfg.floor, cfg.ceiling);
+      high = clamp(mid + cfg.minSpan / 2, cfg.floor, cfg.ceiling);
+      if (high - low < cfg.minSpan) {
+        low = cfg.floor;
+        high = cfg.ceiling;
+      }
+    }
+
+    ranges[factor] = { low, high, floor: cfg.floor, ceiling: cfg.ceiling };
+  }
+
+  return { ranges };
+}
+
+function scoreFactor(
+  value: number | null,
+  factor: OpportunityFactor,
+  context?: OpportunityScanContext,
+): number {
+  const cfg = FACTOR_NORMALIZATION[factor];
+  if (value == null) {
+    return cfg.fallbackNeutral ?? 50;
+  }
+
+  const bounded = clamp(value, cfg.floor, cfg.ceiling);
+  const range = context?.ranges[factor];
+  const min = range ? range.low : cfg.floor;
+  const max = range ? range.high : cfg.ceiling;
+
+  return normalizeTo100(bounded, {
+    min,
+    max,
+    invert: cfg.invert,
+    curve: cfg.curve ?? "linear",
+  });
 }
 
 /**
@@ -127,128 +312,185 @@ export function normalizeWeights(profile?: OpportunityWeightProfile): Normalized
  */
 export function explainOpportunityScore(explanation: OpportunityExplanation): string {
   const positives = explanation.topPositives
-    .filter((item) => item.normalized > 55)
+    .filter((item) => item.contribution > 0)
     .map((item) => item.factor)
     .slice(0, 2);
 
   const penalties = explanation.topPenalties
-    .filter((item) => item.normalized < 45)
+    .filter((item) => item.contribution < 0)
     .map((item) => item.factor)
     .slice(0, 2);
 
   if (positives.length === 0 && penalties.length === 0) {
-    return `Balanced profile with no standout strengths or penalties (score ${explanation.finalScore.toFixed(1)}).`;
+    return `No standout strengths or weaknesses (score ${explanation.finalScore.toFixed(1)}).`;
   }
 
-  const positiveText = positives.length > 0 ? `Strengths: ${positives.join(" + ")}` : "No major strengths";
-  const penaltyText = penalties.length > 0 ? `Penalties: ${penalties.join(" + ")}` : "No major penalties";
+  const positiveText = positives.length > 0 ? `High: ${positives.join(" + ")}` : "No strong positives";
+  const penaltyText = penalties.length > 0 ? `Low: ${penalties.join(" + ")}` : "No notable penalties";
   return `${positiveText}. ${penaltyText}.`;
 }
 
-function rankContribution(factor: FactorComputation): number {
-  return (factor.normalized - 50) * factor.weight;
-}
-
-function computeFromMetrics(metrics: FactorMetricSet, profile?: OpportunityWeightProfile): OpportunityExplanation {
+function computeFromMetrics(
+  metrics: FactorMetricSet,
+  profile?: OpportunityWeightProfile,
+  context?: OpportunityScanContext,
+): OpportunityExplanation {
   const weights = normalizeWeights(profile);
 
-  const normalizedByFactor: Record<OpportunityFactor, number> = {
-    // Missing profit uses neutral midpoint (50), because unknown profitability should not over-penalize.
-    profit:
-      metrics.profit == null
-        ? 50
-        : normalizeTo100(Math.max(0, metrics.profit), { min: 0, max: 120_000_000, curve: "log" }),
-    // Missing risk uses conservative penalty (assume somewhat risky).
-    risk: normalizeTo100(metrics.risk ?? RISK_MISSING_RAW, { min: 0, max: 1, invert: true, curve: "linear" }),
-    // Missing velocity uses neutral midpoint (50) to avoid bias toward/against sparse rows.
-    velocity:
-      metrics.velocity == null
-        ? 50
-        : normalizeTo100(Math.max(0, metrics.velocity), { min: 0, max: 120, curve: "sqrt" }),
-    // Missing jumps uses conservative penalty (assume longer route burden).
-    jumps: normalizeTo100(metrics.jumps ?? JUMPS_MISSING_RAW, { min: 0, max: 40, invert: true, curve: "sqrt" }),
-    // Missing capital uses conservative penalty (assume meaningful capital lockup).
-    capital: normalizeTo100(Math.max(0, metrics.capital ?? CAPITAL_MISSING_RAW), {
-      min: 1_000_000,
-      max: 2_000_000_000,
-      invert: true,
-      curve: "log",
-    }),
-  };
-
   const factors = FACTOR_ORDER.reduce((acc, factor) => {
-    const normalized = normalizedByFactor[factor];
+    const normalized = scoreFactor(metrics[factor], factor, context);
     const weight = weights[factor];
+    const contribution = (normalized - 50) * weight;
     acc[factor] = {
       factor,
       rawMetric: metrics[factor],
       normalized,
       weight,
-      contribution: normalized * weight,
+      contribution,
     };
     return acc;
   }, {} as Record<OpportunityFactor, FactorComputation>);
 
   const allFactors = Object.values(factors);
-  const finalScore = allFactors.reduce((sum, item) => sum + item.contribution, 0);
+  const finalScore = clamp(50 + allFactors.reduce((sum, item) => sum + item.contribution, 0), 0, 100);
 
   return {
     finalScore,
     factors,
-    topPositives: [...allFactors].sort((a, b) => rankContribution(b) - rankContribution(a)).slice(0, 2),
-    topPenalties: [...allFactors].sort((a, b) => rankContribution(a) - rankContribution(b)).slice(0, 2),
+    topPositives: [...allFactors]
+      .filter((factor) => factor.contribution > 0)
+      .sort((a, b) => b.contribution - a.contribution)
+      .slice(0, 3),
+    topPenalties: [...allFactors]
+      .filter((factor) => factor.contribution < 0)
+      .sort((a, b) => a.contribution - b.contribution)
+      .slice(0, 3),
   };
 }
 
 export function flipResultMetrics(row: FlipResult): FactorMetricSet {
-  const profit = row.ExpectedProfit ?? row.RealProfit ?? row.TotalProfit ?? row.DailyProfit ?? null;
+  const expectedProfit = safeNumber(row.ExpectedProfit ?? row.RealProfit ?? row.TotalProfit ?? row.DailyProfit);
+  const dailyRealizableProfit = safeNumber(row.DayNowProfit ?? row.DailyProfit ?? row.RealProfit);
+  const executionQuality = executionQualityForFlip(row).score;
+  const jumpBurden = safeNumber(row.TotalJumps ?? ((row.BuyJumps ?? 0) + (row.SellJumps ?? 0)));
+
+  const units = row.UnitsToBuy ?? 0;
+  const buyPrice = row.ExpectedBuyPrice ?? row.BuyPrice ?? 0;
+  const capital = row.DayCapitalRequired ?? (units > 0 && buyPrice > 0 ? units * buyPrice : null);
+  const capitalEfficiency =
+    expectedProfit != null && capital != null && capital > 0 ? clamp(expectedProfit / capital, 0, 10) : null;
+
+  const perUnitProfit = row.ProfitPerUnit ?? (expectedProfit != null && units > 0 ? expectedProfit / units : null);
+  const perM3 = perUnitProfit != null && row.Volume > 0 ? perUnitProfit / row.Volume : null;
+  const cargoEfficiency = safeNumber(
+    row.DayIskPerM3Jump ??
+      (perM3 != null ? perM3 / Math.max(1, jumpBurden ?? 1) : null),
+  );
+
   const competitorRisk = Math.min(1, Math.max(0, (row.BuyCompetitors + row.SellCompetitors) / 20));
   const slippageRisk = Math.min(
     1,
     Math.max(0, ((row.SlippageBuyPct ?? 0) + (row.SlippageSellPct ?? 0)) / 30),
   );
   const risk = clamp(competitorRisk * 0.7 + slippageRisk * 0.3, 0, 1);
-  const velocity = row.DayTargetDemandPerDay ?? row.S2BPerDay ?? row.BfSPerDay ?? row.DailyVolume ?? row.Velocity ?? null;
-  const jumps = row.TotalJumps ?? (((row.BuyJumps ?? 0) + (row.SellJumps ?? 0)) || null);
-  const units = row.UnitsToBuy ?? 0;
-  const buyPrice = row.ExpectedBuyPrice ?? row.BuyPrice ?? 0;
-  const capital = row.DayCapitalRequired ?? (units > 0 && buyPrice > 0 ? units * buyPrice : null);
+  const marketStability = 1 - risk;
 
-  return { profit, risk, velocity, jumps, capital };
+  return {
+    expectedProfit,
+    dailyRealizableProfit,
+    executionQuality,
+    jumpBurden,
+    capitalEfficiency,
+    cargoEfficiency,
+    marketStability,
+  };
 }
 
 export function stationTradeMetrics(row: StationTrade): FactorMetricSet {
-  const profit = row.ExpectedProfit ?? row.RealProfit ?? row.TotalProfit ?? row.RealizableDailyProfit ?? null;
-  const risk = row.IsHighRiskFlag ? 0.9 : Math.min(1, Math.max(0, (row.PVI + row.OBDS) / 200));
-  const velocity = row.SellUnitsPerDay ?? row.BuyUnitsPerDay ?? row.DailyVolume ?? null;
-  const jumps = 0;
-  const capital = row.CapitalRequired > 0 ? row.CapitalRequired : null;
+  const expectedProfit = safeNumber(row.ExpectedProfit ?? row.RealProfit ?? row.TotalProfit ?? row.RealizableDailyProfit);
+  const dailyRealizableProfit = safeNumber(
+    row.RealizableDailyProfit ?? row.DailyProfit ?? row.TheoreticalDailyProfit ?? row.RealProfit,
+  );
+  const marketRisk = row.IsHighRiskFlag ? 0.9 : Math.min(1, Math.max(0, (row.PVI + row.OBDS) / 200));
+  const executionQuality = clamp(100 - marketRisk * 85, 0, 100);
+  const jumpBurden = 0;
+  const capitalEfficiency =
+    expectedProfit != null && row.CapitalRequired > 0 ? clamp(expectedProfit / row.CapitalRequired, 0, 10) : null;
+  const cargoEfficiency =
+    row.Volume > 0 && expectedProfit != null ? clamp((expectedProfit / Math.max(1, row.Volume)) / 1000, 0, 5_000_000) : null;
+  const marketStability = 1 - marketRisk;
 
-  return { profit, risk, velocity, jumps, capital };
+  return {
+    expectedProfit,
+    dailyRealizableProfit,
+    executionQuality,
+    jumpBurden,
+    capitalEfficiency,
+    cargoEfficiency,
+    marketStability,
+  };
 }
 
 export function contractResultMetrics(row: ContractResult): FactorMetricSet {
-  const profit = row.ExpectedProfit ?? row.Profit ?? null;
-  const confidence = row.SellConfidence == null ? null : clamp(row.SellConfidence, 0, 1);
-  const liquidationPressure = row.EstLiquidationDays == null ? null : clamp(row.EstLiquidationDays / 30, 0, 1);
-  const risk = confidence == null && liquidationPressure == null
-    ? null
-    : clamp((liquidationPressure ?? 0.5) * 0.6 + (1 - (confidence ?? 0.5)) * 0.4, 0, 1);
-  const velocity = row.EstLiquidationDays == null ? null : 30 / Math.max(1, row.EstLiquidationDays);
-  const jumps = row.LiquidationJumps ?? row.Jumps ?? null;
-  const capital = row.Price > 0 ? row.Price : null;
+  const expectedProfit = safeNumber(row.ExpectedProfit ?? row.Profit);
+  const liquidationDays = safeNumber(row.EstLiquidationDays);
+  const dailyRealizableProfit =
+    expectedProfit != null
+      ? expectedProfit / Math.max(1, liquidationDays ?? 14)
+      : null;
+  const confidence = row.SellConfidence == null ? 0.5 : clamp(row.SellConfidence, 0, 1);
+  const liquidationPressure = liquidationDays == null ? 0.5 : clamp(liquidationDays / 30, 0, 1);
+  const executionQuality = clamp((confidence * 0.7 + (1 - liquidationPressure) * 0.3) * 100, 0, 100);
+  const jumpBurden = safeNumber(row.LiquidationJumps ?? row.Jumps);
+  const capitalEfficiency = expectedProfit != null && row.Price > 0 ? clamp(expectedProfit / row.Price, 0, 10) : null;
+  const cargoEfficiency = expectedProfit != null && row.Volume > 0
+    ? clamp((expectedProfit / row.Volume) / Math.max(1, jumpBurden ?? 1), 0, 10_000_000)
+    : null;
+  const marketStability = clamp(confidence * (1 - liquidationPressure * 0.8), 0, 1);
 
-  return { profit, risk, velocity, jumps, capital };
+  return {
+    expectedProfit,
+    dailyRealizableProfit,
+    executionQuality,
+    jumpBurden,
+    capitalEfficiency,
+    cargoEfficiency,
+    marketStability,
+  };
 }
 
-export function scoreFlipResult(row: FlipResult, profile?: OpportunityWeightProfile): OpportunityExplanation {
-  return computeFromMetrics(flipResultMetrics(row), profile);
+export function buildFlipScoreContext(rows: FlipResult[]): OpportunityScanContext {
+  return buildOpportunityScanContext(rows.map((row) => flipResultMetrics(row)));
 }
 
-export function scoreStationTrade(row: StationTrade, profile?: OpportunityWeightProfile): OpportunityExplanation {
-  return computeFromMetrics(stationTradeMetrics(row), profile);
+export function buildStationScoreContext(rows: StationTrade[]): OpportunityScanContext {
+  return buildOpportunityScanContext(rows.map((row) => stationTradeMetrics(row)));
 }
 
-export function scoreContractResult(row: ContractResult, profile?: OpportunityWeightProfile): OpportunityExplanation {
-  return computeFromMetrics(contractResultMetrics(row), profile);
+export function buildContractScoreContext(rows: ContractResult[]): OpportunityScanContext {
+  return buildOpportunityScanContext(rows.map((row) => contractResultMetrics(row)));
+}
+
+export function scoreFlipResult(
+  row: FlipResult,
+  profile?: OpportunityWeightProfile,
+  context?: OpportunityScanContext,
+): OpportunityExplanation {
+  return computeFromMetrics(flipResultMetrics(row), profile, context);
+}
+
+export function scoreStationTrade(
+  row: StationTrade,
+  profile?: OpportunityWeightProfile,
+  context?: OpportunityScanContext,
+): OpportunityExplanation {
+  return computeFromMetrics(stationTradeMetrics(row), profile, context);
+}
+
+export function scoreContractResult(
+  row: ContractResult,
+  profile?: OpportunityWeightProfile,
+  context?: OpportunityScanContext,
+): OpportunityExplanation {
+  return computeFromMetrics(contractResultMetrics(row), profile, context);
 }

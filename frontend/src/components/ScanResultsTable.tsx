@@ -69,8 +69,10 @@ import { handleEveUIError } from "@/lib/handleEveUIError";
 import { BatchBuilderPopup } from "./BatchBuilderPopup";
 import { RouteSafetyModal } from "./RouteSafetyModal";
 import {
+  buildFlipScoreContext,
   scoreFlipResult,
   strategyScoreToOpportunityProfile,
+  type OpportunityScanContext,
   type OpportunityWeightProfile,
 } from "@/lib/opportunityScore";
 import { OpportunityScoreDetails } from "./OpportunityScorePopover";
@@ -952,6 +954,7 @@ function getCellValue(
     RouteBatchMetadata
   >,
   profile?: OpportunityWeightProfile,
+  scoreContext?: OpportunityScanContext,
 ): unknown {
   if (isBatchSyntheticKey(key)) {
     return getBatchSyntheticValue(row, key, batchMetricsByRow);
@@ -975,7 +978,7 @@ function getCellValue(
   if (key === "BreakevenBuffer") return breakevenBufferForFlip(row);
   if (key === "RouteSafety") return null;
   if (key === "OpportunityScore")
-    return scoreFlipResult(row, profile).finalScore;
+    return scoreFlipResult(row, profile, scoreContext).finalScore;
   return row[key as keyof FlipResult];
 }
 
@@ -988,9 +991,10 @@ function passesFilter(
     RouteBatchMetadata
   >,
   profile?: OpportunityWeightProfile,
+  scoreContext?: OpportunityScanContext,
 ): boolean {
   if (!fval) return true;
-  const cellVal = getCellValue(row, col.key, batchMetricsByRow, profile);
+  const cellVal = getCellValue(row, col.key, batchMetricsByRow, profile, scoreContext);
   if (isBatchSyntheticKey(col.key)) {
     return passesBatchNumericFilter(cellVal as number | null, fval);
   }
@@ -1009,8 +1013,9 @@ function fmtCell(
     RouteBatchMetadata
   >,
   profile?: OpportunityWeightProfile,
+  scoreContext?: OpportunityScanContext,
 ): string {
-  const val = getCellValue(row, col.key, batchMetricsByRow, profile);
+  const val = getCellValue(row, col.key, batchMetricsByRow, profile, scoreContext);
   if (isBatchSyntheticKey(col.key)) {
     return formatBatchSyntheticCell(col.key, val as number | null);
   }
@@ -1662,6 +1667,9 @@ export function ScanResultsTable({
         })
       : indexed;
 
+
+    const filteredScoreContext = buildFlipScoreContext(filtered.map((item) => item.row));
+
     const dangerRank = (row: FlipResult): number => {
       const k = `${row.BuySystemID}:${row.SellSystemID}`;
       const rs = routeSafetyMap[k];
@@ -1693,12 +1701,14 @@ export function ScanResultsTable({
         sortKey,
         batchMetricsByRow,
         opportunityProfile,
+        filteredScoreContext,
       );
       const bv = getCellValue(
         b.row,
         sortKey,
         batchMetricsByRow,
         opportunityProfile,
+        filteredScoreContext,
       );
       if (isBatchSyntheticKey(sortKey)) {
         const syntheticCmp = compareBatchSyntheticValues(
@@ -1833,6 +1843,12 @@ export function ScanResultsTable({
     routeSafetyFilter,
     routeSafetyMap,
   ]);
+
+
+  const displayScoreContext = useMemo(
+    () => buildFlipScoreContext(displaySorted.map((item) => item.row)),
+    [displaySorted],
+  );
 
   const regionGroups = useMemo<RegionGroup[]>(() => {
     if (!isRegionGrouped) return [];
@@ -2619,7 +2635,7 @@ export function ScanResultsTable({
     a.click();
     URL.revokeObjectURL(url);
     addToast(`${t("exportCSV")}: ${rows.length} rows`, "success", 2000);
-  }, [visibleRows, selectedIds, columnDefs, addToast, t]);
+  }, [visibleRows, selectedIds, columnDefs, batchMetricsByRow, opportunityProfile, displayScoreContext, addToast, t]);
 
   const copyTable = useCallback(() => {
     const rows =
@@ -2630,13 +2646,13 @@ export function ScanResultsTable({
     const tsv = rows.map((ir) =>
       columnDefs
         .map((col) =>
-          fmtCell(col, ir.row, batchMetricsByRow, opportunityProfile),
+          fmtCell(col, ir.row, batchMetricsByRow, opportunityProfile, displayScoreContext),
         )
         .join("\t"),
     );
     navigator.clipboard.writeText([header, ...tsv].join("\n"));
     addToast(t("copied"), "success", 2000);
-  }, [visibleRows, selectedIds, columnDefs, addToast, t]);
+  }, [visibleRows, selectedIds, columnDefs, batchMetricsByRow, opportunityProfile, displayScoreContext, addToast, t]);
 
   const hiddenEntries = useMemo(
     () =>
@@ -2816,6 +2832,7 @@ export function ScanResultsTable({
         onOpenScore={setScoreExplainRow}
         batchMetricsByRow={batchMetricsByRow}
         opportunityProfile={opportunityProfile}
+        scoreContext={displayScoreContext}
       />
     ),
     [
@@ -2838,6 +2855,7 @@ export function ScanResultsTable({
       handleRouteSafetyClick,
       batchMetricsByRow,
       opportunityProfile,
+      displayScoreContext,
     ],
   );
 
@@ -3886,7 +3904,7 @@ export function ScanResultsTable({
               Why this score?
             </div>
             <OpportunityScoreDetails
-              explanation={scoreFlipResult(scoreExplainRow, opportunityProfile)}
+              explanation={scoreFlipResult(scoreExplainRow, opportunityProfile, displayScoreContext)}
               executionQuality={executionQualityForFlip(scoreExplainRow)}
             />
             <div className="mt-2 text-center">
@@ -4406,6 +4424,7 @@ interface DataRowProps {
     RouteBatchMetadata
   >;
   opportunityProfile?: OpportunityWeightProfile;
+  scoreContext?: OpportunityScanContext;
 }
 
 /* ─── Trade Score Badge ─── */
@@ -4507,6 +4526,7 @@ const DataRow = memo(
     onOpenScore,
     batchMetricsByRow,
     opportunityProfile,
+    scoreContext,
   }: DataRowProps) {
     return (
       <tr
@@ -4623,7 +4643,7 @@ const DataRow = memo(
                 }}
                 aria-label="Why this score?"
               >
-                {scoreFlipResult(ir.row, opportunityProfile).finalScore.toFixed(
+                {scoreFlipResult(ir.row, opportunityProfile, scoreContext).finalScore.toFixed(
                   1,
                 )}
               </button>
@@ -4636,10 +4656,10 @@ const DataRow = memo(
               />
             ) : col.key === "BuyStation" ? (
               <span className="truncate">
-                {fmtCell(col, ir.row, batchMetricsByRow, opportunityProfile)}
+                {fmtCell(col, ir.row, batchMetricsByRow, opportunityProfile, scoreContext)}
               </span>
             ) : (
-              fmtCell(col, ir.row, batchMetricsByRow, opportunityProfile)
+              fmtCell(col, ir.row, batchMetricsByRow, opportunityProfile, scoreContext)
             )}
           </td>
         ))}
@@ -4669,7 +4689,8 @@ const DataRow = memo(
     prev.routeSafetyEntry === next.routeSafetyEntry &&
     prev.onRouteSafetyClick === next.onRouteSafetyClick &&
     prev.onOpenScore === next.onOpenScore &&
-    prev.opportunityProfile === next.opportunityProfile,
+    prev.opportunityProfile === next.opportunityProfile &&
+    prev.scoreContext === next.scoreContext,
 );
 
 /* ─── EVE category name lookup ─── */
