@@ -654,6 +654,7 @@ func FlattenRegionalDayHubs(hubs []RegionalDayTradeHub) []FlipResult {
 				ProfitPerUnit:     sanitizeFloat(perUnitNowProfit),
 				MarginPercent:     sanitizeFloat(item.MarginNow),
 				UnitsToBuy:        item.PurchaseUnits,
+				PreExecutionUnits: item.PurchaseUnits,
 				BuyOrderRemain:    int32(item.TargetSupplyUnits),
 				SellOrderRemain:   item.SourceUnits,
 				TotalProfit:       sanitizeFloat(item.TargetNowProfit),

@@ -56,9 +56,10 @@ type FlipResult struct {
 	ExpectedBuyPrice  float64 `json:"ExpectedBuyPrice,omitempty"`
 	ExpectedSellPrice float64 `json:"ExpectedSellPrice,omitempty"`
 	ExpectedProfit    float64 `json:"ExpectedProfit,omitempty"`
-	RealProfit        float64 `json:"RealProfit,omitempty"` // primary KPI: expected net ISK with depth/slippage
-	FilledQty         int32   `json:"FilledQty,omitempty"`  // executable profitable quantity from execution simulation
-	CanFill           bool    `json:"CanFill"`              // true when requested quantity is executable profitably
+	RealProfit        float64 `json:"RealProfit,omitempty"`        // primary KPI: expected net ISK with depth/slippage
+	PreExecutionUnits int32   `json:"PreExecutionUnits,omitempty"` // requested qty before execution-safe trimming
+	FilledQty         int32   `json:"FilledQty,omitempty"`         // executable profitable quantity from execution simulation
+	CanFill           bool    `json:"CanFill"`                     // true when requested quantity is executable profitably
 	SlippageBuyPct    float64 `json:"SlippageBuyPct,omitempty"`
 	SlippageSellPct   float64 `json:"SlippageSellPct,omitempty"`
 

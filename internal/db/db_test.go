@@ -70,7 +70,7 @@ func TestDB_FlipResultsRoundTrip(t *testing.T) {
 			UnitsToBuy: 50, TotalProfit: 500,
 			DailyVolume: 1000, S2BPerDay: 520, BfSPerDay: 480, S2BBfSRatio: 1.0833,
 			DailyProfit: 120, RealProfit: 110, RealMarginPercent: 9.9,
-			FilledQty: 11, CanFill: true,
+			PreExecutionUnits: 14, FilledQty: 11, CanFill: true,
 			ExpectedProfit: 110, ExpectedBuyPrice: 91, ExpectedSellPrice: 101,
 			SlippageBuyPct: 0.15, SlippageSellPct: 0.12,
 			HistoryAvailable: true,
@@ -108,6 +108,9 @@ func TestDB_FlipResultsRoundTrip(t *testing.T) {
 	}
 	if !r.HistoryAvailable || !r.CanFill {
 		t.Errorf("HistoryAvailable/CanFill = %v/%v, want true/true", r.HistoryAvailable, r.CanFill)
+	}
+	if r.PreExecutionUnits != 14 {
+		t.Errorf("PreExecutionUnits = %d, want 14", r.PreExecutionUnits)
 	}
 	if r.S2BPerDay <= 0 || r.BfSPerDay <= 0 || r.S2BBfSRatio <= 0 {
 		t.Errorf("S2B/BfS fields = %v/%v/%v, want >0", r.S2BPerDay, r.BfSPerDay, r.S2BBfSRatio)
@@ -273,6 +276,7 @@ func TestDB_Migrate_FlipResultsHasLiquidityAndExecutionColumns(t *testing.T) {
 		"daily_profit",
 		"real_profit",
 		"real_margin_percent",
+		"pre_execution_units",
 		"filled_qty",
 		"can_fill",
 		"expected_profit",

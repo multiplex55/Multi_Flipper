@@ -42,11 +42,14 @@ export interface FlipResult {
   BuyCompetitors: number;
   SellCompetitors: number;
   DailyProfit: number;
+  TargetSellSupply?: number;
+  TargetLowestSell?: number;
   /** Expected fill prices from execution plan (order book depth) */
   ExpectedBuyPrice?: number;
   ExpectedSellPrice?: number;
   ExpectedProfit?: number;
   RealProfit?: number;
+  PreExecutionUnits?: number;
   FilledQty?: number;
   CanFill?: boolean;
   SlippageBuyPct?: number;
