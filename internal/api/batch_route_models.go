@@ -142,6 +142,10 @@ type BatchRouteCandidateLine struct {
 	SellLocationID int64   `json:"sell_location_id"`
 	BuyPriceISK    float64 `json:"buy_price_isk"`
 	SellPriceISK   float64 `json:"sell_price_isk"`
+	FillConfidence float64 `json:"fill_confidence,omitempty"`
+	CapitalLockup  float64 `json:"capital_lockup_duration,omitempty"`
+	StaleRisk      float64 `json:"stale_snapshot_risk,omitempty"`
+	Concentration  float64 `json:"concentration_risk,omitempty"`
 }
 
 type MergedBatchManifest struct {

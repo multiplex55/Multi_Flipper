@@ -28,6 +28,10 @@ type RoutePlannerHop struct {
 	SellLocationID int64   `json:"sell_location_id"`
 	BuyPriceISK    float64 `json:"buy_price_isk"`
 	SellPriceISK   float64 `json:"sell_price_isk"`
+	FillConfidence float64 `json:"fill_confidence,omitempty"`
+	CapitalLockup  float64 `json:"capital_lockup_duration,omitempty"`
+	StaleRisk      float64 `json:"stale_snapshot_risk,omitempty"`
+	Concentration  float64 `json:"concentration_risk,omitempty"`
 }
 
 type RoutePlannerRequest struct {
@@ -53,14 +57,19 @@ type RoutePlannerRequest struct {
 }
 
 type RoutePlannerStopManifest struct {
-	StopSystemID   int32               `json:"stop_system_id"`
-	StopLocationID int64               `json:"stop_location_id"`
-	Lines          []RouteAdditionLine `json:"lines"`
-	TotalUnits     int64               `json:"total_units"`
-	TotalVolumeM3  float64             `json:"total_volume_m3"`
-	TotalBuyISK    float64             `json:"total_buy_isk"`
-	TotalSellISK   float64             `json:"total_sell_isk"`
-	TotalProfitISK float64             `json:"total_profit_isk"`
+	StopSystemID       int32               `json:"stop_system_id"`
+	StopLocationID     int64               `json:"stop_location_id"`
+	BuyLines           []RouteAdditionLine `json:"buy_lines"`
+	SellLines          []RouteAdditionLine `json:"sell_lines"`
+	TotalBuyUnits      int64               `json:"total_buy_units"`
+	TotalSellUnits     int64               `json:"total_sell_units"`
+	TotalBuyVolumeM3   float64             `json:"total_buy_volume_m3"`
+	TotalSellVolumeM3  float64             `json:"total_sell_volume_m3"`
+	TotalBuyISK        float64             `json:"total_buy_isk"`
+	TotalSellISK       float64             `json:"total_sell_isk"`
+	TotalProfitISK     float64             `json:"total_profit_isk"`
+	CargoUsedAfterM3   float64             `json:"cargo_used_after_m3"`
+	CargoRemainAfterM3 float64             `json:"cargo_remain_after_m3"`
 }
 
 type RoutePlannerOption struct {

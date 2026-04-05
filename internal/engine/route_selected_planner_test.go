@@ -25,12 +25,12 @@ func TestPlanSelectedRouteExpansions_TableDrivenScenarios(t *testing.T) {
 				CargoLimitM3:          100,
 				RemainingCapacityM3:   50,
 				MaxDetourJumpsPerNode: 1,
-				CandidateLines:        []BatchRouteCandidateOpportunity{{TypeID: 1, TypeName: "Type-1", Units: 20, UnitVolumeM3: 1, BuySystemID: 20, BuyLocationID: 2002, SellSystemID: 30, SellLocationID: 3001, BuyPriceISK: 10, SellPriceISK: 20}},
+				CandidateLines:        []BatchRouteCandidateOpportunity{{TypeID: 1, TypeName: "Type-1", Units: 20, UnitVolumeM3: 1, BuySystemID: 20, BuyLocationID: 2001, SellSystemID: 30, SellLocationID: 3001, BuyPriceISK: 10, SellPriceISK: 20}},
 			},
 			wantOptions: true,
 			assert: func(t *testing.T, result RouteSelectedPlannerResult) {
-				if got := len(result.Options[0].ManifestByStop); got != 1 {
-					t.Fatalf("manifest stop groups = %d, want 1", got)
+				if got := len(result.Options[0].ManifestByStop); got != 2 {
+					t.Fatalf("manifest stop groups = %d, want 2", got)
 				}
 			},
 		},
@@ -57,7 +57,7 @@ func TestPlanSelectedRouteExpansions_TableDrivenScenarios(t *testing.T) {
 				CargoLimitM3:          100,
 				RemainingCapacityM3:   100,
 				MaxDetourJumpsPerNode: 1,
-				CandidateLines:        []BatchRouteCandidateOpportunity{{TypeID: 1, TypeName: "Type-1", Units: 3, UnitVolumeM3: 1, BuySystemID: 10, BuyLocationID: 1002, SellSystemID: 30, SellLocationID: 3001, BuyPriceISK: 10, SellPriceISK: 20}},
+				CandidateLines:        []BatchRouteCandidateOpportunity{{TypeID: 1, TypeName: "Type-1", Units: 3, UnitVolumeM3: 1, BuySystemID: 10, BuyLocationID: 1001, SellSystemID: 30, SellLocationID: 3001, BuyPriceISK: 10, SellPriceISK: 20}},
 			},
 			wantOptions: true,
 			assert: func(t *testing.T, result RouteSelectedPlannerResult) {
@@ -86,7 +86,7 @@ func TestPlanSelectedRouteExpansions_TableDrivenScenarios(t *testing.T) {
 				CurrentSystemID:     10,
 				CargoLimitM3:        100,
 				RemainingCapacityM3: 50,
-				CandidateLines:      []BatchRouteCandidateOpportunity{{TypeID: 1, TypeName: "Type-1", Units: 5, UnitVolumeM3: 1, BuySystemID: 10, BuyLocationID: 1002, SellSystemID: 30, SellLocationID: 3001, BuyPriceISK: 20, SellPriceISK: 10}},
+				CandidateLines:      []BatchRouteCandidateOpportunity{{TypeID: 1, TypeName: "Type-1", Units: 5, UnitVolumeM3: 1, BuySystemID: 10, BuyLocationID: 1001, SellSystemID: 30, SellLocationID: 3001, BuyPriceISK: 20, SellPriceISK: 10}},
 			},
 			wantOptions: false,
 			assert: func(t *testing.T, result RouteSelectedPlannerResult) {
@@ -103,7 +103,7 @@ func TestPlanSelectedRouteExpansions_TableDrivenScenarios(t *testing.T) {
 				CurrentSystemID:     20,
 				CargoLimitM3:        100,
 				RemainingCapacityM3: 50,
-				CandidateLines:      []BatchRouteCandidateOpportunity{{TypeID: 1, TypeName: "Type-1", Units: 5, UnitVolumeM3: 1, BuySystemID: 10, BuyLocationID: 1002, SellSystemID: 30, SellLocationID: 3001, BuyPriceISK: 10, SellPriceISK: 20}},
+				CandidateLines:      []BatchRouteCandidateOpportunity{{TypeID: 1, TypeName: "Type-1", Units: 5, UnitVolumeM3: 1, BuySystemID: 10, BuyLocationID: 1001, SellSystemID: 30, SellLocationID: 3001, BuyPriceISK: 10, SellPriceISK: 20}},
 			},
 			wantOptions: true,
 			assert: func(t *testing.T, result RouteSelectedPlannerResult) {

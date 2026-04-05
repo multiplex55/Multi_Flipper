@@ -29,7 +29,7 @@ func TestHandleRoutePlanner_ReturnsRankedGroupedOptions(t *testing.T) {
 					ISKPerJump:     20,
 					Lines:          []engine.BatchCreateRouteLine{{TypeID: 1, TypeName: "Type-1", Units: 3, UnitVolumeM3: 1, BuySystemID: 10, BuyLocationID: 1002, SellSystemID: 30, SellLocationID: 3001, BuyTotalISK: 30, SellTotalISK: 60, ProfitTotalISK: 30, RouteJumps: 5}},
 				},
-				ManifestByStop: []engine.RouteSelectedManifestStopGroup{{StopSystemID: 30, StopLocationID: 3001, TotalUnits: 3, TotalVolumeM3: 3, TotalBuyISK: 30, TotalSellISK: 60, TotalProfitISK: 30}},
+				ManifestByStop: []engine.RouteSelectedManifestStopGroup{{StopSystemID: 30, StopLocationID: 3001, TotalSellUnits: 3, TotalSellVolumeM3: 3, TotalBuyISK: 30, TotalSellISK: 60, TotalProfitISK: 30}},
 			}},
 			Diagnostics: []string{"ok"},
 			SnapshotID:  "snap-1",
