@@ -186,6 +186,44 @@ type BatchRouteCandidateLine struct {
 	Concentration  float64 `json:"concentration_risk,omitempty"`
 }
 
+type BatchRouteFillerSuggestionsRequest struct {
+	CargoLimitM3      float64                     `json:"cargo_limit_m3"`
+	OriginSystemID    int32                       `json:"origin_system_id"`
+	CurrentSystemID   int32                       `json:"current_system_id"`
+	MinRouteSecurity  float64                     `json:"min_route_security"`
+	AllowLowsec       bool                        `json:"allow_lowsec"`
+	AllowNullsec      bool                        `json:"allow_nullsec"`
+	AllowWormhole     bool                        `json:"allow_wormhole"`
+	RouteMaxJumps     int                         `json:"route_max_jumps"`
+	ExecutionScoring  RouteExecutionScoringConfig `json:"execution_scoring,omitempty"`
+	BaseLines         []BaseBatchLine             `json:"base_lines"`
+	SelectedAdditions []RouteAdditionLine         `json:"selected_additions"`
+	CandidateSnapshot []BatchRouteCandidateLine   `json:"candidate_snapshot"`
+}
+
+type BatchRouteFillerSuggestion struct {
+	TypeID          int32   `json:"type_id"`
+	TypeName        string  `json:"type_name"`
+	Units           int64   `json:"units"`
+	UnitVolumeM3    float64 `json:"unit_volume_m3"`
+	BuySystemID     int32   `json:"buy_system_id"`
+	BuyLocationID   int64   `json:"buy_location_id"`
+	SellSystemID    int32   `json:"sell_system_id"`
+	SellLocationID  int64   `json:"sell_location_id"`
+	VolumeM3        float64 `json:"volume_m3"`
+	AddedProfitISK  float64 `json:"added_profit_isk"`
+	AddedCapitalISK float64 `json:"added_capital_isk"`
+	FillConfidence  float64 `json:"fill_confidence"`
+	StaleRisk       float64 `json:"stale_risk"`
+	SuggestedRole   string  `json:"suggested_role"`
+	FillerScore     float64 `json:"filler_score"`
+}
+
+type BatchRouteFillerSuggestionsResponse struct {
+	RemainingCapacityM3 float64                      `json:"remaining_capacity_m3"`
+	Suggestions         []BatchRouteFillerSuggestion `json:"suggestions"`
+}
+
 type MergedBatchManifest struct {
 	OriginSystemID      int32               `json:"origin_system_id"`
 	OriginLocationID    int64               `json:"origin_location_id"`

@@ -5,6 +5,8 @@ import type {
   AuthStatus,
   BatchCreateRouteRequest,
   BatchCreateRouteResponse,
+  BatchRouteFillerSuggestionsRequest,
+  BatchRouteFillerSuggestionsResponse,
   BannedStation,
   BanlistItem,
   CharacterInfo,
@@ -494,6 +496,19 @@ export async function batchCreateRoute(
     signal,
   });
   return handleResponse<BatchCreateRouteResponse>(res);
+}
+
+export async function batchFillerSuggestions(
+  request: BatchRouteFillerSuggestionsRequest,
+  signal?: AbortSignal,
+): Promise<BatchRouteFillerSuggestionsResponse> {
+  const res = await apiFetch(`${BASE}/api/batch/filler-suggestions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+    signal,
+  });
+  return handleResponse<BatchRouteFillerSuggestionsResponse>(res);
 }
 
 

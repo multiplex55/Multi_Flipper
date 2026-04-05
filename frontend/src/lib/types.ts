@@ -565,6 +565,44 @@ export interface BatchCreateRouteResponse {
   route_manifest?: RouteExecutionManifest;
 }
 
+export interface BatchRouteFillerSuggestionRow {
+  type_id: number;
+  type_name: string;
+  units: number;
+  unit_volume_m3: number;
+  buy_system_id: number;
+  buy_location_id: number;
+  sell_system_id: number;
+  sell_location_id: number;
+  volume_m3: number;
+  added_profit_isk: number;
+  added_capital_isk: number;
+  fill_confidence: number;
+  stale_risk: number;
+  suggested_role: "core" | "safe_filler" | "stretch_filler" | string;
+  filler_score: number;
+}
+
+export interface BatchRouteFillerSuggestionsRequest {
+  cargo_limit_m3: number;
+  origin_system_id: number;
+  current_system_id: number;
+  min_route_security: number;
+  allow_lowsec: boolean;
+  allow_nullsec: boolean;
+  allow_wormhole: boolean;
+  route_max_jumps: number;
+  execution_scoring?: BatchCreateRouteRequest["execution_scoring"];
+  base_lines: BaseBatchLine[];
+  selected_additions: RouteAdditionLine[];
+  candidate_snapshot: NonNullable<BatchCreateRouteRequest["candidate_snapshot"]>;
+}
+
+export interface BatchRouteFillerSuggestionsResponse {
+  remaining_capacity_m3: number;
+  suggestions: BatchRouteFillerSuggestionRow[];
+}
+
 export type PinnedOpportunitySource =
   | "scan"
   | "station"
