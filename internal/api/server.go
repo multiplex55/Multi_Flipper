@@ -3346,6 +3346,46 @@ func (s *Server) handleRouteFind(w http.ResponseWriter, r *http.Request) {
 	flusher.Flush()
 }
 
+func normalizeExecutionScoringPreset(preset string) string {
+	switch strings.ToLower(strings.TrimSpace(preset)) {
+	case "", "balanced", "practical-hauling":
+		return "balanced"
+	case "conservative", "safer_fillers", "safer-fillers":
+		return "conservative"
+	case "aggressive":
+		return "aggressive"
+	case "max_fill", "max-fill", "fuller_cargo", "fuller-cargo":
+		return "max_fill"
+	default:
+		return strings.TrimSpace(preset)
+	}
+}
+
+func toEngineExecutionScoring(cfg RouteExecutionScoringConfig) (engine.RouteExecutionScoringConfig, bool) {
+	normalizedPreset := normalizeExecutionScoringPreset(cfg.Preset)
+	if cfg.Weights == nil && normalizedPreset == "" && cfg.UtilizationTarget <= 0 {
+		return engine.RouteExecutionScoringConfig{}, false
+	}
+	out := engine.RouteExecutionScoringConfig{
+		Preset:            normalizedPreset,
+		UtilizationTarget: cfg.UtilizationTarget,
+	}
+	if cfg.Weights != nil {
+		out.Weights = &engine.RouteExecutionScoreWeights{
+			NetProfit:         cfg.Weights.NetProfit,
+			ISKPerJump:        cfg.Weights.ISKPerJump,
+			CargoUtilization:  cfg.Weights.CargoUtilization,
+			StopPenalty:       cfg.Weights.StopPenalty,
+			CapitalRequired:   cfg.Weights.CapitalRequired,
+			DetourPenalty:     cfg.Weights.DetourPenalty,
+			FillConfidence:    cfg.Weights.FillConfidence,
+			ConcentrationRisk: cfg.Weights.ConcentrationRisk,
+			StaleRisk:         cfg.Weights.StaleRisk,
+		}
+	}
+	return out, true
+}
+
 func (s *Server) handleBatchCreateRoute(w http.ResponseWriter, r *http.Request) {
 	if !s.isReady() {
 		writeError(w, http.StatusServiceUnavailable, "SDE not loaded yet")
@@ -3439,27 +3479,8 @@ func (s *Server) handleBatchCreateRoute(w http.ResponseWriter, r *http.Request) 
 			})
 		}
 	}
-	if req.ExecutionScoring.Weights != nil {
-		params.ExecutionScoring = engine.RouteExecutionScoringConfig{
-			Preset:            req.ExecutionScoring.Preset,
-			UtilizationTarget: req.ExecutionScoring.UtilizationTarget,
-			Weights: &engine.RouteExecutionScoreWeights{
-				NetProfit:         req.ExecutionScoring.Weights.NetProfit,
-				ISKPerJump:        req.ExecutionScoring.Weights.ISKPerJump,
-				CargoUtilization:  req.ExecutionScoring.Weights.CargoUtilization,
-				StopPenalty:       req.ExecutionScoring.Weights.StopPenalty,
-				CapitalRequired:   req.ExecutionScoring.Weights.CapitalRequired,
-				DetourPenalty:     req.ExecutionScoring.Weights.DetourPenalty,
-				FillConfidence:    req.ExecutionScoring.Weights.FillConfidence,
-				ConcentrationRisk: req.ExecutionScoring.Weights.ConcentrationRisk,
-				StaleRisk:         req.ExecutionScoring.Weights.StaleRisk,
-			},
-		}
-	} else if req.ExecutionScoring.Preset != "" || req.ExecutionScoring.UtilizationTarget > 0 {
-		params.ExecutionScoring = engine.RouteExecutionScoringConfig{
-			Preset:            req.ExecutionScoring.Preset,
-			UtilizationTarget: req.ExecutionScoring.UtilizationTarget,
-		}
+	if scoring, ok := toEngineExecutionScoring(req.ExecutionScoring); ok {
+		params.ExecutionScoring = scoring
 	}
 	if !params.SplitTradeFees {
 		params.BrokerFeePercent = req.BuyBrokerFeePercent
@@ -3702,27 +3723,8 @@ func (s *Server) handleRoutePlanner(w http.ResponseWriter, r *http.Request) {
 		BuyBrokerFeePercent:   req.BuyBrokerFeePercent,
 		SellBrokerFeePercent:  req.SellBrokerFeePercent,
 	}
-	if req.ExecutionScoring.Weights != nil {
-		params.ExecutionScoring = engine.RouteExecutionScoringConfig{
-			Preset:            req.ExecutionScoring.Preset,
-			UtilizationTarget: req.ExecutionScoring.UtilizationTarget,
-			Weights: &engine.RouteExecutionScoreWeights{
-				NetProfit:         req.ExecutionScoring.Weights.NetProfit,
-				ISKPerJump:        req.ExecutionScoring.Weights.ISKPerJump,
-				CargoUtilization:  req.ExecutionScoring.Weights.CargoUtilization,
-				StopPenalty:       req.ExecutionScoring.Weights.StopPenalty,
-				CapitalRequired:   req.ExecutionScoring.Weights.CapitalRequired,
-				DetourPenalty:     req.ExecutionScoring.Weights.DetourPenalty,
-				FillConfidence:    req.ExecutionScoring.Weights.FillConfidence,
-				ConcentrationRisk: req.ExecutionScoring.Weights.ConcentrationRisk,
-				StaleRisk:         req.ExecutionScoring.Weights.StaleRisk,
-			},
-		}
-	} else if req.ExecutionScoring.Preset != "" || req.ExecutionScoring.UtilizationTarget > 0 {
-		params.ExecutionScoring = engine.RouteExecutionScoringConfig{
-			Preset:            req.ExecutionScoring.Preset,
-			UtilizationTarget: req.ExecutionScoring.UtilizationTarget,
-		}
+	if scoring, ok := toEngineExecutionScoring(req.ExecutionScoring); ok {
+		params.ExecutionScoring = scoring
 	}
 	if len(req.SelectedRouteStops) > 0 {
 		params.SelectedRouteStops = make([]engine.RouteSelectedStop, 0, len(req.SelectedRouteStops))

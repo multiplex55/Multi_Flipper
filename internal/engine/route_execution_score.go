@@ -34,29 +34,87 @@ type RouteScoreFactorBreakdown struct {
 	HigherIsBetter bool    `json:"higher_is_better"`
 }
 
-func practicalHaulingScoringPreset() RouteExecutionScoringConfig {
-	return RouteExecutionScoringConfig{
-		Preset:            "practical-hauling",
-		UtilizationTarget: 0.60,
-		Weights: &RouteExecutionScoreWeights{
-			NetProfit:         0.9,
-			ISKPerJump:        1.5,
-			CargoUtilization:  0.7,
-			StopPenalty:       1.3,
-			CapitalRequired:   0.8,
-			DetourPenalty:     0.9,
-			FillConfidence:    1.2,
-			ConcentrationRisk: 0.7,
-			StaleRisk:         0.7,
-		},
+const (
+	routeExecutionPresetConservative = "conservative"
+	routeExecutionPresetBalanced     = "balanced"
+	routeExecutionPresetAggressive   = "aggressive"
+	routeExecutionPresetMaxFill      = "max_fill"
+	routeExecutionPresetLegacy       = "practical-hauling"
+)
+
+func routeExecutionPresetConfig(name string) RouteExecutionScoringConfig {
+	switch name {
+	case routeExecutionPresetConservative:
+		return RouteExecutionScoringConfig{
+			Preset:            routeExecutionPresetConservative,
+			UtilizationTarget: 0.58,
+			Weights: &RouteExecutionScoreWeights{
+				NetProfit:         0.8,
+				ISKPerJump:        1.3,
+				CargoUtilization:  0.6,
+				StopPenalty:       1.7,
+				CapitalRequired:   1.2,
+				DetourPenalty:     1.0,
+				FillConfidence:    1.8,
+				ConcentrationRisk: 1.4,
+				StaleRisk:         1.4,
+			},
+		}
+	case routeExecutionPresetAggressive:
+		return RouteExecutionScoringConfig{
+			Preset:            routeExecutionPresetAggressive,
+			UtilizationTarget: 0.78,
+			Weights: &RouteExecutionScoreWeights{
+				NetProfit:         1.5,
+				ISKPerJump:        1.7,
+				CargoUtilization:  1.0,
+				StopPenalty:       0.9,
+				CapitalRequired:   0.6,
+				DetourPenalty:     0.7,
+				FillConfidence:    0.8,
+				ConcentrationRisk: 0.5,
+				StaleRisk:         0.5,
+			},
+		}
+	case routeExecutionPresetMaxFill:
+		return RouteExecutionScoringConfig{
+			Preset:            routeExecutionPresetMaxFill,
+			UtilizationTarget: 0.95,
+			Weights: &RouteExecutionScoreWeights{
+				NetProfit:         1.1,
+				ISKPerJump:        1.2,
+				CargoUtilization:  2.0,
+				StopPenalty:       0.8,
+				CapitalRequired:   0.6,
+				DetourPenalty:     0.7,
+				FillConfidence:    1.0,
+				ConcentrationRisk: 0.5,
+				StaleRisk:         0.5,
+			},
+		}
+	case routeExecutionPresetLegacy, routeExecutionPresetBalanced, "":
+		fallthrough
+	default:
+		return RouteExecutionScoringConfig{
+			Preset:            routeExecutionPresetBalanced,
+			UtilizationTarget: 0.68,
+			Weights: &RouteExecutionScoreWeights{
+				NetProfit:         1.0,
+				ISKPerJump:        1.5,
+				CargoUtilization:  0.8,
+				StopPenalty:       1.2,
+				CapitalRequired:   0.8,
+				DetourPenalty:     0.9,
+				FillConfidence:    1.2,
+				ConcentrationRisk: 0.9,
+				StaleRisk:         0.9,
+			},
+		}
 	}
 }
 
 func resolveRouteExecutionScoring(input RouteExecutionScoringConfig) RouteExecutionScoringConfig {
-	cfg := practicalHaulingScoringPreset()
-	if input.Preset != "" {
-		cfg.Preset = input.Preset
-	}
+	cfg := routeExecutionPresetConfig(input.Preset)
 	if input.UtilizationTarget > 0 {
 		cfg.UtilizationTarget = input.UtilizationTarget
 	}
@@ -64,7 +122,7 @@ func resolveRouteExecutionScoring(input RouteExecutionScoringConfig) RouteExecut
 		cfg.Weights = input.Weights
 	}
 	if cfg.Weights == nil {
-		cfg.Weights = practicalHaulingScoringPreset().Weights
+		cfg.Weights = routeExecutionPresetConfig(routeExecutionPresetBalanced).Weights
 	}
 	return cfg
 }

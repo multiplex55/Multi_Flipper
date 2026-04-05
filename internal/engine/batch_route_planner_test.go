@@ -274,3 +274,52 @@ func TestBuildBatchRouteOptions_IncludesBaseLinesInRouteSequence(t *testing.T) {
 		t.Fatalf("route sequence = %v, want [1 2 3 4]", options[0].RouteSequence)
 	}
 }
+
+func TestRankRouteOptions_PresetDrivesRankingDifferences(t *testing.T) {
+	options := []BatchCreateRouteOption{
+		{
+			OptionID:       "safe-low-util",
+			AddedVolumeM3:  35,
+			TotalBuyISK:    40_000_000,
+			TotalSellISK:   42_500_000,
+			TotalProfitISK: 2_500_000,
+			TotalJumps:     7,
+			ISKPerJump:     357_142,
+			Lines: []BatchCreateRouteLine{
+				{TypeID: 1, Units: 35, UnitVolumeM3: 1, BuySystemID: 10, SellSystemID: 30, BuyLocationID: 1, SellLocationID: 2, ProfitTotalISK: 2_500_000, BuyTotalISK: 40_000_000, RouteJumps: 7, FillConfidence: 0.90, StaleRisk: 0.10, Concentration: 0.10},
+			},
+		},
+		{
+			OptionID:       "risky-high-util",
+			AddedVolumeM3:  90,
+			TotalBuyISK:    110_000_000,
+			TotalSellISK:   116_000_000,
+			TotalProfitISK: 6_000_000,
+			TotalJumps:     9,
+			ISKPerJump:     666_666,
+			Lines: []BatchCreateRouteLine{
+				{TypeID: 2, Units: 90, UnitVolumeM3: 1, BuySystemID: 10, SellSystemID: 30, BuyLocationID: 1, SellLocationID: 2, ProfitTotalISK: 6_000_000, BuyTotalISK: 110_000_000, RouteJumps: 9, FillConfidence: 0.45, StaleRisk: 0.70, Concentration: 0.75},
+			},
+		},
+	}
+	addedProfit := map[string]float64{
+		"safe-low-util":   2_500_000,
+		"risky-high-util": 6_000_000,
+	}
+
+	conservative := rankRouteOptions(options, addedProfit, 100, RouteExecutionScoringConfig{Preset: routeExecutionPresetConservative})
+	if len(conservative) < 2 {
+		t.Fatalf("expected 2 conservative options")
+	}
+	if conservative[0].OptionID != "safe-low-util" {
+		t.Fatalf("conservative top option = %q, want safe-low-util", conservative[0].OptionID)
+	}
+
+	maxFill := rankRouteOptions(options, addedProfit, 100, RouteExecutionScoringConfig{Preset: routeExecutionPresetMaxFill})
+	if len(maxFill) < 2 {
+		t.Fatalf("expected 2 max-fill options")
+	}
+	if maxFill[0].OptionID != "risky-high-util" {
+		t.Fatalf("max-fill top option = %q, want risky-high-util", maxFill[0].OptionID)
+	}
+}

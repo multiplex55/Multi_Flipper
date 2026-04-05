@@ -21,7 +21,7 @@ func TestClassifyRouteOptionLines_AssignsCore(t *testing.T) {
 		},
 	}
 
-	classifyRouteOptionLines(&option)
+	classifyRouteOptionLines(&option, RouteExecutionScoringConfig{})
 	if got := option.Lines[0].LineRole; got != routeLineRoleCore {
 		t.Fatalf("LineRole = %q, want %q", got, routeLineRoleCore)
 	}
@@ -46,7 +46,7 @@ func TestClassifyRouteOptionLines_AssignsSafeFiller(t *testing.T) {
 		},
 	}
 
-	classifyRouteOptionLines(&option)
+	classifyRouteOptionLines(&option, RouteExecutionScoringConfig{})
 	if got := option.Lines[0].LineRole; got != routeLineRoleSafeFiller {
 		t.Fatalf("LineRole = %q, want %q", got, routeLineRoleSafeFiller)
 	}
@@ -71,7 +71,7 @@ func TestClassifyRouteOptionLines_AssignsStretchFiller(t *testing.T) {
 		},
 	}
 
-	classifyRouteOptionLines(&option)
+	classifyRouteOptionLines(&option, RouteExecutionScoringConfig{})
 	if got := option.Lines[0].LineRole; got != routeLineRoleStretchFiller {
 		t.Fatalf("LineRole = %q, want %q", got, routeLineRoleStretchFiller)
 	}
@@ -105,7 +105,7 @@ func TestClassifyRouteOptionLines_BoundaryBehavior(t *testing.T) {
 		},
 	}
 
-	classifyRouteOptionLines(&option)
+	classifyRouteOptionLines(&option, RouteExecutionScoringConfig{})
 	if got := option.Lines[0].LineRole; got == routeLineRoleCore {
 		t.Fatalf("below threshold role = %q, want non-core", got)
 	}

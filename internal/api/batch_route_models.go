@@ -125,9 +125,9 @@ type RouteExecutionScoreWeights struct {
 }
 
 type RouteExecutionScoringConfig struct {
-	Preset            string                      `json:"preset,omitempty"`
-	UtilizationTarget float64                     `json:"utilization_target,omitempty"`
-	Weights           *RouteExecutionScoreWeights `json:"weights,omitempty"`
+	Preset            string                      `json:"preset"`
+	UtilizationTarget float64                     `json:"utilization_target"`
+	Weights           *RouteExecutionScoreWeights `json:"weights"`
 }
 
 type DeterministicSortConfig struct {
