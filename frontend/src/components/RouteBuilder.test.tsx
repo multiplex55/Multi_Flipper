@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@/lib/i18n";
 import { ToastProvider } from "@/components/Toast";
@@ -34,6 +40,11 @@ function makeRouteResult(): RouteResult {
         Profit: 2000,
         Jumps: 9,
         RegionID: 10000002,
+        modeled_qty: 1000,
+        buy_remaining: 1000,
+        sell_remaining: 1000,
+        effective_buy: 5,
+        effective_sell: 7,
       },
     ],
     TotalProfit: 2000,
@@ -80,6 +91,7 @@ describe("RouteBuilder planner interactions", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     cleanup();
   });
 
@@ -92,7 +104,9 @@ describe("RouteBuilder planner interactions", () => {
     const expandButton = await screen.findByTestId("route-planner-cta-expand");
     fireEvent.click(expandButton);
 
-    expect(await screen.findByTestId("route-execution-planner")).toBeInTheDocument();
+    expect(
+      await screen.findByTestId("route-execution-planner"),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("route-planner-manifest")).toBeInTheDocument();
   });
 
@@ -121,16 +135,22 @@ describe("RouteBuilder planner interactions", () => {
     fireEvent.doubleClick(routeRow);
 
     fireEvent.click(await screen.findByTestId("route-planner-cta-cargo"));
-    expect(await screen.findByTestId("route-execution-planner")).toBeInTheDocument();
+    expect(
+      await screen.findByTestId("route-execution-planner"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Route hops")).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText("Close dialog"));
     await waitFor(() => {
-      expect(screen.queryByTestId("route-execution-planner")).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("route-execution-planner"),
+      ).not.toBeInTheDocument();
     });
 
     fireEvent.click(await screen.findByTestId("route-planner-cta-expand"));
-    expect(await screen.findByTestId("route-execution-planner")).toBeInTheDocument();
+    expect(
+      await screen.findByTestId("route-execution-planner"),
+    ).toBeInTheDocument();
     expect(screen.getByText("Route hops")).toBeInTheDocument();
     expect(screen.getByTestId("route-result-row-0")).toHaveTextContent("Jita");
   });
@@ -158,16 +178,98 @@ describe("RouteBuilder planner interactions", () => {
     fireEvent.doubleClick(routeRow);
     fireEvent.click(await screen.findByTestId("route-planner-cta-validate"));
 
-    expect(await screen.findByTestId("route-validation-band")).toBeInTheDocument();
+    expect(
+      await screen.findByTestId("route-validation-band"),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText("Close dialog"));
     await waitFor(() => {
-      expect(screen.queryByTestId("route-execution-planner")).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId("route-execution-planner"),
+      ).not.toBeInTheDocument();
     });
 
     const postPlannerRow = screen.getByTestId("route-result-row-0");
     expect(postPlannerRow).toHaveTextContent("Amarr");
     expect(postPlannerRow).toHaveTextContent("2.0K");
+  });
+
+  it("renders green/yellow/red validation bands", async () => {
+    const green = makeRouteResult();
+    const yellow = makeRouteResult();
+    yellow.Hops[0].effective_buy = 5.3;
+    const red = makeRouteResult();
+    red.Hops[0].effective_buy = 5.8;
+
+    const { rerender } = render(
+      <I18nProvider>
+        <ToastProvider>
+          <RouteBuilder params={baseParams} loadedResults={[green]} />
+        </ToastProvider>
+      </I18nProvider>,
+    );
+    fireEvent.doubleClick(await screen.findByTestId("route-result-row-0"));
+    fireEvent.click(await screen.findByTestId("route-planner-cta-validate"));
+    expect(
+      await screen.findByTestId("route-validation-band"),
+    ).toHaveTextContent("green");
+    fireEvent.click(screen.getByLabelText("Close dialog"));
+
+    rerender(
+      <I18nProvider>
+        <ToastProvider>
+          <RouteBuilder params={baseParams} loadedResults={[yellow]} />
+        </ToastProvider>
+      </I18nProvider>,
+    );
+    fireEvent.doubleClick(await screen.findByTestId("route-result-row-0"));
+    fireEvent.click(await screen.findByTestId("route-planner-cta-validate"));
+    expect(
+      await screen.findByTestId("route-validation-band"),
+    ).toHaveTextContent("yellow");
+    fireEvent.click(screen.getByLabelText("Close dialog"));
+
+    rerender(
+      <I18nProvider>
+        <ToastProvider>
+          <RouteBuilder params={baseParams} loadedResults={[red]} />
+        </ToastProvider>
+      </I18nProvider>,
+    );
+    fireEvent.doubleClick(await screen.findByTestId("route-result-row-0"));
+    fireEvent.click(await screen.findByTestId("route-planner-cta-validate"));
+    expect(
+      await screen.findByTestId("route-validation-band"),
+    ).toHaveTextContent("red");
+  });
+
+  it("re-run validation updates summary and stop cards together", async () => {
+    const route = makeRouteResult();
+    route.Hops[0].snapshot_ts = "2026-04-04T11:55:00Z";
+    renderRouteBuilder([route]);
+
+    fireEvent.doubleClick(await screen.findByTestId("route-result-row-0"));
+    fireEvent.click(await screen.findByTestId("route-planner-cta-validate"));
+    expect(
+      await screen.findByTestId("route-stale-warning"),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByTestId("route-validation-summary"),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByTestId("route-validation-stops"),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("route-validation-rerun"));
+    expect(
+      await screen.findByTestId("route-stale-warning"),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByTestId("route-validation-summary"),
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByTestId("route-validation-stops"),
+    ).toBeInTheDocument();
   });
 
   it("renders station labels with enriched-field fallback when fields are missing", async () => {

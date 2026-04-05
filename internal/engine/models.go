@@ -244,12 +244,16 @@ type ScanParams struct {
 	AccessToken string
 
 	// --- Contract-specific filters ---
-	MinContractPrice           float64 // Minimum contract price in ISK (0 = use default 10M)
-	MaxContractMargin          float64 // Maximum margin % to filter scams (0 = use default 100%)
-	MinPricedRatio             float64 // Minimum fraction of items that must have market price (0 = use default 0.8)
-	RequireHistory             bool    // If true, skip items without market history
-	ContractInstantLiquidation bool    // If true, require immediate sell-side liquidation via buy-book depth (sell radius)
-	ContractHoldDays           int     // Non-instant mode: hold horizon in days (0 = default)
-	ContractTargetConfidence   float64 // Non-instant mode: minimum full-liquidation probability in % (0 = default)
-	ExcludeRigsWithShip        bool    // If true, exclude rig pricing when contract contains a ship
+	MinContractPrice                       float64 // Minimum contract price in ISK (0 = use default 10M)
+	MaxContractMargin                      float64 // Maximum margin % to filter scams (0 = use default 100%)
+	MinPricedRatio                         float64 // Minimum fraction of items that must have market price (0 = use default 0.8)
+	RequireHistory                         bool    // If true, skip items without market history
+	ContractInstantLiquidation             bool    // If true, require immediate sell-side liquidation via buy-book depth (sell radius)
+	ContractHoldDays                       int     // Non-instant mode: hold horizon in days (0 = default)
+	ContractTargetConfidence               float64 // Non-instant mode: minimum full-liquidation probability in % (0 = default)
+	ExcludeRigsWithShip                    bool    // If true, exclude rig pricing when contract contains a ship
+	RouteValidationMaxBuyDriftPct          float64
+	RouteValidationMaxSellDriftPct         float64
+	RouteValidationMinProfitRetainedPct    float64
+	RouteValidationMinLiquidityRetainedPct float64
 }
