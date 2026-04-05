@@ -1,10 +1,14 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@/lib/i18n";
 import { ToastProvider } from "@/components/Toast";
 import { ScanResultsTable } from "@/components/ScanResultsTable";
 import type { FlipResult } from "@/lib/types";
-import { addPinnedOpportunity, removePinnedOpportunity } from "@/lib/api";
+import {
+  addPinnedOpportunity,
+  getGankCheckBatch,
+  removePinnedOpportunity,
+} from "@/lib/api";
 
 vi.mock("@/lib/api", () => ({
   addToWatchlist: vi.fn(async () => undefined),
@@ -421,6 +425,49 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
     expect(screen.getByText("High B")).toBeInTheDocument();
     fireEvent.click(routeButtons[0]);
     expect(screen.queryByText("High A")).not.toBeInTheDocument();
+  });
+
+  it("honors Safest lens route ordering in route mode", async () => {
+    vi.mocked(getGankCheckBatch).mockResolvedValueOnce([
+      { key: "30000142:30002187", danger: "red", kills: 3, totalISK: 10_000_000 },
+      { key: "30002659:30002510", danger: "green", kills: 0, totalISK: 0 },
+    ]);
+
+    const redRoute = makeRow({
+      TypeID: 502,
+      TypeName: "Red Route",
+      BuyStation: "Jita Hub",
+      SellStation: "Amarr Hub",
+      BuySystemID: 30000142,
+      SellSystemID: 30002187,
+    });
+    const greenRoute = makeRow({
+      TypeID: 503,
+      TypeName: "Green Route",
+      BuyStation: "Dodixie Hub",
+      SellStation: "Rens Hub",
+      BuySystemID: 30002659,
+      SellSystemID: 30002510,
+    });
+
+    renderTable({
+      scanning: false,
+      results: [redRoute, greenRoute],
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Safest" })[0]);
+
+    await waitFor(() => {
+      const groupedRouteButtons = screen
+        .getAllByRole("button")
+        .filter((node) => {
+          const text = node.textContent ?? "";
+          return text.includes("→") && text.includes("items");
+        });
+      expect(groupedRouteButtons[0]).toHaveTextContent("Dodixie Hub → Rens Hub");
+      expect(groupedRouteButtons[1]).toHaveTextContent("Jita Hub → Amarr Hub");
+    });
   });
 
   it("keeps identical metric rows in deterministic order across rerenders", () => {
