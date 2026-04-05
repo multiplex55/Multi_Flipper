@@ -8,7 +8,7 @@ import {
   useEffect,
   useRef,
 } from "react";
-import type { FlipResult, StationCacheMeta, WatchlistItem, RouteState, SystemDanger } from "@/lib/types";
+import type { FlipResult, StationCacheMeta, WatchlistItem, RouteState, SystemDanger, StrategyScoreConfig } from "@/lib/types";
 import { formatISK, formatMargin } from "@/lib/format";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { buildRouteBatchMetadataByRow } from "@/lib/batchMetrics";
@@ -42,7 +42,7 @@ import { ExecutionPlannerPopup } from "./ExecutionPlannerPopup";
 import { handleEveUIError } from "@/lib/handleEveUIError";
 import { BatchBuilderPopup } from "./BatchBuilderPopup";
 import { RouteSafetyModal } from "./RouteSafetyModal";
-import { scoreFlipResult } from "@/lib/opportunityScore";
+import { scoreFlipResult, strategyScoreToOpportunityProfile, type OpportunityWeightProfile } from "@/lib/opportunityScore";
 import { OpportunityScoreDetails } from "./OpportunityScorePopover";
 import { mapScanRowToPinnedOpportunity } from "@/lib/pinnedOpportunityMapper";
 
@@ -115,6 +115,7 @@ interface Props {
   allowNullsec?: boolean;
   allowWormhole?: boolean;
   onOpenPriceValidation?: (manifestText: string) => void;
+  strategyScore?: StrategyScoreConfig;
 }
 
 type ColumnDef = {
@@ -748,6 +749,7 @@ function getCellValue(
     string,
     { batchNumber: number; batchProfit: number; batchTotalCapital: number; batchIskPerJump: number }
   >,
+  profile?: OpportunityWeightProfile,
 ): unknown {
   if (
     key === "BatchNumber" ||
@@ -767,7 +769,7 @@ function getCellValue(
   if (key === "BfSPerDay") return rowBfSPerDay(row);
   if (key === "S2BBfSRatio") return rowS2BBfSRatio(row);
   if (key === "RouteSafety") return null;
-  if (key === "OpportunityScore") return scoreFlipResult(row).finalScore;
+  if (key === "OpportunityScore") return scoreFlipResult(row, profile).finalScore;
   return row[key as keyof FlipResult];
 }
 
@@ -779,9 +781,10 @@ function passesFilter(
     string,
     { batchNumber: number; batchProfit: number; batchTotalCapital: number; batchIskPerJump: number }
   >,
+  profile?: OpportunityWeightProfile,
 ): boolean {
   if (!fval) return true;
-  const cellVal = getCellValue(row, col.key, batchMetricsByRow);
+  const cellVal = getCellValue(row, col.key, batchMetricsByRow, profile);
   if (
     col.key === "BatchNumber" ||
     col.key === "BatchProfit" ||
@@ -802,8 +805,9 @@ function fmtCell(
     string,
     { batchNumber: number; batchProfit: number; batchTotalCapital: number; batchIskPerJump: number }
   >,
+  profile?: OpportunityWeightProfile,
 ): string {
-  const val = getCellValue(row, col.key, batchMetricsByRow);
+  const val = getCellValue(row, col.key, batchMetricsByRow, profile);
   if (
     col.key === "BatchNumber" ||
     col.key === "BatchProfit" ||
@@ -920,12 +924,17 @@ export function ScanResultsTable({
   allowNullsec,
   allowWormhole,
   onOpenPriceValidation,
+  strategyScore,
 }: Props) {
   const { t } = useI18n();
   const emptyReason: EmptyReason = scanCompletedWithZero
     ? "no_results"
     : "no_scan_yet";
   const { addToast, removeToast } = useGlobalToast();
+  const opportunityProfile = useMemo(
+    () => strategyScoreToOpportunityProfile(strategyScore),
+    [strategyScore],
+  );
 
   const allColumnDefs = useMemo(
     () => buildColumnDefs(showRegions, columnProfile),
@@ -1337,7 +1346,7 @@ export function ScanResultsTable({
           for (const col of columnDefs) {
             const fval = filters[col.key];
             if (!fval) continue;
-            if (!passesFilter(ir.row, col, fval, batchMetricsByRow)) return false;
+            if (!passesFilter(ir.row, col, fval, batchMetricsByRow, opportunityProfile)) return false;
           }
           return true;
         })
@@ -1362,8 +1371,8 @@ export function ScanResultsTable({
         return sortDir === "asc" ? diff : -diff;
       }
 
-      const av = getCellValue(a.row, sortKey, batchMetricsByRow);
-      const bv = getCellValue(b.row, sortKey, batchMetricsByRow);
+      const av = getCellValue(a.row, sortKey, batchMetricsByRow, opportunityProfile);
+      const bv = getCellValue(b.row, sortKey, batchMetricsByRow, opportunityProfile);
       if (
         sortKey === "BatchNumber" ||
         sortKey === "BatchProfit" ||
@@ -1410,6 +1419,7 @@ export function ScanResultsTable({
     pinnedKeys,
     routeSafetyMap,
     batchMetricsByRow,
+    opportunityProfile,
   ]);
 
   // Available market groups derived from current results (region mode only)
@@ -2062,7 +2072,7 @@ export function ScanResultsTable({
     const csvRows = rows.map((ir) =>
       columnDefs
         .map((col) => {
-          const str = String(getCellValue(ir.row, col.key, batchMetricsByRow) ?? "");
+          const str = String(getCellValue(ir.row, col.key, batchMetricsByRow, opportunityProfile) ?? "");
           return str.includes(",") ? `"${str}"` : str;
         })
         .join(","),
@@ -2085,7 +2095,7 @@ export function ScanResultsTable({
         : visibleRows;
     const header = columnDefs.map((c) => t(c.labelKey)).join("\t");
     const tsv = rows.map((ir) =>
-      columnDefs.map((col) => fmtCell(col, ir.row, batchMetricsByRow)).join("\t"),
+      columnDefs.map((col) => fmtCell(col, ir.row, batchMetricsByRow, opportunityProfile)).join("\t"),
     );
     navigator.clipboard.writeText([header, ...tsv].join("\n"));
     addToast(t("copied"), "success", 2000);
@@ -2249,6 +2259,7 @@ export function ScanResultsTable({
         onRouteSafetyClick={handleRouteSafetyClick}
         onOpenScore={setScoreExplainRow}
         batchMetricsByRow={batchMetricsByRow}
+        opportunityProfile={opportunityProfile}
       />
     ),
     [
@@ -2270,6 +2281,7 @@ export function ScanResultsTable({
       routeSafetyMap,
       handleRouteSafetyClick,
       batchMetricsByRow,
+      opportunityProfile,
     ],
   );
 
@@ -3045,7 +3057,7 @@ export function ScanResultsTable({
             className="max-w-[92vw] w-[520px] rounded-sm border border-eve-border bg-eve-dark shadow-eve-glow-strong p-3"
           >
             <div className="mb-2 text-sm font-medium text-eve-text">Why this score?</div>
-            <OpportunityScoreDetails explanation={scoreFlipResult(scoreExplainRow)} />
+            <OpportunityScoreDetails explanation={scoreFlipResult(scoreExplainRow, opportunityProfile)} />
             <div className="mt-2 text-center">
               <button
                 type="button"
@@ -3535,6 +3547,7 @@ interface DataRowProps {
     string,
     { batchNumber: number; batchProfit: number; batchTotalCapital: number; batchIskPerJump: number }
   >;
+  opportunityProfile?: OpportunityWeightProfile;
 }
 
 /* ─── Trade Score Badge ─── */
@@ -3609,6 +3622,7 @@ const DataRow = memo(
     onToggleSelect, onTogglePin, tFn,
     routeSafetyEntry, onRouteSafetyClick, onOpenScore,
     batchMetricsByRow,
+    opportunityProfile,
   }: DataRowProps) {
     return (
       <tr
@@ -3719,7 +3733,7 @@ const DataRow = memo(
                 }}
                 aria-label="Why this score?"
               >
-                {scoreFlipResult(ir.row).finalScore.toFixed(1)}
+                {scoreFlipResult(ir.row, opportunityProfile).finalScore.toFixed(1)}
               </button>
             ) : col.key === ("RouteSafety" as SortKey) ? (
               <RouteSafetyCell
@@ -3729,9 +3743,9 @@ const DataRow = memo(
                 onRouteSafetyClick={onRouteSafetyClick}
               />
             ) : col.key === "BuyStation" ? (
-              <span className="truncate">{fmtCell(col, ir.row, batchMetricsByRow)}</span>
+              <span className="truncate">{fmtCell(col, ir.row, batchMetricsByRow, opportunityProfile)}</span>
             ) : (
-              fmtCell(col, ir.row, batchMetricsByRow)
+              fmtCell(col, ir.row, batchMetricsByRow, opportunityProfile)
             )}
           </td>
         ))}
@@ -3760,7 +3774,8 @@ const DataRow = memo(
     prev.onTogglePin === next.onTogglePin &&
     prev.routeSafetyEntry === next.routeSafetyEntry &&
     prev.onRouteSafetyClick === next.onRouteSafetyClick &&
-    prev.onOpenScore === next.onOpenScore,
+    prev.onOpenScore === next.onOpenScore &&
+    prev.opportunityProfile === next.opportunityProfile,
 );
 
 /* ─── EVE category name lookup ─── */

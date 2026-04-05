@@ -1,4 +1,4 @@
-import type { ContractResult, FlipResult, StationTrade } from "@/lib/types";
+import type { ContractResult, FlipResult, StationTrade, StrategyScoreConfig } from "@/lib/types";
 
 export type OpportunityFactor = "profit" | "risk" | "velocity" | "jumps" | "capital";
 
@@ -8,6 +8,19 @@ export interface OpportunityWeightProfile {
   velocity?: number;
   jumps?: number;
   capital?: number;
+}
+
+export function strategyScoreToOpportunityProfile(
+  strategyScore?: StrategyScoreConfig,
+): OpportunityWeightProfile | undefined {
+  if (!strategyScore) return undefined;
+  return {
+    profit: strategyScore.profit_weight,
+    risk: strategyScore.risk_weight,
+    velocity: strategyScore.velocity_weight,
+    jumps: strategyScore.jump_weight,
+    capital: strategyScore.capital_weight,
+  };
 }
 
 export type NormalizedWeights = Record<OpportunityFactor, number>;

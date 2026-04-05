@@ -52,7 +52,7 @@ import { PresetPicker } from "./PresetPicker";
 import { StationAIAssistant } from "./StationAIAssistant";
 import { SystemBlacklistButton } from "./SystemBlacklistButton";
 import { ScoringProfileEditor } from "./ScoringProfileEditor";
-import { scoreStationTrade } from "@/lib/opportunityScore";
+import { scoreStationTrade, strategyScoreToOpportunityProfile, type OpportunityWeightProfile } from "@/lib/opportunityScore";
 import { OpportunityScoreDetails } from "./OpportunityScorePopover";
 import { mapStationRowToPinnedOpportunity } from "@/lib/pinnedOpportunityMapper";
 import { DEFAULT_STRATEGY_SCORE } from "@/lib/scoringPresets";
@@ -229,8 +229,8 @@ function stationDailyProfit(row: StationTrade): number {
   );
 }
 
-function stationSortValue(row: StationTrade, key: SortKey): string | number {
-  if (key === "OpportunityScore") return scoreStationTrade(row).finalScore;
+function stationSortValue(row: StationTrade, key: SortKey, profile?: OpportunityWeightProfile): string | number {
+  if (key === "OpportunityScore") return scoreStationTrade(row, profile).finalScore;
   const value = row[key as keyof StationTrade];
   return typeof value === "number" || typeof value === "string" ? value : "";
 }
@@ -369,6 +369,10 @@ export function StationTrading({
 }: Props) {
   const { t } = useI18n();
   const operatorModeDevOnly = import.meta.env.DEV;
+  const opportunityProfile = useMemo(
+    () => strategyScoreToOpportunityProfile(strategyScore),
+    [strategyScore],
+  );
 
   const [stations, setStations] = useState<StationInfo[]>([]);
   const [selectedStationId, setSelectedStationId] =
@@ -1290,8 +1294,8 @@ export function StationTrading({
   const sorted = useMemo(() => {
     const copy = [...results];
     copy.sort((a, b) => {
-      const av = stationSortValue(a, sortKey);
-      const bv = stationSortValue(b, sortKey);
+      const av = stationSortValue(a, sortKey, opportunityProfile);
+      const bv = stationSortValue(b, sortKey, opportunityProfile);
       if (typeof av === "number" && typeof bv === "number") {
         const diff = sortDir === "asc" ? av - bv : bv - av;
         if (diff !== 0) return diff;
@@ -1304,7 +1308,7 @@ export function StationTrading({
       return stationRowKey(a).localeCompare(stationRowKey(b));
     });
     return copy;
-  }, [results, sortKey, sortDir]);
+  }, [opportunityProfile, results, sortKey, sortDir]);
 
   const hiddenEntries = useMemo(() => {
     return Object.values(hiddenTradeMap).sort((a, b) =>
@@ -1755,7 +1759,7 @@ export function StationTrading({
     row: StationTrade,
   ): string => {
     const val = col.key === "OpportunityScore"
-      ? scoreStationTrade(row).finalScore
+      ? scoreStationTrade(row, opportunityProfile).finalScore
       : row[col.key as keyof StationTrade];
     if (
       col.key === "BuyPrice" ||
@@ -1789,7 +1793,7 @@ export function StationTrading({
       return (val as number).toFixed(1);
     }
     if (col.key === "OpportunityScore") {
-      return scoreStationTrade(row).finalScore.toFixed(1);
+      return scoreStationTrade(row, opportunityProfile).finalScore.toFixed(1);
     }
     if (typeof val === "number") return formatNumber(val);
     return String(val);
@@ -3092,7 +3096,7 @@ export function StationTrading({
                             }}
                             aria-label="Why this score?"
                           >
-                            {scoreStationTrade(row).finalScore.toFixed(1)}
+                            {scoreStationTrade(row, opportunityProfile).finalScore.toFixed(1)}
                           </button>
                         ) : (
                           formatCell(col, row)
@@ -3188,7 +3192,7 @@ export function StationTrading({
             className="max-w-[92vw] w-[520px] rounded-sm border border-eve-border bg-eve-dark shadow-eve-glow-strong p-3"
           >
             <div className="mb-2 text-sm font-medium text-eve-text">Why this score?</div>
-            <OpportunityScoreDetails explanation={scoreStationTrade(scoreExplainRow)} />
+            <OpportunityScoreDetails explanation={scoreStationTrade(scoreExplainRow, opportunityProfile)} />
             <div className="mt-2 text-center">
               <button
                 type="button"

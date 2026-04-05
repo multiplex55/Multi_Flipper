@@ -2012,6 +2012,7 @@ function App() {
                   setVerifierInitialManifestText(manifestText);
                   setShowVerifierModal(true);
                 }}
+                strategyScore={strategyScore}
               />
             </div>
             <div
@@ -2110,6 +2111,7 @@ function App() {
                   setVerifierInitialManifestText(manifestText);
                   setShowVerifierModal(true);
                 }}
+                strategyScore={strategyScore}
               />
             </div>
             <div
@@ -2133,6 +2135,7 @@ function App() {
                 excludeRigPriceIfShip={params.exclude_rigs_with_ship ?? true}
                 filterHints={contractFilterHints}
                 isLoggedIn={authStatus.logged_in}
+                strategyScore={strategyScore}
               />
             </div>
             <div
