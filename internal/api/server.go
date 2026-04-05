@@ -3479,6 +3479,8 @@ func (s *Server) handleBatchCreateRoute(w http.ResponseWriter, r *http.Request) 
 
 	ranked := make([]RouteAdditionOption, 0, len(planResult.Options))
 	addedLines := make([]RouteAdditionLine, 0)
+	recommendedOptionIdx := -1
+	bestRecommendationScore := -1.0
 	for idx, opt := range planResult.Options {
 		lines := make([]RouteAdditionLine, 0, len(opt.Lines))
 		for _, line := range opt.Lines {
@@ -3502,28 +3504,29 @@ func (s *Server) handleBatchCreateRoute(w http.ResponseWriter, r *http.Request) 
 				LineRole:           line.LineRole,
 			}
 			lines = append(lines, apiLine)
-			if idx == 0 {
-				addedLines = append(addedLines, apiLine)
-			}
 		}
 		utilization := 0.0
 		if req.CargoLimitM3 > 0 {
 			utilization = ((req.CargoLimitM3 - req.RemainingCapacityM3 + opt.AddedVolumeM3) / req.CargoLimitM3) * 100
 		}
 		ranked = append(ranked, RouteAdditionOption{
-			OptionID:       opt.OptionID,
-			Rank:           idx + 1,
-			Lines:          lines,
-			LineCount:      len(lines),
-			AddedVolumeM3:  opt.AddedVolumeM3,
-			UtilizationPct: utilization,
-			TotalBuyISK:    opt.TotalBuyISK,
-			TotalSellISK:   opt.TotalSellISK,
-			TotalProfitISK: opt.TotalProfitISK,
-			TotalJumps:     opt.TotalJumps,
-			ISKPerJump:     opt.ISKPerJump,
-			ExecutionScore: opt.ExecutionScore,
-			ScoreBreakdown: append([]engine.RouteScoreFactorBreakdown(nil), opt.ScoreBreakdown...),
+			OptionID:            opt.OptionID,
+			Rank:                idx + 1,
+			Lines:               lines,
+			LineCount:           len(lines),
+			AddedVolumeM3:       opt.AddedVolumeM3,
+			UtilizationPct:      utilization,
+			TotalBuyISK:         opt.TotalBuyISK,
+			TotalSellISK:        opt.TotalSellISK,
+			TotalProfitISK:      opt.TotalProfitISK,
+			TotalJumps:          opt.TotalJumps,
+			ISKPerJump:          opt.ISKPerJump,
+			ExecutionScore:      opt.ExecutionScore,
+			Recommended:         opt.Recommended,
+			RecommendationScore: opt.RecommendationScore,
+			ReasonChips:         append([]string(nil), opt.ReasonChips...),
+			WarningChips:        append([]string(nil), opt.WarningChips...),
+			ScoreBreakdown:      append([]engine.RouteScoreFactorBreakdown(nil), opt.ScoreBreakdown...),
 			RankingInputs: RouteOptionRankingInputs{
 				TotalProfitISK: opt.TotalProfitISK,
 				TotalJumps:     opt.TotalJumps,
@@ -3541,6 +3544,26 @@ func (s *Server) handleBatchCreateRoute(w http.ResponseWriter, r *http.Request) 
 			SafeFillerProfitISK:    opt.SafeFillerProfitISK,
 			StretchFillerProfitISK: opt.StretchFillerProfitISK,
 		})
+		if opt.Recommended {
+			recommendedOptionIdx = idx
+		}
+		if opt.RecommendationScore > bestRecommendationScore {
+			bestRecommendationScore = opt.RecommendationScore
+		}
+	}
+	if recommendedOptionIdx < 0 && len(ranked) > 0 {
+		for idx := range ranked {
+			if ranked[idx].RecommendationScore == bestRecommendationScore {
+				recommendedOptionIdx = idx
+				break
+			}
+		}
+	}
+	for idx := range ranked {
+		ranked[idx].Recommended = idx == recommendedOptionIdx
+	}
+	if recommendedOptionIdx >= 0 {
+		addedLines = append(addedLines, ranked[recommendedOptionIdx].Lines...)
 	}
 
 	totalUnits := req.BaseBatch.TotalUnits
@@ -3609,9 +3632,9 @@ func (s *Server) handleBatchCreateRoute(w http.ResponseWriter, r *http.Request) 
 			SellTotalISK:   added.SellTotalISK,
 		})
 	}
-	if len(ranked) > 0 {
-		selectedRouteSequence = append(selectedRouteSequence, ranked[0].RouteSequence...)
-		selectedTotalJumps = ranked[0].TotalJumps
+	if recommendedOptionIdx >= 0 && len(ranked) > recommendedOptionIdx {
+		selectedRouteSequence = append(selectedRouteSequence, ranked[recommendedOptionIdx].RouteSequence...)
+		selectedTotalJumps = ranked[recommendedOptionIdx].TotalJumps
 	}
 	manifest := engine.BuildRouteExecutionManifest(engine.RouteExecutionManifestBuildInput{
 		Origin: engine.RouteExecutionManifestEndpoint{

@@ -1,5 +1,9 @@
 import { formatISK } from "@/lib/format";
-import { rowBatchIdentityKey, type RouteBatchMetadata } from "@/lib/batchMetrics";
+import {
+  rowBatchIdentityKey,
+  type RouteBatchMetadata,
+} from "@/lib/batchMetrics";
+import { routeRecommendationScoreFromMetrics } from "@/lib/radiusMetrics";
 import type { FlipResult } from "@/lib/types";
 
 export type BatchSyntheticKey =
@@ -25,7 +29,8 @@ export type BatchSyntheticKey =
   | "RoutePackRiskSpikeCount"
   | "RoutePackRiskNoHistoryCount"
   | "RoutePackRiskUnstableHistoryCount"
-  | "RoutePackTotalRiskCount";
+  | "RoutePackTotalRiskCount"
+  | "RoutePackRecommendationScore";
 
 export type BatchMetadataByRow = Record<string, RouteBatchMetadata>;
 
@@ -47,20 +52,26 @@ export function getBatchSyntheticValue(
   if (key === "RoutePackTotalProfit") return metadata.routeTotalProfit;
   if (key === "RoutePackTotalCapital") return metadata.routeTotalCapital;
   if (key === "RoutePackTotalVolume") return metadata.routeTotalVolume;
-  if (key === "RoutePackCapacityUsedPercent") return metadata.routeCapacityUsedPercent;
+  if (key === "RoutePackCapacityUsedPercent")
+    return metadata.routeCapacityUsedPercent;
   if (key === "RoutePackRealIskPerJump") return metadata.routeRealIskPerJump;
   if (key === "RoutePackDailyIskPerJump") return metadata.routeDailyIskPerJump;
   if (key === "RoutePackDailyProfit") return metadata.routeDailyProfit;
-  if (key === "RoutePackRealIskPerM3PerJump") return metadata.routeRealIskPerM3PerJump;
-  if (key === "RoutePackDailyProfitOverCapital") return metadata.routeDailyProfitOverCapital;
-  if (key === "RoutePackWeightedSlippagePct") return metadata.routeWeightedSlippagePct;
+  if (key === "RoutePackRealIskPerM3PerJump")
+    return metadata.routeRealIskPerM3PerJump;
+  if (key === "RoutePackDailyProfitOverCapital")
+    return metadata.routeDailyProfitOverCapital;
+  if (key === "RoutePackWeightedSlippagePct")
+    return metadata.routeWeightedSlippagePct;
   if (key === "RoutePackWeakestExecutionQuality")
     return metadata.routeWeakestExecutionQuality;
   if (key === "RoutePackTurnoverDays") return metadata.routeTurnoverDays;
-  if (key === "RoutePackExitOverhangDays") return metadata.routeExitOverhangDays;
+  if (key === "RoutePackExitOverhangDays")
+    return metadata.routeExitOverhangDays;
   if (key === "RoutePackBreakevenBuffer") return metadata.routeBreakevenBuffer;
   if (key === "RoutePackRiskSpikeCount") return metadata.routeRiskSpikeCount;
-  if (key === "RoutePackRiskNoHistoryCount") return metadata.routeRiskNoHistoryCount;
+  if (key === "RoutePackRiskNoHistoryCount")
+    return metadata.routeRiskNoHistoryCount;
   if (key === "RoutePackRiskUnstableHistoryCount")
     return metadata.routeRiskUnstableHistoryCount;
   if (key === "RoutePackTotalRiskCount")
@@ -70,10 +81,27 @@ export function getBatchSyntheticValue(
       metadata.routeRiskUnstableHistoryCount +
       metadata.routeRiskThinFillCount
     );
+  if (key === "RoutePackRecommendationScore") {
+    return routeRecommendationScoreFromMetrics({
+      routeDailyIskPerJump: metadata.routeDailyIskPerJump,
+      routeWeakestExecutionQuality: metadata.routeWeakestExecutionQuality,
+      routeWeightedSlippagePct: metadata.routeWeightedSlippagePct,
+      routeTotalRiskCount:
+        metadata.routeRiskSpikeCount +
+        metadata.routeRiskNoHistoryCount +
+        metadata.routeRiskUnstableHistoryCount +
+        metadata.routeRiskThinFillCount,
+      routeTurnoverDays: metadata.routeTurnoverDays,
+      routeCapacityUsedPercent: metadata.routeCapacityUsedPercent,
+    });
+  }
   return metadata.batchTotalCapital;
 }
 
-export function formatBatchSyntheticCell(key: BatchSyntheticKey, value: number | null): string {
+export function formatBatchSyntheticCell(
+  key: BatchSyntheticKey,
+  value: number | null,
+): string {
   if (
     key === "BatchNumber" ||
     key === "RoutePackItemCount" ||
@@ -100,7 +128,9 @@ export function formatBatchSyntheticCell(key: BatchSyntheticKey, value: number |
     key === "RoutePackExitOverhangDays"
   ) {
     if (value == null || value <= 0) return "\u2014";
-    return key === "RoutePackExitOverhangDays" ? `${value.toFixed(1)}d` : value.toFixed(1);
+    return key === "RoutePackExitOverhangDays"
+      ? `${value.toFixed(1)}d`
+      : value.toFixed(1);
   }
   if (key === "RoutePackTotalVolume") {
     if (value == null || value <= 0) return "\u2014";
@@ -122,7 +152,10 @@ export function compareBatchSyntheticValues(
   return sortDir === "asc" ? diff : -diff;
 }
 
-export function passesBatchNumericFilter(value: number | null, filterValue: string): boolean {
+export function passesBatchNumericFilter(
+  value: number | null,
+  filterValue: string,
+): boolean {
   if (!filterValue) return true;
   if (value == null) return false;
   const min = Number(filterValue);

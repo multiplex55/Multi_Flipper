@@ -191,5 +191,6 @@ func rankRouteOptions(options []BatchCreateRouteOption, addedProfitByOptionID ma
 		classifyRouteOptionLines(&ranked[i])
 	}
 	sortByExecutionScore(ranked, addedProfitByOptionID, cargoLimitM3)
+	markRecommendedRouteOption(ranked)
 	return ranked
 }

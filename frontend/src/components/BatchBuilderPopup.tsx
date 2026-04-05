@@ -158,8 +158,8 @@ export function BatchBuilderPopup({
   const [routeState, setRouteState] = useState<RouteState>("idle");
   const [routeOptions, setRouteOptions] = useState<RouteAdditionOption[]>([]);
   const [routeSortBy, setRouteSortBy] = useState<
-    "execution_score" | "isk_per_jump" | "total_profit_isk"
-  >("execution_score");
+    "recommended" | "execution_score" | "isk_per_jump" | "total_profit_isk"
+  >("recommended");
   const [routeError, setRouteError] = useState<string | null>(null);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [mergedManifest, setMergedManifest] =
@@ -174,7 +174,7 @@ export function BatchBuilderPopup({
     setCargoLimitM3(defaultCargoM3 > 0 ? defaultCargoM3 : 0);
     setRouteState("idle");
     setRouteOptions([]);
-    setRouteSortBy("execution_score");
+    setRouteSortBy("recommended");
     setRouteError(null);
     setSelectedOptionId(null);
     setMergedManifest(null);
@@ -307,6 +307,14 @@ export function BatchBuilderPopup({
     decorated.sort((a, b) => {
       const left = a.option;
       const right = b.option;
+      if (
+        routeSortBy === "recommended" &&
+        (left.recommendation_score ?? 0) !== (right.recommendation_score ?? 0)
+      ) {
+        return (
+          (right.recommendation_score ?? 0) - (left.recommendation_score ?? 0)
+        );
+      }
       if (
         routeSortBy === "isk_per_jump" &&
         left.isk_per_jump !== right.isk_per_jump
@@ -811,9 +819,22 @@ export function BatchBuilderPopup({
         setRouteError(t("batchBuilderRouteNoOptions"));
         return;
       }
-      setSelectedOptionId(null);
-      setMergedManifest(null);
-      setRouteState("results");
+      const recommended =
+        options.find((option) => option.recommended) ??
+        [...options].sort(
+          (a, b) =>
+            (b.recommendation_score ?? 0) - (a.recommendation_score ?? 0),
+        )[0] ??
+        null;
+      if (recommended && baseBatchManifest) {
+        setSelectedOptionId(recommended.option_id);
+        setMergedManifest(buildMergedManifest(baseBatchManifest, recommended));
+        setRouteState("selected");
+      } else {
+        setSelectedOptionId(null);
+        setMergedManifest(null);
+        setRouteState("results");
+      }
       setLastProgress(
         t("batchBuilderRouteSearchComplete", { count: options.length }),
       );
@@ -991,6 +1012,7 @@ export function BatchBuilderPopup({
                   onChange={(e) =>
                     setRouteSortBy(
                       e.target.value as
+                        | "recommended"
                         | "execution_score"
                         | "isk_per_jump"
                         | "total_profit_isk",
@@ -998,6 +1020,7 @@ export function BatchBuilderPopup({
                   }
                   className="px-2 py-1 bg-eve-input border border-eve-border rounded-sm text-eve-text"
                 >
+                  <option value="recommended">Recommended</option>
                   <option value="execution_score">Execution Score</option>
                   <option value="isk_per_jump">ISK / Jump</option>
                   <option value="total_profit_isk">Net Profit</option>
@@ -1010,6 +1033,7 @@ export function BatchBuilderPopup({
                   ? buildMergedManifest(baseBatchManifest, option)
                   : null;
                 const selected = option.option_id === selectedOptionId;
+                const recommended = !!option.recommended;
                 return (
                   <button
                     type="button"
@@ -1031,9 +1055,37 @@ export function BatchBuilderPopup({
                       </span>
                       <span className="text-eve-dim">#{option.rank}</span>
                     </div>
+                    {recommended && (
+                      <div className="mt-1 inline-flex items-center rounded-sm border border-emerald-400/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-emerald-300">
+                        Recommended
+                      </div>
+                    )}
                     <div className="mt-1 text-[11px] text-blue-300">
-                      Execution Score: {option.execution_score.toFixed(1)}
+                      Execution: {option.execution_score.toFixed(1)} |
+                      Recommendation:{" "}
+                      {(option.recommendation_score ?? 0).toFixed(1)}
                     </div>
+                    {((option.reason_chips?.length ?? 0) > 0 ||
+                      (option.warning_chips?.length ?? 0) > 0) && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {(option.reason_chips ?? []).map((chip) => (
+                          <span
+                            key={`${option.option_id}-reason-${chip}`}
+                            className="rounded-sm border border-blue-400/30 bg-blue-500/10 px-1.5 py-0.5 text-[10px] text-blue-200"
+                          >
+                            {chip}
+                          </span>
+                        ))}
+                        {(option.warning_chips ?? []).map((chip) => (
+                          <span
+                            key={`${option.option_id}-warning-${chip}`}
+                            className="rounded-sm border border-amber-400/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-200"
+                          >
+                            {chip}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-1 text-[11px] mt-2">
                       <div className="text-eve-dim">
                         {t("batchBuilderRouteAddedItems")}: {option.line_count}

@@ -52,7 +52,8 @@ export function slippageCostIsk(row: FlipResult): number {
 
   const buyBase = safeNumber(row.BuyPrice);
   const buyExec = safeNumber(row.ExpectedBuyPrice);
-  const buySlipPerUnit = buyExec > 0 && buyBase > 0 ? Math.max(0, buyExec - buyBase) : 0;
+  const buySlipPerUnit =
+    buyExec > 0 && buyBase > 0 ? Math.max(0, buyExec - buyBase) : 0;
 
   const sellBase = safeNumber(row.SellPrice);
   const sellExec = safeNumber(row.ExpectedSellPrice);
@@ -69,4 +70,48 @@ export function radiusRouteKey(row: FlipResult): string {
     row.BuyStation || row.BuySystemName || "",
     row.SellStation || row.SellSystemName || "",
   ].join(":");
+}
+
+export function routeRecommendationScoreFromMetrics(input: {
+  routeDailyIskPerJump: number;
+  routeWeakestExecutionQuality: number;
+  routeWeightedSlippagePct: number;
+  routeTotalRiskCount: number;
+  routeTurnoverDays: number | null;
+  routeCapacityUsedPercent: number | null;
+}): number {
+  const dailyNorm = Math.max(
+    0,
+    Math.min(1, safeNumber(input.routeDailyIskPerJump) / 5_000_000),
+  );
+  const qualityNorm = Math.max(
+    0,
+    Math.min(1, safeNumber(input.routeWeakestExecutionQuality) / 100),
+  );
+  const slipPenalty = Math.max(
+    0,
+    Math.min(1, safeNumber(input.routeWeightedSlippagePct) / 30),
+  );
+  const riskPenalty = Math.max(
+    0,
+    Math.min(1, safeNumber(input.routeTotalRiskCount) / 8),
+  );
+  const turnoverNorm =
+    input.routeTurnoverDays != null && input.routeTurnoverDays > 0
+      ? Math.max(0, Math.min(1, 1 - input.routeTurnoverDays / 30))
+      : 0.5;
+  const utilTarget = 70;
+  const util = safeNumber(input.routeCapacityUsedPercent);
+  const utilNorm =
+    util > 0
+      ? Math.max(0, Math.min(1, 1 - Math.abs(util - utilTarget) / utilTarget))
+      : 0.4;
+  const score =
+    0.28 * dailyNorm +
+    0.28 * qualityNorm +
+    0.14 * turnoverNorm +
+    0.12 * utilNorm -
+    0.1 * slipPenalty -
+    0.08 * riskPenalty;
+  return Math.max(0, Math.min(100, score * 100));
 }

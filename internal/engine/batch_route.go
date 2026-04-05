@@ -89,6 +89,10 @@ type BatchCreateRouteOption struct {
 	TotalJumps             int
 	ISKPerJump             float64
 	ExecutionScore         float64
+	RecommendationScore    float64
+	Recommended            bool
+	ReasonChips            []string
+	WarningChips           []string
 	ScoreBreakdown         []RouteScoreFactorBreakdown
 	CoreLineCount          int
 	SafeFillerLineCount    int

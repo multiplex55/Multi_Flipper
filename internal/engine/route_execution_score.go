@@ -89,6 +89,10 @@ func applyExecutionScoring(options []BatchCreateRouteOption, cargoLimitM3 float6
 		fillConf    float64
 		concentRisk float64
 		staleRisk   float64
+		riskCount   float64
+		weakestQual float64
+		routeConf   float64
+		dailyProxy  float64
 	}
 	metrics := make([]metricSet, len(options))
 	profitVals := make([]float64, len(options))
@@ -100,12 +104,17 @@ func applyExecutionScoring(options []BatchCreateRouteOption, cargoLimitM3 float6
 	fillVals := make([]float64, len(options))
 	concVals := make([]float64, len(options))
 	staleVals := make([]float64, len(options))
+	riskCountVals := make([]float64, len(options))
+	weakestVals := make([]float64, len(options))
+	dailyProxyVals := make([]float64, len(options))
 
 	for i, opt := range options {
 		stopKeys := map[string]struct{}{}
 		fillSum := 0.0
 		concSum := 0.0
 		staleSum := 0.0
+		riskCount := 0
+		weakestQual := 1.0
 		lineCount := float64(len(opt.Lines))
 		for _, line := range opt.Lines {
 			stopKeys[fmt.Sprintf("%d|%d", line.BuySystemID, line.BuyLocationID)] = struct{}{}
@@ -113,6 +122,19 @@ func applyExecutionScoring(options []BatchCreateRouteOption, cargoLimitM3 float6
 			fillSum += clampUnit(line.FillConfidence)
 			concSum += clampUnit(line.Concentration)
 			staleSum += clampUnit(line.StaleRisk)
+			lineQuality := clampUnit((0.65 * clampUnit(line.FillConfidence)) + (0.2 * (1 - clampUnit(line.StaleRisk))) + (0.15 * (1 - clampUnit(line.Concentration))))
+			if lineQuality < weakestQual {
+				weakestQual = lineQuality
+			}
+			if clampUnit(line.FillConfidence) < 0.45 {
+				riskCount++
+			}
+			if clampUnit(line.StaleRisk) > 0.65 {
+				riskCount++
+			}
+			if clampUnit(line.Concentration) > 0.65 {
+				riskCount++
+			}
 		}
 		util := 0.0
 		if cargoLimitM3 > 0 {
@@ -125,7 +147,11 @@ func applyExecutionScoring(options []BatchCreateRouteOption, cargoLimitM3 float6
 			fill = fillSum / lineCount
 			conc = concSum / lineCount
 			stale = staleSum / lineCount
+		} else {
+			weakestQual = 0
 		}
+		routeConf := clampUnit((0.55 * fill) + (0.25 * (1 - stale)) + (0.20 * (1 - conc)))
+		dailyProxy := opt.ISKPerJump * routeConf
 		detour := 0.0
 		if opt.TotalJumps > 0 {
 			detour = float64(opt.TotalJumps)
@@ -140,6 +166,10 @@ func applyExecutionScoring(options []BatchCreateRouteOption, cargoLimitM3 float6
 			fillConf:    fill,
 			concentRisk: conc,
 			staleRisk:   stale,
+			riskCount:   float64(riskCount),
+			weakestQual: weakestQual,
+			routeConf:   routeConf,
+			dailyProxy:  dailyProxy,
 		}
 		metrics[i] = m
 		profitVals[i] = m.profit
@@ -151,6 +181,9 @@ func applyExecutionScoring(options []BatchCreateRouteOption, cargoLimitM3 float6
 		fillVals[i] = m.fillConf
 		concVals[i] = m.concentRisk
 		staleVals[i] = m.staleRisk
+		riskCountVals[i] = m.riskCount
+		weakestVals[i] = m.weakestQual
+		dailyProxyVals[i] = m.dailyProxy
 	}
 	minProfit, maxProfit := minMax(profitVals)
 	minISKJump, maxISKJump := minMax(iskJumpVals)
@@ -160,6 +193,8 @@ func applyExecutionScoring(options []BatchCreateRouteOption, cargoLimitM3 float6
 	minFill, maxFill := minMax(fillVals)
 	minConc, maxConc := minMax(concVals)
 	minStale, maxStale := minMax(staleVals)
+	minRiskCount, maxRiskCount := minMax(riskCountVals)
+	minDailyProxy, maxDailyProxy := minMax(dailyProxyVals)
 	targetUtil := clampUnit(cfg.UtilizationTarget)
 
 	for i := range options {
@@ -188,7 +223,41 @@ func applyExecutionScoring(options []BatchCreateRouteOption, cargoLimitM3 float6
 		}
 		options[i].ExecutionScore = math.Max(0, math.Min(100, score))
 		options[i].ScoreBreakdown = factors
+
+		recommendationFactors := routeRecommendationFactors{
+			ExecutionNorm:        clampUnit(options[i].ExecutionScore / 100),
+			RouteConfidence:      m.routeConf,
+			DailyISKJumpNorm:     normalizedRange(m.dailyProxy, minDailyProxy, maxDailyProxy),
+			WeakestQuality:       normalizedRange(m.weakestQual, minWeakest(weakestVals), maxWeakest(weakestVals)),
+			RiskCountNorm:        normalizedRange(m.riskCount, minRiskCount, maxRiskCount),
+			StopCountNorm:        normalizedRange(m.stopCount, minStop, maxStop),
+			UtilizationAlignment: utilNorm,
+			AvgFill:              m.fillConf,
+			AvgStale:             m.staleRisk,
+			AvgConcentration:     m.concentRisk,
+			RiskCount:            int(m.riskCount),
+			StopCount:            int(m.stopCount),
+		}
+		recommendationRaw := (0.30 * recommendationFactors.ExecutionNorm) +
+			(0.20 * recommendationFactors.RouteConfidence) +
+			(0.20 * recommendationFactors.DailyISKJumpNorm) +
+			(0.15 * recommendationFactors.WeakestQuality) +
+			(0.10 * recommendationFactors.UtilizationAlignment) -
+			(0.03 * recommendationFactors.RiskCountNorm) -
+			(0.02 * recommendationFactors.StopCountNorm)
+		options[i].RecommendationScore = math.Max(0, math.Min(100, recommendationRaw*100))
+		options[i].ReasonChips, options[i].WarningChips = buildRouteReasonChips(recommendationFactors)
 	}
+}
+
+func minWeakest(values []float64) float64 {
+	minVal, _ := minMax(values)
+	return minVal
+}
+
+func maxWeakest(values []float64) float64 {
+	_, maxVal := minMax(values)
+	return maxVal
 }
 
 func makeScoreFactor(key, label string, raw, norm, weight float64, higherIsBetter bool) RouteScoreFactorBreakdown {
@@ -281,4 +350,24 @@ func sortByExecutionScore(ranked []BatchCreateRouteOption, addedProfitByOptionID
 		}
 		return left.OptionID < right.OptionID
 	})
+}
+
+func markRecommendedRouteOption(ranked []BatchCreateRouteOption) {
+	if len(ranked) == 0 {
+		return
+	}
+	bestIdx := 0
+	for i := 1; i < len(ranked); i++ {
+		left := ranked[i]
+		right := ranked[bestIdx]
+		if left.RecommendationScore > right.RecommendationScore ||
+			(left.RecommendationScore == right.RecommendationScore && left.ExecutionScore > right.ExecutionScore) ||
+			(left.RecommendationScore == right.RecommendationScore && left.ExecutionScore == right.ExecutionScore && left.TotalJumps < right.TotalJumps) ||
+			(left.RecommendationScore == right.RecommendationScore && left.ExecutionScore == right.ExecutionScore && left.TotalJumps == right.TotalJumps && left.OptionID < right.OptionID) {
+			bestIdx = i
+		}
+	}
+	for i := range ranked {
+		ranked[i].Recommended = i == bestIdx
+	}
 }

@@ -155,7 +155,11 @@ func TestBatchCreateRouteRequestApplyDefaults(t *testing.T) {
 
 func TestRouteAdditionOptionJSONIncludesRoleAndLineFields(t *testing.T) {
 	option := RouteAdditionOption{
-		OptionID: "x",
+		OptionID:            "x",
+		Recommended:         true,
+		RecommendationScore: 87.5,
+		ReasonChips:         []string{"High ISK/jump"},
+		WarningChips:        []string{"Thin fill"},
 		Lines: []RouteAdditionLine{{
 			TypeID:             1,
 			LineExecutionScore: 55.5,
@@ -178,6 +182,10 @@ func TestRouteAdditionOptionJSONIncludesRoleAndLineFields(t *testing.T) {
 	payload := string(body)
 	for _, expected := range []string{
 		`"line_execution_score"`,
+		`"recommended"`,
+		`"recommendation_score"`,
+		`"reason_chips"`,
+		`"warning_chips"`,
 		`"line_role"`,
 		`"fill_confidence"`,
 		`"stale_risk"`,
