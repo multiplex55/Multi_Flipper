@@ -1,9 +1,10 @@
+import React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ParametersPanel } from "@/components/ParametersPanel";
 import { ContractParametersPanel } from "@/components/ContractParametersPanel";
 import { StationTrading } from "@/components/StationTrading";
-import type { ScanParams, StrategyScoreConfig } from "@/lib/types";
+import type { ScanParams, StationTrade, StrategyScoreConfig } from "@/lib/types";
 
 vi.mock("@/lib/i18n", () => ({
   useI18n: () => ({ t: (key: string) => key, locale: "en" }),
@@ -29,6 +30,10 @@ vi.mock("@/lib/api", () => ({
   removeFromWatchlist: vi.fn().mockResolvedValue(undefined),
   openMarketInGame: vi.fn().mockResolvedValue(undefined),
   setWaypointInGame: vi.fn().mockResolvedValue(undefined),
+  getBanlistItems: vi.fn().mockResolvedValue([]),
+  getBannedStations: vi.fn().mockResolvedValue([]),
+  listPinnedOpportunities: vi.fn().mockResolvedValue([]),
+  subscribePinnedOpportunityChanges: vi.fn(() => () => undefined),
 }));
 
 afterEach(() => {
@@ -52,6 +57,54 @@ const strategy: StrategyScoreConfig = {
   jump_weight: 10,
   capital_weight: 10,
 };
+
+function makeTrade(overrides: Partial<StationTrade> = {}): StationTrade {
+  return {
+    TypeID: 34,
+    TypeName: "Tritanium",
+    Volume: 0.01,
+    StationID: 60003760,
+    StationName: "Jita IV - Moon 4",
+    RegionID: 10000002,
+    SystemID: 30000142,
+    BuyPrice: 1,
+    SellPrice: 2,
+    Spread: 1,
+    ProfitPerUnit: 1,
+    MarginPercent: 10,
+    DailyVolume: 1000,
+    BuyOrderCount: 10,
+    SellOrderCount: 10,
+    BuyVolume: 1000,
+    SellVolume: 1000,
+    TotalProfit: 100,
+    DailyProfit: 100,
+    RealizableDailyProfit: 100,
+    ROI: 5,
+    CapitalRequired: 10000,
+    BuyUnitsPerDay: 100,
+    SellUnitsPerDay: 100,
+    BvSRatio: 1,
+    CTS: 40,
+    SDS: 10,
+    PVI: 10,
+    OBDS: 10,
+    DOS: 5,
+    S2BPerDay: 100,
+    BfSPerDay: 50,
+    S2BBfSRatio: 2,
+    PeriodROI: 3,
+    NowROI: 2,
+    VWAP: 1.5,
+    CI: 10,
+    AvgPrice: 1.4,
+    PriceHigh: 1.8,
+    PriceLow: 1.0,
+    IsHighRiskFlag: false,
+    IsExtremePriceFlag: false,
+    ...overrides,
+  };
+}
 
 describe("ScoringProfile integration", () => {
   it("renders in ParametersPanel and emits strategy updates", () => {
@@ -116,5 +169,48 @@ describe("ScoringProfile integration", () => {
       ...strategy,
       velocity_weight: 15,
     });
+  });
+
+  it("updates displayed station score when scoring slider changes", () => {
+    function Wrapper() {
+      const [value, setValue] = React.useState<StrategyScoreConfig>(strategy);
+      return (
+        <StationTrading
+          params={params}
+          onChange={vi.fn()}
+          strategyScore={value}
+          onStrategyScoreChange={setValue}
+          loadedResults={[
+            makeTrade({
+              TypeID: 1,
+              TypeName: "Profit Heavy",
+              ExpectedProfit: 100_000_000,
+              CapitalRequired: 900_000_000,
+              PVI: 40,
+              OBDS: 35,
+            }),
+            makeTrade({
+              TypeID: 2,
+              TypeName: "Risk Light",
+              ExpectedProfit: 45_000_000,
+              CapitalRequired: 120_000_000,
+              PVI: 10,
+              OBDS: 10,
+            }),
+          ]}
+        />
+      );
+    }
+
+    render(<Wrapper />);
+    const scoreButtons = screen.getAllByLabelText("Why this score?");
+    const before = scoreButtons.map((button) => button.textContent);
+    fireEvent.change(screen.getByLabelText("Profit weight"), {
+      target: { value: "70" },
+    });
+    const after = screen
+      .getAllByLabelText("Why this score?")
+      .map((button) => button.textContent);
+    expect(after).not.toEqual(before);
   });
 });

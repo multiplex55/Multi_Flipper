@@ -9,6 +9,7 @@ import {
   scoreFlipResult,
   scoreStationTrade,
   stationTradeMetrics,
+  strategyScoreToOpportunityProfile,
 } from "@/lib/opportunityScore";
 import type { ContractResult, FlipResult, StationTrade } from "@/lib/types";
 
@@ -237,5 +238,85 @@ describe("opportunityScore", () => {
       makeFlip({ ExpectedProfit: 70_000_000, BuyCompetitors: 0, SellCompetitors: 0, DayCapitalRequired: 40_000_000 }),
     );
     expect(explainOpportunityScore(explanation)).toContain("Strengths");
+  });
+
+  it("maps strategy score config into opportunity profile keys", () => {
+    expect(
+      strategyScoreToOpportunityProfile({
+        profit_weight: 45,
+        risk_weight: 15,
+        velocity_weight: 20,
+        jump_weight: 10,
+        capital_weight: 10,
+      }),
+    ).toEqual({
+      profit: 45,
+      risk: 15,
+      velocity: 20,
+      jumps: 10,
+      capital: 10,
+    });
+  });
+
+  it("profile variants change both score and ordering (table-driven)", () => {
+    const rows = [
+      makeFlip({
+        TypeID: 1,
+        TypeName: "Capital Efficient",
+        ExpectedProfit: 30_000_000,
+        DayCapitalRequired: 30_000_000,
+        BuyCompetitors: 1,
+        SellCompetitors: 1,
+      }),
+      makeFlip({
+        TypeID: 2,
+        TypeName: "Raw Profit",
+        ExpectedProfit: 90_000_000,
+        DayCapitalRequired: 900_000_000,
+        BuyCompetitors: 6,
+        SellCompetitors: 6,
+      }),
+    ];
+
+    const profiles = [
+      {
+        name: "profit-first",
+        profile: { profit: 60, risk: 15, velocity: 15, jumps: 5, capital: 5 },
+        expectedTop: "Raw Profit",
+      },
+      {
+        name: "capital-first",
+        profile: { profit: 15, risk: 25, velocity: 15, jumps: 10, capital: 35 },
+        expectedTop: "Capital Efficient",
+      },
+    ] as const;
+
+    const topByProfile = new Map<string, string>();
+    const topScores = new Map<string, number>();
+
+    for (const testCase of profiles) {
+      const ranked = rows
+        .map((row) => ({ row, score: scoreFlipResult(row, testCase.profile).finalScore }))
+        .sort((a, b) => b.score - a.score);
+      topByProfile.set(testCase.name, ranked[0].row.TypeName);
+      topScores.set(testCase.name, ranked[0].score);
+      expect(ranked[0].row.TypeName).toBe(testCase.expectedTop);
+    }
+
+    expect(topByProfile.get("profit-first")).not.toBe(topByProfile.get("capital-first"));
+    expect(topScores.get("profit-first")).not.toBeCloseTo(topScores.get("capital-first") ?? 0, 6);
+  });
+
+  it("uses balanced defaults when profile is omitted", () => {
+    const row = makeFlip({ ExpectedProfit: 48_000_000, DayCapitalRequired: 240_000_000 });
+    const implicit = scoreFlipResult(row);
+    const explicitBalanced = scoreFlipResult(row, {
+      profit: 0.34,
+      risk: 0.2,
+      velocity: 0.2,
+      jumps: 0.13,
+      capital: 0.13,
+    });
+    expect(implicit.finalScore).toBeCloseTo(explicitBalanced.finalScore, 8);
   });
 });

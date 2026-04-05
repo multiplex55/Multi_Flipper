@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import type { ContractResult, StationCacheMeta } from "@/lib/types";
+import type { ContractResult, StationCacheMeta, StrategyScoreConfig } from "@/lib/types";
 import { formatISK, formatMargin } from "@/lib/format";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { useGlobalToast } from "./Toast";
@@ -19,7 +19,7 @@ import {
 } from "@/lib/api";
 import { handleEveUIError } from "@/lib/handleEveUIError";
 import { ContractDetailsPopup } from "./ContractDetailsPopup";
-import { scoreContractResult } from "@/lib/opportunityScore";
+import { scoreContractResult, strategyScoreToOpportunityProfile, type OpportunityWeightProfile } from "@/lib/opportunityScore";
 import { OpportunityScoreDetails } from "./OpportunityScorePopover";
 import { mapContractRowToPinnedOpportunity } from "@/lib/pinnedOpportunityMapper";
 
@@ -60,6 +60,7 @@ interface Props {
   /** When 0 results, show these filter hints (e.g. "Min price: 10M", "Max margin: 100%") */
   filterHints?: string[];
   isLoggedIn?: boolean;
+  strategyScore?: StrategyScoreConfig;
 }
 
 const columnDefs: { key: SortKey; labelKey: TranslationKey; width: string; numeric: boolean }[] = [
@@ -176,8 +177,8 @@ function mapServerCacheMeta(
   };
 }
 
-function numericCellValue(row: ContractResult, key: SortKey): number {
-  if (key === "OpportunityScore") return scoreContractResult(row).finalScore;
+function numericCellValue(row: ContractResult, key: SortKey, profile?: OpportunityWeightProfile): number {
+  if (key === "OpportunityScore") return scoreContractResult(row, profile).finalScore;
   if (key === "MarginPercent") return row.ExpectedMarginPercent ?? row.MarginPercent ?? 0;
   if (key === "ExpectedProfit") return row.ExpectedProfit ?? row.Profit ?? 0;
   const val = row[key as keyof ContractResult];
@@ -193,9 +194,14 @@ export function ContractResultsTable({
   excludeRigPriceIfShip = true,
   filterHints,
   isLoggedIn = false,
+  strategyScore,
 }: Props) {
   const { t } = useI18n();
   const { addToast } = useGlobalToast();
+  const opportunityProfile = useMemo(
+    () => strategyScoreToOpportunityProfile(strategyScore),
+    [strategyScore],
+  );
   const emptyReason: EmptyReason = (results.length === 0 && filterHints && filterHints.length > 0)
     ? "filters_too_strict"
     : "no_scan_yet";
@@ -335,13 +341,13 @@ export function ContractResultsTable({
         const fval = filters[col.key];
         if (!fval) continue;
         const cellVal = col.numeric
-          ? numericCellValue(row, col.key)
+          ? numericCellValue(row, col.key, opportunityProfile)
           : col.key === "Title"
             ? effectiveTitle(row)
             : row[col.key as keyof ContractResult];
         if (col.numeric) {
           // Support filters: "100-500" (range), ">100", ">=100", "<500", "<=500", "=100" (exact), or plain number (>= threshold)
-          const num = numericCellValue(row, col.key);
+          const num = numericCellValue(row, col.key, opportunityProfile);
           const trimmed = fval.trim();
           if (trimmed.includes("-") && !trimmed.startsWith("-")) {
             // Range: "100-500"
@@ -376,18 +382,18 @@ export function ContractResultsTable({
       }
       return true;
     });
-  }, [effectiveTitle, filters, results]);
+  }, [effectiveTitle, filters, opportunityProfile, results]);
 
   const sorted = useMemo(() => {
     const copy = [...filtered];
     const currentCol = columnDefs.find((c) => c.key === sortKey);
     const numericSort = !!currentCol?.numeric;
     copy.sort((a, b) => {
-      const av = sortKey === "Title" ? effectiveTitle(a) : (sortKey === "OpportunityScore" ? scoreContractResult(a).finalScore : a[sortKey as keyof ContractResult]);
-      const bv = sortKey === "Title" ? effectiveTitle(b) : (sortKey === "OpportunityScore" ? scoreContractResult(b).finalScore : b[sortKey as keyof ContractResult]);
+      const av = sortKey === "Title" ? effectiveTitle(a) : (sortKey === "OpportunityScore" ? scoreContractResult(a, opportunityProfile).finalScore : a[sortKey as keyof ContractResult]);
+      const bv = sortKey === "Title" ? effectiveTitle(b) : (sortKey === "OpportunityScore" ? scoreContractResult(b, opportunityProfile).finalScore : b[sortKey as keyof ContractResult]);
       if (numericSort) {
-        const an = numericCellValue(a, sortKey);
-        const bn = numericCellValue(b, sortKey);
+        const an = numericCellValue(a, sortKey, opportunityProfile);
+        const bn = numericCellValue(b, sortKey, opportunityProfile);
         return sortDir === "asc" ? an - bn : bn - an;
       }
       return sortDir === "asc"
@@ -395,7 +401,7 @@ export function ContractResultsTable({
         : String(bv).localeCompare(String(av));
     });
     return copy;
-  }, [effectiveTitle, filtered, sortDir, sortKey]);
+  }, [effectiveTitle, filtered, opportunityProfile, sortDir, sortKey]);
 
   const displaySorted = useMemo(() => {
     if (showHiddenRows) return sorted;
@@ -556,7 +562,7 @@ export function ContractResultsTable({
 
   const formatCell = (col: (typeof columnDefs)[number], row: ContractResult): string => {
     const val = col.key === "OpportunityScore"
-      ? scoreContractResult(row).finalScore
+      ? scoreContractResult(row, opportunityProfile).finalScore
       : col.key === "Title"
         ? effectiveTitle(row)
         : row[col.key as keyof ContractResult];
@@ -583,7 +589,7 @@ export function ContractResultsTable({
     const csvRows = displaySorted.map((row) =>
       columnDefs.map((col) => {
         const val = col.numeric
-          ? numericCellValue(row, col.key)
+          ? numericCellValue(row, col.key, opportunityProfile)
           : col.key === "Title"
             ? effectiveTitle(row)
             : row[col.key as keyof ContractResult];
@@ -941,7 +947,7 @@ export function ContractResultsTable({
                         }}
                         aria-label="Why this score?"
                       >
-                        {scoreContractResult(row).finalScore.toFixed(1)}
+                        {scoreContractResult(row, opportunityProfile).finalScore.toFixed(1)}
                       </button>
                     ) : (
                       formatCell(col, row)
@@ -1000,7 +1006,7 @@ export function ContractResultsTable({
         <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/45 p-4" onClick={() => setScoreExplainRow(null)}>
           <div onClick={(e) => e.stopPropagation()} className="max-w-[92vw] w-[520px] rounded-sm border border-eve-border bg-eve-dark shadow-eve-glow-strong p-3">
             <div className="mb-2 text-sm font-medium text-eve-text">Why this score?</div>
-            <OpportunityScoreDetails explanation={scoreContractResult(scoreExplainRow)} />
+            <OpportunityScoreDetails explanation={scoreContractResult(scoreExplainRow, opportunityProfile)} />
             <div className="mt-2 text-center">
               <button type="button" className="text-xs text-eve-dim hover:text-eve-accent" onClick={() => setScoreExplainRow(null)}>Close</button>
             </div>
