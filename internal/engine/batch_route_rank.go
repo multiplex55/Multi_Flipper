@@ -187,8 +187,9 @@ func mergeBaseAndAdditions(baseLines, additionLines []BatchCreateRouteLine) []Ba
 func rankRouteOptions(options []BatchCreateRouteOption, addedProfitByOptionID map[string]float64, cargoLimitM3 float64, scoring RouteExecutionScoringConfig) []BatchCreateRouteOption {
 	ranked := append([]BatchCreateRouteOption(nil), options...)
 	applyExecutionScoring(ranked, cargoLimitM3, scoring)
+	resolvedScoring := resolveRouteExecutionScoring(scoring)
 	for i := range ranked {
-		classifyRouteOptionLines(&ranked[i])
+		classifyRouteOptionLines(&ranked[i], resolvedScoring)
 	}
 	sortByExecutionScore(ranked, addedProfitByOptionID, cargoLimitM3)
 	markRecommendedRouteOption(ranked)

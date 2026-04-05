@@ -913,12 +913,28 @@ func (s *Scanner) buildBatchRouteOptionsFromCandidates(lines []BatchCreateRouteL
 				leftVol := float64(i.Units) * i.UnitVolumeM3
 				rightVol := float64(j.Units) * j.UnitVolumeM3
 				if leftVol == rightVol {
-					if i.ProfitTotalISK == j.ProfitTotalISK {
+					leftFiller := computeFillerScore(i, params.ExecutionScoring)
+					rightFiller := computeFillerScore(j, params.ExecutionScoring)
+					if leftFiller == rightFiller && i.ProfitTotalISK == j.ProfitTotalISK {
 						return batchRouteLineLess(i, j)
+					}
+					if leftFiller != rightFiller {
+						return leftFiller > rightFiller
 					}
 					return i.ProfitTotalISK > j.ProfitTotalISK
 				}
 				return leftVol > rightVol
+			},
+		},
+		{
+			id: "safe-fillers-first",
+			sort: func(i, j BatchCreateRouteLine) bool {
+				left := computeFillerScore(i, params.ExecutionScoring)
+				right := computeFillerScore(j, params.ExecutionScoring)
+				if left == right {
+					return batchRouteLineLess(i, j)
+				}
+				return left > right
 			},
 		},
 	}

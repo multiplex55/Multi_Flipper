@@ -26,7 +26,7 @@ type routeLineClassificationMetrics struct {
 	riskBurden             float64
 }
 
-func classifyRouteOptionLines(option *BatchCreateRouteOption) {
+func classifyRouteOptionLines(option *BatchCreateRouteOption, config RouteExecutionScoringConfig) {
 	if option == nil {
 		return
 	}
@@ -41,7 +41,7 @@ func classifyRouteOptionLines(option *BatchCreateRouteOption) {
 		line := &option.Lines[i]
 		metrics := computeRouteLineClassificationMetrics(*line, *option)
 		line.LineExecutionScore = computeRouteLineExecutionScore(*line, metrics, option.ExecutionScore)
-		line.LineRole = determineRouteLineRole(*line, metrics)
+		line.LineRole = determineRouteLineRole(*line, metrics, config)
 
 		switch line.LineRole {
 		case routeLineRoleCore:
@@ -97,7 +97,8 @@ func computeRouteLineExecutionScore(line BatchCreateRouteLine, metrics routeLine
 	return math.Max(0, math.Min(100, finalScore))
 }
 
-func determineRouteLineRole(line BatchCreateRouteLine, metrics routeLineClassificationMetrics) string {
+func determineRouteLineRole(line BatchCreateRouteLine, metrics routeLineClassificationMetrics, config RouteExecutionScoringConfig) string {
+	fillerScore := computeFillerScore(line, config)
 	if metrics.contributionProfitPct >= lineRoleCoreContributionProfitThreshold ||
 		(metrics.contributionISKJumpPct >= lineRoleCoreContributionISKJumpThreshold &&
 			metrics.contributionProfitPct >= 0.20) ||
@@ -109,6 +110,12 @@ func determineRouteLineRole(line BatchCreateRouteLine, metrics routeLineClassifi
 	if line.LineExecutionScore >= lineRoleSafeFillerExecutionScoreThreshold &&
 		metrics.riskBurden <= lineRoleSafeFillerRiskBurdenThreshold &&
 		clampUnit(line.FillConfidence) >= lineRoleSafeFillerFillConfidenceThreshold {
+		return routeLineRoleSafeFiller
+	}
+	// Tie-break near-threshold fillers using dedicated filler scoring.
+	if line.LineExecutionScore >= (lineRoleSafeFillerExecutionScoreThreshold-5) &&
+		clampUnit(line.FillConfidence) >= 0.40 &&
+		fillerScore >= 52 {
 		return routeLineRoleSafeFiller
 	}
 	return routeLineRoleStretchFiller

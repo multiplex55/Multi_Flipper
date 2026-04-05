@@ -497,6 +497,66 @@ describe("BatchBuilderPopup route creation", () => {
     ).toBeEnabled();
   });
 
+  it("includes selected execution scoring preset in request payload", async () => {
+    batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
+    renderPopup({ anchorRow, rows });
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
+    await screen.findByTestId("route-option-rank-1");
+
+    fireEvent.change(screen.getByLabelText("Execution scoring preset"), {
+      target: { value: "max_fill" },
+    });
+    await waitFor(() => expect(batchCreateRouteMock).toHaveBeenCalledTimes(2));
+
+    const firstPayload = batchCreateRouteMock.mock.calls[0]?.[0];
+    const secondPayload = batchCreateRouteMock.mock.calls[1]?.[0];
+    expect(firstPayload?.execution_scoring?.preset).toBe("balanced");
+    expect(secondPayload?.execution_scoring?.preset).toBe("max_fill");
+  });
+
+  it("reranks route options when execution preset changes", async () => {
+    batchCreateRouteMock.mockImplementation(async (payload) => {
+      const preset = payload.execution_scoring?.preset ?? "balanced";
+      const response = makeRouteResponse();
+      if (preset === "aggressive") {
+        response.ranked_options = [
+          {
+            ...response.ranked_options[1],
+            rank: 1,
+            recommended: true,
+            recommendation_score: 99.9,
+          },
+          {
+            ...response.ranked_options[0],
+            rank: 2,
+            recommended: false,
+            recommendation_score: 20.0,
+          },
+        ];
+      }
+      return response;
+    });
+    renderPopup({ anchorRow, rows });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
+
+    let options = await screen.findAllByTestId(/route-option-/);
+    expect(options[0]).toHaveAttribute("data-testid", "route-option-rank-1");
+
+    fireEvent.change(screen.getByLabelText("Execution scoring preset"), {
+      target: { value: "aggressive" },
+    });
+    await waitFor(() => expect(batchCreateRouteMock).toHaveBeenCalledTimes(2));
+    await waitFor(async () => {
+      options = await screen.findAllByTestId(/route-option-/);
+      expect(options[0]).toHaveAttribute("data-testid", "route-option-rank-2");
+    });
+  });
+
   it("includes scan params, routing limits, and candidate snapshot in request payload", async () => {
     batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
     renderPopup({

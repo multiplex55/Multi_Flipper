@@ -426,7 +426,7 @@ export interface BatchCreateRouteRequest {
   buy_broker_fee_percent: number;
   sell_broker_fee_percent: number;
   execution_scoring?: {
-    preset?: string;
+    preset?: "conservative" | "balanced" | "aggressive" | "max_fill" | string;
     utilization_target?: number;
     weights?: {
       net_profit: number;

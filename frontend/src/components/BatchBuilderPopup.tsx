@@ -57,6 +57,11 @@ interface BatchBuilderPopupProps {
 }
 
 type RouteState = "idle" | "searching" | "results" | "selected";
+type ExecutionScoringPreset =
+  | "conservative"
+  | "balanced"
+  | "aggressive"
+  | "max_fill";
 
 function normalizeStationName(name: string | null | undefined): string {
   return (name ?? "").trim().toLocaleLowerCase().replace(/\s+/g, " ");
@@ -160,6 +165,8 @@ export function BatchBuilderPopup({
   const [routeSortBy, setRouteSortBy] = useState<
     "recommended" | "execution_score" | "isk_per_jump" | "total_profit_isk"
   >("recommended");
+  const [executionScoringPreset, setExecutionScoringPreset] =
+    useState<ExecutionScoringPreset>("balanced");
   const [routeError, setRouteError] = useState<string | null>(null);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [mergedManifest, setMergedManifest] =
@@ -168,6 +175,7 @@ export function BatchBuilderPopup({
   const [routeDiagnostics, setRouteDiagnostics] = useState<string[]>([]);
   const activeRequestRef = useRef(0);
   const activeAbortRef = useRef<AbortController | null>(null);
+  const lastAppliedPresetRef = useRef<ExecutionScoringPreset>("balanced");
 
   useEffect(() => {
     if (!open) return;
@@ -175,6 +183,8 @@ export function BatchBuilderPopup({
     setRouteState("idle");
     setRouteOptions([]);
     setRouteSortBy("recommended");
+    setExecutionScoringPreset("balanced");
+    lastAppliedPresetRef.current = "balanced";
     setRouteError(null);
     setSelectedOptionId(null);
     setMergedManifest(null);
@@ -784,7 +794,7 @@ export function BatchBuilderPopup({
         tie_break_order: ["utilization_pct", "type_id"],
       },
       execution_scoring: {
-        preset: "practical-hauling",
+        preset: executionScoringPreset,
       },
     };
 
@@ -872,8 +882,22 @@ export function BatchBuilderPopup({
     cacheMeta,
     scanSourceTab,
     allowedRows,
+    executionScoringPreset,
     t,
     addToast,
+  ]);
+
+  useEffect(() => {
+    if (!open || !baseBatchManifest || routeOptions.length === 0) return;
+    if (lastAppliedPresetRef.current === executionScoringPreset) return;
+    lastAppliedPresetRef.current = executionScoringPreset;
+    void startBatchCreateRoute();
+  }, [
+    executionScoringPreset,
+    open,
+    baseBatchManifest,
+    routeOptions.length,
+    startBatchCreateRoute,
   ]);
 
   const onSelectOption = useCallback(
@@ -1005,27 +1029,47 @@ export function BatchBuilderPopup({
               <div className="text-xs text-eve-dim">
                 {t("batchBuilderRouteOptionsTitle")}
               </div>
-              <label className="text-xs text-eve-dim flex items-center gap-2">
-                <span>Sort</span>
-                <select
-                  value={routeSortBy}
-                  onChange={(e) =>
-                    setRouteSortBy(
-                      e.target.value as
-                        | "recommended"
-                        | "execution_score"
-                        | "isk_per_jump"
-                        | "total_profit_isk",
-                    )
-                  }
-                  className="px-2 py-1 bg-eve-input border border-eve-border rounded-sm text-eve-text"
-                >
-                  <option value="recommended">Recommended</option>
-                  <option value="execution_score">Execution Score</option>
-                  <option value="isk_per_jump">ISK / Jump</option>
-                  <option value="total_profit_isk">Net Profit</option>
-                </select>
-              </label>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-eve-dim flex items-center gap-2">
+                  <span>Preset</span>
+                  <select
+                    aria-label="Execution scoring preset"
+                    value={executionScoringPreset}
+                    onChange={(e) =>
+                      setExecutionScoringPreset(
+                        e.target.value as ExecutionScoringPreset,
+                      )
+                    }
+                    className="px-2 py-1 bg-eve-input border border-eve-border rounded-sm text-eve-text"
+                  >
+                    <option value="conservative">Conservative</option>
+                    <option value="balanced">Balanced</option>
+                    <option value="aggressive">Aggressive</option>
+                    <option value="max_fill">Max Fill</option>
+                  </select>
+                </label>
+                <label className="text-xs text-eve-dim flex items-center gap-2">
+                  <span>Sort</span>
+                  <select
+                    value={routeSortBy}
+                    onChange={(e) =>
+                      setRouteSortBy(
+                        e.target.value as
+                          | "recommended"
+                          | "execution_score"
+                          | "isk_per_jump"
+                          | "total_profit_isk",
+                      )
+                    }
+                    className="px-2 py-1 bg-eve-input border border-eve-border rounded-sm text-eve-text"
+                  >
+                    <option value="recommended">Recommended</option>
+                    <option value="execution_score">Execution Score</option>
+                    <option value="isk_per_jump">ISK / Jump</option>
+                    <option value="total_profit_isk">Net Profit</option>
+                  </select>
+                </label>
+              </div>
             </div>
             <div className="grid grid-cols-1 gap-2">
               {sortedRouteOptions.map((option) => {
