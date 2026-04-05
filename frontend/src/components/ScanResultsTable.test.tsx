@@ -660,6 +660,7 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
       dailyProfitOverCapital: 10,
       routeTotalProfit: 10_000,
       routeTotalCapital: 100_000,
+      weightedSlippagePct: 1,
     });
     const highOverhang = calcRouteConfidence({
       routeSafetyRank: 1,
@@ -679,8 +680,136 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
       dailyProfitOverCapital: 10,
       routeTotalProfit: 10_000,
       routeTotalCapital: 100_000,
+      weightedSlippagePct: 1,
     });
     expect(highOverhang.score).toBeLessThan(baseline.score);
+  });
+
+  it("renders compact collapsed route header metrics from route aggregate metadata", async () => {
+    const row = makeRow({
+      TypeID: 8801,
+      TypeName: "Header route row",
+      BuyStation: "Jita Hub",
+      SellStation: "Amarr Hub",
+      BuySystemID: 30000142,
+      SellSystemID: 30002187,
+      TotalJumps: 2,
+      UnitsToBuy: 50,
+      FilledQty: 30,
+      Volume: 2,
+      RealProfit: 400,
+      DailyProfit: 150,
+      SlippageBuyPct: 3,
+      SlippageSellPct: 2,
+    });
+    renderTable({ scanning: false, results: [row] });
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+    const routeButton = groupedRouteButtons()[0];
+    expect(routeButton.textContent).toContain("P ");
+    expect(routeButton.textContent).toContain("C ");
+    expect(routeButton.textContent).toContain("V ");
+    expect(routeButton.textContent).toContain("Cap ");
+    expect(routeButton.textContent).toContain("D/J ");
+    expect(routeButton.textContent).toContain("m³/J ");
+    expect(routeButton.textContent).toContain("EQ min");
+    expect(routeButton.textContent).toContain("Safety ");
+    expect(routeButton.textContent).toContain("Slip ");
+  });
+
+  it("shows and hides warning badges on collapsed route header using configured thresholds", () => {
+    const risky = makeRow({
+      TypeID: 8802,
+      TypeName: "Risky route row",
+      BuyStation: "Hek Hub",
+      SellStation: "Dodixie Hub",
+      BuySystemID: 30002053,
+      SellSystemID: 30002659,
+      UnitsToBuy: 20,
+      FilledQty: 5, // thin fill
+      DayNowProfit: 5,
+      DayPeriodProfit: -1, // spike
+      DayTargetPeriodPrice: 100,
+      DayTargetNowPrice: 150, // unstable history
+    });
+    renderTable({ scanning: false, results: [risky] });
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+    expect(screen.getByText(/SPIKE 1/)).toBeInTheDocument();
+    expect(screen.getByText(/UNSTABLE 1/)).toBeInTheDocument();
+    expect(screen.getByText(/THIN 1/)).toBeInTheDocument();
+    expect(screen.queryByText(/NO HIST/)).not.toBeInTheDocument();
+  });
+
+  it("uses the corrected Weighted Slippage % label for route-pack slippage column", () => {
+    renderTable({ scanning: false, results: [makeRow()] });
+    fireEvent.click(screen.getByTitle("Column setup"));
+    expect(screen.getAllByText("Weighted Slippage %").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Slippage Cost").length).toBeGreaterThan(0);
+  });
+
+  it("snapshot: collapsed route row confidence states (high/medium/low)", async () => {
+    vi.mocked(getGankCheckBatch).mockResolvedValue([
+      { key: "30000142:30002187", danger: "green", kills: 0, totalISK: 0 },
+      { key: "30002659:30002510", danger: "yellow", kills: 1, totalISK: 10_000_000 },
+      { key: "30002053:30002537", danger: "red", kills: 4, totalISK: 60_000_000 },
+    ]);
+    const high = makeRow({
+      TypeID: 9001,
+      TypeName: "High Confidence",
+      BuyStation: "Jita Hub",
+      SellStation: "Amarr Hub",
+      BuySystemID: 30000142,
+      SellSystemID: 30002187,
+      RealProfit: 300,
+      DailyProfit: 180,
+      UnitsToBuy: 20,
+      FilledQty: 20,
+      SlippageBuyPct: 0.2,
+      SlippageSellPct: 0.2,
+      DayTargetPeriodPrice: 120,
+      DayTargetNowPrice: 121,
+    });
+    const medium = makeRow({
+      TypeID: 9002,
+      TypeName: "Medium Confidence",
+      BuyStation: "Dodixie Hub",
+      SellStation: "Rens Hub",
+      BuySystemID: 30002659,
+      SellSystemID: 30002510,
+      RealProfit: 120,
+      DailyProfit: 80,
+      UnitsToBuy: 30,
+      FilledQty: 14,
+      SlippageBuyPct: 6,
+      SlippageSellPct: 5,
+      DayTargetPeriodPrice: 100,
+      DayTargetNowPrice: 130,
+    });
+    const low = makeRow({
+      TypeID: 9003,
+      TypeName: "Low Confidence",
+      BuyStation: "Hek Hub",
+      SellStation: "Jita Hub",
+      BuySystemID: 30002053,
+      SellSystemID: 30002537,
+      RealProfit: 30,
+      DailyProfit: 10,
+      UnitsToBuy: 40,
+      FilledQty: 5,
+      SlippageBuyPct: 15,
+      SlippageSellPct: 12,
+      DayNowProfit: 1,
+      DayPeriodProfit: -1,
+      DayTargetPeriodPrice: 100,
+      DayTargetNowPrice: 180,
+    });
+    const { container } = renderTable({ scanning: false, results: [high, medium, low] });
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+    await waitFor(() => {
+      expect(screen.getAllByText(/High \d+/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/Medium \d+/).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/Low \d+/).length).toBeGreaterThan(0);
+    });
+    expect(container.querySelector("tbody")?.innerHTML).toMatchSnapshot();
   });
 
   it("switching rows ↔ route mode changes comparator source", () => {

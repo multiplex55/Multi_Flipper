@@ -161,6 +161,8 @@ export const en = {
     colTurnoverDaysHint: "Capital required / daily profit (hidden when daily profit ≤ 0).",
     colSlippageCostIsk: "Slippage Cost",
     colSlippageCostIskHint: "Execution slippage cost at shown fill size (buy + sell).",
+    colWeightedSlippagePct: "Weighted Slippage %",
+    colWeightedSlippagePctHint: "Weighted buy+sell slippage percentage across selected route pack lines.",
     colProfit: "Top-book Profit",
     colBatchNumber: "Batch #",
     colBatchProfit: "Batch Profit",
