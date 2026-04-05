@@ -8,7 +8,14 @@ import {
   useEffect,
   useRef,
 } from "react";
-import type { FlipResult, StationCacheMeta, WatchlistItem, RouteState, SystemDanger, StrategyScoreConfig } from "@/lib/types";
+import type {
+  FlipResult,
+  StationCacheMeta,
+  WatchlistItem,
+  RouteState,
+  SystemDanger,
+  StrategyScoreConfig,
+} from "@/lib/types";
 import { formatISK, formatMargin } from "@/lib/format";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { buildRouteBatchMetadataByRow } from "@/lib/batchMetrics";
@@ -42,7 +49,11 @@ import { ExecutionPlannerPopup } from "./ExecutionPlannerPopup";
 import { handleEveUIError } from "@/lib/handleEveUIError";
 import { BatchBuilderPopup } from "./BatchBuilderPopup";
 import { RouteSafetyModal } from "./RouteSafetyModal";
-import { scoreFlipResult, strategyScoreToOpportunityProfile, type OpportunityWeightProfile } from "@/lib/opportunityScore";
+import {
+  scoreFlipResult,
+  strategyScoreToOpportunityProfile,
+  type OpportunityWeightProfile,
+} from "@/lib/opportunityScore";
 import { OpportunityScoreDetails } from "./OpportunityScorePopover";
 import { mapScanRowToPinnedOpportunity } from "@/lib/pinnedOpportunityMapper";
 
@@ -565,7 +576,9 @@ function mapServerCacheMeta(
       meta.current_revision && Number.isFinite(meta.current_revision)
         ? meta.current_revision
         : Math.floor(nextExpiryTs / 1000),
-    lastRefreshAt: Number.isFinite(lastRefreshTs) ? lastRefreshTs : fallbackBaseTs,
+    lastRefreshAt: Number.isFinite(lastRefreshTs)
+      ? lastRefreshTs
+      : fallbackBaseTs,
     nextExpiryAt: Number.isFinite(nextExpiryTs)
       ? nextExpiryTs
       : fallbackBaseTs + CACHE_TTL_FALLBACK_MS,
@@ -582,8 +595,12 @@ function hash53(input: string): number {
     h1 = Math.imul(h1 ^ ch, 2654435761);
     h2 = Math.imul(h2 ^ ch, 1597334677);
   }
-  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  h1 =
+    Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^
+    Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 =
+    Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^
+    Math.imul(h1 ^ (h1 >>> 13), 3266489909);
   return 4294967296 * (2097151 & h2) + (h1 >>> 0);
 }
 
@@ -611,7 +628,11 @@ function flipStateIDs(row: FlipResult): {
   return { typeID, stationID, regionID };
 }
 
-function tradeStateIndexKey(typeID: number, stationID: number, regionID: number): string {
+function tradeStateIndexKey(
+  typeID: number,
+  stationID: number,
+  regionID: number,
+): string {
   return `${typeID}:${stationID}:${regionID}`;
 }
 
@@ -747,7 +768,12 @@ function getCellValue(
   key: SortKey,
   batchMetricsByRow: Record<
     string,
-    { batchNumber: number; batchProfit: number; batchTotalCapital: number; batchIskPerJump: number }
+    {
+      batchNumber: number;
+      batchProfit: number;
+      batchTotalCapital: number;
+      batchIskPerJump: number;
+    }
   >,
   profile?: OpportunityWeightProfile,
 ): unknown {
@@ -769,7 +795,8 @@ function getCellValue(
   if (key === "BfSPerDay") return rowBfSPerDay(row);
   if (key === "S2BBfSRatio") return rowS2BBfSRatio(row);
   if (key === "RouteSafety") return null;
-  if (key === "OpportunityScore") return scoreFlipResult(row, profile).finalScore;
+  if (key === "OpportunityScore")
+    return scoreFlipResult(row, profile).finalScore;
   return row[key as keyof FlipResult];
 }
 
@@ -779,7 +806,12 @@ function passesFilter(
   fval: string,
   batchMetricsByRow: Record<
     string,
-    { batchNumber: number; batchProfit: number; batchTotalCapital: number; batchIskPerJump: number }
+    {
+      batchNumber: number;
+      batchProfit: number;
+      batchTotalCapital: number;
+      batchIskPerJump: number;
+    }
   >,
   profile?: OpportunityWeightProfile,
 ): boolean {
@@ -793,7 +825,9 @@ function passesFilter(
   ) {
     return passesBatchNumericFilter(cellVal as number | null, fval);
   }
-  return col.numeric ? passesNumericFilter(cellVal as number, fval) : passesTextFilter(cellVal, fval);
+  return col.numeric
+    ? passesNumericFilter(cellVal as number, fval)
+    : passesTextFilter(cellVal, fval);
 }
 
 /* ─── Cell formatting ─── */
@@ -803,7 +837,12 @@ function fmtCell(
   row: FlipResult,
   batchMetricsByRow: Record<
     string,
-    { batchNumber: number; batchProfit: number; batchTotalCapital: number; batchIskPerJump: number }
+    {
+      batchNumber: number;
+      batchProfit: number;
+      batchTotalCapital: number;
+      batchIskPerJump: number;
+    }
   >,
   profile?: OpportunityWeightProfile,
 ): string {
@@ -952,7 +991,9 @@ export function ScanResultsTable({
   );
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const [showFilters, setShowFilters] = useState(() => tradeStateTab === "radius");
+  const [showFilters, setShowFilters] = useState(
+    () => tradeStateTab === "radius",
+  );
   const [showColumnPanel, setShowColumnPanel] = useState(false);
   const [columnOrder, setColumnOrder] = useState<SortKey[]>(() =>
     allColumnDefs.map((col) => col.key),
@@ -971,33 +1012,46 @@ export function ScanResultsTable({
     }
   });
   const [showHiddenRows, setShowHiddenRows] = useState(false);
-  const [hiddenMap, setHiddenMap] = useState<Record<string, HiddenFlipEntry>>({});
+  const [hiddenMap, setHiddenMap] = useState<Record<string, HiddenFlipEntry>>(
+    {},
+  );
   const [focusedRowId, setFocusedRowId] = useState<number | null>(null);
   // Column DnD state
   const [colDraggedKey, setColDraggedKey] = useState<SortKey | null>(null);
   const [colDragOverKey, setColDragOverKey] = useState<SortKey | null>(null);
-  const [colDragOverSide, setColDragOverSide] = useState<"before" | "after">("after");
+  const [colDragOverSide, setColDragOverSide] = useState<"before" | "after">(
+    "after",
+  );
   const [ignoredModalOpen, setIgnoredModalOpen] = useState(false);
   const [ignoredSearch, setIgnoredSearch] = useState("");
   const [ignoredTab, setIgnoredTab] = useState<HiddenFilterTab>("all");
-  const [ignoredSelectedKeys, setIgnoredSelectedKeys] = useState<Set<string>>(new Set());
+  const [ignoredSelectedKeys, setIgnoredSelectedKeys] = useState<Set<string>>(
+    new Set(),
+  );
   const [cacheNowTs, setCacheNowTs] = useState<number>(Date.now());
   const [lastScanTs, setLastScanTs] = useState<number>(Date.now());
   const [cacheStaleSuppressedUntilTs, setCacheStaleSuppressedUntilTs] =
     useState<number>(0);
   const [cacheRebooting, setCacheRebooting] = useState(false);
-  const [collapsedRegionGroups, setCollapsedRegionGroups] = useState<Set<string>>(
-    new Set(),
-  );
+  const [collapsedRegionGroups, setCollapsedRegionGroups] = useState<
+    Set<string>
+  >(new Set());
   const [expandedItemGroups, setExpandedItemGroups] = useState<Set<string>>(
     new Set(),
   );
-  const [regionCollapseInitialized, setRegionCollapseInitialized] = useState(false);
+  const [regionCollapseInitialized, setRegionCollapseInitialized] =
+    useState(false);
 
   // ── Route Safety ──
-  const [routeSafetyMap, setRouteSafetyMap] = useState<Record<string, RouteState>>({});
-  const [routeSafetyFilter, setRouteSafetyFilter] = useState<"all" | "green" | "yellow" | "red">("all");
-  const [routeSafetyModal, setRouteSafetyModal] = useState<{ systems: SystemDanger[] } | null>(null);
+  const [routeSafetyMap, setRouteSafetyMap] = useState<
+    Record<string, RouteState>
+  >({});
+  const [routeSafetyFilter, setRouteSafetyFilter] = useState<
+    "all" | "green" | "yellow" | "red"
+  >("all");
+  const [routeSafetyModal, setRouteSafetyModal] = useState<{
+    systems: SystemDanger[];
+  } | null>(null);
 
   const isRegionGrouped = columnProfile === "region_eveguru";
   const isItemGrouped = !isRegionGrouped && groupByItem;
@@ -1072,7 +1126,9 @@ export function ScanResultsTable({
 
   const reloadPinnedKeys = useCallback(() => {
     listPinnedOpportunities("scan")
-      .then((rows) => setPinnedKeys(new Set(rows.map((row) => row.opportunity_key))))
+      .then((rows) =>
+        setPinnedKeys(new Set(rows.map((row) => row.opportunity_key))),
+      )
       .catch(() => {});
   }, []);
 
@@ -1117,32 +1173,44 @@ export function ScanResultsTable({
       }
       return next;
     });
-    getGankCheckBatch(pairs).then((summaries) => {
-      setRouteSafetyMap((prev) => {
-        const next = { ...prev };
-        // Clear any pairs that weren't in the response (treat as green/safe)
-        for (const p of pairs) {
-          const k = `${p.from}:${p.to}`;
-          if (next[k]?.status === "loading") {
-            next[k] = { status: "summary", danger: "green", kills: 0, totalISK: 0 };
+    getGankCheckBatch(pairs)
+      .then((summaries) => {
+        setRouteSafetyMap((prev) => {
+          const next = { ...prev };
+          // Clear any pairs that weren't in the response (treat as green/safe)
+          for (const p of pairs) {
+            const k = `${p.from}:${p.to}`;
+            if (next[k]?.status === "loading") {
+              next[k] = {
+                status: "summary",
+                danger: "green",
+                kills: 0,
+                totalISK: 0,
+              };
+            }
           }
-        }
-        for (const s of summaries) {
-          next[s.key] = { status: "summary", danger: s.danger, kills: s.kills, totalISK: s.totalISK };
-        }
-        return next;
+          for (const s of summaries) {
+            next[s.key] = {
+              status: "summary",
+              danger: s.danger,
+              kills: s.kills,
+              totalISK: s.totalISK,
+            };
+          }
+          return next;
+        });
+      })
+      .catch(() => {
+        // On error, clear loading state so cells don't hang
+        setRouteSafetyMap((prev) => {
+          const next = { ...prev };
+          for (const p of pairs) {
+            const k = `${p.from}:${p.to}`;
+            if (next[k]?.status === "loading") delete next[k];
+          }
+          return next;
+        });
       });
-    }).catch(() => {
-      // On error, clear loading state so cells don't hang
-      setRouteSafetyMap((prev) => {
-        const next = { ...prev };
-        for (const p of pairs) {
-          const k = `${p.from}:${p.to}`;
-          if (next[k]?.status === "loading") delete next[k];
-        }
-        return next;
-      });
-    });
   }, [results, scanning]);
   const watchlistIds = useMemo(
     () => new Set(watchlist.map((w) => w.type_id)),
@@ -1160,7 +1228,9 @@ export function ScanResultsTable({
   const keyNavRootRef = useRef<HTMLDivElement>(null);
   const [execPlanRow, setExecPlanRow] = useState<FlipResult | null>(null);
   const [batchPlanRow, setBatchPlanRow] = useState<FlipResult | null>(null);
-  const [scoreExplainRow, setScoreExplainRow] = useState<FlipResult | null>(null);
+  const [scoreExplainRow, setScoreExplainRow] = useState<FlipResult | null>(
+    null,
+  );
   const [dayDetailRow, setDayDetailRow] = useState<FlipResult | null>(null);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [filterSearch, setFilterSearch] = useState("");
@@ -1175,7 +1245,9 @@ export function ScanResultsTable({
     hiddenMap: {} as Record<string, HiddenFlipEntry>,
   });
   // Per-group row limit for region mode (key → max rows shown)
-  const [groupRowLimit, setGroupRowLimit] = useState<Map<string, number>>(new Map());
+  const [groupRowLimit, setGroupRowLimit] = useState<Map<string, number>>(
+    new Map(),
+  );
 
   useEffect(() => {
     if (contextMenu && contextMenuRef.current) {
@@ -1198,7 +1270,10 @@ export function ScanResultsTable({
     if (!filterPanelOpen) return;
     const handler = (e: MouseEvent) => {
       const t = e.target as Node;
-      if (!filterPanelRef.current?.contains(t) && !filterBtnRef.current?.contains(t)) {
+      if (
+        !filterPanelRef.current?.contains(t) &&
+        !filterBtnRef.current?.contains(t)
+      ) {
         setFilterPanelOpen(false);
       }
     };
@@ -1219,8 +1294,9 @@ export function ScanResultsTable({
           hidden?: string[];
         };
         if (Array.isArray(parsed.order)) {
-          const saved = parsed.order
-            .filter((k): k is SortKey => available.has(k as SortKey));
+          const saved = parsed.order.filter((k): k is SortKey =>
+            available.has(k as SortKey),
+          );
           const missing = defaultOrder.filter((k) => !saved.includes(k));
           nextOrder = [...saved, ...missing];
         }
@@ -1320,18 +1396,21 @@ export function ScanResultsTable({
     setColumnOrder(allColumnDefs.map((col) => col.key));
   }, [allColumnDefs]);
 
-  const insertColumn = useCallback((fromKey: SortKey, toKey: SortKey, side: "before" | "after") => {
-    if (fromKey === toKey) return;
-    setColumnOrder((prev) => {
-      const without = prev.filter((k) => k !== fromKey);
-      const toIdx = without.indexOf(toKey);
-      if (toIdx < 0) return prev;
-      const insertAt = side === "before" ? toIdx : toIdx + 1;
-      const next = [...without];
-      next.splice(insertAt, 0, fromKey);
-      return next;
-    });
-  }, []);
+  const insertColumn = useCallback(
+    (fromKey: SortKey, toKey: SortKey, side: "before" | "after") => {
+      if (fromKey === toKey) return;
+      setColumnOrder((prev) => {
+        const without = prev.filter((k) => k !== fromKey);
+        const toIdx = without.indexOf(toKey);
+        if (toIdx < 0) return prev;
+        const insertAt = side === "before" ? toIdx : toIdx + 1;
+        const next = [...without];
+        next.splice(insertAt, 0, fromKey);
+        return next;
+      });
+    },
+    [],
+  );
 
   // ── Data pipeline: index → filter → sort ──
   const { indexed, filtered, sorted, variantByRowId } = useMemo(() => {
@@ -1346,7 +1425,16 @@ export function ScanResultsTable({
           for (const col of columnDefs) {
             const fval = filters[col.key];
             if (!fval) continue;
-            if (!passesFilter(ir.row, col, fval, batchMetricsByRow, opportunityProfile)) return false;
+            if (
+              !passesFilter(
+                ir.row,
+                col,
+                fval,
+                batchMetricsByRow,
+                opportunityProfile,
+              )
+            )
+              return false;
           }
           return true;
         })
@@ -1356,14 +1444,19 @@ export function ScanResultsTable({
       const k = `${row.BuySystemID}:${row.SellSystemID}`;
       const rs = routeSafetyMap[k];
       if (!rs || rs.status === "loading") return -1;
-      const d = rs.status === "full" || rs.status === "summary" ? rs.danger : "green";
+      const d =
+        rs.status === "full" || rs.status === "summary" ? rs.danger : "green";
       return d === "red" ? 2 : d === "yellow" ? 1 : 0;
     };
 
     const sorted = filtered.slice();
     sorted.sort((a, b) => {
-      const aPin = pinnedKeys.has(mapScanRowToPinnedOpportunity(a.row).opportunity_key);
-      const bPin = pinnedKeys.has(mapScanRowToPinnedOpportunity(b.row).opportunity_key);
+      const aPin = pinnedKeys.has(
+        mapScanRowToPinnedOpportunity(a.row).opportunity_key,
+      );
+      const bPin = pinnedKeys.has(
+        mapScanRowToPinnedOpportunity(b.row).opportunity_key,
+      );
       if (aPin !== bPin) return aPin ? -1 : 1;
 
       if (sortKey === ("RouteSafety" as SortKey)) {
@@ -1371,15 +1464,29 @@ export function ScanResultsTable({
         return sortDir === "asc" ? diff : -diff;
       }
 
-      const av = getCellValue(a.row, sortKey, batchMetricsByRow, opportunityProfile);
-      const bv = getCellValue(b.row, sortKey, batchMetricsByRow, opportunityProfile);
+      const av = getCellValue(
+        a.row,
+        sortKey,
+        batchMetricsByRow,
+        opportunityProfile,
+      );
+      const bv = getCellValue(
+        b.row,
+        sortKey,
+        batchMetricsByRow,
+        opportunityProfile,
+      );
       if (
         sortKey === "BatchNumber" ||
         sortKey === "BatchProfit" ||
         sortKey === "BatchTotalCapital" ||
         sortKey === "BatchIskPerJump"
       ) {
-        return compareBatchSyntheticValues(av as number | null, bv as number | null, sortDir);
+        return compareBatchSyntheticValues(
+          av as number | null,
+          bv as number | null,
+          sortDir,
+        );
       }
       if (typeof av === "number" || typeof bv === "number") {
         if (av == null && bv == null) return 0;
@@ -1428,7 +1535,11 @@ export function ScanResultsTable({
     const counts = new Map<string, number>();
     for (const ir of sorted) {
       // Only show groups for selected categories (if any filter active)
-      if (categoryFilter.size > 0 && !categoryFilter.has(ir.row.DayCategoryID ?? 0)) continue;
+      if (
+        categoryFilter.size > 0 &&
+        !categoryFilter.has(ir.row.DayCategoryID ?? 0)
+      )
+        continue;
       const g = ir.row.DayGroupName ?? "";
       if (g) counts.set(g, (counts.get(g) ?? 0) + 1);
     }
@@ -1438,7 +1549,9 @@ export function ScanResultsTable({
   }, [isRegionGrouped, sorted, categoryFilter]);
 
   // Available categories derived from current results (region mode only)
-  const availableCategories = useMemo<{ id: number; name: string; count: number }[]>(() => {
+  const availableCategories = useMemo<
+    { id: number; name: string; count: number }[]
+  >(() => {
     if (!isRegionGrouped) return [];
     const counts = new Map<number, number>();
     for (const ir of sorted) {
@@ -1452,10 +1565,14 @@ export function ScanResultsTable({
   }, [isRegionGrouped, sorted]);
 
   const displaySorted = useMemo(() => {
-    let rows = showHiddenRows ? sorted : sorted.filter((ir) => !hiddenMap[flipStateKey(ir.row)]);
+    let rows = showHiddenRows
+      ? sorted
+      : sorted.filter((ir) => !hiddenMap[flipStateKey(ir.row)]);
     if (isRegionGrouped) {
       if (categoryFilter.size > 0) {
-        rows = rows.filter((ir) => categoryFilter.has(ir.row.DayCategoryID ?? 0));
+        rows = rows.filter((ir) =>
+          categoryFilter.has(ir.row.DayCategoryID ?? 0),
+        );
       }
       if (securityFilter !== "all") {
         rows = rows.filter((ir) => {
@@ -1474,13 +1591,25 @@ export function ScanResultsTable({
       rows = rows.filter((ir) => {
         const k = `${ir.row.BuySystemID}:${ir.row.SellSystemID}`;
         const rs = routeSafetyMap[k];
-        if (!rs || rs.status === "loading") return routeSafetyFilter === "green";
-        const d = rs.status === "full" || rs.status === "summary" ? rs.danger : "green";
+        if (!rs || rs.status === "loading")
+          return routeSafetyFilter === "green";
+        const d =
+          rs.status === "full" || rs.status === "summary" ? rs.danger : "green";
         return d === routeSafetyFilter;
       });
     }
     return rows;
-  }, [sorted, showHiddenRows, hiddenMap, isRegionGrouped, categoryFilter, securityFilter, groupFilter, routeSafetyFilter, routeSafetyMap]);
+  }, [
+    sorted,
+    showHiddenRows,
+    hiddenMap,
+    isRegionGrouped,
+    categoryFilter,
+    securityFilter,
+    groupFilter,
+    routeSafetyFilter,
+    routeSafetyMap,
+  ]);
 
   const regionGroups = useMemo<RegionGroup[]>(() => {
     if (!isRegionGrouped) return [];
@@ -1596,12 +1725,21 @@ export function ScanResultsTable({
   }, [isRegionGrouped, results]);
 
   useEffect(() => {
-    if (!isRegionGrouped || regionCollapseInitialized || regionGroups.length === 0) {
+    if (
+      !isRegionGrouped ||
+      regionCollapseInitialized ||
+      regionGroups.length === 0
+    ) {
       return;
     }
     setCollapsedRegionGroups(new Set(defaultCollapsedRegionGroups));
     setRegionCollapseInitialized(true);
-  }, [defaultCollapsedRegionGroups, isRegionGrouped, regionCollapseInitialized, regionGroups.length]);
+  }, [
+    defaultCollapsedRegionGroups,
+    isRegionGrouped,
+    regionCollapseInitialized,
+    regionGroups.length,
+  ]);
 
   useEffect(() => {
     if (!isRegionGrouped) return;
@@ -1642,8 +1780,12 @@ export function ScanResultsTable({
     for (const group of itemGroups) {
       if (group.rows.length === 0) continue;
       rows.push(group.rows[0]);
-      if (group.rows.length <= 1 || !expandedItemGroups.has(group.key)) continue;
-      const limit = Math.max(1, groupRowLimit.get(group.key) ?? GROUP_PAGE_SIZE);
+      if (group.rows.length <= 1 || !expandedItemGroups.has(group.key))
+        continue;
+      const limit = Math.max(
+        1,
+        groupRowLimit.get(group.key) ?? GROUP_PAGE_SIZE,
+      );
       rows.push(...group.rows.slice(1, limit));
     }
     return rows;
@@ -1674,7 +1816,15 @@ export function ScanResultsTable({
   // Reset page when data/filters/sort change
   useEffect(() => {
     setPage(0);
-  }, [results, filters, sortKey, sortDir, showHiddenRows, hiddenMap, groupByItem]);
+  }, [
+    results,
+    filters,
+    sortKey,
+    sortDir,
+    showHiddenRows,
+    hiddenMap,
+    groupByItem,
+  ]);
 
   // Reset selection/pins/context menu/group limits when results change
   useEffect(() => {
@@ -1747,7 +1897,12 @@ export function ScanResultsTable({
         ? t("hiddenScopeRegionScan")
         : t("hiddenScopeRadiusScan");
     const fallbackRegionCount = showRegions ? 2 : 1;
-    return mapServerCacheMeta(cacheMeta, scopeLabel, fallbackRegionCount, lastScanTs);
+    return mapServerCacheMeta(
+      cacheMeta,
+      scopeLabel,
+      fallbackRegionCount,
+      lastScanTs,
+    );
   }, [cacheMeta, lastScanTs, showRegions, t, tradeStateTab]);
 
   const cacheSecondsLeft = useMemo(
@@ -1755,8 +1910,7 @@ export function ScanResultsTable({
     [cacheNowTs, cacheView.nextExpiryAt],
   );
   const isCacheStale = useMemo(
-    () =>
-      cacheSecondsLeft <= 0 && cacheNowTs >= cacheStaleSuppressedUntilTs,
+    () => cacheSecondsLeft <= 0 && cacheNowTs >= cacheStaleSuppressedUntilTs,
     [cacheNowTs, cacheSecondsLeft, cacheStaleSuppressedUntilTs],
   );
 
@@ -1780,12 +1934,19 @@ export function ScanResultsTable({
         const byStateKey = new Map<string, IndexedRow>();
         for (const ir of indexed) {
           const ids = flipStateIDs(ir.row);
-          byStateKey.set(tradeStateIndexKey(ids.typeID, ids.stationID, ids.regionID), ir);
+          byStateKey.set(
+            tradeStateIndexKey(ids.typeID, ids.stationID, ids.regionID),
+            ir,
+          );
         }
         setHiddenMap((prev) => {
           const next: Record<string, HiddenFlipEntry> = {};
           for (const s of states) {
-            const stateKey = tradeStateIndexKey(s.type_id, s.station_id, s.region_id);
+            const stateKey = tradeStateIndexKey(
+              s.type_id,
+              s.station_id,
+              s.region_id,
+            );
             const ir = byStateKey.get(stateKey);
             const key = ir ? flipStateKey(ir.row) : stateKey;
             const prevEntry = prev[key];
@@ -1793,9 +1954,18 @@ export function ScanResultsTable({
               key,
               mode: s.mode,
               updatedAt: s.updated_at,
-              typeName: ir?.row.TypeName ?? prevEntry?.typeName ?? t("hiddenTypeFallback", { id: s.type_id }),
-              buyStation: ir?.row.BuyStation ?? prevEntry?.buyStation ?? t("hiddenUnknown"),
-              sellStation: ir?.row.SellStation ?? prevEntry?.sellStation ?? t("hiddenUnknown"),
+              typeName:
+                ir?.row.TypeName ??
+                prevEntry?.typeName ??
+                t("hiddenTypeFallback", { id: s.type_id }),
+              buyStation:
+                ir?.row.BuyStation ??
+                prevEntry?.buyStation ??
+                t("hiddenUnknown"),
+              sellStation:
+                ir?.row.SellStation ??
+                prevEntry?.sellStation ??
+                t("hiddenUnknown"),
               stateTypeID: s.type_id,
               stateStationID: s.station_id,
               stateRegionID: s.region_id,
@@ -1817,14 +1987,16 @@ export function ScanResultsTable({
 
   // ── Summary stats ──
   const summary = useMemo(() => {
-    const baseRows = isItemGrouped && selectedIds.size === 0 ? displaySorted : visibleRows;
+    const baseRows =
+      isItemGrouped && selectedIds.size === 0 ? displaySorted : visibleRows;
     const rows =
       selectedIds.size > 0
         ? visibleRows.filter((ir) => selectedIds.has(ir.id))
         : baseRows;
     if (rows.length === 0) return null;
     const totalProfit = rows.reduce(
-      (s, ir) => s + (ir.row.RealProfit ?? ir.row.ExpectedProfit ?? ir.row.TotalProfit),
+      (s, ir) =>
+        s + (ir.row.RealProfit ?? ir.row.ExpectedProfit ?? ir.row.TotalProfit),
       0,
     );
     const avgMargin =
@@ -1870,26 +2042,32 @@ export function ScanResultsTable({
     });
   }, [visibleRows]);
 
-  const togglePin = useCallback((row: FlipResult) => {
-    const mapped = mapScanRowToPinnedOpportunity(row);
-    const stableKey = mapped.opportunity_key;
-    const removing = pinnedKeys.has(stableKey);
-    setPinnedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(stableKey)) next.delete(stableKey);
-      else next.add(stableKey);
-      return next;
-    });
-    (removing ? removePinnedOpportunity(stableKey) : addPinnedOpportunity(mapped)).catch(() => {
+  const togglePin = useCallback(
+    (row: FlipResult) => {
+      const mapped = mapScanRowToPinnedOpportunity(row);
+      const stableKey = mapped.opportunity_key;
+      const removing = pinnedKeys.has(stableKey);
       setPinnedKeys((prev) => {
         const next = new Set(prev);
-        if (removing) next.add(stableKey);
-        else next.delete(stableKey);
+        if (next.has(stableKey)) next.delete(stableKey);
+        else next.add(stableKey);
         return next;
       });
-      addToast(t("watchlistError"), "error", 3000);
-    });
-  }, [addToast, pinnedKeys, t]);
+      (removing
+        ? removePinnedOpportunity(stableKey)
+        : addPinnedOpportunity(mapped)
+      ).catch(() => {
+        setPinnedKeys((prev) => {
+          const next = new Set(prev);
+          if (removing) next.add(stableKey);
+          else next.delete(stableKey);
+          return next;
+        });
+        addToast(t("watchlistError"), "error", 3000);
+      });
+    },
+    [addToast, pinnedKeys, t],
+  );
 
   const toggleItemGroupExpanded = useCallback((typeID: number) => {
     const key = String(typeID ?? 0);
@@ -1939,7 +2117,10 @@ export function ScanResultsTable({
       setContextMenu(null);
 
       // Undo toast
-      const toastText = mode === "done" ? t("hiddenContextMarkedDoneToast") : t("hiddenContextIgnoredToast");
+      const toastText =
+        mode === "done"
+          ? t("hiddenContextMarkedDoneToast")
+          : t("hiddenContextIgnoredToast");
       const toastId = addToast(toastText, "info", 5000, {
         label: t("undo"),
         onClick: () => {
@@ -1950,7 +2131,13 @@ export function ScanResultsTable({
           });
           void deleteStationTradeStates({
             tab: tradeStateTab,
-            keys: [{ type_id: ids.typeID, station_id: ids.stationID, region_id: ids.regionID }],
+            keys: [
+              {
+                type_id: ids.typeID,
+                station_id: ids.stationID,
+                region_id: ids.regionID,
+              },
+            ],
           });
         },
       });
@@ -1970,7 +2157,14 @@ export function ScanResultsTable({
         void refreshHiddenStates(cacheView.currentRevision);
       }
     },
-    [addToast, removeToast, cacheView.currentRevision, refreshHiddenStates, t, tradeStateTab],
+    [
+      addToast,
+      removeToast,
+      cacheView.currentRevision,
+      refreshHiddenStates,
+      t,
+      tradeStateTab,
+    ],
   );
 
   const unhideRowsByKeys = useCallback(
@@ -2010,7 +2204,14 @@ export function ScanResultsTable({
         void refreshHiddenStates(cacheView.currentRevision);
       }
     },
-    [addToast, cacheView.currentRevision, hiddenMap, refreshHiddenStates, t, tradeStateTab],
+    [
+      addToast,
+      cacheView.currentRevision,
+      hiddenMap,
+      refreshHiddenStates,
+      t,
+      tradeStateTab,
+    ],
   );
 
   const clearDoneHiddenRows = useCallback(async () => {
@@ -2029,7 +2230,14 @@ export function ScanResultsTable({
       addToast(t("hiddenStateClearDoneFailed"), "error", 2600);
       void refreshHiddenStates(cacheView.currentRevision);
     }
-  }, [addToast, cacheView.currentRevision, hiddenMap, refreshHiddenStates, t, tradeStateTab]);
+  }, [
+    addToast,
+    cacheView.currentRevision,
+    hiddenMap,
+    refreshHiddenStates,
+    t,
+    tradeStateTab,
+  ]);
 
   const clearAllHiddenRows = useCallback(async () => {
     if (Object.keys(hiddenMap).length === 0) return;
@@ -2041,7 +2249,14 @@ export function ScanResultsTable({
       addToast(t("hiddenStateClearAllFailed"), "error", 2600);
       void refreshHiddenStates(cacheView.currentRevision);
     }
-  }, [addToast, cacheView.currentRevision, hiddenMap, refreshHiddenStates, t, tradeStateTab]);
+  }, [
+    addToast,
+    cacheView.currentRevision,
+    hiddenMap,
+    refreshHiddenStates,
+    t,
+    tradeStateTab,
+  ]);
 
   const handleRebootCache = useCallback(async () => {
     if (cacheRebooting) return;
@@ -2072,7 +2287,14 @@ export function ScanResultsTable({
     const csvRows = rows.map((ir) =>
       columnDefs
         .map((col) => {
-          const str = String(getCellValue(ir.row, col.key, batchMetricsByRow, opportunityProfile) ?? "");
+          const str = String(
+            getCellValue(
+              ir.row,
+              col.key,
+              batchMetricsByRow,
+              opportunityProfile,
+            ) ?? "",
+          );
           return str.includes(",") ? `"${str}"` : str;
         })
         .join(","),
@@ -2095,7 +2317,11 @@ export function ScanResultsTable({
         : visibleRows;
     const header = columnDefs.map((c) => t(c.labelKey)).join("\t");
     const tsv = rows.map((ir) =>
-      columnDefs.map((col) => fmtCell(col, ir.row, batchMetricsByRow, opportunityProfile)).join("\t"),
+      columnDefs
+        .map((col) =>
+          fmtCell(col, ir.row, batchMetricsByRow, opportunityProfile),
+        )
+        .join("\t"),
     );
     navigator.clipboard.writeText([header, ...tsv].join("\n"));
     addToast(t("copied"), "success", 2000);
@@ -2160,15 +2386,25 @@ export function ScanResultsTable({
       // Don't intercept when typing in an input
       const tag = (e.target as HTMLElement).tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      const { pageRows, focusedRowId, setFocusedRowId, setExecPlanRow, setRowHiddenState } = keyNavRef.current;
+      const {
+        pageRows,
+        focusedRowId,
+        setFocusedRowId,
+        setExecPlanRow,
+        setRowHiddenState,
+      } = keyNavRef.current;
       if (pageRows.length === 0) return;
 
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
-        const currentIdx = focusedRowId != null ? pageRows.findIndex((ir) => ir.id === focusedRowId) : -1;
+        const currentIdx =
+          focusedRowId != null
+            ? pageRows.findIndex((ir) => ir.id === focusedRowId)
+            : -1;
         let nextIdx: number;
         if (e.key === "ArrowDown") {
-          nextIdx = currentIdx < 0 ? 0 : Math.min(currentIdx + 1, pageRows.length - 1);
+          nextIdx =
+            currentIdx < 0 ? 0 : Math.min(currentIdx + 1, pageRows.length - 1);
         } else {
           nextIdx = currentIdx < 0 ? 0 : Math.max(currentIdx - 1, 0);
         }
@@ -2195,13 +2431,15 @@ export function ScanResultsTable({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Scroll focused row into view
   useEffect(() => {
     if (focusedRowId == null) return;
-    document.querySelector(`[data-row-id="${focusedRowId}"]`)?.scrollIntoView({ block: "nearest" });
+    document
+      .querySelector(`[data-row-id="${focusedRowId}"]`)
+      ?.scrollIntoView({ block: "nearest" });
   }, [focusedRowId]);
 
   // renderDataRow: renders a DataRow memo component — only the changed row re-renders
@@ -2220,7 +2458,10 @@ export function ScanResultsTable({
           const danger = pe && pe.status !== "loading" ? pe.danger : "green";
           const kills = pe && pe.status !== "loading" ? pe.kills : 0;
           const totalISK = pe && pe.status !== "loading" ? pe.totalISK : 0;
-          return { ...prev, [key]: { status: "full", danger, kills, totalISK, systems } };
+          return {
+            ...prev,
+            [key]: { status: "full", danger, kills, totalISK, systems },
+          };
         });
         setRouteSafetyModal({ systems });
       });
@@ -2240,7 +2481,9 @@ export function ScanResultsTable({
         globalIdx={globalIdx}
         columnDefs={columnDefs}
         compactMode={compactMode}
-        isPinned={pinnedKeys.has(mapScanRowToPinnedOpportunity(ir.row).opportunity_key)}
+        isPinned={pinnedKeys.has(
+          mapScanRowToPinnedOpportunity(ir.row).opportunity_key,
+        )}
         isSelected={selectedIds.has(ir.id)}
         isFocused={focusedRowId === ir.id}
         variant={variantByRowId.get(ir.id)}
@@ -2255,7 +2498,9 @@ export function ScanResultsTable({
         onToggleSelect={toggleSelect}
         onTogglePin={togglePin}
         tFn={t}
-        routeSafetyEntry={routeSafetyMap[`${ir.row.BuySystemID}:${ir.row.SellSystemID}`]}
+        routeSafetyEntry={
+          routeSafetyMap[`${ir.row.BuySystemID}:${ir.row.SellSystemID}`]
+        }
         onRouteSafetyClick={handleRouteSafetyClick}
         onOpenScore={setScoreExplainRow}
         batchMetricsByRow={batchMetricsByRow}
@@ -2336,41 +2581,43 @@ export function ScanResultsTable({
         <div className="flex-1" />
 
         {/* Pagination */}
-        {!isRegionGrouped && !isItemGrouped && displaySorted.length > PAGE_SIZE && (
-          <div className="flex items-center gap-1 text-eve-dim">
-            <button
-              onClick={() => setPage(0)}
-              disabled={safePage === 0}
-              className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              «
-            </button>
-            <button
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={safePage === 0}
-              className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              ‹
-            </button>
-            <span className="px-2 text-eve-text font-mono tabular-nums">
-              {safePage + 1} / {totalPages}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              disabled={safePage >= totalPages - 1}
-              className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              ›
-            </button>
-            <button
-              onClick={() => setPage(totalPages - 1)}
-              disabled={safePage >= totalPages - 1}
-              className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            >
-              »
-            </button>
-          </div>
-        )}
+        {!isRegionGrouped &&
+          !isItemGrouped &&
+          displaySorted.length > PAGE_SIZE && (
+            <div className="flex items-center gap-1 text-eve-dim">
+              <button
+                onClick={() => setPage(0)}
+                disabled={safePage === 0}
+                className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                «
+              </button>
+              <button
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={safePage === 0}
+                className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                ‹
+              </button>
+              <span className="px-2 text-eve-text font-mono tabular-nums">
+                {safePage + 1} / {totalPages}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={safePage >= totalPages - 1}
+                className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                ›
+              </button>
+              <button
+                onClick={() => setPage(totalPages - 1)}
+                disabled={safePage >= totalPages - 1}
+                className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                »
+              </button>
+            </div>
+          )}
 
         {results.length > 0 && !scanning && (
           <>
@@ -2392,13 +2639,31 @@ export function ScanResultsTable({
               className={`px-2 py-0.5 rounded-sm border text-[13px] transition-colors ${showHiddenRows ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10" : "border-eve-border/60 text-eve-text/50 bg-eve-dark/40 hover:border-eve-accent/40 hover:text-eve-accent/70"}`}
             >
               {showHiddenRows ? (
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  className="w-3.5 h-3.5"
+                >
                   <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
-                  <path fillRule="evenodd" d="M.664 10.59a1.651 1.651 0 0 1 0-1.186A10.004 10.004 0 0 1 10 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0 1 10 17c-4.257 0-7.893-2.66-9.336-6.41ZM14 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" clipRule="evenodd" />
+                  <path
+                    fillRule="evenodd"
+                    d="M.664 10.59a1.651 1.651 0 0 1 0-1.186A10.004 10.004 0 0 1 10 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0 1 10 17c-4.257 0-7.893-2.66-9.336-6.41ZM14 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"
+                    clipRule="evenodd"
+                  />
                 </svg>
               ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5">
-                  <path fillRule="evenodd" d="M3.28 2.22a.75.75 0 0 0-1.06 1.06l14.5 14.5a.75.75 0 1 0 1.06-1.06l-1.745-1.745a10.029 10.029 0 0 0 3.3-4.38 1.651 1.651 0 0 0 0-1.185A10.004 10.004 0 0 0 9.999 3a9.956 9.956 0 0 0-4.744 1.194L3.28 2.22ZM7.752 6.69l1.092 1.092a2.5 2.5 0 0 1 3.374 3.373l1.091 1.092a4 4 0 0 0-5.557-5.557Z" clipRule="evenodd" />
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  className="w-3.5 h-3.5"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M3.28 2.22a.75.75 0 0 0-1.06 1.06l14.5 14.5a.75.75 0 1 0 1.06-1.06l-1.745-1.745a10.029 10.029 0 0 0 3.3-4.38 1.651 1.651 0 0 0 0-1.185A10.004 10.004 0 0 0 9.999 3a9.956 9.956 0 0 0-4.744 1.194L3.28 2.22ZM7.752 6.69l1.092 1.092a2.5 2.5 0 0 1 3.374 3.373l1.091 1.092a4 4 0 0 0-5.557-5.557Z"
+                    clipRule="evenodd"
+                  />
                   <path d="M10.748 13.93l2.523 2.523a10.285 10.285 0 0 1-3.27.547c-4.258 0-7.894-2.66-9.337-6.41a1.651 1.651 0 0 1 0-1.186A10.007 10.007 0 0 1 2.839 6.02L6.07 9.252a4 4 0 0 0 4.678 4.678Z" />
                 </svg>
               )}
@@ -2445,11 +2710,18 @@ export function ScanResultsTable({
           <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
             {(["all", "green", "yellow", "red"] as const).map((lvl) => {
               const active = routeSafetyFilter === lvl;
-              const dot = lvl === "all" ? null : (
-                <span className={`inline-block w-1.5 h-1.5 rounded-full mr-0.5 ${
-                  lvl === "green" ? "bg-green-400" : lvl === "yellow" ? "bg-yellow-400" : "bg-red-400"
-                }`} />
-              );
+              const dot =
+                lvl === "all" ? null : (
+                  <span
+                    className={`inline-block w-1.5 h-1.5 rounded-full mr-0.5 ${
+                      lvl === "green"
+                        ? "bg-green-400"
+                        : lvl === "yellow"
+                          ? "bg-yellow-400"
+                          : "bg-red-400"
+                    }`}
+                  />
+                );
               return (
                 <button
                   key={lvl}
@@ -2462,7 +2734,10 @@ export function ScanResultsTable({
                   }`}
                   title={`Route safety: ${lvl}`}
                 >
-                  {dot}{lvl === "all" ? "Route: All" : lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+                  {dot}
+                  {lvl === "all"
+                    ? "Route: All"
+                    : lvl.charAt(0).toUpperCase() + lvl.slice(1)}
                 </button>
               );
             })}
@@ -2502,21 +2777,19 @@ export function ScanResultsTable({
               title={t("exportCSV")}
               onClick={exportCSV}
             />
-            <ToolbarBtn
-              label="⎘"
-              title={t("copyTable")}
-              onClick={copyTable}
-            />
+            <ToolbarBtn label="⎘" title={t("copyTable")} onClick={copyTable} />
           </>
         )}
         {isRegionGrouped && results.length > 0 && !scanning && (
           <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
             <span className="text-eve-dim px-1">Sort:</span>
-            {([
-              ["period_profit", "Period"],
-              ["now_profit", "Now"],
-              ["trade_score", "Score"],
-            ] as const).map(([mode, label]) => {
+            {(
+              [
+                ["period_profit", "Period"],
+                ["now_profit", "Now"],
+                ["trade_score", "Score"],
+              ] as const
+            ).map(([mode, label]) => {
               const active = regionGroupSortMode === mode;
               return (
                 <button
@@ -2536,26 +2809,38 @@ export function ScanResultsTable({
           </div>
         )}
         {/* Item filter button — region mode only */}
-        {isRegionGrouped && results.length > 0 && !scanning && (() => {
-          const activeCount = categoryFilter.size + groupFilter.size + (securityFilter !== "all" ? 1 : 0);
-          return (
-            <button
-              ref={filterBtnRef}
-              type="button"
-              onClick={() => { setFilterPanelOpen((v) => !v); setFilterSearch(""); }}
-              className={`relative px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
-                filterPanelOpen || activeCount > 0
-                  ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent"
-                  : "border-eve-border/60 bg-eve-dark/40 text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent"
-              }`}
-              title="Open item filter (category · group · security)"
-            >
-              ⚙ Filters{activeCount > 0 && (
-                <span className="ml-1 px-1 rounded-full bg-eve-accent text-eve-dark text-[9px] font-bold">{activeCount}</span>
-              )}
-            </button>
-          );
-        })()}
+        {isRegionGrouped &&
+          results.length > 0 &&
+          !scanning &&
+          (() => {
+            const activeCount =
+              categoryFilter.size +
+              groupFilter.size +
+              (securityFilter !== "all" ? 1 : 0);
+            return (
+              <button
+                ref={filterBtnRef}
+                type="button"
+                onClick={() => {
+                  setFilterPanelOpen((v) => !v);
+                  setFilterSearch("");
+                }}
+                className={`relative px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
+                  filterPanelOpen || activeCount > 0
+                    ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent"
+                    : "border-eve-border/60 bg-eve-dark/40 text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent"
+                }`}
+                title="Open item filter (category · group · security)"
+              >
+                ⚙ Filters
+                {activeCount > 0 && (
+                  <span className="ml-1 px-1 rounded-full bg-eve-accent text-eve-dark text-[9px] font-bold">
+                    {activeCount}
+                  </span>
+                )}
+              </button>
+            );
+          })()}
       </div>
 
       {/* ── Region item filter popup ── */}
@@ -2563,7 +2848,11 @@ export function ScanResultsTable({
         <div
           ref={filterPanelRef}
           className="absolute z-40 top-[calc(var(--toolbar-h,36px)+2px)] left-0 right-0 mx-2 bg-eve-panel border border-eve-border rounded-sm shadow-2xl text-xs"
-          style={{ maxHeight: "60vh", display: "flex", flexDirection: "column" }}
+          style={{
+            maxHeight: "60vh",
+            display: "flex",
+            flexDirection: "column",
+          }}
         >
           {/* Header */}
           <div className="flex items-center gap-2 px-3 py-2 border-b border-eve-border shrink-0">
@@ -2582,13 +2871,17 @@ export function ScanResultsTable({
                 const activeColors = {
                   all: "border-eve-accent/70 bg-eve-accent/15 text-eve-accent",
                   highsec: "text-green-300 border-green-500/60 bg-green-900/20",
-                  lowsec: "text-yellow-300 border-yellow-500/60 bg-yellow-900/20",
+                  lowsec:
+                    "text-yellow-300 border-yellow-500/60 bg-yellow-900/20",
                   nullsec: "text-red-300 border-red-500/60 bg-red-900/20",
                 } as const;
                 const active = securityFilter === s;
                 return (
-                  <button key={s} onClick={() => setSecurityFilter(s)}
-                    className={`px-1.5 py-0.5 rounded-sm border transition-colors ${active ? activeColors[s] : "border-eve-border/50 text-eve-dim hover:text-eve-text"}`}>
+                  <button
+                    key={s}
+                    onClick={() => setSecurityFilter(s)}
+                    className={`px-1.5 py-0.5 rounded-sm border transition-colors ${active ? activeColors[s] : "border-eve-border/50 text-eve-dim hover:text-eve-text"}`}
+                  >
                     {labels[s]}
                   </button>
                 );
@@ -2598,9 +2891,17 @@ export function ScanResultsTable({
             <div className="flex-1" />
 
             {/* Reset all */}
-            {(categoryFilter.size > 0 || groupFilter.size > 0 || securityFilter !== "all") && (
-              <button onClick={() => { setCategoryFilter(new Set()); setGroupFilter(new Set()); setSecurityFilter("all"); }}
-                className="px-2 py-0.5 rounded-sm border border-red-500/50 text-red-300 hover:bg-red-900/20 transition-colors">
+            {(categoryFilter.size > 0 ||
+              groupFilter.size > 0 ||
+              securityFilter !== "all") && (
+              <button
+                onClick={() => {
+                  setCategoryFilter(new Set());
+                  setGroupFilter(new Set());
+                  setSecurityFilter("all");
+                }}
+                className="px-2 py-0.5 rounded-sm border border-red-500/50 text-red-300 hover:bg-red-900/20 transition-colors"
+              >
                 Reset all
               </button>
             )}
@@ -2615,73 +2916,119 @@ export function ScanResultsTable({
               className="w-48 px-2 py-0.5 rounded-sm border border-eve-border bg-eve-dark text-eve-text placeholder-eve-dim focus:outline-none focus:border-eve-accent"
             />
 
-            <button onClick={() => setFilterPanelOpen(false)} className="text-eve-dim hover:text-eve-text ml-1">✕</button>
+            <button
+              onClick={() => setFilterPanelOpen(false)}
+              className="text-eve-dim hover:text-eve-text ml-1"
+            >
+              ✕
+            </button>
           </div>
 
           {/* Scrollable body */}
           <div className="overflow-y-auto p-3 space-y-3">
             {/* Category section */}
-            {availableCategories.length > 0 && (() => {
-              const q = filterSearch.trim().toLowerCase();
-              const cats = q ? availableCategories.filter(c => c.name.toLowerCase().includes(q)) : availableCategories;
-              if (cats.length === 0) return null;
-              return (
-                <div>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-eve-dim uppercase tracking-wider text-[10px]">Category</span>
-                    {categoryFilter.size > 0 && (
-                      <button onClick={() => { setCategoryFilter(new Set()); setGroupFilter(new Set()); }}
-                        className="text-red-400 hover:text-red-300 text-[10px]">✕ clear</button>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {cats.map(({ id, name, count }) => {
-                      const active = categoryFilter.has(id);
-                      return (
-                        <button key={id}
+            {availableCategories.length > 0 &&
+              (() => {
+                const q = filterSearch.trim().toLowerCase();
+                const cats = q
+                  ? availableCategories.filter((c) =>
+                      c.name.toLowerCase().includes(q),
+                    )
+                  : availableCategories;
+                if (cats.length === 0) return null;
+                return (
+                  <div>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-eve-dim uppercase tracking-wider text-[10px]">
+                        Category
+                      </span>
+                      {categoryFilter.size > 0 && (
+                        <button
                           onClick={() => {
-                            setCategoryFilter((prev) => { const n = new Set(prev); if (active) n.delete(id); else n.add(id); return n; });
+                            setCategoryFilter(new Set());
                             setGroupFilter(new Set());
                           }}
-                          className={`px-2 py-0.5 rounded-sm border transition-colors ${active ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent" : "border-eve-border/50 text-eve-dim hover:border-eve-accent/40 hover:text-eve-text"}`}>
-                          {name} <span className="opacity-60">{count}</span>
+                          className="text-red-400 hover:text-red-300 text-[10px]"
+                        >
+                          ✕ clear
                         </button>
-                      );
-                    })}
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {cats.map(({ id, name, count }) => {
+                        const active = categoryFilter.has(id);
+                        return (
+                          <button
+                            key={id}
+                            onClick={() => {
+                              setCategoryFilter((prev) => {
+                                const n = new Set(prev);
+                                if (active) n.delete(id);
+                                else n.add(id);
+                                return n;
+                              });
+                              setGroupFilter(new Set());
+                            }}
+                            className={`px-2 py-0.5 rounded-sm border transition-colors ${active ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent" : "border-eve-border/50 text-eve-dim hover:border-eve-accent/40 hover:text-eve-text"}`}
+                          >
+                            {name} <span className="opacity-60">{count}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })()}
+                );
+              })()}
 
             {/* Group section */}
-            {availableGroups.length > 0 && (() => {
-              const q = filterSearch.trim().toLowerCase();
-              const grps = q ? availableGroups.filter(g => g.name.toLowerCase().includes(q)) : availableGroups;
-              if (grps.length === 0) return null;
-              return (
-                <div>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-eve-dim uppercase tracking-wider text-[10px]">Group</span>
-                    {groupFilter.size > 0 && (
-                      <button onClick={() => setGroupFilter(new Set())}
-                        className="text-red-400 hover:text-red-300 text-[10px]">✕ clear</button>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-1">
-                    {grps.map(({ name, count }) => {
-                      const active = groupFilter.has(name);
-                      return (
-                        <button key={name}
-                          onClick={() => setGroupFilter((prev) => { const n = new Set(prev); if (active) n.delete(name); else n.add(name); return n; })}
-                          className={`px-2 py-0.5 rounded-sm border transition-colors ${active ? "border-sky-400/70 bg-sky-900/20 text-sky-300" : "border-eve-border/50 text-eve-dim hover:border-sky-400/40 hover:text-eve-text"}`}>
-                          {name} <span className="opacity-60">{count}</span>
+            {availableGroups.length > 0 &&
+              (() => {
+                const q = filterSearch.trim().toLowerCase();
+                const grps = q
+                  ? availableGroups.filter((g) =>
+                      g.name.toLowerCase().includes(q),
+                    )
+                  : availableGroups;
+                if (grps.length === 0) return null;
+                return (
+                  <div>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="text-eve-dim uppercase tracking-wider text-[10px]">
+                        Group
+                      </span>
+                      {groupFilter.size > 0 && (
+                        <button
+                          onClick={() => setGroupFilter(new Set())}
+                          className="text-red-400 hover:text-red-300 text-[10px]"
+                        >
+                          ✕ clear
                         </button>
-                      );
-                    })}
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {grps.map(({ name, count }) => {
+                        const active = groupFilter.has(name);
+                        return (
+                          <button
+                            key={name}
+                            onClick={() =>
+                              setGroupFilter((prev) => {
+                                const n = new Set(prev);
+                                if (active) n.delete(name);
+                                else n.add(name);
+                                return n;
+                              })
+                            }
+                            className={`px-2 py-0.5 rounded-sm border transition-colors ${active ? "border-sky-400/70 bg-sky-900/20 text-sky-300" : "border-eve-border/50 text-eve-dim hover:border-sky-400/40 hover:text-eve-text"}`}
+                          >
+                            {name} <span className="opacity-60">{count}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })()}
+                );
+              })()}
           </div>
         </div>
       )}
@@ -2712,15 +3059,17 @@ export function ScanResultsTable({
                 const isDragged = colDraggedKey === col.key;
                 const isOver = colDragOverKey === col.key && !isDragged;
                 const showGapBefore = isOver && colDragOverSide === "before";
-                const showGapAfter  = isOver && colDragOverSide === "after";
+                const showGapAfter = isOver && colDragOverSide === "after";
 
                 return (
                   <div key={col.key} className="flex items-center">
                     {/* Drop gap — before */}
-                    <div className={[
-                      "flex items-center justify-center self-stretch transition-all duration-150 overflow-hidden",
-                      showGapBefore ? "w-7 opacity-100" : "w-0 opacity-0",
-                    ].join(" ")}>
+                    <div
+                      className={[
+                        "flex items-center justify-center self-stretch transition-all duration-150 overflow-hidden",
+                        showGapBefore ? "w-7 opacity-100" : "w-0 opacity-0",
+                      ].join(" ")}
+                    >
                       <div className="w-0.5 h-full min-h-[24px] rounded-full bg-eve-accent shadow-[0_0_6px_2px] shadow-eve-accent/40" />
                     </div>
 
@@ -2740,15 +3089,25 @@ export function ScanResultsTable({
                         e.preventDefault();
                         e.dataTransfer.dropEffect = "move";
                         if (colDraggedKey === col.key) return;
-                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                        const side = e.clientX < rect.left + rect.width / 2 ? "before" : "after";
-                        if (colDragOverKey !== col.key || colDragOverSide !== side) {
+                        const rect = (
+                          e.currentTarget as HTMLElement
+                        ).getBoundingClientRect();
+                        const side =
+                          e.clientX < rect.left + rect.width / 2
+                            ? "before"
+                            : "after";
+                        if (
+                          colDragOverKey !== col.key ||
+                          colDragOverSide !== side
+                        ) {
                           setColDragOverKey(col.key);
                           setColDragOverSide(side);
                         }
                       }}
                       onDragLeave={(e) => {
-                        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                        if (
+                          !e.currentTarget.contains(e.relatedTarget as Node)
+                        ) {
                           setColDragOverKey(null);
                         }
                       }}
@@ -2761,8 +3120,13 @@ export function ScanResultsTable({
                         setColDragOverKey(null);
                       }}
                       onKeyDown={(e) => {
-                        if (e.key === "ArrowLeft") { e.preventDefault(); moveColumn(col.key, -1); }
-                        else if (e.key === "ArrowRight") { e.preventDefault(); moveColumn(col.key, 1); }
+                        if (e.key === "ArrowLeft") {
+                          e.preventDefault();
+                          moveColumn(col.key, -1);
+                        } else if (e.key === "ArrowRight") {
+                          e.preventDefault();
+                          moveColumn(col.key, 1);
+                        }
                       }}
                       className={[
                         "flex items-center gap-1.5 rounded-sm border px-2 py-1 cursor-grab active:cursor-grabbing select-none transition-all duration-150",
@@ -2775,25 +3139,37 @@ export function ScanResultsTable({
                               : "border-eve-border/40 bg-eve-panel/60 hover:border-eve-accent/30 hover:bg-eve-accent/5",
                       ].join(" ")}
                     >
-                      <span className="text-eve-dim/40 text-[11px] leading-none">⠿</span>
+                      <span className="text-eve-dim/40 text-[11px] leading-none">
+                        ⠿
+                      </span>
                       <label className="flex items-center gap-1.5 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={visible}
-                          onChange={(e) => toggleColumnVisibility(col.key, e.target.checked)}
+                          onChange={(e) =>
+                            toggleColumnVisibility(col.key, e.target.checked)
+                          }
                           className="accent-eve-accent w-3 h-3"
                         />
-                        <span className={visible ? "text-eve-text" : "text-eve-dim/50 line-through"}>
+                        <span
+                          className={
+                            visible
+                              ? "text-eve-text"
+                              : "text-eve-dim/50 line-through"
+                          }
+                        >
                           {t(col.labelKey)}
                         </span>
                       </label>
                     </div>
 
                     {/* Drop gap — after */}
-                    <div className={[
-                      "flex items-center justify-center self-stretch transition-all duration-150 overflow-hidden",
-                      showGapAfter ? "w-7 opacity-100" : "w-0 opacity-0",
-                    ].join(" ")}>
+                    <div
+                      className={[
+                        "flex items-center justify-center self-stretch transition-all duration-150 overflow-hidden",
+                        showGapAfter ? "w-7 opacity-100" : "w-0 opacity-0",
+                      ].join(" ")}
+                    >
                       <div className="w-0.5 h-full min-h-[24px] rounded-full bg-eve-accent shadow-[0_0_6px_2px] shadow-eve-accent/40" />
                     </div>
                   </div>
@@ -2835,7 +3211,9 @@ export function ScanResultsTable({
                   <span className="inline-flex items-center gap-1">
                     {t(col.labelKey)}
                     {col.tooltipKey ? (
-                      <span className="text-eve-dim/70 normal-case text-[10px]">?</span>
+                      <span className="text-eve-dim/70 normal-case text-[10px]">
+                        ?
+                      </span>
                     ) : null}
                   </span>
                   {sortKey === col.key && (
@@ -2876,11 +3254,16 @@ export function ScanResultsTable({
               ? (() => {
                   let rowIndex = 0;
                   return regionGroups.map((group) => {
-                    const collapsed = effectiveCollapsedRegionGroups.has(group.key);
+                    const collapsed = effectiveCollapsedRegionGroups.has(
+                      group.key,
+                    );
                     return (
                       <Fragment key={`group:${group.key}`}>
                         <tr className="border-b border-eve-border/60 bg-eve-dark/50">
-                          <td colSpan={columnDefs.length + 2} className="px-2 py-1.5">
+                          <td
+                            colSpan={columnDefs.length + 2}
+                            className="px-2 py-1.5"
+                          >
                             <button
                               type="button"
                               onClick={() => {
@@ -2890,7 +3273,8 @@ export function ScanResultsTable({
                                     const next = regionCollapseInitialized
                                       ? new Set(prev)
                                       : new Set(defaultCollapsedRegionGroups);
-                                    if (next.has(group.key)) next.delete(group.key);
+                                    if (next.has(group.key))
+                                      next.delete(group.key);
                                     else next.add(group.key);
                                     return next;
                                   });
@@ -2913,39 +3297,48 @@ export function ScanResultsTable({
                             </button>
                           </td>
                         </tr>
-                        {!collapsed && (() => {
-                          const limit = groupRowLimit.get(group.key) ?? GROUP_PAGE_SIZE;
-                          const sliced = group.rows.slice(0, limit);
-                          const hasMore = group.rows.length > limit;
-                          return (
-                            <>
-                              {sliced.map((ir) => {
-                                const rendered = renderDataRow(ir, rowIndex);
-                                rowIndex++;
-                                return rendered;
-                              })}
-                              {hasMore && (
-                                <tr className="bg-eve-dark/30">
-                                  <td colSpan={columnDefs.length + 2} className="px-4 py-1.5 text-center">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setGroupRowLimit((prev) => {
-                                          const next = new Map(prev);
-                                          next.set(group.key, group.rows.length);
-                                          return next;
-                                        })
-                                      }
-                                      className="text-[11px] text-eve-dim hover:text-eve-accent transition-colors"
+                        {!collapsed &&
+                          (() => {
+                            const limit =
+                              groupRowLimit.get(group.key) ?? GROUP_PAGE_SIZE;
+                            const sliced = group.rows.slice(0, limit);
+                            const hasMore = group.rows.length > limit;
+                            return (
+                              <>
+                                {sliced.map((ir) => {
+                                  const rendered = renderDataRow(ir, rowIndex);
+                                  rowIndex++;
+                                  return rendered;
+                                })}
+                                {hasMore && (
+                                  <tr className="bg-eve-dark/30">
+                                    <td
+                                      colSpan={columnDefs.length + 2}
+                                      className="px-4 py-1.5 text-center"
                                     >
-                                      Show all {group.rows.length} items ({group.rows.length - limit} more) ↓
-                                    </button>
-                                  </td>
-                                </tr>
-                              )}
-                            </>
-                          );
-                        })()}
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setGroupRowLimit((prev) => {
+                                            const next = new Map(prev);
+                                            next.set(
+                                              group.key,
+                                              group.rows.length,
+                                            );
+                                            return next;
+                                          })
+                                        }
+                                        className="text-[11px] text-eve-dim hover:text-eve-accent transition-colors"
+                                      >
+                                        Show all {group.rows.length} items (
+                                        {group.rows.length - limit} more) ↓
+                                      </button>
+                                    </td>
+                                  </tr>
+                                )}
+                              </>
+                            );
+                          })()}
                       </Fragment>
                     );
                   });
@@ -2957,12 +3350,15 @@ export function ScanResultsTable({
                       if (group.rows.length === 0) return null;
                       const topRow = group.rows[0];
                       const expanded =
-                        group.rows.length > 1 && expandedItemGroups.has(group.key);
+                        group.rows.length > 1 &&
+                        expandedItemGroups.has(group.key);
                       const limit = Math.max(
                         1,
                         groupRowLimit.get(group.key) ?? GROUP_PAGE_SIZE,
                       );
-                      const childRows = expanded ? group.rows.slice(1, limit) : [];
+                      const childRows = expanded
+                        ? group.rows.slice(1, limit)
+                        : [];
                       const hasMore = expanded && group.rows.length > limit;
                       const topRendered = renderDataRow(topRow, rowIndex, {
                         expandable: group.rows.length > 1,
@@ -2979,7 +3375,10 @@ export function ScanResultsTable({
                           })}
                           {hasMore && (
                             <tr className="bg-eve-dark/30">
-                              <td colSpan={columnDefs.length + 2} className="px-4 py-1.5 text-center">
+                              <td
+                                colSpan={columnDefs.length + 2}
+                                className="px-4 py-1.5 text-center"
+                              >
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -2991,7 +3390,8 @@ export function ScanResultsTable({
                                   }
                                   className="text-[11px] text-eve-dim hover:text-eve-accent transition-colors"
                                 >
-                                  Show all {group.rows.length} items ({group.rows.length - limit} more) ↓
+                                  Show all {group.rows.length} items (
+                                  {group.rows.length - limit} more) ↓
                                 </button>
                               </td>
                             </tr>
@@ -3000,11 +3400,15 @@ export function ScanResultsTable({
                       );
                     });
                   })()
-                : pageRows.map((ir, i) => renderDataRow(ir, safePage * PAGE_SIZE + i))}
+                : pageRows.map((ir, i) =>
+                    renderDataRow(ir, safePage * PAGE_SIZE + i),
+                  )}
             {displaySorted.length === 0 && !scanning && (
               <tr>
                 <td colSpan={columnDefs.length + 2} className="p-0">
-                  {results.length > 0 && hiddenCounts.total > 0 && !showHiddenRows ? (
+                  {results.length > 0 &&
+                  hiddenCounts.total > 0 &&
+                  !showHiddenRows ? (
                     <div className="p-6 text-center text-sm text-eve-dim">
                       {t("hiddenAllRowsPrefix")}{" "}
                       <span className="text-eve-accent">{t("showHidden")}</span>{" "}
@@ -3015,7 +3419,10 @@ export function ScanResultsTable({
                       .
                     </div>
                   ) : (
-                    <EmptyState reason={emptyReason} wikiSlug="Getting-Started" />
+                    <EmptyState
+                      reason={emptyReason}
+                      wikiSlug="Getting-Started"
+                    />
                   )}
                 </td>
               </tr>
@@ -3056,8 +3463,12 @@ export function ScanResultsTable({
             onClick={(e) => e.stopPropagation()}
             className="max-w-[92vw] w-[520px] rounded-sm border border-eve-border bg-eve-dark shadow-eve-glow-strong p-3"
           >
-            <div className="mb-2 text-sm font-medium text-eve-text">Why this score?</div>
-            <OpportunityScoreDetails explanation={scoreFlipResult(scoreExplainRow, opportunityProfile)} />
+            <div className="mb-2 text-sm font-medium text-eve-text">
+              Why this score?
+            </div>
+            <OpportunityScoreDetails
+              explanation={scoreFlipResult(scoreExplainRow, opportunityProfile)}
+            />
             <div className="mt-2 text-center">
               <button
                 type="button"
@@ -3233,7 +3644,8 @@ export function ScanResultsTable({
                     setContextMenu(null);
                   }}
                 />
-                {contextMenu.row.SellSystemID !== contextMenu.row.BuySystemID && (
+                {contextMenu.row.SellSystemID !==
+                  contextMenu.row.BuySystemID && (
                   <ContextItem
                     label={`🎯 ${t("setDestination")} (Sell)`}
                     onClick={async () => {
@@ -3241,7 +3653,11 @@ export function ScanResultsTable({
                         await setWaypointInGame(contextMenu.row.SellSystemID);
                         addToast(t("actionSuccess"), "success", 2000);
                       } catch (err: any) {
-                        addToast(t("actionFailed").replace("{error}", err.message), "error", 3000);
+                        addToast(
+                          t("actionFailed").replace("{error}", err.message),
+                          "error",
+                          3000,
+                        );
                       }
                       setContextMenu(null);
                     }}
@@ -3252,7 +3668,12 @@ export function ScanResultsTable({
             <div className="h-px bg-eve-border my-1" />
             <ContextItem
               label={
-                pinnedKeys.has(mapScanRowToPinnedOpportunity(contextMenu.row).opportunity_key) ? t("unpinRow") : t("pinRow")
+                pinnedKeys.has(
+                  mapScanRowToPinnedOpportunity(contextMenu.row)
+                    .opportunity_key,
+                )
+                  ? t("unpinRow")
+                  : t("pinRow")
               }
               onClick={() => {
                 togglePin(contextMenu.row);
@@ -3300,24 +3721,26 @@ export function ScanResultsTable({
                 className="h-8 px-2 min-w-[240px] rounded-sm border border-eve-border bg-eve-input text-eve-text text-xs"
               />
               <div className="flex items-center gap-1">
-                {(["all", "done", "ignored"] as HiddenFilterTab[]).map((tab) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    onClick={() => setIgnoredTab(tab)}
-                    className={`px-2 py-1 rounded-sm border text-xs uppercase tracking-wide transition-colors ${
-                      ignoredTab === tab
-                        ? "border-eve-accent text-eve-accent bg-eve-accent/10"
-                        : "border-eve-border/60 text-eve-dim hover:border-eve-accent/40 hover:text-eve-text"
-                    }`}
-                  >
-                    {tab === "all"
-                      ? t("hiddenFilterAll")
-                      : tab === "done"
-                        ? t("hiddenFilterDone")
-                        : t("hiddenFilterIgnored")}
-                  </button>
-                ))}
+                {(["all", "done", "ignored"] as HiddenFilterTab[]).map(
+                  (tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => setIgnoredTab(tab)}
+                      className={`px-2 py-1 rounded-sm border text-xs uppercase tracking-wide transition-colors ${
+                        ignoredTab === tab
+                          ? "border-eve-accent text-eve-accent bg-eve-accent/10"
+                          : "border-eve-border/60 text-eve-dim hover:border-eve-accent/40 hover:text-eve-text"
+                      }`}
+                    >
+                      {tab === "all"
+                        ? t("hiddenFilterAll")
+                        : tab === "done"
+                          ? t("hiddenFilterDone")
+                          : t("hiddenFilterIgnored")}
+                    </button>
+                  ),
+                )}
               </div>
               <div className="flex-1" />
               <button
@@ -3372,7 +3795,9 @@ export function ScanResultsTable({
                               return;
                             }
                             setIgnoredSelectedKeys(
-                              new Set(filteredHiddenEntries.map((entry) => entry.key)),
+                              new Set(
+                                filteredHiddenEntries.map((entry) => entry.key),
+                              ),
                             );
                           }}
                           className="accent-eve-accent"
@@ -3418,7 +3843,9 @@ export function ScanResultsTable({
                             className="accent-eve-accent"
                           />
                         </td>
-                        <td className="px-2 py-1 text-eve-text">{entry.typeName}</td>
+                        <td className="px-2 py-1 text-eve-text">
+                          {entry.typeName}
+                        </td>
                         <td className="px-2 py-1 text-eve-dim truncate">
                           {`${entry.buyStation} -> ${entry.sellStation}`}
                         </td>
@@ -3464,7 +3891,10 @@ export function ScanResultsTable({
       )}
 
       {dayDetailRow && (
-        <DayDetailPanel row={dayDetailRow} onClose={() => setDayDetailRow(null)} />
+        <DayDetailPanel
+          row={dayDetailRow}
+          onClose={() => setDayDetailRow(null)}
+        />
       )}
 
       <ExecutionPlannerPopup
@@ -3535,17 +3965,30 @@ interface DataRowProps {
   variantExpandable: boolean;
   variantExpanded: boolean;
   onToggleVariantGroup: (typeID: number) => void;
-  onContextMenu: (e: import("react").MouseEvent, id: number, row: FlipResult) => void;
+  onContextMenu: (
+    e: import("react").MouseEvent,
+    id: number,
+    row: FlipResult,
+  ) => void;
   onLmbClick: (row: FlipResult) => void;
   onToggleSelect: (id: number) => void;
   onTogglePin: (row: FlipResult) => void;
   tFn: (key: TranslationKey, vars?: Record<string, string | number>) => string;
   routeSafetyEntry: RouteState | undefined;
-  onRouteSafetyClick: (from: number, to: number, e: import("react").MouseEvent) => void;
+  onRouteSafetyClick: (
+    from: number,
+    to: number,
+    e: import("react").MouseEvent,
+  ) => void;
   onOpenScore: (row: FlipResult) => void;
   batchMetricsByRow: Record<
     string,
-    { batchNumber: number; batchProfit: number; batchTotalCapital: number; batchIskPerJump: number }
+    {
+      batchNumber: number;
+      batchProfit: number;
+      batchTotalCapital: number;
+      batchIskPerJump: number;
+    }
   >;
   opportunityProfile?: OpportunityWeightProfile;
 }
@@ -3578,7 +4021,11 @@ function RouteSafetyCell({
   entry: RouteState | undefined;
   from: number;
   to: number;
-  onRouteSafetyClick: (from: number, to: number, e: import("react").MouseEvent) => void;
+  onRouteSafetyClick: (
+    from: number,
+    to: number,
+    e: import("react").MouseEvent,
+  ) => void;
 }) {
   if (!entry) {
     return <span className="text-eve-dim/30 text-[10px]">—</span>;
@@ -3607,20 +4054,42 @@ function RouteSafetyCell({
       className="inline-flex items-center gap-1 text-[11px] bg-transparent border-0 cursor-pointer p-0 hover:opacity-80 transition-opacity"
       title={`Route safety: ${danger}${kills > 0 ? ` — ${kills} kills` : ""}`}
     >
-      <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${dotCls}`} />
-      {kills > 0 && <span className={`font-mono tabular-nums leading-none ${textCls}`}>{kills}</span>}
+      <span
+        className={`inline-block w-2 h-2 rounded-full shrink-0 ${dotCls}`}
+      />
+      {kills > 0 && (
+        <span className={`font-mono tabular-nums leading-none ${textCls}`}>
+          {kills}
+        </span>
+      )}
     </button>
   );
 }
 
 const DataRow = memo(
   function DataRow({
-    ir, globalIdx, columnDefs, compactMode,
-    isPinned, isSelected, isFocused, variant, rowHidden,
-    isItemGrouped, isRegionGrouped, variantExpandable, variantExpanded,
-    onToggleVariantGroup, onContextMenu, onLmbClick,
-    onToggleSelect, onTogglePin, tFn,
-    routeSafetyEntry, onRouteSafetyClick, onOpenScore,
+    ir,
+    globalIdx,
+    columnDefs,
+    compactMode,
+    isPinned,
+    isSelected,
+    isFocused,
+    variant,
+    rowHidden,
+    isItemGrouped,
+    isRegionGrouped,
+    variantExpandable,
+    variantExpanded,
+    onToggleVariantGroup,
+    onContextMenu,
+    onLmbClick,
+    onToggleSelect,
+    onTogglePin,
+    tFn,
+    routeSafetyEntry,
+    onRouteSafetyClick,
+    onOpenScore,
     batchMetricsByRow,
     opportunityProfile,
   }: DataRowProps) {
@@ -3646,7 +4115,9 @@ const DataRow = memo(
                   : "bg-eve-dark"
         } ${rowHidden ? "opacity-60" : ""}`}
       >
-        <td className={`w-8 px-1 text-center ${compactMode ? "py-1" : "py-1.5"}`}>
+        <td
+          className={`w-8 px-1 text-center ${compactMode ? "py-1" : "py-1.5"}`}
+        >
           <input
             type="checkbox"
             checked={isSelected}
@@ -3654,7 +4125,9 @@ const DataRow = memo(
             className="accent-eve-accent cursor-pointer"
           />
         </td>
-        <td className={`w-8 px-1 text-center ${compactMode ? "py-1" : "py-1.5"}`}>
+        <td
+          className={`w-8 px-1 text-center ${compactMode ? "py-1" : "py-1.5"}`}
+        >
           <button
             onClick={() => onTogglePin(ir.row)}
             className={`text-xs cursor-pointer transition-opacity ${isPinned ? "opacity-100" : "opacity-30 hover:opacity-70"}`}
@@ -3682,16 +4155,17 @@ const DataRow = memo(
                 )}
                 <span className="truncate">{ir.row.TypeName}</span>
                 {/* Price-spike warning: now-profit > 0 but period-profit < 0 means temp spike */}
-                {(ir.row.DayNowProfit ?? 0) > 0 && (ir.row.DayPeriodProfit ?? 0) < 0 && (
-                  <span
-                    title="Price spike: current profit looks positive but historical average is below break-even. This trade may be risky."
-                    className="shrink-0 inline-flex items-center px-1 py-px rounded-[2px] border border-yellow-400/50 bg-yellow-400/10 text-yellow-300 text-[9px] leading-none font-medium uppercase"
-                  >
-                    SPIKE
-                  </span>
-                )}
-                {variant && (
-                  variantExpandable && isItemGrouped ? (
+                {(ir.row.DayNowProfit ?? 0) > 0 &&
+                  (ir.row.DayPeriodProfit ?? 0) < 0 && (
+                    <span
+                      title="Price spike: current profit looks positive but historical average is below break-even. This trade may be risky."
+                      className="shrink-0 inline-flex items-center px-1 py-px rounded-[2px] border border-yellow-400/50 bg-yellow-400/10 text-yellow-300 text-[9px] leading-none font-medium uppercase"
+                    >
+                      SPIKE
+                    </span>
+                  )}
+                {variant &&
+                  (variantExpandable && isItemGrouped ? (
                     <button
                       type="button"
                       onClick={(e) => {
@@ -3716,10 +4190,12 @@ const DataRow = memo(
                       title={tFn("variantChipHint")}
                       className="shrink-0 inline-flex items-center px-1 py-px rounded-[2px] border border-eve-accent/35 bg-eve-accent/10 text-eve-accent text-[9px] leading-none font-medium uppercase tracking-normal"
                     >
-                      {tFn("variantChip", { index: variant.index, total: variant.total })}
+                      {tFn("variantChip", {
+                        index: variant.index,
+                        total: variant.total,
+                      })}
                     </span>
-                  )
-                )}
+                  ))}
               </div>
             ) : col.key === "DayTradeScore" ? (
               <TradeScoreBadge score={ir.row.DayTradeScore ?? 0} />
@@ -3733,7 +4209,9 @@ const DataRow = memo(
                 }}
                 aria-label="Why this score?"
               >
-                {scoreFlipResult(ir.row, opportunityProfile).finalScore.toFixed(1)}
+                {scoreFlipResult(ir.row, opportunityProfile).finalScore.toFixed(
+                  1,
+                )}
               </button>
             ) : col.key === ("RouteSafety" as SortKey) ? (
               <RouteSafetyCell
@@ -3743,7 +4221,9 @@ const DataRow = memo(
                 onRouteSafetyClick={onRouteSafetyClick}
               />
             ) : col.key === "BuyStation" ? (
-              <span className="truncate">{fmtCell(col, ir.row, batchMetricsByRow, opportunityProfile)}</span>
+              <span className="truncate">
+                {fmtCell(col, ir.row, batchMetricsByRow, opportunityProfile)}
+              </span>
             ) : (
               fmtCell(col, ir.row, batchMetricsByRow, opportunityProfile)
             )}
@@ -3782,13 +4262,13 @@ const DataRow = memo(
 
 function eveCategoryName(id: number): string {
   const MAP: Record<number, string> = {
-    2:  "Celestial",
-    4:  "Material",
-    5:  "Accessories",
-    6:  "Ship",
-    7:  "Module",
-    8:  "Charge",
-    9:  "Blueprint",
+    2: "Celestial",
+    4: "Material",
+    5: "Accessories",
+    6: "Ship",
+    7: "Module",
+    8: "Charge",
+    9: "Blueprint",
     16: "Skill",
     17: "Commodity",
     18: "Drone",
@@ -3814,16 +4294,41 @@ function eveCategoryName(id: number): string {
 
 /* ─── Regional Day Trader detail panel (LMB on row) ─── */
 
-function DRRow({ label, value, accent, dim }: { label: string; value: string; accent?: boolean; dim?: boolean }) {
+function DRRow({
+  label,
+  value,
+  accent,
+  dim,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+  dim?: boolean;
+}) {
   return (
     <div className="flex items-center justify-between gap-2 text-xs">
       <span className="text-eve-dim">{label}</span>
-      <span className={accent ? "text-eve-accent font-semibold" : dim ? "text-yellow-400" : "text-eve-text"}>{value}</span>
+      <span
+        className={
+          accent
+            ? "text-eve-accent font-semibold"
+            : dim
+              ? "text-yellow-400"
+              : "text-eve-text"
+        }
+      >
+        {value}
+      </span>
     </div>
   );
 }
 
-function calcConfidence(row: FlipResult): { score: number; label: string; color: string; hint: string } {
+function calcConfidence(row: FlipResult): {
+  score: number;
+  label: string;
+  color: string;
+  hint: string;
+} {
   const dos = row.DayTargetDOS ?? 0;
   const demand = row.DayTargetDemandPerDay ?? 0;
   const srcPrice = row.DaySourceAvgPrice ?? row.BuyPrice ?? 0;
@@ -3831,45 +4336,93 @@ function calcConfidence(row: FlipResult): { score: number; label: string; color:
   const hasPeriodPrice = (row.DayTargetPeriodPrice ?? 0) > 0;
   let score = 100;
   const reasons: string[] = [];
-  if (!hasPeriodPrice) { score -= 30; reasons.push("no period history"); }
-  if (dos > 90)        { score -= 40; reasons.push(`DOS ${dos.toFixed(0)}d saturated`); }
-  else if (dos > 30)   { score -= 15; reasons.push(`DOS ${dos.toFixed(0)}d elevated`); }
-  if (demand > 0 && demand < 1) { score -= 30; reasons.push(`demand ${demand.toFixed(2)}/day thin`); }
-  else if (demand > 0 && demand < 3) { score -= 12; reasons.push(`demand ${demand.toFixed(2)}/day moderate`); }
-  if (srcPrice > 0 && tgtNow > 0 && (tgtNow - srcPrice) / srcPrice > 2) { score -= 25; reasons.push("spread >200%"); }
+  if (!hasPeriodPrice) {
+    score -= 30;
+    reasons.push("no period history");
+  }
+  if (dos > 90) {
+    score -= 40;
+    reasons.push(`DOS ${dos.toFixed(0)}d saturated`);
+  } else if (dos > 30) {
+    score -= 15;
+    reasons.push(`DOS ${dos.toFixed(0)}d elevated`);
+  }
+  if (demand > 0 && demand < 1) {
+    score -= 30;
+    reasons.push(`demand ${demand.toFixed(2)}/day thin`);
+  } else if (demand > 0 && demand < 3) {
+    score -= 12;
+    reasons.push(`demand ${demand.toFixed(2)}/day moderate`);
+  }
+  if (srcPrice > 0 && tgtNow > 0 && (tgtNow - srcPrice) / srcPrice > 2) {
+    score -= 25;
+    reasons.push("spread >200%");
+  }
   score = Math.max(0, Math.min(100, score));
   const label = score >= 75 ? "High" : score >= 45 ? "Medium" : "Low";
-  const color = score >= 75 ? "text-green-300 border-green-500/60 bg-green-900/20"
-              : score >= 45 ? "text-yellow-300 border-yellow-500/60 bg-yellow-900/20"
-                            : "text-red-300 border-red-500/60 bg-red-900/20";
-  const hint = reasons.length > 0 ? `Score ${score}/100 — ${reasons.join("; ")}` : `Score ${score}/100 — no risk factors detected`;
+  const color =
+    score >= 75
+      ? "text-green-300 border-green-500/60 bg-green-900/20"
+      : score >= 45
+        ? "text-yellow-300 border-yellow-500/60 bg-yellow-900/20"
+        : "text-red-300 border-red-500/60 bg-red-900/20";
+  const hint =
+    reasons.length > 0
+      ? `Score ${score}/100 — ${reasons.join("; ")}`
+      : `Score ${score}/100 — no risk factors detected`;
   return { score, label, color, hint };
 }
 
-function DayDetailPanel({ row, onClose }: { row: FlipResult; onClose: () => void }) {
+function DayDetailPanel({
+  row,
+  onClose,
+}: {
+  row: FlipResult;
+  onClose: () => void;
+}) {
   const signals: { label: string; title: string }[] = [];
   const dos = row.DayTargetDOS ?? 0;
   const demand = row.DayTargetDemandPerDay ?? 0;
-  if (dos > 90) signals.push({ label: "SAT", title: `Saturated: ${dos.toFixed(0)} days of supply` });
-  if (demand > 0 && demand < 1) signals.push({ label: "LOW", title: `Low demand: ${demand.toFixed(2)} units/day` });
+  if (dos > 90)
+    signals.push({
+      label: "SAT",
+      title: `Saturated: ${dos.toFixed(0)} days of supply`,
+    });
+  if (demand > 0 && demand < 1)
+    signals.push({
+      label: "LOW",
+      title: `Low demand: ${demand.toFixed(2)} units/day`,
+    });
   const srcPrice = row.DaySourceAvgPrice ?? row.BuyPrice ?? 0;
   const tgtNow = row.DayTargetNowPrice ?? row.SellPrice ?? 0;
+  const daySupply = row.DayTargetSupplyUnits;
+  const dayLowestAsk = row.DayTargetLowestSell;
   if (srcPrice > 0 && tgtNow > 0 && (tgtNow - srcPrice) / srcPrice > 2)
-    signals.push({ label: "ODD", title: `Spread ${(((tgtNow - srcPrice) / srcPrice) * 100).toFixed(0)}% — verify prices` });
+    signals.push({
+      label: "ODD",
+      title: `Spread ${(((tgtNow - srcPrice) / srcPrice) * 100).toFixed(0)}% — verify prices`,
+    });
 
   const confidence = calcConfidence(row);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onClick={onClose}
+    >
       <div
         className="bg-eve-panel border border-eve-border rounded-sm shadow-2xl w-full max-w-lg mx-4 font-mono text-xs text-eve-text"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-3 py-2 border-b border-eve-border bg-eve-dark/60">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="font-semibold text-sm text-eve-accent truncate">{row.TypeName}</span>
+            <span className="font-semibold text-sm text-eve-accent truncate">
+              {row.TypeName}
+            </span>
             {row.DayGroupName && (
-              <span className="text-[10px] text-eve-dim shrink-0">{row.DayGroupName}</span>
+              <span className="text-[10px] text-eve-dim shrink-0">
+                {row.DayGroupName}
+              </span>
             )}
           </div>
           <div className="flex items-center gap-2 ml-3 shrink-0">
@@ -3879,7 +4432,12 @@ function DayDetailPanel({ row, onClose }: { row: FlipResult; onClose: () => void
             >
               {confidence.label} {confidence.score}
             </span>
-            <button onClick={onClose} className="text-eve-dim hover:text-eve-text">✕</button>
+            <button
+              onClick={onClose}
+              className="text-eve-dim hover:text-eve-text"
+            >
+              ✕
+            </button>
           </div>
         </div>
 
@@ -3887,8 +4445,11 @@ function DayDetailPanel({ row, onClose }: { row: FlipResult; onClose: () => void
           {signals.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {signals.map((s, i) => (
-                <span key={i} title={s.title}
-                  className="px-1.5 py-0.5 rounded-sm border border-yellow-500/60 text-yellow-400 bg-yellow-900/20 text-[10px] font-bold cursor-help">
+                <span
+                  key={i}
+                  title={s.title}
+                  className="px-1.5 py-0.5 rounded-sm border border-yellow-500/60 text-yellow-400 bg-yellow-900/20 text-[10px] font-bold cursor-help"
+                >
                   ⚠ {s.label}
                 </span>
               ))}
@@ -3896,51 +4457,123 @@ function DayDetailPanel({ row, onClose }: { row: FlipResult; onClose: () => void
           )}
 
           <div className="flex items-center gap-2 text-eve-dim flex-wrap">
-            <span className="text-eve-text">{row.BuyStation || row.BuySystemName}</span>
-            <span className="text-eve-accent">→ {row.SellJumps ?? row.TotalJumps ?? 0}j →</span>
-            <span className="text-eve-text">{row.SellStation || row.SellSystemName}</span>
+            <span className="text-eve-text">
+              {row.BuyStation || row.BuySystemName}
+            </span>
+            <span className="text-eve-accent">
+              → {row.SellJumps ?? row.TotalJumps ?? 0}j →
+            </span>
+            <span className="text-eve-text">
+              {row.SellStation || row.SellSystemName}
+            </span>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-sm border border-eve-border/50 bg-eve-dark/30 p-2 space-y-1">
-              <div className="text-[10px] uppercase tracking-wider text-eve-dim font-semibold mb-1">Source (Buy)</div>
+              <div className="text-[10px] uppercase tracking-wider text-eve-dim font-semibold mb-1">
+                Source (Buy)
+              </div>
               <DRRow label="Price" value={formatISK(srcPrice)} />
-              <DRRow label="Available" value={`${(row.SellOrderRemain ?? 0).toLocaleString()} units`} />
+              <DRRow
+                label="Available"
+                value={`${(row.SellOrderRemain ?? 0).toLocaleString()} units`}
+              />
               <DRRow label="Region" value={row.BuyRegionName ?? "—"} />
             </div>
             <div className="rounded-sm border border-eve-border/50 bg-eve-dark/30 p-2 space-y-1">
-              <div className="text-[10px] uppercase tracking-wider text-eve-dim font-semibold mb-1">Target (Sell)</div>
+              <div className="text-[10px] uppercase tracking-wider text-eve-dim font-semibold mb-1">
+                Target (Sell)
+              </div>
               <DRRow label="Now price" value={formatISK(tgtNow)} />
-              <DRRow label="Period avg" value={formatISK(row.DayTargetPeriodPrice ?? 0)} />
-              {(row.DayTargetLowestSell ?? 0) > 0 && (
-                <DRRow label="Lowest ask" value={formatISK(row.DayTargetLowestSell ?? 0)} />
-              )}
-              <DRRow label="Demand/Day" value={(demand).toFixed(2)} />
-              <DRRow label="Supply" value={(row.DayTargetSupplyUnits ?? 0).toLocaleString()} />
-              <DRRow label="DOS" value={`${dos.toFixed(2)} days`} dim={dos > 30} />
+              <DRRow
+                label="Period avg"
+                value={formatISK(row.DayTargetPeriodPrice ?? 0)}
+              />
+              <DRRow
+                label="Lowest ask"
+                value={
+                  (dayLowestAsk ?? row.TargetLowestSell ?? 0) > 0
+                    ? formatISK(dayLowestAsk ?? row.TargetLowestSell ?? 0)
+                    : "—"
+                }
+              />
+              <DRRow label="Demand/Day" value={demand.toFixed(2)} />
+              <DRRow
+                label="Supply"
+                value={
+                  daySupply != null
+                    ? daySupply.toLocaleString()
+                    : row.TargetSellSupply != null
+                      ? row.TargetSellSupply.toLocaleString()
+                      : "—"
+                }
+              />
+              <DRRow
+                label="DOS"
+                value={`${dos.toFixed(2)} days`}
+                dim={dos > 30}
+              />
             </div>
           </div>
 
           <div className="rounded-sm border border-eve-border/50 bg-eve-dark/30 p-2 space-y-1">
             <div className="text-[10px] uppercase tracking-wider text-eve-dim font-semibold mb-1">
-              Position ({(row.UnitsToBuy ?? 0).toLocaleString()} units · {(row.Volume ?? 0).toFixed(2)} m³/unit)
+              Position ({(row.UnitsToBuy ?? 0).toLocaleString()} units ·{" "}
+              {(row.Volume ?? 0).toFixed(2)} m³/unit)
             </div>
             <div className="grid grid-cols-2 gap-x-4">
-              <DRRow label="Capital" value={formatISK(row.DayCapitalRequired ?? 0)} />
-              <DRRow label="Shipping" value={formatISK(row.DayShippingCost ?? 0)} />
-              <DRRow label="Now Profit" value={formatISK(row.DayNowProfit ?? row.TotalProfit ?? 0)} accent={(row.DayNowProfit ?? 0) > 0} />
-              <DRRow label="Period Profit" value={formatISK(row.DayPeriodProfit ?? row.RealProfit ?? 0)} accent={(row.DayPeriodProfit ?? 0) > 0} />
-              <DRRow label="ROI Now" value={formatMargin(row.DayROINow ?? 0)} accent={(row.DayROINow ?? 0) > 0} />
-              <DRRow label="ROI Period" value={formatMargin(row.DayROIPeriod ?? 0)} accent={(row.DayROIPeriod ?? 0) > 0} />
-              <DRRow label="Margin" value={formatMargin(row.MarginPercent ?? 0)} />
+              <DRRow
+                label="Capital"
+                value={formatISK(row.DayCapitalRequired ?? 0)}
+              />
+              <DRRow
+                label="Shipping"
+                value={formatISK(row.DayShippingCost ?? 0)}
+              />
+              <DRRow
+                label="Now Profit"
+                value={formatISK(row.DayNowProfit ?? row.TotalProfit ?? 0)}
+                accent={(row.DayNowProfit ?? 0) > 0}
+              />
+              <DRRow
+                label="Period Profit"
+                value={formatISK(row.DayPeriodProfit ?? row.RealProfit ?? 0)}
+                accent={(row.DayPeriodProfit ?? 0) > 0}
+              />
+              <DRRow
+                label="ROI Now"
+                value={formatMargin(row.DayROINow ?? 0)}
+                accent={(row.DayROINow ?? 0) > 0}
+              />
+              <DRRow
+                label="ROI Period"
+                value={formatMargin(row.DayROIPeriod ?? 0)}
+                accent={(row.DayROIPeriod ?? 0) > 0}
+              />
+              <DRRow
+                label="Margin"
+                value={formatMargin(row.MarginPercent ?? 0)}
+              />
             </div>
           </div>
 
           {((row.DayAssets ?? 0) > 0 || (row.DayActiveOrders ?? 0) > 0) && (
             <div className="rounded-sm border border-eve-border/50 bg-eve-dark/30 p-2 space-y-1">
-              <div className="text-[10px] uppercase tracking-wider text-eve-dim font-semibold mb-1">Inventory Coverage</div>
-              {(row.DayAssets ?? 0) > 0 && <DRRow label="Assets in target" value={`${(row.DayAssets ?? 0).toLocaleString()} units`} />}
-              {(row.DayActiveOrders ?? 0) > 0 && <DRRow label="Active sell orders" value={`${(row.DayActiveOrders ?? 0).toLocaleString()} units`} />}
+              <div className="text-[10px] uppercase tracking-wider text-eve-dim font-semibold mb-1">
+                Inventory Coverage
+              </div>
+              {(row.DayAssets ?? 0) > 0 && (
+                <DRRow
+                  label="Assets in target"
+                  value={`${(row.DayAssets ?? 0).toLocaleString()} units`}
+                />
+              )}
+              {(row.DayActiveOrders ?? 0) > 0 && (
+                <DRRow
+                  label="Active sell orders"
+                  value={`${(row.DayActiveOrders ?? 0).toLocaleString()} units`}
+                />
+              )}
             </div>
           )}
 

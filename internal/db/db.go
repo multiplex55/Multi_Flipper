@@ -669,6 +669,7 @@ func (d *DB) migrate() error {
 			{name: "daily_profit", def: "REAL NOT NULL DEFAULT 0"},
 			{name: "real_profit", def: "REAL NOT NULL DEFAULT 0"},
 			{name: "real_margin_percent", def: "REAL NOT NULL DEFAULT 0"},
+			{name: "pre_execution_units", def: "INTEGER NOT NULL DEFAULT 0"},
 			{name: "filled_qty", def: "INTEGER NOT NULL DEFAULT 0"},
 			{name: "can_fill", def: "INTEGER NOT NULL DEFAULT 0"},
 			{name: "expected_profit", def: "REAL NOT NULL DEFAULT 0"},
@@ -1313,6 +1314,22 @@ func (d *DB) migrate() error {
 			return fmt.Errorf("migration v30: %w", err)
 		}
 		logger.Info("DB", "Applied migration v30 (route hop enrichment fields)")
+	}
+
+	if version < 31 {
+		flipResultsExists, err := d.tableExists("flip_results")
+		if err != nil {
+			return fmt.Errorf("migration v31 check flip_results exists: %w", err)
+		}
+		if flipResultsExists {
+			if err := d.ensureTableColumn("flip_results", "pre_execution_units", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+				return fmt.Errorf("migration v31 add flip_results.pre_execution_units: %w", err)
+			}
+		}
+		if _, err := d.sql.Exec(`INSERT OR IGNORE INTO schema_version (version) VALUES (31);`); err != nil {
+			return fmt.Errorf("migration v31: %w", err)
+		}
+		logger.Info("DB", "Applied migration v31 (flip pre-execution units)")
 	}
 
 	return nil

@@ -150,6 +150,54 @@ function toNumberArray(value: unknown): number[] | undefined {
   return out.length > 0 ? out : undefined;
 }
 
+function fromAliases(rec: Record<string, unknown>, aliases: string[]): unknown {
+  for (const key of aliases) {
+    if (Object.prototype.hasOwnProperty.call(rec, key)) return rec[key];
+  }
+  return undefined;
+}
+
+function numberFromAliases(
+  rec: Record<string, unknown>,
+  aliases: string[],
+): number | undefined {
+  const raw = fromAliases(rec, aliases);
+  if (raw == null) return undefined;
+  const parsed = toNumber(raw, Number.NaN);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function intFromAliases(
+  rec: Record<string, unknown>,
+  aliases: string[],
+): number | undefined {
+  const parsed = numberFromAliases(rec, aliases);
+  return parsed == null ? undefined : Math.trunc(parsed);
+}
+
+function textFromAliases(
+  rec: Record<string, unknown>,
+  aliases: string[],
+): string | undefined {
+  const raw = fromAliases(rec, aliases);
+  return typeof raw === "string" ? raw : undefined;
+}
+
+function boolFromAliases(
+  rec: Record<string, unknown>,
+  aliases: string[],
+): boolean | undefined {
+  const raw = fromAliases(rec, aliases);
+  if (typeof raw === "boolean") return raw;
+  if (typeof raw === "number") return raw !== 0;
+  if (typeof raw === "string") {
+    const normalized = raw.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1") return true;
+    if (normalized === "false" || normalized === "0") return false;
+  }
+  return undefined;
+}
+
 function normalizePatronEntries(value: unknown): PatronEntry[] {
   if (!Array.isArray(value)) return [];
   const out: PatronEntry[] = [];
@@ -184,7 +232,175 @@ function normalizePatronEntries(value: unknown): PatronEntry[] {
 function isFlipResultLike(value: unknown): value is FlipResult {
   const rec = toRecord(value);
   if (!rec) return false;
-  return toInt(rec.TypeID, 0) > 0;
+  return toInt(fromAliases(rec, ["TypeID", "type_id", "typeId"]), 0) > 0;
+}
+
+export function normalizeFlipResultLike(value: unknown): FlipResult | null {
+  const rec = toRecord(value);
+  if (!rec) return null;
+
+  const typeID = Math.max(
+    0,
+    toInt(fromAliases(rec, ["TypeID", "type_id", "typeId"]), 0),
+  );
+  if (typeID <= 0) return null;
+
+  const row: FlipResult = {
+    TypeID: typeID,
+    TypeName: toText(
+      fromAliases(rec, ["TypeName", "type_name", "typeName"]),
+      `Type ${typeID}`,
+    ),
+    Volume: toNumber(fromAliases(rec, ["Volume", "volume"]), 0),
+    BuyPrice: toNumber(fromAliases(rec, ["BuyPrice", "buy_price"]), 0),
+    BuyStation: toText(fromAliases(rec, ["BuyStation", "buy_station"]), ""),
+    BuySystemName: toText(
+      fromAliases(rec, ["BuySystemName", "buy_system_name"]),
+      "",
+    ),
+    BuySystemID: toInt(fromAliases(rec, ["BuySystemID", "buy_system_id"]), 0),
+    SellPrice: toNumber(fromAliases(rec, ["SellPrice", "sell_price"]), 0),
+    SellStation: toText(fromAliases(rec, ["SellStation", "sell_station"]), ""),
+    SellSystemName: toText(
+      fromAliases(rec, ["SellSystemName", "sell_system_name"]),
+      "",
+    ),
+    SellSystemID: toInt(
+      fromAliases(rec, ["SellSystemID", "sell_system_id"]),
+      0,
+    ),
+    ProfitPerUnit: toNumber(
+      fromAliases(rec, ["ProfitPerUnit", "profit_per_unit"]),
+      0,
+    ),
+    MarginPercent: toNumber(
+      fromAliases(rec, ["MarginPercent", "margin_percent"]),
+      0,
+    ),
+    UnitsToBuy: toInt(fromAliases(rec, ["UnitsToBuy", "units_to_buy"]), 0),
+    BuyOrderRemain: toInt(
+      fromAliases(rec, ["BuyOrderRemain", "buy_order_remain"]),
+      0,
+    ),
+    SellOrderRemain: toInt(
+      fromAliases(rec, ["SellOrderRemain", "sell_order_remain"]),
+      0,
+    ),
+    TotalProfit: toNumber(fromAliases(rec, ["TotalProfit", "total_profit"]), 0),
+    ProfitPerJump: toNumber(
+      fromAliases(rec, ["ProfitPerJump", "profit_per_jump"]),
+      0,
+    ),
+    BuyJumps: toInt(fromAliases(rec, ["BuyJumps", "buy_jumps"]), 0),
+    SellJumps: toInt(fromAliases(rec, ["SellJumps", "sell_jumps"]), 0),
+    TotalJumps: toInt(fromAliases(rec, ["TotalJumps", "total_jumps"]), 0),
+    DailyVolume: toInt(fromAliases(rec, ["DailyVolume", "daily_volume"]), 0),
+    Velocity: toNumber(fromAliases(rec, ["Velocity", "velocity"]), 0),
+    PriceTrend: toNumber(fromAliases(rec, ["PriceTrend", "price_trend"]), 0),
+    BuyCompetitors: toInt(
+      fromAliases(rec, ["BuyCompetitors", "buy_competitors"]),
+      0,
+    ),
+    SellCompetitors: toInt(
+      fromAliases(rec, ["SellCompetitors", "sell_competitors"]),
+      0,
+    ),
+    DailyProfit: toNumber(fromAliases(rec, ["DailyProfit", "daily_profit"]), 0),
+  };
+
+  const assignNum = (key: keyof FlipResult, aliases: string[]) => {
+    const value = numberFromAliases(rec, aliases);
+    if (value != null) row[key] = value;
+  };
+  const assignInt = (key: keyof FlipResult, aliases: string[]) => {
+    const value = intFromAliases(rec, aliases);
+    if (value != null) row[key] = value;
+  };
+  const assignText = (key: keyof FlipResult, aliases: string[]) => {
+    const value = textFromAliases(rec, aliases);
+    if (value != null) row[key] = value;
+  };
+
+  assignNum("BestAskPrice", ["BestAskPrice", "best_ask_price"]);
+  assignInt("BestAskQty", ["BestAskQty", "best_ask_qty"]);
+  assignNum("BestBidPrice", ["BestBidPrice", "best_bid_price"]);
+  assignInt("BestBidQty", ["BestBidQty", "best_bid_qty"]);
+  assignInt("BuyRegionID", ["BuyRegionID", "buy_region_id"]);
+  assignText("BuyRegionName", ["BuyRegionName", "buy_region_name"]);
+  assignNum("BuyLocationID", ["BuyLocationID", "buy_location_id"]);
+  assignInt("SellRegionID", ["SellRegionID", "sell_region_id"]);
+  assignText("SellRegionName", ["SellRegionName", "sell_region_name"]);
+  assignNum("SellLocationID", ["SellLocationID", "sell_location_id"]);
+  assignNum("S2BPerDay", ["S2BPerDay", "s2b_per_day"]);
+  assignNum("BfSPerDay", ["BfSPerDay", "bfs_per_day"]);
+  assignNum("S2BBfSRatio", ["S2BBfSRatio", "s2b_bfs_ratio"]);
+  assignNum("RealMarginPercent", ["RealMarginPercent", "real_margin_percent"]);
+  assignNum("TargetSellSupply", ["TargetSellSupply", "target_sell_supply"]);
+  assignNum("TargetLowestSell", ["TargetLowestSell", "target_lowest_sell"]);
+  assignNum("ExpectedBuyPrice", ["ExpectedBuyPrice", "expected_buy_price"]);
+  assignNum("ExpectedSellPrice", ["ExpectedSellPrice", "expected_sell_price"]);
+  assignNum("ExpectedProfit", ["ExpectedProfit", "expected_profit"]);
+  assignNum("RealProfit", ["RealProfit", "real_profit"]);
+  assignInt("PreExecutionUnits", [
+    "PreExecutionUnits",
+    "pre_execution_units",
+    "RequestedQty",
+    "requested_qty",
+  ]);
+  assignInt("FilledQty", ["FilledQty", "filled_qty"]);
+  assignNum("SlippageBuyPct", ["SlippageBuyPct", "slippage_buy_pct"]);
+  assignNum("SlippageSellPct", ["SlippageSellPct", "slippage_sell_pct"]);
+  assignNum("DaySecurity", ["DaySecurity", "day_security"]);
+  assignInt("DaySourceUnits", ["DaySourceUnits", "day_source_units"]);
+  assignNum("DayTargetDemandPerDay", [
+    "DayTargetDemandPerDay",
+    "day_target_demand_per_day",
+  ]);
+  assignNum("DayTargetSupplyUnits", [
+    "DayTargetSupplyUnits",
+    "day_target_supply_units",
+  ]);
+  assignNum("DayTargetDOS", ["DayTargetDOS", "day_target_dos"]);
+  assignNum("DayAssets", ["DayAssets", "day_assets"]);
+  assignNum("DayActiveOrders", ["DayActiveOrders", "day_active_orders"]);
+  assignNum("DaySourceAvgPrice", ["DaySourceAvgPrice", "day_source_avg_price"]);
+  assignNum("DayTargetNowPrice", ["DayTargetNowPrice", "day_target_now_price"]);
+  assignNum("DayTargetPeriodPrice", [
+    "DayTargetPeriodPrice",
+    "day_target_period_price",
+  ]);
+  assignNum("DayNowProfit", ["DayNowProfit", "day_now_profit"]);
+  assignNum("DayPeriodProfit", ["DayPeriodProfit", "day_period_profit"]);
+  assignNum("DayROINow", ["DayROINow", "day_roi_now"]);
+  assignNum("DayROIPeriod", ["DayROIPeriod", "day_roi_period"]);
+  assignNum("DayCapitalRequired", [
+    "DayCapitalRequired",
+    "day_capital_required",
+  ]);
+  assignNum("DayShippingCost", ["DayShippingCost", "day_shipping_cost"]);
+  assignInt("DayCategoryID", ["DayCategoryID", "day_category_id"]);
+  assignInt("DayGroupID", ["DayGroupID", "day_group_id"]);
+  assignText("DayGroupName", ["DayGroupName", "day_group_name"]);
+  assignNum("DayIskPerM3Jump", ["DayIskPerM3Jump", "day_isk_per_m3_jump"]);
+  assignNum("DayTradeScore", ["DayTradeScore", "day_trade_score"]);
+  assignNum("DayTargetLowestSell", [
+    "DayTargetLowestSell",
+    "day_target_lowest_sell",
+  ]);
+
+  const canFill = boolFromAliases(rec, ["CanFill", "can_fill"]);
+  if (canFill != null) row.CanFill = canFill;
+  const historyAvailable = boolFromAliases(rec, [
+    "HistoryAvailable",
+    "history_available",
+  ]);
+  if (historyAvailable != null) row.HistoryAvailable = historyAvailable;
+  const dayPriceHistory = toNumberArray(
+    fromAliases(rec, ["DayPriceHistory", "day_price_history"]),
+  );
+  if (dayPriceHistory) row.DayPriceHistory = dayPriceHistory;
+
+  return row;
 }
 
 function isLegacyRegionalItemLike(
@@ -241,6 +457,7 @@ function legacyRegionalItemToFlip(
     ProfitPerUnit: perUnitNowProfit,
     MarginPercent: toNumber(item.margin_now, 0),
     UnitsToBuy: unitsToBuy,
+    PreExecutionUnits: unitsToBuy,
     BuyOrderRemain: toInt(item.target_supply_units, 0),
     SellOrderRemain: toInt(item.source_units, 0),
     TotalProfit: nowProfit,
@@ -287,6 +504,8 @@ function legacyRegionalItemToFlip(
     DayIskPerM3Jump:
       volume > 0 && sellJumps > 0 ? perUnitNowProfit / (volume * sellJumps) : 0,
     DayTradeScore: toNumber(item.trade_score, 0),
+    TargetSellSupply: toNumber(item.target_supply_units, 0),
+    TargetLowestSell: toNumber(item.target_lowest_sell, 0),
     DayTargetLowestSell: toNumber(item.target_lowest_sell, 0),
   };
   const priceHistory = toNumberArray(item.target_price_history);
@@ -301,7 +520,8 @@ function normalizeRegionalResults(raw: unknown[]): FlipResult[] {
 
   for (const entry of raw) {
     if (isFlipResultLike(entry)) {
-      out.push(entry);
+      const normalized = normalizeFlipResultLike(entry);
+      if (normalized) out.push(normalized);
       continue;
     }
 
@@ -2317,9 +2537,10 @@ function App() {
             onLoadResults={(resultTab, results, loadedParams) => {
               // Load historical results into appropriate tab
               if (resultTab === "radius") {
+                const normalizedRows = normalizeRegionalResults(results);
                 setRadiusResults(
                   filterFlipResults(
-                    results as FlipResult[],
+                    normalizedRows,
                     bannedTypeIDs,
                     bannedStationIDs,
                   ),

@@ -28,10 +28,15 @@ func (d *DB) InsertFlipResults(scanID int64, results []engine.FlipResult) {
 		total_profit, profit_per_jump, buy_jumps, sell_jumps, total_jumps,
 		daily_volume, velocity, price_trend,
 		s2b_per_day, bfs_per_day, s2b_bfs_ratio,
-		daily_profit, real_profit, real_margin_percent, filled_qty, can_fill,
+		daily_profit, real_profit, real_margin_percent, pre_execution_units, filled_qty, can_fill,
 		expected_profit, expected_buy_price, expected_sell_price,
 		slippage_buy_pct, slippage_sell_pct, history_available
-	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+	) VALUES (
+		?,?,?,?,?,?,?,?,?,?,?,
+		?,?,?,?,?,?,?,?,?,?,?,
+		?,?,?,?,?,?,?,?,?,?,?,
+		?,?,?,?,?,?,?,?,?,?,?
+	)`)
 	if err != nil {
 		tx.Rollback()
 		log.Printf("[DB] InsertFlipResults prepare: %v", err)
@@ -57,7 +62,7 @@ func (d *DB) InsertFlipResults(scanID int64, results []engine.FlipResult) {
 			r.TotalProfit, r.ProfitPerJump, r.BuyJumps, r.SellJumps, r.TotalJumps,
 			r.DailyVolume, r.Velocity, r.PriceTrend,
 			r.S2BPerDay, r.BfSPerDay, r.S2BBfSRatio,
-			r.DailyProfit, r.RealProfit, r.RealMarginPercent, r.FilledQty, canFill,
+			r.DailyProfit, r.RealProfit, r.RealMarginPercent, r.PreExecutionUnits, r.FilledQty, canFill,
 			r.ExpectedProfit, r.ExpectedBuyPrice, r.ExpectedSellPrice,
 			r.SlippageBuyPct, r.SlippageSellPct, historyAvailable,
 		); err != nil {
@@ -83,7 +88,7 @@ func (d *DB) GetFlipResults(scanID int64) []engine.FlipResult {
 			total_profit, profit_per_jump, buy_jumps, sell_jumps, total_jumps,
 			daily_volume, velocity, price_trend,
 			s2b_per_day, bfs_per_day, s2b_bfs_ratio,
-			daily_profit, real_profit, real_margin_percent, filled_qty, can_fill,
+			daily_profit, real_profit, real_margin_percent, pre_execution_units, filled_qty, can_fill,
 			expected_profit, expected_buy_price, expected_sell_price,
 			slippage_buy_pct, slippage_sell_pct, history_available
 		FROM flip_results WHERE scan_id = ?
@@ -107,7 +112,7 @@ func (d *DB) GetFlipResults(scanID int64) []engine.FlipResult {
 			&r.TotalProfit, &r.ProfitPerJump, &r.BuyJumps, &r.SellJumps, &r.TotalJumps,
 			&r.DailyVolume, &r.Velocity, &r.PriceTrend,
 			&r.S2BPerDay, &r.BfSPerDay, &r.S2BBfSRatio,
-			&r.DailyProfit, &r.RealProfit, &r.RealMarginPercent, &r.FilledQty, &canFill,
+			&r.DailyProfit, &r.RealProfit, &r.RealMarginPercent, &r.PreExecutionUnits, &r.FilledQty, &canFill,
 			&r.ExpectedProfit, &r.ExpectedBuyPrice, &r.ExpectedSellPrice,
 			&r.SlippageBuyPct, &r.SlippageSellPct, &historyAvailable,
 		); err != nil {

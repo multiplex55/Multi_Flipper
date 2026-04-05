@@ -58,11 +58,22 @@ function makeRow(overrides: Partial<FlipResult> = {}): FlipResult {
   };
 }
 
-function renderTable({ scanning, results }: { scanning: boolean; results: FlipResult[] }) {
+function renderTable({
+  scanning,
+  results,
+}: {
+  scanning: boolean;
+  results: FlipResult[];
+}) {
   return render(
     <I18nProvider>
       <ToastProvider>
-        <ScanResultsTable results={results} scanning={scanning} progress="" tradeStateTab="radius" />
+        <ScanResultsTable
+          results={results}
+          scanning={scanning}
+          progress=""
+          tradeStateTab="radius"
+        />
       </ToastProvider>
     </I18nProvider>,
   );
@@ -82,7 +93,12 @@ describe("ScanResultsTable compact mode defaults", () => {
     rerender(
       <I18nProvider>
         <ToastProvider>
-          <ScanResultsTable results={[row]} scanning={false} progress="" tradeStateTab="radius" />
+          <ScanResultsTable
+            results={[row]}
+            scanning={false}
+            progress=""
+            tradeStateTab="radius"
+          />
         </ToastProvider>
       </I18nProvider>,
     );
@@ -97,7 +113,12 @@ describe("ScanResultsTable compact mode defaults", () => {
     rerender(
       <I18nProvider>
         <ToastProvider>
-          <ScanResultsTable results={[]} scanning={false} progress="" tradeStateTab="radius" />
+          <ScanResultsTable
+            results={[]}
+            scanning={false}
+            progress=""
+            tradeStateTab="radius"
+          />
         </ToastProvider>
       </I18nProvider>,
     );
@@ -105,7 +126,12 @@ describe("ScanResultsTable compact mode defaults", () => {
     rerender(
       <I18nProvider>
         <ToastProvider>
-          <ScanResultsTable results={[row]} scanning={false} progress="" tradeStateTab="radius" />
+          <ScanResultsTable
+            results={[row]}
+            scanning={false}
+            progress=""
+            tradeStateTab="radius"
+          />
         </ToastProvider>
       </I18nProvider>,
     );
@@ -121,7 +147,12 @@ describe("ScanResultsTable compact mode defaults", () => {
     rerender(
       <I18nProvider>
         <ToastProvider>
-          <ScanResultsTable results={[row]} scanning={false} progress="" tradeStateTab="radius" />
+          <ScanResultsTable
+            results={[row]}
+            scanning={false}
+            progress=""
+            tradeStateTab="radius"
+          />
         </ToastProvider>
       </I18nProvider>,
     );
@@ -134,7 +165,12 @@ describe("ScanResultsTable compact mode defaults", () => {
     rerender(
       <I18nProvider>
         <ToastProvider>
-          <ScanResultsTable results={[row]} scanning={false} progress="" tradeStateTab="radius" />
+          <ScanResultsTable
+            results={[row]}
+            scanning={false}
+            progress=""
+            tradeStateTab="radius"
+          />
         </ToastProvider>
       </I18nProvider>,
     );
@@ -154,13 +190,17 @@ describe("ScanResultsTable filter visibility defaults", () => {
     renderTable({ scanning: false, results: [row] });
 
     // Radius mode default: filter header row is visible immediately.
-    expect(screen.getAllByPlaceholderText("Filter...").length).toBeGreaterThan(0);
+    expect(screen.getAllByPlaceholderText("Filter...").length).toBeGreaterThan(
+      0,
+    );
 
     fireEvent.click(screen.getByTitle("Clear filters"));
     expect(screen.queryByPlaceholderText("Filter...")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByTitle("Filter..."));
-    expect(screen.getAllByPlaceholderText("Filter...").length).toBeGreaterThan(0);
+    expect(screen.getAllByPlaceholderText("Filter...").length).toBeGreaterThan(
+      0,
+    );
   });
 });
 
@@ -168,8 +208,18 @@ describe("ScanResultsTable opportunity score", () => {
   afterEach(() => cleanup());
 
   it("renders score column, sorts by score, and shows explanation popover", async () => {
-    const low = makeRow({ TypeID: 1, TypeName: "Low", ExpectedProfit: 1_000_000, DayCapitalRequired: 900_000_000 });
-    const high = makeRow({ TypeID: 2, TypeName: "High", ExpectedProfit: 120_000_000, DayCapitalRequired: 80_000_000 });
+    const low = makeRow({
+      TypeID: 1,
+      TypeName: "Low",
+      ExpectedProfit: 1_000_000,
+      DayCapitalRequired: 900_000_000,
+    });
+    const high = makeRow({
+      TypeID: 2,
+      TypeName: "High",
+      ExpectedProfit: 120_000_000,
+      DayCapitalRequired: 80_000_000,
+    });
     renderTable({ scanning: false, results: [low, high] });
 
     expect(screen.getAllByText("Score").length).toBeGreaterThan(0);
@@ -185,13 +235,51 @@ describe("ScanResultsTable opportunity score", () => {
   });
 
   it("keeps score sort deterministic for ties", () => {
-    const a = makeRow({ TypeID: 10, TypeName: "Alpha", ExpectedProfit: 20_000_000, DayCapitalRequired: 200_000_000 });
-    const b = makeRow({ TypeID: 20, TypeName: "Beta", ExpectedProfit: 20_000_000, DayCapitalRequired: 200_000_000 });
+    const a = makeRow({
+      TypeID: 10,
+      TypeName: "Alpha",
+      ExpectedProfit: 20_000_000,
+      DayCapitalRequired: 200_000_000,
+    });
+    const b = makeRow({
+      TypeID: 20,
+      TypeName: "Beta",
+      ExpectedProfit: 20_000_000,
+      DayCapitalRequired: 200_000_000,
+    });
     renderTable({ scanning: false, results: [a, b] });
     fireEvent.click(screen.getAllByText("Score")[0]);
     const rows = screen.getAllByRole("row");
     expect(rows[2]).toHaveTextContent("Alpha");
     expect(rows[3]).toHaveTextContent("Beta");
+  });
+
+  it("keeps score and day-detail rendering stable when target sell fields are missing", async () => {
+    const row = makeRow({
+      TypeID: 99,
+      TypeName: "No target depth",
+      DayTargetDemandPerDay: 12.5,
+      DayTargetSupplyUnits: undefined,
+      DayTargetLowestSell: undefined,
+      TargetSellSupply: undefined,
+      TargetLowestSell: undefined,
+    });
+    render(
+      <I18nProvider>
+        <ToastProvider>
+          <ScanResultsTable
+            results={[row]}
+            scanning={false}
+            progress=""
+            tradeStateTab="region"
+          />
+        </ToastProvider>
+      </I18nProvider>,
+    );
+
+    expect(screen.getAllByText("Score").length).toBeGreaterThan(0);
+    expect(screen.getByText("No target depth")).toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 });
 
@@ -204,14 +292,18 @@ describe("ScanResultsTable pinning", () => {
     const payload = vi.mocked(addPinnedOpportunity).mock.calls[0][0];
     expect(payload.opportunity_key).toContain("flip:");
     expect(payload.source).toBe("scan");
-    expect(payload.metrics).toEqual(expect.objectContaining({
-      profit: expect.any(Number),
-      margin: expect.any(Number),
-      volume: expect.any(Number),
-      route_risk: expect.any(Number),
-    }));
+    expect(payload.metrics).toEqual(
+      expect.objectContaining({
+        profit: expect.any(Number),
+        margin: expect.any(Number),
+        volume: expect.any(Number),
+        route_risk: expect.any(Number),
+      }),
+    );
 
     fireEvent.click(await screen.findByTitle("Unpin"));
-    expect(removePinnedOpportunity).toHaveBeenCalledWith(payload.opportunity_key);
+    expect(removePinnedOpportunity).toHaveBeenCalledWith(
+      payload.opportunity_key,
+    );
   });
 });
