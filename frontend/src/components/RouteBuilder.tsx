@@ -351,6 +351,15 @@ export function RouteBuilder({
         targetSystemName: targetSystemName.trim(),
         minISKPerJump: typeof minISKPerJump === "number" ? minISKPerJump : 0,
         allowEmptyHops,
+        lowAttention: {
+          maxStops: params.route_low_attention_max_stops,
+          maxItems: params.route_low_attention_max_items,
+          minFillConfidence: params.route_low_attention_min_fill_confidence,
+          minStopProfitISK: params.route_low_attention_min_stop_profit_isk,
+          avoidStructureOnly: params.route_low_attention_avoid_structure_only,
+          avoidItemConcentration:
+            params.route_low_attention_avoid_item_concentration,
+        },
       },
       executionSettings: {
         cargoCapacityM3: params.cargo_capacity ?? 0,
