@@ -57,37 +57,45 @@ type BatchRouteCandidateOpportunity struct {
 }
 
 type BatchCreateRouteLine struct {
-	TypeID         int32
-	TypeName       string
-	Units          int64
-	UnitVolumeM3   float64
-	BuySystemID    int32
-	BuyLocationID  int64
-	SellSystemID   int32
-	SellLocationID int64
-	BuyTotalISK    float64
-	SellTotalISK   float64
-	ProfitTotalISK float64
-	RouteJumps     int
-	FillConfidence float64
-	CapitalLockup  float64
-	StaleRisk      float64
-	Concentration  float64
+	TypeID             int32
+	TypeName           string
+	Units              int64
+	UnitVolumeM3       float64
+	BuySystemID        int32
+	BuyLocationID      int64
+	SellSystemID       int32
+	SellLocationID     int64
+	BuyTotalISK        float64
+	SellTotalISK       float64
+	ProfitTotalISK     float64
+	RouteJumps         int
+	FillConfidence     float64
+	CapitalLockup      float64
+	StaleRisk          float64
+	Concentration      float64
+	LineExecutionScore float64
+	LineRole           string
 }
 
 type BatchCreateRouteOption struct {
-	OptionID          string
-	Lines             []BatchCreateRouteLine
-	OrderedBuySystems []int32
-	RouteSequence     []int32
-	AddedVolumeM3     float64
-	TotalBuyISK       float64
-	TotalSellISK      float64
-	TotalProfitISK    float64
-	TotalJumps        int
-	ISKPerJump        float64
-	ExecutionScore    float64
-	ScoreBreakdown    []RouteScoreFactorBreakdown
+	OptionID               string
+	Lines                  []BatchCreateRouteLine
+	OrderedBuySystems      []int32
+	RouteSequence          []int32
+	AddedVolumeM3          float64
+	TotalBuyISK            float64
+	TotalSellISK           float64
+	TotalProfitISK         float64
+	TotalJumps             int
+	ISKPerJump             float64
+	ExecutionScore         float64
+	ScoreBreakdown         []RouteScoreFactorBreakdown
+	CoreLineCount          int
+	SafeFillerLineCount    int
+	StretchFillerLineCount int
+	CoreProfitTotalISK     float64
+	SafeFillerProfitISK    float64
+	StretchFillerProfitISK float64
 }
 
 type BatchCreateRouteResult struct {
@@ -305,6 +313,10 @@ func (s *Scanner) buildBatchRouteCacheCandidateLines(
 			SellTotalISK:   float64(units) * candidate.SellPriceISK,
 			ProfitTotalISK: float64(units) * profitPerUnit,
 			RouteJumps:     routeJumps,
+			FillConfidence: candidate.FillConfidence,
+			CapitalLockup:  candidate.CapitalLockup,
+			StaleRisk:      candidate.StaleRisk,
+			Concentration:  candidate.Concentration,
 		})
 	}
 	return lines

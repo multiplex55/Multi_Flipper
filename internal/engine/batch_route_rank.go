@@ -71,6 +71,13 @@ func mergeBatchRouteCandidatePools(
 				continue
 			}
 			if existing, ok := mergedByTuple[key]; ok {
+				totalUnits := float64(existing.Units + line.Units)
+				if totalUnits > 0 {
+					existing.FillConfidence = ((existing.FillConfidence * float64(existing.Units)) + (line.FillConfidence * float64(line.Units))) / totalUnits
+					existing.CapitalLockup = ((existing.CapitalLockup * float64(existing.Units)) + (line.CapitalLockup * float64(line.Units))) / totalUnits
+					existing.StaleRisk = ((existing.StaleRisk * float64(existing.Units)) + (line.StaleRisk * float64(line.Units))) / totalUnits
+					existing.Concentration = ((existing.Concentration * float64(existing.Units)) + (line.Concentration * float64(line.Units))) / totalUnits
+				}
 				existing.Units += line.Units
 				existing.BuyTotalISK += line.BuyTotalISK
 				existing.SellTotalISK += line.SellTotalISK
@@ -133,6 +140,13 @@ func mergeBaseAndAdditions(baseLines, additionLines []BatchCreateRouteLine) []Ba
 			return
 		}
 		existing := &merged[idx]
+		totalUnits := float64(existing.Units + line.Units)
+		if totalUnits > 0 {
+			existing.FillConfidence = ((existing.FillConfidence * float64(existing.Units)) + (line.FillConfidence * float64(line.Units))) / totalUnits
+			existing.CapitalLockup = ((existing.CapitalLockup * float64(existing.Units)) + (line.CapitalLockup * float64(line.Units))) / totalUnits
+			existing.StaleRisk = ((existing.StaleRisk * float64(existing.Units)) + (line.StaleRisk * float64(line.Units))) / totalUnits
+			existing.Concentration = ((existing.Concentration * float64(existing.Units)) + (line.Concentration * float64(line.Units))) / totalUnits
+		}
 		existing.Units += line.Units
 		existing.BuyTotalISK += line.BuyTotalISK
 		existing.SellTotalISK += line.SellTotalISK
@@ -173,6 +187,9 @@ func mergeBaseAndAdditions(baseLines, additionLines []BatchCreateRouteLine) []Ba
 func rankRouteOptions(options []BatchCreateRouteOption, addedProfitByOptionID map[string]float64, cargoLimitM3 float64, scoring RouteExecutionScoringConfig) []BatchCreateRouteOption {
 	ranked := append([]BatchCreateRouteOption(nil), options...)
 	applyExecutionScoring(ranked, cargoLimitM3, scoring)
+	for i := range ranked {
+		classifyRouteOptionLines(&ranked[i])
+	}
 	sortByExecutionScore(ranked, addedProfitByOptionID, cargoLimitM3)
 	return ranked
 }

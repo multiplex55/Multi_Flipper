@@ -74,20 +74,29 @@ func TestHandleBatchCreateRoute_ValidRequestReturnsRankedOptions(t *testing.T) {
 					RouteSequence:     []int32{30000142, 30002187},
 					Lines: []engine.BatchCreateRouteLine{
 						{
-							TypeID:         35,
-							TypeName:       "Pyerite",
-							Units:          100,
-							UnitVolumeM3:   1,
-							BuySystemID:    30000142,
-							BuyLocationID:  60003760,
-							SellSystemID:   30002187,
-							SellLocationID: 60008494,
-							BuyTotalISK:    500,
-							SellTotalISK:   700,
-							ProfitTotalISK: 180,
-							RouteJumps:     8,
+							TypeID:             35,
+							TypeName:           "Pyerite",
+							Units:              100,
+							UnitVolumeM3:       1,
+							BuySystemID:        30000142,
+							BuyLocationID:      60003760,
+							SellSystemID:       30002187,
+							SellLocationID:     60008494,
+							BuyTotalISK:        500,
+							SellTotalISK:       700,
+							ProfitTotalISK:     180,
+							RouteJumps:         8,
+							FillConfidence:     0.77,
+							StaleRisk:          0.2,
+							Concentration:      0.3,
+							LineExecutionScore: 64,
+							LineRole:           "core",
 						},
 					},
+					CoreLineCount:          1,
+					SafeFillerLineCount:    0,
+					StretchFillerLineCount: 0,
+					CoreProfitTotalISK:     180,
 				},
 			},
 			SelectedID:   "batch-option-1",
@@ -122,6 +131,13 @@ func TestHandleBatchCreateRoute_ValidRequestReturnsRankedOptions(t *testing.T) {
 	}
 	if resp.RankedOptions[0].RouteTotalJumps != 8 {
 		t.Fatalf("RouteTotalJumps = %d, want 8", resp.RankedOptions[0].RouteTotalJumps)
+	}
+	line := resp.RankedOptions[0].Lines[0]
+	if line.LineRole != "core" || line.LineExecutionScore != 64 || line.FillConfidence != 0.77 {
+		t.Fatalf("line fields not mapped: %+v", line)
+	}
+	if resp.RankedOptions[0].CoreLineCount != 1 || resp.RankedOptions[0].CoreProfitTotalISK != 180 {
+		t.Fatalf("role summaries not mapped: %+v", resp.RankedOptions[0])
 	}
 }
 

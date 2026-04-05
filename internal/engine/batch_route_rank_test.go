@@ -192,3 +192,37 @@ func TestExecutionScore_DeterministicTieBreakWithEqualScores(t *testing.T) {
 		t.Fatalf("expected deterministic option_id tie-break, got %s then %s", ranked[0].OptionID, ranked[1].OptionID)
 	}
 }
+
+func TestRankRouteOptions_PreservesRoleSummariesAfterRanking(t *testing.T) {
+	options := []BatchCreateRouteOption{
+		{
+			OptionID:       "opt-a",
+			TotalProfitISK: 500_000,
+			TotalBuyISK:    1_000_000,
+			AddedVolumeM3:  40,
+			TotalJumps:     8,
+			ISKPerJump:     62_500,
+			Lines: []BatchCreateRouteLine{
+				{TypeID: 1, ProfitTotalISK: 260_000, BuyTotalISK: 300_000, RouteJumps: 5, FillConfidence: 0.9, StaleRisk: 0.2, Concentration: 0.2},
+				{TypeID: 2, ProfitTotalISK: 120_000, BuyTotalISK: 150_000, RouteJumps: 10, FillConfidence: 0.5, StaleRisk: 0.2, Concentration: 0.2},
+				{TypeID: 3, ProfitTotalISK: 120_000, BuyTotalISK: 550_000, RouteJumps: 14, FillConfidence: 0.2, StaleRisk: 0.9, Concentration: 0.9},
+			},
+		},
+	}
+
+	ranked := rankRouteOptions(options, map[string]float64{"opt-a": 500_000}, 100, RouteExecutionScoringConfig{})
+	got := ranked[0]
+	totalCount := got.CoreLineCount + got.SafeFillerLineCount + got.StretchFillerLineCount
+	if totalCount != len(got.Lines) {
+		t.Fatalf("role summary line counts = %d, want %d", totalCount, len(got.Lines))
+	}
+	totalProfit := got.CoreProfitTotalISK + got.SafeFillerProfitISK + got.StretchFillerProfitISK
+	if totalProfit != got.TotalProfitISK {
+		t.Fatalf("role summary profits = %f, want total %f", totalProfit, got.TotalProfitISK)
+	}
+	for _, line := range got.Lines {
+		if line.LineRole == "" {
+			t.Fatalf("line role should not be empty: %+v", line)
+		}
+	}
+}

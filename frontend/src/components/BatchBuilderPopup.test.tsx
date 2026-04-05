@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BatchCreateRouteResponse, FlipResult } from "@/lib/types";
 import { I18nProvider } from "@/lib/i18n";
@@ -127,6 +133,11 @@ function makeRouteResponse(): BatchCreateRouteResponse {
             sell_total_isk: 140000,
             profit_total_isk: 40000,
             route_jumps: 8,
+            fill_confidence: 0.8,
+            stale_risk: 0.2,
+            concentration_risk: 0.2,
+            line_execution_score: 72,
+            line_role: "core",
           },
         ],
         line_count: 1,
@@ -138,6 +149,12 @@ function makeRouteResponse(): BatchCreateRouteResponse {
         total_jumps: 8,
         isk_per_jump: 5000,
         execution_score: 82.5,
+        core_line_count: 1,
+        safe_filler_line_count: 0,
+        stretch_filler_line_count: 0,
+        core_profit_total_isk: 40000,
+        safe_filler_profit_isk: 0,
+        stretch_filler_profit_isk: 0,
         ordered_buy_systems: [30000142],
         route_sequence: [30000142, 30002187],
         route_total_jumps: 8,
@@ -167,6 +184,11 @@ function makeRouteResponse(): BatchCreateRouteResponse {
             sell_total_isk: 290000,
             profit_total_isk: 90000,
             route_jumps: 10,
+            fill_confidence: 0.6,
+            stale_risk: 0.4,
+            concentration_risk: 0.4,
+            line_execution_score: 48,
+            line_role: "safe_filler",
           },
         ],
         line_count: 1,
@@ -178,6 +200,12 @@ function makeRouteResponse(): BatchCreateRouteResponse {
         total_jumps: 10,
         isk_per_jump: 9000,
         execution_score: 88.1,
+        core_line_count: 0,
+        safe_filler_line_count: 1,
+        stretch_filler_line_count: 0,
+        core_profit_total_isk: 0,
+        safe_filler_profit_isk: 90000,
+        stretch_filler_profit_isk: 0,
         ordered_buy_systems: [30000142],
         route_sequence: [30000142, 30002187],
         route_total_jumps: 10,
@@ -218,6 +246,11 @@ function makeDuplicateTotalsRouteResponse(): BatchCreateRouteResponse {
           sell_total_isk: 180000,
           profit_total_isk: 60000,
           route_jumps: 7,
+          fill_confidence: 0.8,
+          stale_risk: 0.2,
+          concentration_risk: 0.2,
+          line_execution_score: 70,
+          line_role: "core",
         },
         {
           type_id: 777,
@@ -232,6 +265,11 @@ function makeDuplicateTotalsRouteResponse(): BatchCreateRouteResponse {
           sell_total_isk: 140000,
           profit_total_isk: 44000,
           route_jumps: 7,
+          fill_confidence: 0.3,
+          stale_risk: 0.7,
+          concentration_risk: 0.7,
+          line_execution_score: 30,
+          line_role: "stretch_filler",
         },
       ],
       line_count: 2,
@@ -243,6 +281,12 @@ function makeDuplicateTotalsRouteResponse(): BatchCreateRouteResponse {
       total_jumps: 7,
       isk_per_jump: 14857.14,
       execution_score: 91.2,
+      core_line_count: 1,
+      safe_filler_line_count: 0,
+      stretch_filler_line_count: 1,
+      core_profit_total_isk: 60000,
+      safe_filler_profit_isk: 0,
+      stretch_filler_profit_isk: 44000,
       ordered_buy_systems: [30000142],
       route_sequence: [30000142, 30002187],
       route_total_jumps: 7,
@@ -316,7 +360,9 @@ function renderPopup({
 }
 
 describe("BatchBuilderPopup route creation", () => {
-  const writeText = vi.fn<(_: string) => Promise<void>>(() => Promise.resolve());
+  const writeText = vi.fn<(_: string) => Promise<void>>(() =>
+    Promise.resolve(),
+  );
   const batchCreateRouteMock = vi.mocked(batchCreateRoute);
 
   const anchorRow = makeRow({
@@ -371,13 +417,19 @@ describe("BatchBuilderPopup route creation", () => {
 
     renderPopup({ anchorRow, rows });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
 
-    expect(await screen.findByRole("status")).toHaveTextContent("Searching route additions...");
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Searching route additions...",
+    );
 
     expect(pending.resolve).toBeDefined();
     pending.resolve!(makeRouteResponse());
-    await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.queryByRole("status")).not.toBeInTheDocument(),
+    );
   });
 
   it("defaults to execution score sorting for route option cards", async () => {
@@ -385,7 +437,9 @@ describe("BatchBuilderPopup route creation", () => {
 
     renderPopup({ anchorRow, rows });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
 
     const options = await screen.findAllByTestId(/route-option-/);
     expect(options.map((node) => node.getAttribute("data-testid"))).toEqual([
@@ -401,7 +455,9 @@ describe("BatchBuilderPopup route creation", () => {
     batchCreateRouteMock.mockResolvedValue(response);
 
     renderPopup({ anchorRow, rows });
-    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
 
     const options = await screen.findAllByTestId(/route-option-/);
     expect(options.map((node) => node.getAttribute("data-testid"))).toEqual([
@@ -413,23 +469,38 @@ describe("BatchBuilderPopup route creation", () => {
   it("switching sort updates displayed rank without losing selection", async () => {
     batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
     renderPopup({ anchorRow, rows });
-    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
 
     const selectedOption = await screen.findByTestId("route-option-rank-1");
     fireEvent.click(selectedOption);
-    expect(screen.getByRole("button", { name: "Copy merged manifest" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Copy merged manifest" }),
+    ).toBeEnabled();
 
-    fireEvent.change(screen.getByDisplayValue("Execution Score"), { target: { value: "total_profit_isk" } });
+    fireEvent.change(screen.getByDisplayValue("Execution Score"), {
+      target: { value: "total_profit_isk" },
+    });
     const reordered = await screen.findAllByTestId(/route-option-/);
     expect(reordered[0]).toHaveAttribute("data-testid", "route-option-rank-2");
-    expect(screen.getByRole("button", { name: "Copy merged manifest" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Copy merged manifest" }),
+    ).toBeEnabled();
   });
 
   it("includes scan params, routing limits, and candidate snapshot in request payload", async () => {
     batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
-    renderPopup({ anchorRow, rows, routeMaxJumps: 17, maxDetourJumpsPerNode: 5 });
+    renderPopup({
+      anchorRow,
+      rows,
+      routeMaxJumps: 17,
+      maxDetourJumpsPerNode: 5,
+    });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
     await screen.findByTestId("route-option-rank-1");
 
     expect(batchCreateRouteMock).toHaveBeenCalledTimes(1);
@@ -445,7 +516,9 @@ describe("BatchBuilderPopup route creation", () => {
     expect(payload?.current_location_id).toBe(60003760);
     expect(payload?.candidate_context?.source_tab).toBe("radius");
     expect(payload?.candidate_context?.cache_revision).toBe(99);
-    expect(payload?.candidate_context?.cache_next_expiry).toBe("2026-03-27T00:30:00Z");
+    expect(payload?.candidate_context?.cache_next_expiry).toBe(
+      "2026-03-27T00:30:00Z",
+    );
     expect(payload?.candidate_context?.cache_stale).toBe(false);
     expect(payload?.candidate_snapshot?.length).toBeGreaterThan(0);
     expect(payload?.candidate_snapshot?.[0]).toMatchObject({
@@ -472,23 +545,31 @@ describe("BatchBuilderPopup route creation", () => {
       bannedStationIDs: [60009999],
     });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
     await screen.findByTestId("route-option-rank-1");
 
     const [payload] = batchCreateRouteMock.mock.calls[0] ?? [];
-    const typeIDs = payload?.candidate_snapshot?.map((line) => line.type_id) ?? [];
-    const buyStations = payload?.candidate_snapshot?.map((line) => line.buy_location_id) ?? [];
+    const typeIDs =
+      payload?.candidate_snapshot?.map((line) => line.type_id) ?? [];
+    const buyStations =
+      payload?.candidate_snapshot?.map((line) => line.buy_location_id) ?? [];
     expect(typeIDs).not.toContain(22);
     expect(buyStations).not.toContain(60009999);
   });
 
   it("surfaces fallback diagnostics from planner responses", async () => {
     const response = makeRouteResponse();
-    response.diagnostics = ["radius cache unavailable or stale; falling back to market-only candidates"];
+    response.diagnostics = [
+      "radius cache unavailable or stale; falling back to market-only candidates",
+    ];
     batchCreateRouteMock.mockResolvedValue(response);
 
     renderPopup({ anchorRow, rows });
-    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
 
     const diagnostics = await screen.findByTestId("route-diagnostics");
     expect(diagnostics).toHaveTextContent(
@@ -496,24 +577,29 @@ describe("BatchBuilderPopup route creation", () => {
     );
   });
 
-
   it("does not show empty-options message when API returns route options", async () => {
     const response = makeRouteResponse();
-    response.diagnostics = ["diagnostic should not force empty state"]; 
+    response.diagnostics = ["diagnostic should not force empty state"];
     batchCreateRouteMock.mockResolvedValue(response);
 
     renderPopup({ anchorRow, rows });
-    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
 
     await screen.findByTestId("route-option-rank-1");
-    expect(screen.queryByText("No route options returned for remaining cargo.")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("No route options returned for remaining cargo."),
+    ).not.toBeInTheDocument();
   });
 
   it("renders ranked route option details from multi-option planner output", async () => {
     batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
 
     renderPopup({ anchorRow, rows });
-    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
 
     const first = await screen.findByTestId("route-option-rank-1");
     const second = await screen.findByTestId("route-option-rank-2");
@@ -524,6 +610,8 @@ describe("BatchBuilderPopup route creation", () => {
     expect(second).toHaveTextContent("#1");
     expect(second).toHaveTextContent("Added items: 1");
     expect(second).toHaveTextContent("Jump segments: 10");
+    expect(first).toHaveTextContent("Core: 1 items / 40 K");
+    expect(second).toHaveTextContent("Safe filler: 1 / 90 K");
   });
 
   it("shows empty options UX when API returns no ranked options", async () => {
@@ -534,9 +622,13 @@ describe("BatchBuilderPopup route creation", () => {
     batchCreateRouteMock.mockResolvedValue(response);
 
     renderPopup({ anchorRow, rows });
-    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
 
-    expect(await screen.findByText("No route options returned for remaining cargo.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("No route options returned for remaining cargo."),
+    ).toBeInTheDocument();
   });
 
   it("selecting a route updates merged totals", async () => {
@@ -544,22 +636,30 @@ describe("BatchBuilderPopup route creation", () => {
 
     renderPopup({ anchorRow, rows });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
 
     const secondOption = await screen.findByTestId("route-option-rank-2");
-    expect(screen.getByRole("button", { name: "Copy merged manifest" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Copy merged manifest" }),
+    ).toBeDisabled();
     fireEvent.click(secondOption);
 
     expect(secondOption).toHaveTextContent("Merged volume: 15,580");
     expect(secondOption).toHaveTextContent("Jump segments: 10");
-    expect(screen.getByRole("button", { name: "Copy merged manifest" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Copy merged manifest" }),
+    ).toBeEnabled();
   });
 
   it("uses option totals for duplicate added lines in merged display", async () => {
     batchCreateRouteMock.mockResolvedValue(makeDuplicateTotalsRouteResponse());
 
     renderPopup({ anchorRow, rows });
-    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
 
     const option = await screen.findByTestId("route-option-dup-opt");
     fireEvent.click(option);
@@ -575,15 +675,23 @@ describe("BatchBuilderPopup route creation", () => {
 
     renderPopup({ anchorRow, rows });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Copy manifest" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Copy manifest" }),
+    );
     const baseManifest = writeText.mock.calls[0][0] as string;
     const baseDetailLines = baseManifest
       .split("\n")
-      .filter((line) => line.includes(" | qty ") && line.includes(" | buy total "));
+      .filter(
+        (line) => line.includes(" | qty ") && line.includes(" | buy total "),
+      );
 
-    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
     fireEvent.click(await screen.findByTestId("route-option-rank-2"));
-    fireEvent.click(await screen.findByRole("button", { name: "Copy merged manifest" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Copy merged manifest" }),
+    );
 
     expect(writeText).toHaveBeenCalledTimes(2);
     const manifest = writeText.mock.calls[1][0] as string;
@@ -591,7 +699,9 @@ describe("BatchBuilderPopup route creation", () => {
     expect(manifest).toContain("Buy Station: Jita IV - Moon 4");
     expect(manifest).toContain("Jumps to Buy Station: 0");
     expect(manifest).toContain("Jumps Buy -> Sell: 0");
-    expect(manifest).toContain("Sell Station: Amarr VIII (Oris) - Emperor Family Academy");
+    expect(manifest).toContain(
+      "Sell Station: Amarr VIII (Oris) - Emperor Family Academy",
+    );
     expect(manifest).toContain("Cargo m3: 15,580 m3");
     expect(manifest).toContain("Items: 4");
     expect(manifest).toContain("Total volume: 15,580 m3");
@@ -600,6 +710,9 @@ describe("BatchBuilderPopup route creation", () => {
     expect(manifest).toContain("Total profit: 1,590,000 ISK");
     expect(manifest).toContain("Total isk/jump: 9,000 ISK");
     expect(manifest).toContain("Base manifest items:");
+    expect(manifest).toContain("Main Trades");
+    expect(manifest).toContain("Safe Fillers");
+    expect(manifest).toContain("Optional Fillers");
     const requiredLabels = [
       "Buy Station:",
       "Jumps to Buy Station:",
@@ -642,11 +755,17 @@ describe("BatchBuilderPopup route creation", () => {
     batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
 
     renderPopup({ anchorRow, rows });
-    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
     fireEvent.click(await screen.findByTestId("route-option-rank-2"));
-    fireEvent.click(await screen.findByRole("button", { name: "Copy merged manifest" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Copy merged manifest" }),
+    );
 
-    const manifest = writeText.mock.calls[writeText.mock.calls.length - 1][0] as string;
+    const manifest = writeText.mock.calls[
+      writeText.mock.calls.length - 1
+    ][0] as string;
     const sectionStart = manifest.indexOf("\nBase manifest items:\n");
     expect(sectionStart).toBeGreaterThanOrEqual(0);
     const baseItemsSection = manifest.slice(sectionStart);
@@ -654,8 +773,20 @@ describe("BatchBuilderPopup route creation", () => {
       "Anchor Paste | qty 1,500 | buy total 150,000 ISK | buy per 100 ISK | sell total 180,000 ISK | sell per 120 ISK | vol 1,500 m3 | profit 150,000 ISK";
     const addedLine =
       "Megacyte | qty 40 | buy total 200,000 ISK | buy per 5,000 ISK | sell total 290,000 ISK | sell per 7,250 ISK | vol 80 m3 | profit 90,000 ISK";
-    expect((baseItemsSection.match(new RegExp(anchorLine.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g")) ?? []).length).toBe(1);
-    expect((baseItemsSection.match(new RegExp(addedLine.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g")) ?? []).length).toBe(1);
+    expect(
+      (
+        baseItemsSection.match(
+          new RegExp(anchorLine.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"),
+        ) ?? []
+      ).length,
+    ).toBe(1);
+    expect(
+      (
+        baseItemsSection.match(
+          new RegExp(addedLine.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"),
+        ) ?? []
+      ).length,
+    ).toBe(1);
   });
 
   it("copy merged manifest does not print zero placeholders for unknown jump metadata", async () => {
@@ -682,11 +813,18 @@ describe("BatchBuilderPopup route creation", () => {
     response.selected_rank = 0;
     batchCreateRouteMock.mockResolvedValue(response);
 
-    renderPopup({ anchorRow: rowsWithoutJumpMetadata[0], rows: rowsWithoutJumpMetadata });
+    renderPopup({
+      anchorRow: rowsWithoutJumpMetadata[0],
+      rows: rowsWithoutJumpMetadata,
+    });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
     fireEvent.click(await screen.findByTestId("route-option-unknown-jumps"));
-    fireEvent.click(await screen.findByRole("button", { name: "Copy merged manifest" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Copy merged manifest" }),
+    );
 
     const manifest = writeText.mock.calls[writeText.mock.calls.length - 1][0];
     expect(manifest).toContain("Jumps to Buy Station: N/A");
@@ -715,6 +853,11 @@ describe("BatchBuilderPopup route creation", () => {
             sell_total_isk: 13000,
             profit_total_isk: 3000,
             route_jumps: 8,
+            fill_confidence: 0.8,
+            stale_risk: 0.2,
+            concentration_risk: 0.2,
+            line_execution_score: 71,
+            line_role: "core",
           },
           {
             type_id: 8002,
@@ -729,8 +872,19 @@ describe("BatchBuilderPopup route creation", () => {
             sell_total_isk: 17000,
             profit_total_isk: 5000,
             route_jumps: 8,
+            fill_confidence: 0.4,
+            stale_risk: 0.7,
+            concentration_risk: 0.7,
+            line_execution_score: 28,
+            line_role: "stretch_filler",
           },
         ],
+        core_line_count: 1,
+        safe_filler_line_count: 0,
+        stretch_filler_line_count: 1,
+        core_profit_total_isk: 3000,
+        safe_filler_profit_isk: 0,
+        stretch_filler_profit_isk: 5000,
         ordered_buy_systems: [30000142, 30005305],
         route_sequence: [30000142, 30005305, 30002187],
       },
@@ -751,9 +905,13 @@ describe("BatchBuilderPopup route creation", () => {
     ];
     renderPopup({ anchorRow, rows: altRows });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
     fireEvent.click(await screen.findByTestId("route-option-route-order"));
-    fireEvent.click(await screen.findByRole("button", { name: "Copy merged manifest" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Copy merged manifest" }),
+    );
 
     const manifest = writeText.mock.calls[writeText.mock.calls.length - 1][0];
     const jitaIndex = manifest.indexOf("Buy Station: Jita IV - Moon 4");
@@ -784,9 +942,13 @@ describe("BatchBuilderPopup route creation", () => {
 
     renderPopup({ anchorRow, rows });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
     fireEvent.click(await screen.findByTestId("route-option-true-zero-jumps"));
-    fireEvent.click(await screen.findByRole("button", { name: "Copy merged manifest" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Copy merged manifest" }),
+    );
 
     const manifest = writeText.mock.calls[writeText.mock.calls.length - 1][0];
     expect(manifest).toContain("Jumps to Buy Station: 0");
@@ -815,18 +977,25 @@ describe("BatchBuilderPopup route creation", () => {
 
     renderPopup({ anchorRow, rows });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
     fireEvent.click(await screen.findByTestId("route-option-map-fallback"));
-    fireEvent.click(await screen.findByRole("button", { name: "Copy merged manifest" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Copy merged manifest" }),
+    );
 
-    const latestManifestCall = writeText.mock.calls[writeText.mock.calls.length - 1];
+    const latestManifestCall =
+      writeText.mock.calls[writeText.mock.calls.length - 1];
     const manifest = latestManifestCall?.[0] ?? "";
     expect(manifest).toContain("Buy Station: Jita IV - Moon 4");
     expect(manifest).not.toContain("Buy Station: Station 60003760");
   });
 
   it("falls back to Station <id> only when no station-name resolvers succeed", async () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
     const response = makeRouteResponse();
     response.ranked_options = [
       {
@@ -848,11 +1017,16 @@ describe("BatchBuilderPopup route creation", () => {
 
     renderPopup({ anchorRow, rows });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
     fireEvent.click(await screen.findByTestId("route-option-id-fallback"));
-    fireEvent.click(await screen.findByRole("button", { name: "Copy merged manifest" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Copy merged manifest" }),
+    );
 
-    const latestManifestCall = writeText.mock.calls[writeText.mock.calls.length - 1];
+    const latestManifestCall =
+      writeText.mock.calls[writeText.mock.calls.length - 1];
     const manifest = latestManifestCall?.[0] ?? "";
     expect(manifest).toContain("Buy Station: Station 70000001");
     expect(warnSpy).toHaveBeenCalledWith(
@@ -866,26 +1040,36 @@ describe("BatchBuilderPopup route creation", () => {
     batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
 
     renderPopup({ anchorRow, rows });
-    fireEvent.click(await screen.findByRole("button", { name: "Copy manifest" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Copy manifest" }),
+    );
 
     expect(writeText).toHaveBeenCalledTimes(1);
     const baseManifest = writeText.mock.calls[0][0];
     expect(baseManifest).toContain("Buy Station: Jita IV - Moon 4");
-    expect(baseManifest).toContain("Sell Station: Amarr VIII (Oris) - Emperor Family Academy");
+    expect(baseManifest).toContain(
+      "Sell Station: Amarr VIII (Oris) - Emperor Family Academy",
+    );
     expect(baseManifest).toContain("Total profit: 1,500,000 ISK");
     expect(baseManifest).not.toContain("----- MERGED SUMMARY -----");
 
-    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
     await screen.findByTestId("route-option-rank-1");
 
-    expect(screen.getByRole("button", { name: "Copy merged manifest" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Copy merged manifest" }),
+    ).toBeDisabled();
   });
 
   it("renders Open Price Validation button and emits deterministic manifest payload", async () => {
     const onOpenPriceValidation = vi.fn();
     renderPopup({ anchorRow, rows, onOpenPriceValidation });
 
-    const trigger = await screen.findByRole("button", { name: "Open Price Validation" });
+    const trigger = await screen.findByRole("button", {
+      name: "Open Price Validation",
+    });
     expect(trigger).toBeInTheDocument();
 
     fireEvent.click(trigger);
@@ -893,7 +1077,9 @@ describe("BatchBuilderPopup route creation", () => {
     expect(onOpenPriceValidation).toHaveBeenCalledTimes(1);
     const manifest = onOpenPriceValidation.mock.calls[0]?.[0] as string;
     expect(manifest).toContain("Buy Station: Jita IV - Moon 4");
-    expect(manifest).toContain("Sell Station: Amarr VIII (Oris) - Emperor Family Academy");
+    expect(manifest).toContain(
+      "Sell Station: Amarr VIII (Oris) - Emperor Family Academy",
+    );
     expect(manifest).not.toContain("Export Order");
     expect(manifest).toContain("Anchor Paste 1500");
   });

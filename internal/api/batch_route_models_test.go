@@ -1,7 +1,9 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -149,4 +151,46 @@ func TestBatchCreateRouteRequestApplyDefaults(t *testing.T) {
 			t.Fatalf("CurrentLocationID = %d, want 60008494", req.CurrentLocationID)
 		}
 	})
+}
+
+func TestRouteAdditionOptionJSONIncludesRoleAndLineFields(t *testing.T) {
+	option := RouteAdditionOption{
+		OptionID: "x",
+		Lines: []RouteAdditionLine{{
+			TypeID:             1,
+			LineExecutionScore: 55.5,
+			LineRole:           "safe_filler",
+			FillConfidence:     0.8,
+			StaleRisk:          0.2,
+			Concentration:      0.1,
+		}},
+		CoreLineCount:          1,
+		SafeFillerLineCount:    2,
+		StretchFillerLineCount: 3,
+		CoreProfitTotalISK:     10,
+		SafeFillerProfitISK:    20,
+		StretchFillerProfitISK: 30,
+	}
+	body, err := json.Marshal(option)
+	if err != nil {
+		t.Fatalf("Marshal error: %v", err)
+	}
+	payload := string(body)
+	for _, expected := range []string{
+		`"line_execution_score"`,
+		`"line_role"`,
+		`"fill_confidence"`,
+		`"stale_risk"`,
+		`"concentration_risk"`,
+		`"core_line_count"`,
+		`"safe_filler_line_count"`,
+		`"stretch_filler_line_count"`,
+		`"core_profit_total_isk"`,
+		`"safe_filler_profit_isk"`,
+		`"stretch_filler_profit_isk"`,
+	} {
+		if !strings.Contains(payload, expected) {
+			t.Fatalf("JSON missing %s: %s", expected, payload)
+		}
+	}
 }
