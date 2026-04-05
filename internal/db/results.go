@@ -371,8 +371,12 @@ func (d *DB) InsertRouteResults(scanID int64, routes []engine.RouteResult) {
 		scan_id, route_index, hop_index,
 		system_name, station_name, dest_system_name, dest_station_name,
 		type_name, type_id, buy_price, sell_price, units, profit, jumps,
+		buy_location_id, sell_location_id, buy_station_name, sell_station_name, item_volume,
+		buy_remaining, sell_remaining, modeled_qty,
+		effective_buy, effective_sell, hop_capital, hop_gross_sell, hop_net,
+		snapshot_ts, cache_revision,
 		total_profit, total_jumps, profit_per_jump, hop_count
-	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+	) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
 	if err != nil {
 		tx.Rollback()
 		log.Printf("[DB] InsertRouteResults prepare: %v", err)
@@ -386,6 +390,10 @@ func (d *DB) InsertRouteResults(scanID int64, routes []engine.RouteResult) {
 				scanID, ri, hi,
 				hop.SystemName, hop.StationName, hop.DestSystemName, hop.DestStationName,
 				hop.TypeName, hop.TypeID, hop.BuyPrice, hop.SellPrice, hop.Units, hop.Profit, hop.Jumps,
+				hop.BuyLocationID, hop.SellLocationID, hop.BuyStationName, hop.SellStationName, hop.ItemVolume,
+				hop.BuyRemaining, hop.SellRemaining, hop.ModeledQty,
+				hop.EffectiveBuy, hop.EffectiveSell, hop.HopCapital, hop.HopGrossSell, hop.HopNet,
+				hop.SnapshotTS, hop.CacheRevision,
 				route.TotalProfit, route.TotalJumps, route.ProfitPerJump, route.HopCount,
 			); err != nil {
 				tx.Rollback()
@@ -406,6 +414,10 @@ func (d *DB) GetRouteResults(scanID int64) []engine.RouteResult {
 		SELECT route_index, hop_index,
 			system_name, station_name, dest_system_name, dest_station_name,
 			type_name, type_id, buy_price, sell_price, units, profit, jumps,
+			buy_location_id, sell_location_id, buy_station_name, sell_station_name, item_volume,
+			buy_remaining, sell_remaining, modeled_qty,
+			effective_buy, effective_sell, hop_capital, hop_gross_sell, hop_net,
+			snapshot_ts, cache_revision,
 			total_profit, total_jumps, profit_per_jump, hop_count
 		FROM route_results WHERE scan_id = ? ORDER BY route_index, hop_index
 	`, scanID)
@@ -425,10 +437,25 @@ func (d *DB) GetRouteResults(scanID int64) []engine.RouteResult {
 			&ri, &hi,
 			&hop.SystemName, &hop.StationName, &hop.DestSystemName, &hop.DestStationName,
 			&hop.TypeName, &hop.TypeID, &hop.BuyPrice, &hop.SellPrice, &hop.Units, &hop.Profit, &hop.Jumps,
+			&hop.BuyLocationID, &hop.SellLocationID, &hop.BuyStationName, &hop.SellStationName, &hop.ItemVolume,
+			&hop.BuyRemaining, &hop.SellRemaining, &hop.ModeledQty,
+			&hop.EffectiveBuy, &hop.EffectiveSell, &hop.HopCapital, &hop.HopGrossSell, &hop.HopNet,
+			&hop.SnapshotTS, &hop.CacheRevision,
 			&totalProfit, &totalJumps, &profitPerJump, &hopCount,
 		); err != nil {
 			log.Printf("[DB] GetRouteResults scan row: %v", err)
 			continue
+		}
+		hop.LocationID = hop.BuyLocationID
+		hop.DestLocationID = hop.SellLocationID
+		if hop.BuyStationName == "" {
+			hop.BuyStationName = hop.StationName
+		}
+		if hop.SellStationName == "" {
+			hop.SellStationName = hop.DestStationName
+		}
+		if hop.HopNet == 0 {
+			hop.HopNet = hop.Profit
 		}
 		if _, ok := routeMap[ri]; !ok {
 			routeMap[ri] = &engine.RouteResult{

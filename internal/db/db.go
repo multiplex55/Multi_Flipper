@@ -1277,6 +1277,44 @@ func (d *DB) migrate() error {
 		logger.Info("DB", "Applied migration v29 (pinned opportunities)")
 	}
 
+	if version < 30 {
+		hasRouteResults, err := d.tableExists("route_results")
+		if err != nil {
+			return fmt.Errorf("migration v30 table check: %w", err)
+		}
+		if hasRouteResults {
+			routeCols := []struct {
+				name string
+				def  string
+			}{
+				{name: "buy_location_id", def: "INTEGER NOT NULL DEFAULT 0"},
+				{name: "sell_location_id", def: "INTEGER NOT NULL DEFAULT 0"},
+				{name: "buy_station_name", def: "TEXT NOT NULL DEFAULT ''"},
+				{name: "sell_station_name", def: "TEXT NOT NULL DEFAULT ''"},
+				{name: "item_volume", def: "REAL NOT NULL DEFAULT 0"},
+				{name: "buy_remaining", def: "INTEGER NOT NULL DEFAULT 0"},
+				{name: "sell_remaining", def: "INTEGER NOT NULL DEFAULT 0"},
+				{name: "modeled_qty", def: "INTEGER NOT NULL DEFAULT 0"},
+				{name: "effective_buy", def: "REAL NOT NULL DEFAULT 0"},
+				{name: "effective_sell", def: "REAL NOT NULL DEFAULT 0"},
+				{name: "hop_capital", def: "REAL NOT NULL DEFAULT 0"},
+				{name: "hop_gross_sell", def: "REAL NOT NULL DEFAULT 0"},
+				{name: "hop_net", def: "REAL NOT NULL DEFAULT 0"},
+				{name: "snapshot_ts", def: "TEXT NOT NULL DEFAULT ''"},
+				{name: "cache_revision", def: "INTEGER NOT NULL DEFAULT 0"},
+			}
+			for _, c := range routeCols {
+				if err := d.ensureTableColumn("route_results", c.name, c.def); err != nil {
+					return fmt.Errorf("migration v30 add route_results.%s: %w", c.name, err)
+				}
+			}
+		}
+		if _, err := d.sql.Exec(`INSERT OR IGNORE INTO schema_version (version) VALUES (30);`); err != nil {
+			return fmt.Errorf("migration v30: %w", err)
+		}
+		logger.Info("DB", "Applied migration v30 (route hop enrichment fields)")
+	}
+
 	return nil
 }
 

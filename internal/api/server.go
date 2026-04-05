@@ -1568,9 +1568,11 @@ func (s *Server) enrichRouteStructureNames(userID string, results []engine.Route
 			}
 			if name, ok := resolved[results[i].Hops[j].LocationID]; ok {
 				results[i].Hops[j].StationName = name
+				results[i].Hops[j].BuyStationName = name
 			}
 			if name, ok := resolved[results[i].Hops[j].DestLocationID]; ok {
 				results[i].Hops[j].DestStationName = name
+				results[i].Hops[j].SellStationName = name
 			}
 		}
 		if !skip {

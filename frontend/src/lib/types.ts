@@ -217,6 +217,21 @@ export interface RouteHop {
   Profit: number;
   Jumps: number;
   RegionID?: number;
+  buy_location_id?: number;
+  sell_location_id?: number;
+  buy_station_name?: string;
+  sell_station_name?: string;
+  item_volume?: number;
+  buy_remaining?: number;
+  sell_remaining?: number;
+  modeled_qty?: number;
+  effective_buy?: number;
+  effective_sell?: number;
+  hop_capital?: number;
+  hop_gross_sell?: number;
+  hop_net?: number;
+  snapshot_ts?: string;
+  cache_revision?: number;
 }
 
 export interface RouteResult {

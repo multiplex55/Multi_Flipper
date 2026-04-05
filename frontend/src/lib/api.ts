@@ -171,6 +171,38 @@ type NdjsonGenericMessage<T> =
   | { type: "result"; data: T[]; count?: number; scan_id?: number; cache_meta?: StationCacheMeta }
   | { type: "error"; message: string };
 
+function normalizeRouteHop(hop: RouteResult["Hops"][number]): RouteResult["Hops"][number] {
+  const units = Number.isFinite(hop.Units) ? hop.Units : 0;
+  const buyPrice = Number.isFinite(hop.BuyPrice) ? hop.BuyPrice : 0;
+  const sellPrice = Number.isFinite(hop.SellPrice) ? hop.SellPrice : 0;
+  return {
+    ...hop,
+    buy_location_id: Number.isFinite(hop.buy_location_id) ? hop.buy_location_id : 0,
+    sell_location_id: Number.isFinite(hop.sell_location_id) ? hop.sell_location_id : 0,
+    buy_station_name: hop.buy_station_name ?? hop.StationName ?? "",
+    sell_station_name: hop.sell_station_name ?? hop.DestStationName ?? "",
+    item_volume: Number.isFinite(hop.item_volume) ? hop.item_volume : 0,
+    buy_remaining: Number.isFinite(hop.buy_remaining) ? hop.buy_remaining : 0,
+    sell_remaining: Number.isFinite(hop.sell_remaining) ? hop.sell_remaining : 0,
+    modeled_qty: Number.isFinite(hop.modeled_qty) ? hop.modeled_qty : units,
+    effective_buy: Number.isFinite(hop.effective_buy) ? hop.effective_buy : buyPrice,
+    effective_sell: Number.isFinite(hop.effective_sell) ? hop.effective_sell : sellPrice,
+    hop_capital: Number.isFinite(hop.hop_capital) ? hop.hop_capital : buyPrice * units,
+    hop_gross_sell: Number.isFinite(hop.hop_gross_sell) ? hop.hop_gross_sell : sellPrice * units,
+    hop_net: Number.isFinite(hop.hop_net) ? hop.hop_net : (Number.isFinite(hop.Profit) ? hop.Profit : 0),
+    snapshot_ts: hop.snapshot_ts ?? "",
+    cache_revision: Number.isFinite(hop.cache_revision) ? hop.cache_revision : 0,
+  };
+}
+
+export function normalizeRouteResults(results: RouteResult[]): RouteResult[] {
+  if (!Array.isArray(results)) return [];
+  return results.map((route) => ({
+    ...route,
+    Hops: Array.isArray(route.Hops) ? route.Hops.map(normalizeRouteHop) : [],
+  }));
+}
+
 // Generic NDJSON streaming helper to eliminate code duplication
 async function streamNdjson<T>(
   url: string,
@@ -422,7 +454,7 @@ export async function findRoutes(
   onProgress: (msg: string) => void,
   signal?: AbortSignal
 ): Promise<RouteResult[]> {
-  return streamNdjson<RouteResult>(
+  const routes = await streamNdjson<RouteResult>(
     `${BASE}/api/route/find`,
     {
       system_name: params.system_name,
@@ -448,6 +480,7 @@ export async function findRoutes(
     signal,
     "Route search failed"
   );
+  return normalizeRouteResults(routes);
 }
 
 export async function batchCreateRoute(
