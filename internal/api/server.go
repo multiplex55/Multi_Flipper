@@ -92,8 +92,9 @@ type Server struct {
 	updateSkipMu     sync.RWMutex
 	updateSkipByUser map[string]string
 
-	batchCreateRoutePlanner func(context.Context, engine.BatchCreateRouteParams) (engine.BatchCreateRouteResult, error)
-	routeSelectedPlanner    func(context.Context, engine.RouteSelectedPlannerParams) (engine.RouteSelectedPlannerResult, error)
+	batchCreateRoutePlanner  func(context.Context, engine.BatchCreateRouteParams) (engine.BatchCreateRouteResult, error)
+	routeSelectedPlanner     func(context.Context, engine.RouteSelectedPlannerParams) (engine.RouteSelectedPlannerResult, error)
+	batchRouteFillersPlanner func(context.Context, engine.BatchRouteFillerSuggestionParams) (engine.BatchRouteFillerSuggestionResult, error)
 }
 
 // ssoStateEntry holds metadata for a pending SSO login flow.
@@ -675,6 +676,15 @@ func NewServer(cfg *config.Config, esiClient *esi.Client, database *db.DB, ssoCo
 		}
 		return scanner.PlanSelectedRouteExpansions(ctx, params)
 	}
+	s.batchRouteFillersPlanner = func(ctx context.Context, params engine.BatchRouteFillerSuggestionParams) (engine.BatchRouteFillerSuggestionResult, error) {
+		s.mu.RLock()
+		scanner := s.scanner
+		s.mu.RUnlock()
+		if scanner == nil {
+			return engine.BatchRouteFillerSuggestionResult{}, errors.New("scanner unavailable")
+		}
+		return scanner.SuggestBatchRouteFillers(ctx, params)
+	}
 	return s
 }
 
@@ -743,6 +753,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/route/find", s.handleRouteFind)
 	mux.HandleFunc("POST /api/route/planner", s.handleRoutePlanner)
 	mux.HandleFunc("POST /api/batch/create-route", s.handleBatchCreateRoute)
+	mux.HandleFunc("POST /api/batch/filler-suggestions", s.handleBatchFillerSuggestions)
 	mux.HandleFunc("GET /api/watchlist", s.handleGetWatchlist)
 	mux.HandleFunc("POST /api/watchlist", s.handleAddWatchlist)
 	mux.HandleFunc("DELETE /api/watchlist/{typeID}", s.handleDeleteWatchlist)
@@ -3683,6 +3694,129 @@ func (s *Server) handleBatchCreateRoute(w http.ResponseWriter, r *http.Request) 
 		DeterministicSortApplied: true,
 		SortSignature:            req.SortSignature(),
 		RouteManifest:            &apiManifest,
+	}
+	writeJSON(w, resp)
+}
+
+func (s *Server) handleBatchFillerSuggestions(w http.ResponseWriter, r *http.Request) {
+	if !s.isReady() {
+		writeError(w, http.StatusServiceUnavailable, "SDE not loaded yet")
+		return
+	}
+	var req BatchRouteFillerSuggestionsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	params := engine.BatchRouteFillerSuggestionParams{
+		CargoLimitM3:     req.CargoLimitM3,
+		CurrentSystemID:  req.CurrentSystemID,
+		MinRouteSecurity: req.MinRouteSecurity,
+		AllowLowsec:      req.AllowLowsec,
+		AllowNullsec:     req.AllowNullsec,
+		AllowWormhole:    req.AllowWormhole,
+		RouteMaxJumps:    req.RouteMaxJumps,
+	}
+	if params.CurrentSystemID <= 0 {
+		params.CurrentSystemID = req.OriginSystemID
+	}
+	if scoring, ok := toEngineExecutionScoring(req.ExecutionScoring); ok {
+		params.ExecutionScoring = scoring
+	}
+	if len(req.BaseLines) > 0 {
+		params.BaseLines = make([]engine.BatchCreateRouteLine, 0, len(req.BaseLines))
+		for _, line := range req.BaseLines {
+			params.BaseLines = append(params.BaseLines, engine.BatchCreateRouteLine{
+				TypeID:         line.TypeID,
+				TypeName:       line.TypeName,
+				Units:          line.Units,
+				UnitVolumeM3:   line.UnitVolumeM3,
+				BuySystemID:    line.BuySystemID,
+				BuyLocationID:  line.BuyLocationID,
+				SellSystemID:   line.SellSystemID,
+				SellLocationID: line.SellLocationID,
+				BuyTotalISK:    line.BuyTotalISK,
+				SellTotalISK:   line.SellTotalISK,
+				ProfitTotalISK: line.ProfitTotalISK,
+				RouteJumps:     line.Jumps,
+			})
+		}
+	}
+	if len(req.SelectedAdditions) > 0 {
+		params.SelectedLines = make([]engine.BatchCreateRouteLine, 0, len(req.SelectedAdditions))
+		for _, line := range req.SelectedAdditions {
+			params.SelectedLines = append(params.SelectedLines, engine.BatchCreateRouteLine{
+				TypeID:         line.TypeID,
+				TypeName:       line.TypeName,
+				Units:          line.Units,
+				UnitVolumeM3:   line.UnitVolumeM3,
+				BuySystemID:    line.BuySystemID,
+				BuyLocationID:  line.BuyLocationID,
+				SellSystemID:   line.SellSystemID,
+				SellLocationID: line.SellLocationID,
+				BuyTotalISK:    line.BuyTotalISK,
+				SellTotalISK:   line.SellTotalISK,
+				ProfitTotalISK: line.ProfitTotalISK,
+				RouteJumps:     line.RouteJumps,
+				FillConfidence: line.FillConfidence,
+				StaleRisk:      line.StaleRisk,
+				Concentration:  line.Concentration,
+			})
+		}
+	}
+	if len(req.CandidateSnapshot) > 0 {
+		params.CandidateLines = make([]engine.BatchRouteCandidateOpportunity, 0, len(req.CandidateSnapshot))
+		for _, candidate := range req.CandidateSnapshot {
+			params.CandidateLines = append(params.CandidateLines, engine.BatchRouteCandidateOpportunity{
+				TypeID:         candidate.TypeID,
+				TypeName:       candidate.TypeName,
+				Units:          candidate.Units,
+				UnitVolumeM3:   candidate.UnitVolumeM3,
+				BuySystemID:    candidate.BuySystemID,
+				BuyLocationID:  candidate.BuyLocationID,
+				SellSystemID:   candidate.SellSystemID,
+				SellLocationID: candidate.SellLocationID,
+				BuyPriceISK:    candidate.BuyPriceISK,
+				SellPriceISK:   candidate.SellPriceISK,
+				FillConfidence: candidate.FillConfidence,
+				CapitalLockup:  candidate.CapitalLockup,
+				StaleRisk:      candidate.StaleRisk,
+				Concentration:  candidate.Concentration,
+			})
+		}
+	}
+	planner := s.batchRouteFillersPlanner
+	if planner == nil {
+		writeError(w, http.StatusInternalServerError, "batch filler planner unavailable")
+		return
+	}
+	planned, err := planner(r.Context(), params)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	resp := BatchRouteFillerSuggestionsResponse{
+		RemainingCapacityM3: planned.RemainingCapacityM3,
+		Suggestions:         make([]BatchRouteFillerSuggestion, 0, len(planned.Suggestions)),
+	}
+	for _, suggestion := range planned.Suggestions {
+		resp.Suggestions = append(resp.Suggestions, BatchRouteFillerSuggestion{
+			TypeID:          suggestion.Line.TypeID,
+			TypeName:        suggestion.Line.TypeName,
+			Units:           suggestion.Line.Units,
+			UnitVolumeM3:    suggestion.Line.UnitVolumeM3,
+			BuySystemID:     suggestion.Line.BuySystemID,
+			BuyLocationID:   suggestion.Line.BuyLocationID,
+			SellSystemID:    suggestion.Line.SellSystemID,
+			SellLocationID:  suggestion.Line.SellLocationID,
+			VolumeM3:        suggestion.VolumeM3,
+			AddedProfitISK:  suggestion.Line.ProfitTotalISK,
+			AddedCapitalISK: suggestion.Line.BuyTotalISK,
+			FillConfidence:  suggestion.Line.FillConfidence,
+			StaleRisk:       suggestion.Line.StaleRisk,
+			SuggestedRole:   suggestion.SuggestedRole,
+			FillerScore:     suggestion.FillerScore,
+		})
 	}
 	writeJSON(w, resp)
 }

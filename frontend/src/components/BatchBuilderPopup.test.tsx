@@ -10,13 +10,14 @@ import type { BatchCreateRouteResponse, FlipResult } from "@/lib/types";
 import { I18nProvider } from "@/lib/i18n";
 import { ToastProvider } from "@/components/Toast";
 import { BatchBuilderPopup } from "@/components/BatchBuilderPopup";
-import { batchCreateRoute } from "@/lib/api";
+import { batchCreateRoute, batchFillerSuggestions } from "@/lib/api";
 
 vi.mock("@/lib/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
   return {
     ...actual,
     batchCreateRoute: vi.fn(),
+    batchFillerSuggestions: vi.fn(),
   };
 });
 
@@ -372,6 +373,7 @@ describe("BatchBuilderPopup route creation", () => {
     Promise.resolve(),
   );
   const batchCreateRouteMock = vi.mocked(batchCreateRoute);
+  const batchFillerSuggestionsMock = vi.mocked(batchFillerSuggestions);
 
   const anchorRow = makeRow({
     TypeID: 11,
@@ -403,6 +405,46 @@ describe("BatchBuilderPopup route creation", () => {
 
   beforeEach(() => {
     batchCreateRouteMock.mockReset();
+    batchFillerSuggestionsMock.mockReset();
+    batchFillerSuggestionsMock.mockResolvedValue({
+      remaining_capacity_m3: 4400,
+      suggestions: [
+        {
+          type_id: 9100,
+          type_name: "Filler One",
+          units: 50,
+          unit_volume_m3: 1,
+          buy_system_id: 30000142,
+          buy_location_id: 60003761,
+          sell_system_id: 30002187,
+          sell_location_id: 60008494,
+          volume_m3: 50,
+          added_profit_isk: 10000,
+          added_capital_isk: 50000,
+          fill_confidence: 0.8,
+          stale_risk: 0.2,
+          suggested_role: "safe_filler",
+          filler_score: 74,
+        },
+        {
+          type_id: 9200,
+          type_name: "Filler Two",
+          units: 25,
+          unit_volume_m3: 2,
+          buy_system_id: 30000142,
+          buy_location_id: 60003762,
+          sell_system_id: 30002187,
+          sell_location_id: 60008494,
+          volume_m3: 50,
+          added_profit_isk: 15000,
+          added_capital_isk: 80000,
+          fill_confidence: 0.6,
+          stale_risk: 0.3,
+          suggested_role: "stretch_filler",
+          filler_score: 61,
+        },
+      ],
+    });
     writeText.mockClear();
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
@@ -719,6 +761,58 @@ describe("BatchBuilderPopup route creation", () => {
     expect(
       screen.getByRole("button", { name: "Copy merged manifest" }),
     ).toBeEnabled();
+  });
+
+  it("shows remaining m3 in Fill Remaining Hull panel", async () => {
+    batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
+
+    renderPopup({ anchorRow, rows });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
+
+    expect(await screen.findByText("Fill Remaining Hull")).toBeInTheDocument();
+    expect(await screen.findByTestId("filler-remaining-m3")).toHaveTextContent(
+      "Remaining m³: 4,400",
+    );
+  });
+
+  it("renders filler suggestion rows", async () => {
+    batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
+
+    renderPopup({ anchorRow, rows });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
+
+    expect(await screen.findByTestId("filler-row-9100")).toHaveTextContent(
+      "Filler One",
+    );
+    expect(await screen.findByTestId("filler-row-9200")).toHaveTextContent(
+      "Filler Two",
+    );
+  });
+
+  it("filler action buttons mutate merged selection summary", async () => {
+    batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
+
+    renderPopup({ anchorRow, rows });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
+
+    expect(await screen.findByText(/Current selection: 1 lines/)).toBeInTheDocument();
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Add all safe fillers" }),
+    );
+    expect(await screen.findByText(/Current selection: 2 lines/)).toBeInTheDocument();
+    expect(screen.getByText(/Safe 1/)).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Keep current pack" }),
+    );
+    expect(await screen.findByText(/Current selection: 1 lines/)).toBeInTheDocument();
   });
 
   it("uses option totals for duplicate added lines in merged display", async () => {

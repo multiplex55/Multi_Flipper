@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { batchCreateRoute } from "@/lib/api";
+import { batchCreateRoute, batchFillerSuggestions } from "@/lib/api";
 import { formatISK } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -16,6 +16,7 @@ import {
 } from "@/lib/batchManifestFormat";
 import type {
   BaseBatchManifest,
+  BatchRouteFillerSuggestionRow,
   BatchCreateRouteRequest,
   MergedBatchManifest,
   FlipResult,
@@ -127,6 +128,61 @@ function buildMergedManifest(
   };
 }
 
+function additionTupleKey(line: {
+  type_id: number;
+  buy_location_id: number;
+  buy_system_id: number;
+  sell_location_id: number;
+  sell_system_id: number;
+}): string {
+  const buyKey = safeNumber(line.buy_location_id) || safeNumber(line.buy_system_id);
+  const sellKey = safeNumber(line.sell_location_id) || safeNumber(line.sell_system_id);
+  return [line.type_id, buyKey, sellKey].join(":");
+}
+
+function mergeAdditionLines(
+  base: RouteAdditionOption["lines"],
+  extras: RouteAdditionOption["lines"],
+): RouteAdditionOption["lines"] {
+  const byKey = new Map<string, RouteAdditionOption["lines"][number]>();
+  const roleRank: Record<string, number> = { core: 3, safe_filler: 2, stretch_filler: 1 };
+  for (const line of [...base, ...extras]) {
+    const key = additionTupleKey(line);
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, { ...line });
+      continue;
+    }
+    const totalUnits = existing.units + line.units;
+    const weighted = (left: number, right: number) =>
+      totalUnits > 0 ? (left * existing.units + right * line.units) / totalUnits : 0;
+    existing.units = totalUnits;
+    existing.buy_total_isk += line.buy_total_isk;
+    existing.sell_total_isk += line.sell_total_isk;
+    existing.profit_total_isk += line.profit_total_isk;
+    existing.route_jumps =
+      existing.route_jumps > 0 && line.route_jumps > 0
+        ? Math.min(existing.route_jumps, line.route_jumps)
+        : Math.max(existing.route_jumps, line.route_jumps);
+    existing.fill_confidence = weighted(existing.fill_confidence, line.fill_confidence);
+    existing.stale_risk = weighted(existing.stale_risk, line.stale_risk);
+    existing.concentration_risk = weighted(
+      existing.concentration_risk,
+      line.concentration_risk,
+    );
+    existing.line_execution_score = weighted(
+      existing.line_execution_score,
+      line.line_execution_score,
+    );
+    if (
+      (roleRank[line.line_role] ?? 0) > (roleRank[existing.line_role] ?? 0)
+    ) {
+      existing.line_role = line.line_role;
+    }
+  }
+  return Array.from(byKey.values());
+}
+
 export function BatchBuilderPopup({
   open,
   onClose,
@@ -173,8 +229,20 @@ export function BatchBuilderPopup({
     useState<MergedBatchManifest | null>(null);
   const [lastProgress, setLastProgress] = useState<string>("");
   const [routeDiagnostics, setRouteDiagnostics] = useState<string[]>([]);
+  const [fillerSuggestions, setFillerSuggestions] = useState<
+    BatchRouteFillerSuggestionRow[]
+  >([]);
+  const [fillerRemainingM3, setFillerRemainingM3] = useState<number>(0);
+  const [selectedFillerKeys, setSelectedFillerKeys] = useState<
+    Record<string, boolean>
+  >({});
+  const [appliedFillerLines, setAppliedFillerLines] = useState<
+    RouteAdditionOption["lines"]
+  >([]);
+  const [fillerLoading, setFillerLoading] = useState(false);
   const activeRequestRef = useRef(0);
   const activeAbortRef = useRef<AbortController | null>(null);
+  const activeFillerAbortRef = useRef<AbortController | null>(null);
   const lastAppliedPresetRef = useRef<ExecutionScoringPreset>("balanced");
 
   useEffect(() => {
@@ -190,6 +258,11 @@ export function BatchBuilderPopup({
     setMergedManifest(null);
     setLastProgress("");
     setRouteDiagnostics([]);
+    setFillerSuggestions([]);
+    setFillerRemainingM3(0);
+    setSelectedFillerKeys({});
+    setAppliedFillerLines([]);
+    setFillerLoading(false);
   }, [open, defaultCargoM3]);
 
   const allowedRows = useMemo(
@@ -345,6 +418,74 @@ export function BatchBuilderPopup({
     return decorated.map((entry, idx) => ({ ...entry.option, rank: idx + 1 }));
   }, [routeOptions, routeSortBy]);
 
+  const candidateSnapshot = useMemo(
+    () =>
+      scanSourceTab === "radius"
+        ? allowedRows
+            .filter(
+              (row) =>
+                row.TypeID > 0 &&
+                (row.BuyLocationID ?? 0) > 0 &&
+                (row.SellLocationID ?? 0) > 0,
+            )
+            .map((row) => ({
+              type_id: row.TypeID,
+              type_name: row.TypeName,
+              units: Math.max(0, Math.floor(safeNumber(row.UnitsToBuy))),
+              unit_volume_m3: safeNumber(row.Volume),
+              buy_system_id: row.BuySystemID,
+              buy_location_id: row.BuyLocationID ?? 0,
+              sell_system_id: row.SellSystemID,
+              sell_location_id: row.SellLocationID ?? 0,
+              buy_price_isk:
+                safeNumber(row.ExpectedBuyPrice) > 0
+                  ? safeNumber(row.ExpectedBuyPrice)
+                  : safeNumber(row.BuyPrice),
+              sell_price_isk:
+                safeNumber(row.ExpectedSellPrice) > 0
+                  ? safeNumber(row.ExpectedSellPrice)
+                  : safeNumber(row.SellPrice),
+            }))
+            .filter((candidate) => candidate.units > 0 && candidate.unit_volume_m3 > 0)
+        : [],
+    [scanSourceTab, allowedRows],
+  );
+
+  const selectedOption = useMemo(
+    () => routeOptions.find((option) => option.option_id === selectedOptionId) ?? null,
+    [routeOptions, selectedOptionId],
+  );
+  const effectiveAddedLines = useMemo(
+    () =>
+      selectedOption
+        ? mergeAdditionLines(selectedOption.lines, appliedFillerLines)
+        : [],
+    [selectedOption, appliedFillerLines],
+  );
+  const effectiveSelectedSummary = useMemo(() => {
+    const totals = {
+      lines: effectiveAddedLines,
+      line_count: effectiveAddedLines.length,
+      added_volume_m3: 0,
+      total_buy_isk: 0,
+      total_sell_isk: 0,
+      total_profit_isk: 0,
+      core_line_count: 0,
+      safe_filler_line_count: 0,
+      stretch_filler_line_count: 0,
+    };
+    for (const line of effectiveAddedLines) {
+      totals.added_volume_m3 += line.units * line.unit_volume_m3;
+      totals.total_buy_isk += line.buy_total_isk;
+      totals.total_sell_isk += line.sell_total_isk;
+      totals.total_profit_isk += line.profit_total_isk;
+      if (line.line_role === "core") totals.core_line_count += 1;
+      else if (line.line_role === "safe_filler") totals.safe_filler_line_count += 1;
+      else totals.stretch_filler_line_count += 1;
+    }
+    return totals;
+  }, [effectiveAddedLines]);
+
   const getBaseManifestText = useCallback((): string => {
     if (!anchorRow || batch.lines.length === 0) return "";
     const buyJumps = Math.max(0, Math.floor(safeNumber(anchorRow.BuyJumps)));
@@ -385,6 +526,10 @@ export function BatchBuilderPopup({
       (option) => option.option_id === selectedOptionId,
     );
     if (!selectedOption) return;
+    const selectedOptionLines = mergeAdditionLines(
+      selectedOption.lines,
+      appliedFillerLines,
+    );
     const routeRows = allowedRows.filter((row) => row.TypeID > 0);
     const buyLocationNameById = new Map<number, string>();
     const locationNameMetaById = new Map<number, string>();
@@ -442,7 +587,7 @@ export function BatchBuilderPopup({
         source: "base" as const,
         line_role: "core" as const,
       })),
-      ...selectedOption.lines.map((line) => ({
+      ...selectedOptionLines.map((line) => ({
         ...line,
         source: "addition" as const,
       })),
@@ -651,7 +796,7 @@ export function BatchBuilderPopup({
     const orderedManifest: OrderedRouteManifest = {
       summary: {
         station_count: orderedStations.length,
-        item_count: mergedManifest.total_line_count,
+        item_count: baseBatchManifest.base_line_count + selectedOptionLines.length,
         total_units: mergedManifest.total_units,
         total_volume_m3: mergedManifest.total_volume_m3,
         total_buy_isk: mergedManifest.total_buy_isk,
@@ -675,7 +820,7 @@ export function BatchBuilderPopup({
     });
     const groupedSections = formatGroupedRouteSections({
       baseLines: baseBatchManifest.base_lines,
-      addedLines: selectedOption.lines,
+      addedLines: selectedOptionLines,
       formatDetailedLine: (line) => formatDetailedManifestItemLine(line, t),
     });
     const manifestParts = [routeManifestText];
@@ -697,6 +842,7 @@ export function BatchBuilderPopup({
     selectedOptionId,
     allowedRows,
     anchorRow,
+    appliedFillerLines,
   ]);
 
   const startBatchCreateRoute = useCallback(async () => {
@@ -757,37 +903,7 @@ export function BatchBuilderPopup({
         cache_stale: cacheMeta?.stale ?? false,
       },
       candidate_snapshot:
-        scanSourceTab === "radius"
-          ? allowedRows
-              .filter(
-                (row) =>
-                  row.TypeID > 0 &&
-                  (row.BuyLocationID ?? 0) > 0 &&
-                  (row.SellLocationID ?? 0) > 0,
-              )
-              .map((row) => ({
-                type_id: row.TypeID,
-                type_name: row.TypeName,
-                units: Math.max(0, Math.floor(safeNumber(row.UnitsToBuy))),
-                unit_volume_m3: safeNumber(row.Volume),
-                buy_system_id: row.BuySystemID,
-                buy_location_id: row.BuyLocationID ?? 0,
-                sell_system_id: row.SellSystemID,
-                sell_location_id: row.SellLocationID ?? 0,
-                buy_price_isk:
-                  safeNumber(row.ExpectedBuyPrice) > 0
-                    ? safeNumber(row.ExpectedBuyPrice)
-                    : safeNumber(row.BuyPrice),
-                sell_price_isk:
-                  safeNumber(row.ExpectedSellPrice) > 0
-                    ? safeNumber(row.ExpectedSellPrice)
-                    : safeNumber(row.SellPrice),
-              }))
-              .filter(
-                (candidate) =>
-                  candidate.units > 0 && candidate.unit_volume_m3 > 0,
-              )
-          : undefined,
+        scanSourceTab === "radius" ? candidateSnapshot : undefined,
       deterministic_sort: {
         primary: "isk_per_jump",
         secondary: "total_profit_isk",
@@ -803,6 +919,10 @@ export function BatchBuilderPopup({
     setRouteOptions([]);
     setSelectedOptionId(null);
     setMergedManifest(null);
+    setAppliedFillerLines([]);
+    setFillerSuggestions([]);
+    setSelectedFillerKeys({});
+    setFillerRemainingM3(0);
     setLastProgress(t("batchBuilderRouteSearchingProgress"));
     setRouteDiagnostics([]);
 
@@ -839,6 +959,10 @@ export function BatchBuilderPopup({
       if (recommended && baseBatchManifest) {
         setSelectedOptionId(recommended.option_id);
         setMergedManifest(buildMergedManifest(baseBatchManifest, recommended));
+        setAppliedFillerLines([]);
+        setFillerSuggestions([]);
+        setSelectedFillerKeys({});
+        setFillerRemainingM3(0);
         setRouteState("selected");
       } else {
         setSelectedOptionId(null);
@@ -881,7 +1005,7 @@ export function BatchBuilderPopup({
     currentLocationId,
     cacheMeta,
     scanSourceTab,
-    allowedRows,
+    candidateSnapshot,
     executionScoringPreset,
     t,
     addToast,
@@ -900,14 +1024,137 @@ export function BatchBuilderPopup({
     startBatchCreateRoute,
   ]);
 
+  useEffect(() => {
+    if (!baseBatchManifest || !selectedOption) return;
+    const optionForMerge: RouteAdditionOption = {
+      ...selectedOption,
+      lines: effectiveSelectedSummary.lines,
+      line_count: effectiveSelectedSummary.line_count,
+      added_volume_m3: effectiveSelectedSummary.added_volume_m3,
+      total_buy_isk: effectiveSelectedSummary.total_buy_isk,
+      total_sell_isk: effectiveSelectedSummary.total_sell_isk,
+      total_profit_isk: effectiveSelectedSummary.total_profit_isk,
+      core_line_count: effectiveSelectedSummary.core_line_count,
+      safe_filler_line_count: effectiveSelectedSummary.safe_filler_line_count,
+      stretch_filler_line_count: effectiveSelectedSummary.stretch_filler_line_count,
+    };
+    setMergedManifest(buildMergedManifest(baseBatchManifest, optionForMerge));
+  }, [baseBatchManifest, selectedOption, effectiveSelectedSummary]);
+
+  useEffect(() => {
+    if (!open || !baseBatchManifest || !selectedOption) {
+      return;
+    }
+    if (candidateSnapshot.length === 0) {
+      setFillerSuggestions([]);
+      setSelectedFillerKeys({});
+      setFillerRemainingM3(0);
+      return;
+    }
+    activeFillerAbortRef.current?.abort();
+    const controller = new AbortController();
+    activeFillerAbortRef.current = controller;
+    setFillerLoading(true);
+    void batchFillerSuggestions(
+      {
+        cargo_limit_m3: baseBatchManifest.cargo_limit_m3,
+        origin_system_id: baseBatchManifest.origin_system_id,
+        current_system_id:
+          currentSystemId ?? baseBatchManifest.origin_system_id,
+        min_route_security: minRouteSecurity,
+        allow_lowsec: allowLowsec,
+        allow_nullsec: allowNullsec,
+        allow_wormhole: allowWormhole,
+        route_max_jumps: Math.max(0, Math.floor(safeNumber(routeMaxJumps))),
+        execution_scoring: { preset: executionScoringPreset },
+        base_lines: baseBatchManifest.base_lines,
+        selected_additions: selectedOption.lines,
+        candidate_snapshot: candidateSnapshot,
+      },
+      controller.signal,
+    )
+      .then((response) => {
+        if (controller.signal.aborted) return;
+        setFillerSuggestions(response.suggestions ?? []);
+        setFillerRemainingM3(response.remaining_capacity_m3 ?? 0);
+        const defaults: Record<string, boolean> = {};
+        for (const suggestion of response.suggestions ?? []) {
+          defaults[
+            additionTupleKey({
+              type_id: suggestion.type_id,
+              buy_location_id: suggestion.buy_location_id,
+              buy_system_id: suggestion.buy_system_id,
+              sell_location_id: suggestion.sell_location_id,
+              sell_system_id: suggestion.sell_system_id,
+            })
+          ] = suggestion.suggested_role === "safe_filler";
+        }
+        setSelectedFillerKeys(defaults);
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return;
+        setFillerSuggestions([]);
+        setSelectedFillerKeys({});
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setFillerLoading(false);
+        }
+      });
+    return () => controller.abort();
+  }, [
+    open,
+    baseBatchManifest,
+    selectedOption,
+    candidateSnapshot,
+    currentSystemId,
+    minRouteSecurity,
+    allowLowsec,
+    allowNullsec,
+    allowWormhole,
+    routeMaxJumps,
+    executionScoringPreset,
+  ]);
+
   const onSelectOption = useCallback(
     (option: RouteAdditionOption) => {
       if (!baseBatchManifest) return;
       setSelectedOptionId(option.option_id);
       setMergedManifest(buildMergedManifest(baseBatchManifest, option));
+      setAppliedFillerLines([]);
+      setSelectedFillerKeys({});
       setRouteState("selected");
     },
     [baseBatchManifest],
+  );
+
+  const suggestionToAdditionLine = useCallback(
+    (suggestion: BatchRouteFillerSuggestionRow): RouteAdditionOption["lines"][number] => ({
+      type_id: suggestion.type_id,
+      type_name: suggestion.type_name,
+      units: suggestion.units,
+      unit_volume_m3: suggestion.unit_volume_m3,
+      buy_system_id: suggestion.buy_system_id,
+      buy_location_id: suggestion.buy_location_id,
+      sell_system_id: suggestion.sell_system_id,
+      sell_location_id: suggestion.sell_location_id,
+      buy_total_isk: suggestion.added_capital_isk,
+      sell_total_isk:
+        suggestion.added_capital_isk + suggestion.added_profit_isk,
+      profit_total_isk: suggestion.added_profit_isk,
+      route_jumps: 0,
+      fill_confidence: suggestion.fill_confidence,
+      stale_risk: suggestion.stale_risk,
+      concentration_risk: 0,
+      line_execution_score: suggestion.filler_score,
+      line_role:
+        suggestion.suggested_role === "core" ||
+        suggestion.suggested_role === "safe_filler" ||
+        suggestion.suggested_role === "stretch_filler"
+          ? suggestion.suggested_role
+          : "stretch_filler",
+    }),
+    [],
   );
 
   if (!anchorRow) return null;
@@ -1218,6 +1465,124 @@ export function BatchBuilderPopup({
                 );
               })}
             </div>
+            {selectedOption && (
+              <div className="border border-eve-border rounded-sm p-3 bg-eve-panel/40">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-semibold text-eve-text">
+                    Fill Remaining Hull
+                  </div>
+                  <div className="text-xs text-eve-dim" data-testid="filler-remaining-m3">
+                    Remaining m³:{" "}
+                    {fillerRemainingM3.toLocaleString(undefined, {
+                      maximumFractionDigits: 1,
+                    })}
+                  </div>
+                </div>
+                <div className="mt-1 text-[11px] text-eve-dim">
+                  Current selection: {effectiveSelectedSummary.line_count} lines ·
+                  Core {effectiveSelectedSummary.core_line_count} · Safe{" "}
+                  {effectiveSelectedSummary.safe_filler_line_count} · Stretch{" "}
+                  {effectiveSelectedSummary.stretch_filler_line_count}
+                </div>
+                {fillerLoading ? (
+                  <div className="mt-2 text-xs text-eve-dim">Loading filler suggestions…</div>
+                ) : fillerSuggestions.length === 0 ? (
+                  <div className="mt-2 text-xs text-eve-dim">No filler suggestions available.</div>
+                ) : (
+                  <div className="mt-2 max-h-52 overflow-auto border border-eve-border rounded-sm">
+                    <table className="w-full text-[11px]">
+                      <thead className="bg-eve-panel border-b border-eve-border text-eve-dim">
+                        <tr>
+                          <th className="text-left px-2 py-1">Pick</th>
+                          <th className="text-left px-2 py-1">Item</th>
+                          <th className="text-right px-2 py-1">m3</th>
+                          <th className="text-right px-2 py-1">Profit</th>
+                          <th className="text-right px-2 py-1">Capital</th>
+                          <th className="text-right px-2 py-1">Fill</th>
+                          <th className="text-right px-2 py-1">Stale</th>
+                          <th className="text-right px-2 py-1">Role</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {fillerSuggestions.map((suggestion) => {
+                          const rowKey = additionTupleKey({
+                            type_id: suggestion.type_id,
+                            buy_location_id: suggestion.buy_location_id,
+                            buy_system_id: suggestion.buy_system_id,
+                            sell_location_id: suggestion.sell_location_id,
+                            sell_system_id: suggestion.sell_system_id,
+                          });
+                          return (
+                            <tr key={rowKey} data-testid={`filler-row-${suggestion.type_id}`} className="border-b border-eve-border/40 last:border-b-0">
+                              <td className="px-2 py-1">
+                                <input
+                                  type="checkbox"
+                                  checked={!!selectedFillerKeys[rowKey]}
+                                  onChange={(e) =>
+                                    setSelectedFillerKeys((prev) => ({
+                                      ...prev,
+                                      [rowKey]: e.target.checked,
+                                    }))
+                                  }
+                                />
+                              </td>
+                              <td className="px-2 py-1 text-eve-text">{suggestion.type_name}</td>
+                              <td className="px-2 py-1 text-right">{suggestion.volume_m3.toFixed(1)}</td>
+                              <td className="px-2 py-1 text-right text-green-300">{formatISK(suggestion.added_profit_isk)}</td>
+                              <td className="px-2 py-1 text-right">{formatISK(suggestion.added_capital_isk)}</td>
+                              <td className="px-2 py-1 text-right">{(suggestion.fill_confidence * 100).toFixed(0)}%</td>
+                              <td className="px-2 py-1 text-right">{(suggestion.stale_risk * 100).toFixed(0)}%</td>
+                              <td className="px-2 py-1 text-right">{suggestion.suggested_role}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="px-2 py-1 rounded-sm border border-blue-400/60 text-blue-300 text-xs"
+                    onClick={() => {
+                      const selected = fillerSuggestions.filter((suggestion) => {
+                        const key = additionTupleKey({
+                          type_id: suggestion.type_id,
+                          buy_location_id: suggestion.buy_location_id,
+                          buy_system_id: suggestion.buy_system_id,
+                          sell_location_id: suggestion.sell_location_id,
+                          sell_system_id: suggestion.sell_system_id,
+                        });
+                        return !!selectedFillerKeys[key];
+                      });
+                      setAppliedFillerLines(selected.map(suggestionToAdditionLine));
+                    }}
+                  >
+                    Add selected fillers
+                  </button>
+                  <button
+                    type="button"
+                    className="px-2 py-1 rounded-sm border border-emerald-400/60 text-emerald-300 text-xs"
+                    onClick={() =>
+                      setAppliedFillerLines(
+                        fillerSuggestions
+                          .filter((row) => row.suggested_role === "safe_filler")
+                          .map(suggestionToAdditionLine),
+                      )
+                    }
+                  >
+                    Add all safe fillers
+                  </button>
+                  <button
+                    type="button"
+                    className="px-2 py-1 rounded-sm border border-eve-border text-eve-dim text-xs"
+                    onClick={() => setAppliedFillerLines([])}
+                  >
+                    Keep current pack
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
