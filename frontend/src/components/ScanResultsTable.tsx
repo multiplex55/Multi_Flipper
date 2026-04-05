@@ -854,6 +854,7 @@ type RouteAggregateMetrics = {
   riskSpikeCount: number;
   riskNoHistoryCount: number;
   riskUnstableHistoryCount: number;
+  riskThinFillCount: number;
   riskTotalCount: number;
   turnoverDays: number;
   dailyProfitOverCapital: number;
@@ -2037,7 +2038,8 @@ export function ScanResultsTable({
       const riskTotalCount =
         meta.routeRiskSpikeCount +
         meta.routeRiskNoHistoryCount +
-        meta.routeRiskUnstableHistoryCount;
+        meta.routeRiskUnstableHistoryCount +
+        meta.routeRiskThinFillCount;
       aggregates[routeKey] = {
         routeSafetyRank,
         dailyIskPerJump: meta.routeDailyIskPerJump,
@@ -2047,6 +2049,7 @@ export function ScanResultsTable({
         riskSpikeCount: meta.routeRiskSpikeCount,
         riskNoHistoryCount: meta.routeRiskNoHistoryCount,
         riskUnstableHistoryCount: meta.routeRiskUnstableHistoryCount,
+        riskThinFillCount: meta.routeRiskThinFillCount,
         riskTotalCount,
         turnoverDays: meta.routeTurnoverDays,
         dailyProfitOverCapital: meta.routeDailyProfitOverCapital,

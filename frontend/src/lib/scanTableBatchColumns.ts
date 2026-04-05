@@ -61,7 +61,8 @@ export function getBatchSyntheticValue(
     return (
       metadata.routeRiskSpikeCount +
       metadata.routeRiskNoHistoryCount +
-      metadata.routeRiskUnstableHistoryCount
+      metadata.routeRiskUnstableHistoryCount +
+      metadata.routeRiskThinFillCount
     );
   return metadata.batchTotalCapital;
 }
