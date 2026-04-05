@@ -226,3 +226,136 @@ func TestRankRouteOptions_PreservesRoleSummariesAfterRanking(t *testing.T) {
 		}
 	}
 }
+
+func TestRecommendation_ChangesWhenConfidenceWorsens(t *testing.T) {
+	options := []BatchCreateRouteOption{
+		{
+			OptionID:       "confident",
+			TotalProfitISK: 120000,
+			TotalBuyISK:    450000,
+			AddedVolumeM3:  90,
+			TotalJumps:     8,
+			ISKPerJump:     15000,
+			Lines: []BatchCreateRouteLine{
+				{FillConfidence: 0.9, StaleRisk: 0.1, Concentration: 0.1, BuySystemID: 1, BuyLocationID: 11, SellSystemID: 2, SellLocationID: 21},
+			},
+		},
+		{
+			OptionID:       "thin",
+			TotalProfitISK: 130000,
+			TotalBuyISK:    450000,
+			AddedVolumeM3:  90,
+			TotalJumps:     8,
+			ISKPerJump:     16250,
+			Lines: []BatchCreateRouteLine{
+				{FillConfidence: 0.25, StaleRisk: 0.55, Concentration: 0.7, BuySystemID: 1, BuyLocationID: 11, SellSystemID: 2, SellLocationID: 21},
+			},
+		},
+	}
+	ranked := rankRouteOptions(options, map[string]float64{"confident": 120000, "thin": 130000}, 1000, RouteExecutionScoringConfig{})
+	if !ranked[0].Recommended && !ranked[1].Recommended {
+		t.Fatalf("expected one recommended option")
+	}
+	var recommendedID string
+	for _, option := range ranked {
+		if option.Recommended {
+			recommendedID = option.OptionID
+			break
+		}
+	}
+	if recommendedID != "confident" {
+		t.Fatalf("expected confident option to be recommended, got %s", recommendedID)
+	}
+}
+
+func TestRecommendation_ChangesWhenStopBurdenWorsens(t *testing.T) {
+	options := []BatchCreateRouteOption{
+		{
+			OptionID:       "compact",
+			TotalProfitISK: 100000,
+			TotalBuyISK:    300000,
+			AddedVolumeM3:  80,
+			TotalJumps:     7,
+			ISKPerJump:     14285,
+			Lines: []BatchCreateRouteLine{
+				{FillConfidence: 0.8, StaleRisk: 0.2, Concentration: 0.2, BuySystemID: 1, BuyLocationID: 11, SellSystemID: 2, SellLocationID: 21},
+				{FillConfidence: 0.8, StaleRisk: 0.2, Concentration: 0.2, BuySystemID: 1, BuyLocationID: 11, SellSystemID: 2, SellLocationID: 21},
+			},
+		},
+		{
+			OptionID:       "many-stops",
+			TotalProfitISK: 110000,
+			TotalBuyISK:    300000,
+			AddedVolumeM3:  80,
+			TotalJumps:     7,
+			ISKPerJump:     15714,
+			Lines: []BatchCreateRouteLine{
+				{FillConfidence: 0.45, StaleRisk: 0.55, Concentration: 0.45, BuySystemID: 10, BuyLocationID: 101, SellSystemID: 20, SellLocationID: 201},
+				{FillConfidence: 0.45, StaleRisk: 0.55, Concentration: 0.45, BuySystemID: 11, BuyLocationID: 102, SellSystemID: 21, SellLocationID: 202},
+				{FillConfidence: 0.45, StaleRisk: 0.55, Concentration: 0.45, BuySystemID: 12, BuyLocationID: 103, SellSystemID: 22, SellLocationID: 203},
+			},
+		},
+	}
+	ranked := rankRouteOptions(options, map[string]float64{"compact": 100000, "many-stops": 115000}, 1000, RouteExecutionScoringConfig{})
+	var recommendedID string
+	for _, option := range ranked {
+		if option.Recommended {
+			recommendedID = option.OptionID
+			break
+		}
+	}
+	if recommendedID != "compact" {
+		t.Fatalf("expected compact option to be recommended, got %s", recommendedID)
+	}
+}
+
+func TestRecommendation_ConservativeProfileCanPreferSaferBundle(t *testing.T) {
+	options := []BatchCreateRouteOption{
+		{
+			OptionID:       "max-profit",
+			TotalProfitISK: 250000,
+			TotalBuyISK:    600000,
+			AddedVolumeM3:  95,
+			TotalJumps:     9,
+			ISKPerJump:     27777,
+			Lines: []BatchCreateRouteLine{
+				{FillConfidence: 0.25, StaleRisk: 0.75, Concentration: 0.8, BuySystemID: 1, BuyLocationID: 11, SellSystemID: 2, SellLocationID: 21},
+			},
+		},
+		{
+			OptionID:       "safer",
+			TotalProfitISK: 170000,
+			TotalBuyISK:    580000,
+			AddedVolumeM3:  90,
+			TotalJumps:     9,
+			ISKPerJump:     18888,
+			Lines: []BatchCreateRouteLine{
+				{FillConfidence: 0.9, StaleRisk: 0.1, Concentration: 0.1, BuySystemID: 1, BuyLocationID: 11, SellSystemID: 2, SellLocationID: 21},
+			},
+		},
+	}
+	scoring := RouteExecutionScoringConfig{
+		Weights: &RouteExecutionScoreWeights{
+			NetProfit:         0.4,
+			ISKPerJump:        0.6,
+			CargoUtilization:  0.3,
+			StopPenalty:       1.0,
+			CapitalRequired:   0.8,
+			DetourPenalty:     0.8,
+			FillConfidence:    1.8,
+			ConcentrationRisk: 1.8,
+			StaleRisk:         1.8,
+		},
+	}
+	ranked := rankRouteOptions(options, map[string]float64{"max-profit": 250000, "safer": 170000}, 1000, scoring)
+	var recommendedID string
+	for _, option := range ranked {
+		if option.Recommended {
+			recommendedID = option.OptionID
+			break
+		}
+	}
+	if recommendedID != "safer" {
+		t.Fatalf("expected safer option to be recommended under conservative profile, got %s", recommendedID)
+	}
+}

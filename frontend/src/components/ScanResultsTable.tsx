@@ -115,6 +115,7 @@ type SyntheticSortKey =
   | "RoutePackRiskNoHistoryCount"
   | "RoutePackRiskUnstableHistoryCount"
   | "RoutePackTotalRiskCount"
+  | "RoutePackRecommendationScore"
   | "OpportunityScore"
   | "ExecutionQuality"
   | "ExitOverhangDays"
@@ -130,6 +131,7 @@ type RegionGroupSortMode = "period_profit" | "now_profit" | "trade_score";
 type HiddenMode = "done" | "ignored";
 type HiddenFilterTab = "all" | "done" | "ignored";
 type DecisionLensPreset =
+  | "recommended"
   | "best_route_pack"
   | "fastest_isk"
   | "cargo"
@@ -924,6 +926,7 @@ const BATCH_SYNTHETIC_KEYS: Set<SortKey> = new Set([
   "RoutePackRiskNoHistoryCount",
   "RoutePackRiskUnstableHistoryCount",
   "RoutePackTotalRiskCount",
+  "RoutePackRecommendationScore",
 ]);
 
 function isBatchSyntheticKey(key: SortKey): key is BatchSyntheticKey {
@@ -1026,10 +1029,7 @@ function rowS2BBfSRatio(row: FlipResult): number {
 function getCellValue(
   row: FlipResult,
   key: SortKey,
-  batchMetricsByRow: Record<
-    string,
-    RouteBatchMetadata
-  >,
+  batchMetricsByRow: Record<string, RouteBatchMetadata>,
   profile?: OpportunityWeightProfile,
   scoreContext?: OpportunityScanContext,
 ): unknown {
@@ -1051,7 +1051,8 @@ function getCellValue(
   if (key === "TurnoverDays") return turnoverDays(row);
   if (key === "SlippageCostIsk") return slippageCostIsk(row);
   if (key === "ExecutionQuality") return executionQualityForFlip(row).score;
-  if (key === "ExitOverhangDays") return exitOverhangDays(row.TargetSellSupply, rowS2BPerDay(row));
+  if (key === "ExitOverhangDays")
+    return exitOverhangDays(row.TargetSellSupply, rowS2BPerDay(row));
   if (key === "BreakevenBuffer") return breakevenBufferForFlip(row);
   if (key === "RouteSafety") return null;
   if (key === "OpportunityScore")
@@ -1063,15 +1064,18 @@ function passesFilter(
   row: FlipResult,
   col: ColumnDef,
   fval: string,
-  batchMetricsByRow: Record<
-    string,
-    RouteBatchMetadata
-  >,
+  batchMetricsByRow: Record<string, RouteBatchMetadata>,
   profile?: OpportunityWeightProfile,
   scoreContext?: OpportunityScanContext,
 ): boolean {
   if (!fval) return true;
-  const cellVal = getCellValue(row, col.key, batchMetricsByRow, profile, scoreContext);
+  const cellVal = getCellValue(
+    row,
+    col.key,
+    batchMetricsByRow,
+    profile,
+    scoreContext,
+  );
   if (isBatchSyntheticKey(col.key)) {
     return passesBatchNumericFilter(cellVal as number | null, fval);
   }
@@ -1085,14 +1089,17 @@ function passesFilter(
 function fmtCell(
   col: ColumnDef,
   row: FlipResult,
-  batchMetricsByRow: Record<
-    string,
-    RouteBatchMetadata
-  >,
+  batchMetricsByRow: Record<string, RouteBatchMetadata>,
   profile?: OpportunityWeightProfile,
   scoreContext?: OpportunityScanContext,
 ): string {
-  const val = getCellValue(row, col.key, batchMetricsByRow, profile, scoreContext);
+  const val = getCellValue(
+    row,
+    col.key,
+    batchMetricsByRow,
+    profile,
+    scoreContext,
+  );
   if (isBatchSyntheticKey(col.key)) {
     return formatBatchSyntheticCell(col.key, val as number | null);
   }
@@ -1198,7 +1205,6 @@ function fmtCell(
   return String(val ?? "");
 }
 
-
 function compareRowsStable(a: IndexedRow, b: IndexedRow): number {
   const typeDiff = (a.row.TypeID ?? 0) - (b.row.TypeID ?? 0);
   if (typeDiff !== 0) return typeDiff;
@@ -1222,7 +1228,10 @@ function routeAggregateValueForSortKey(
   if (sortKey === "RoutePackDailyProfit") return metrics.dailyProfit;
   if (sortKey === "RoutePackRealIskPerJump" || sortKey === "RealIskPerJump")
     return metrics.fastestIskPerJump;
-  if (sortKey === "RoutePackRealIskPerM3PerJump" || sortKey === "RealIskPerM3PerJump")
+  if (
+    sortKey === "RoutePackRealIskPerM3PerJump" ||
+    sortKey === "RealIskPerM3PerJump"
+  )
     return metrics.iskPerM3PerJump;
   if (sortKey === "RoutePackWeakestExecutionQuality")
     return metrics.weakestExecutionQuality;
@@ -1233,7 +1242,8 @@ function routeAggregateValueForSortKey(
   if (sortKey === "RoutePackDailyProfitOverCapital")
     return metrics.dailyProfitOverCapital;
   if (sortKey === "RoutePackRiskSpikeCount") return metrics.riskSpikeCount;
-  if (sortKey === "RoutePackRiskNoHistoryCount") return metrics.riskNoHistoryCount;
+  if (sortKey === "RoutePackRiskNoHistoryCount")
+    return metrics.riskNoHistoryCount;
   if (sortKey === "RoutePackRiskUnstableHistoryCount")
     return metrics.riskUnstableHistoryCount;
   if (sortKey === "RoutePackTotalRiskCount") return metrics.riskTotalCount;
@@ -1242,7 +1252,9 @@ function routeAggregateValueForSortKey(
   return null;
 }
 
-export function calcRouteConfidence(metrics: RouteAggregateMetrics | undefined): {
+export function calcRouteConfidence(
+  metrics: RouteAggregateMetrics | undefined,
+): {
   score: number;
   label: string;
   color: string;
@@ -1325,7 +1337,9 @@ export function ScanResultsTable({
     columnProfile === "region_eveguru" ? "DayPeriodProfit" : "RealProfit",
   );
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [decisionLens, setDecisionLens] = useState<"custom" | DecisionLensPreset>("custom");
+  const [decisionLens, setDecisionLens] = useState<
+    "custom" | DecisionLensPreset
+  >("recommended");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [showFilters, setShowFilters] = useState(
     () => tradeStateTab === "radius",
@@ -1402,7 +1416,8 @@ export function ScanResultsTable({
   } | null>(null);
 
   const isRegionGrouped = columnProfile === "region_eveguru";
-  const isItemGrouped = !isRegionGrouped && groupByItem && routeViewMode === "rows";
+  const isItemGrouped =
+    !isRegionGrouped && groupByItem && routeViewMode === "rows";
   const isRouteGrouped = !isRegionGrouped && routeViewMode === "route";
   const preferredSortKey: SortKey = isRegionGrouped
     ? "DayPeriodProfit"
@@ -1800,8 +1815,9 @@ export function ScanResultsTable({
         })
       : indexed;
 
-
-    const filteredScoreContext = buildFlipScoreContext(filtered.map((item) => item.row));
+    const filteredScoreContext = buildFlipScoreContext(
+      filtered.map((item) => item.row),
+    );
 
     const routeSafetyRankForRow = (row: FlipResult): number => {
       const k = `${row.BuySystemID}:${row.SellSystemID}`;
@@ -1846,7 +1862,8 @@ export function ScanResultsTable({
       if (aPin !== bPin) return aPin ? -1 : 1;
 
       if (sortKey === ("RouteSafety" as SortKey)) {
-        const diff = routeSafetyRankForRow(a.row) - routeSafetyRankForRow(b.row);
+        const diff =
+          routeSafetyRankForRow(a.row) - routeSafetyRankForRow(b.row);
         const primaryRisk = sortDir === "asc" ? diff : -diff;
         if (primaryRisk !== 0) return primaryRisk;
         return routeSafetyTieBreaker(a, b);
@@ -2003,7 +2020,6 @@ export function ScanResultsTable({
     routeSafetyMap,
   ]);
 
-
   const displayScoreContext = useMemo(
     () => buildFlipScoreContext(displaySorted.map((item) => item.row)),
     [displaySorted],
@@ -2095,7 +2111,8 @@ export function ScanResultsTable({
     for (const ir of displaySorted) {
       const key = routeGroupKey(ir.row);
       if (!(key in routeKeyToSystemPair)) {
-        routeKeyToSystemPair[key] = `${ir.row.BuySystemID}:${ir.row.SellSystemID}`;
+        routeKeyToSystemPair[key] =
+          `${ir.row.BuySystemID}:${ir.row.SellSystemID}`;
       }
     }
 
@@ -2152,7 +2169,10 @@ export function ScanResultsTable({
       }
     }
     const groups = [...byRoute.values()];
-    const routeSafetyTieBreaker = (left: RouteGroup, right: RouteGroup): number => {
+    const routeSafetyTieBreaker = (
+      left: RouteGroup,
+      right: RouteGroup,
+    ): number => {
       const leftMeta = routeAggregateMetricsByRoute[left.key];
       const rightMeta = routeAggregateMetricsByRoute[right.key];
       const eqDiff =
@@ -2170,8 +2190,14 @@ export function ScanResultsTable({
     groups.sort((a, b) => {
       const leftAggregate = routeAggregateMetricsByRoute[a.key];
       const rightAggregate = routeAggregateMetricsByRoute[b.key];
-      const leftAggregateValue = routeAggregateValueForSortKey(leftAggregate, sortKey);
-      const rightAggregateValue = routeAggregateValueForSortKey(rightAggregate, sortKey);
+      const leftAggregateValue = routeAggregateValueForSortKey(
+        leftAggregate,
+        sortKey,
+      );
+      const rightAggregateValue = routeAggregateValueForSortKey(
+        rightAggregate,
+        sortKey,
+      );
       if (leftAggregateValue != null || rightAggregateValue != null) {
         const cmp = compareBatchSyntheticValues(
           leftAggregateValue,
@@ -2192,9 +2218,12 @@ export function ScanResultsTable({
       }
 
       if (sortKey === ("RouteSafety" as SortKey)) {
-        const diff = sortDir === "asc"
-          ? (leftAggregate?.routeSafetyRank ?? 3) - (rightAggregate?.routeSafetyRank ?? 3)
-          : (rightAggregate?.routeSafetyRank ?? 3) - (leftAggregate?.routeSafetyRank ?? 3);
+        const diff =
+          sortDir === "asc"
+            ? (leftAggregate?.routeSafetyRank ?? 3) -
+              (rightAggregate?.routeSafetyRank ?? 3)
+            : (rightAggregate?.routeSafetyRank ?? 3) -
+              (leftAggregate?.routeSafetyRank ?? 3);
         if (diff !== 0) return diff;
         return routeSafetyTieBreaker(a, b);
       }
@@ -2219,7 +2248,15 @@ export function ScanResultsTable({
       return compareRowsStable(aRow, bRow);
     });
     return groups;
-  }, [batchMetricsByRow, batchMetricsByRoute, displaySorted, isRouteGrouped, routeAggregateMetricsByRoute, sortDir, sortKey]);
+  }, [
+    batchMetricsByRow,
+    batchMetricsByRoute,
+    displaySorted,
+    isRouteGrouped,
+    routeAggregateMetricsByRoute,
+    sortDir,
+    sortKey,
+  ]);
 
   useEffect(() => {
     if (!isRouteGrouped) {
@@ -2371,7 +2408,14 @@ export function ScanResultsTable({
       (safePage + 1) * PAGE_SIZE,
     );
     return { pageRows, totalPages, safePage };
-  }, [displaySorted, isItemGrouped, isRegionGrouped, isRouteGrouped, page, visibleRows]);
+  }, [
+    displaySorted,
+    isItemGrouped,
+    isRegionGrouped,
+    isRouteGrouped,
+    page,
+    visibleRows,
+  ]);
 
   // Reset page when data/filters/sort change
   useEffect(() => {
@@ -2587,16 +2631,22 @@ export function ScanResultsTable({
     setFilters({});
   }, []);
   const applyDecisionLens = useCallback(
-    (
-      preset: DecisionLensPreset,
-    ) => {
-      const rowModeMapping: Record<Exclude<DecisionLensPreset, "best_route_pack">, { key: SortKey; dir: SortDir }> = {
+    (preset: DecisionLensPreset) => {
+      const rowModeMapping: Record<
+        Exclude<DecisionLensPreset, "best_route_pack">,
+        { key: SortKey; dir: SortDir }
+      > = {
+        recommended: { key: "DailyIskPerJump", dir: "desc" },
         fastest_isk: { key: "RealIskPerJump", dir: "desc" },
         cargo: { key: "RealIskPerM3PerJump", dir: "desc" },
         safest: { key: "RouteSafety", dir: "asc" },
         capital_efficient: { key: "TurnoverDays", dir: "asc" },
       };
-      const routeModeMapping: Record<DecisionLensPreset, { key: SortKey; dir: SortDir }> = {
+      const routeModeMapping: Record<
+        DecisionLensPreset,
+        { key: SortKey; dir: SortDir }
+      > = {
+        recommended: { key: "RoutePackRecommendationScore", dir: "desc" },
         best_route_pack: { key: "RoutePackDailyIskPerJump", dir: "desc" },
         fastest_isk: { key: "RoutePackRealIskPerJump", dir: "desc" },
         safest: { key: "RouteSafety", dir: "asc" },
@@ -2606,14 +2656,21 @@ export function ScanResultsTable({
       const next =
         routeViewMode === "route"
           ? routeModeMapping[preset]
-          : rowModeMapping[preset as Exclude<typeof preset, "best_route_pack">] ??
-            routeModeMapping.fastest_isk;
+          : (rowModeMapping[
+              preset as Exclude<typeof preset, "best_route_pack">
+            ] ?? routeModeMapping.fastest_isk);
       setSortKey(next.key);
       setSortDir(next.dir);
       setDecisionLens(preset);
     },
     [routeViewMode],
   );
+
+  useEffect(() => {
+    if (decisionLens === "recommended") {
+      applyDecisionLens("recommended");
+    }
+  }, [applyDecisionLens, decisionLens]);
 
   const hasActiveFilters = Object.values(filters).some((v) => !!v);
 
@@ -2899,7 +2956,16 @@ export function ScanResultsTable({
     a.click();
     URL.revokeObjectURL(url);
     addToast(`${t("exportCSV")}: ${rows.length} rows`, "success", 2000);
-  }, [visibleRows, selectedIds, columnDefs, batchMetricsByRow, opportunityProfile, displayScoreContext, addToast, t]);
+  }, [
+    visibleRows,
+    selectedIds,
+    columnDefs,
+    batchMetricsByRow,
+    opportunityProfile,
+    displayScoreContext,
+    addToast,
+    t,
+  ]);
 
   const copyTable = useCallback(() => {
     const rows =
@@ -2910,13 +2976,28 @@ export function ScanResultsTable({
     const tsv = rows.map((ir) =>
       columnDefs
         .map((col) =>
-          fmtCell(col, ir.row, batchMetricsByRow, opportunityProfile, displayScoreContext),
+          fmtCell(
+            col,
+            ir.row,
+            batchMetricsByRow,
+            opportunityProfile,
+            displayScoreContext,
+          ),
         )
         .join("\t"),
     );
     navigator.clipboard.writeText([header, ...tsv].join("\n"));
     addToast(t("copied"), "success", 2000);
-  }, [visibleRows, selectedIds, columnDefs, batchMetricsByRow, opportunityProfile, displayScoreContext, addToast, t]);
+  }, [
+    visibleRows,
+    selectedIds,
+    columnDefs,
+    batchMetricsByRow,
+    opportunityProfile,
+    displayScoreContext,
+    addToast,
+    t,
+  ]);
 
   const hiddenEntries = useMemo(
     () =>
@@ -3218,10 +3299,12 @@ export function ScanResultsTable({
             {!isRegionGrouped && (
               <>
                 <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
-                  {([
-                    ["rows", "Row view"],
-                    ["route", "Group by route"],
-                  ] as const).map(([mode, label]) => {
+                  {(
+                    [
+                      ["rows", "Row view"],
+                      ["route", "Group by route"],
+                    ] as const
+                  ).map(([mode, label]) => {
                     const active = routeViewMode === mode;
                     return (
                       <button
@@ -3364,25 +3447,25 @@ export function ScanResultsTable({
           </div>
         )}
 
-
         {!isRegionGrouped && results.length > 0 && !scanning && (
           <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
             <span className="text-eve-dim px-1">{t("decisionLensTitle")}</span>
-            {(
-              routeViewMode === "route"
-                ? ([
-                    ["best_route_pack", "decisionLensBestRoutePack"],
-                    ["fastest_isk", "decisionLensFastestRoute"],
-                    ["safest", "decisionLensSafestRoute"],
-                    ["cargo", "decisionLensBestCargoUse"],
-                    ["capital_efficient", "decisionLensLowestCapitalLockup"],
-                  ] as const)
-                : ([
-                    ["fastest_isk", "decisionLensFastest"],
-                    ["cargo", "decisionLensCargo"],
-                    ["safest", "decisionLensSafest"],
-                    ["capital_efficient", "decisionLensCapital"],
-                  ] as const)
+            {(routeViewMode === "route"
+              ? ([
+                  ["recommended", "decisionLensTitle"],
+                  ["best_route_pack", "decisionLensBestRoutePack"],
+                  ["fastest_isk", "decisionLensFastestRoute"],
+                  ["safest", "decisionLensSafestRoute"],
+                  ["cargo", "decisionLensBestCargoUse"],
+                  ["capital_efficient", "decisionLensLowestCapitalLockup"],
+                ] as const)
+              : ([
+                  ["recommended", "decisionLensTitle"],
+                  ["fastest_isk", "decisionLensFastest"],
+                  ["cargo", "decisionLensCargo"],
+                  ["safest", "decisionLensSafest"],
+                  ["capital_efficient", "decisionLensCapital"],
+                ] as const)
             ).map(([preset, labelKey]) => {
               const active = decisionLens === preset;
               return (
@@ -4067,18 +4150,24 @@ export function ScanResultsTable({
                         if (group.rows.length === 0) return null;
                         const expanded = expandedRouteGroups.has(group.key);
                         const routeSummary = batchMetricsByRoute[group.key];
-                        const routeAggregate = routeAggregateMetricsByRoute[group.key];
-                        const routeConfidence = calcRouteConfidence(routeAggregate);
+                        const routeAggregate =
+                          routeAggregateMetricsByRoute[group.key];
+                        const routeConfidence =
+                          calcRouteConfidence(routeAggregate);
                         return (
                           <Fragment key={`route-group:${group.key}`}>
                             <tr className="border-b border-eve-border/60 bg-eve-dark/50">
-                              <td colSpan={columnDefs.length + 2} className="px-2 py-1.5">
+                              <td
+                                colSpan={columnDefs.length + 2}
+                                className="px-2 py-1.5"
+                              >
                                 <button
                                   type="button"
                                   onClick={() =>
                                     setExpandedRouteGroups((prev) => {
                                       const next = new Set(prev);
-                                      if (next.has(group.key)) next.delete(group.key);
+                                      if (next.has(group.key))
+                                        next.delete(group.key);
                                       else next.add(group.key);
                                       return next;
                                     })
@@ -4088,57 +4177,150 @@ export function ScanResultsTable({
                                   <span className="text-eve-accent">
                                     {expanded ? "▼" : "▶"}
                                   </span>
-                                  <span className="font-medium">{group.label}</span>
+                                  <span className="font-medium">
+                                    {group.label}
+                                  </span>
                                   <span className="text-eve-dim">
-                                    {routeSummary?.routeItemCount ?? group.rows.length} items
+                                    {routeSummary?.routeItemCount ??
+                                      group.rows.length}{" "}
+                                    items
                                   </span>
-                                  <span className="text-eve-accent font-mono" title="Total route profit">
-                                    P {formatISK(routeSummary?.routeTotalProfit ?? 0)}
+                                  <span
+                                    className="text-eve-accent font-mono"
+                                    title="Total route profit"
+                                  >
+                                    P{" "}
+                                    {formatISK(
+                                      routeSummary?.routeTotalProfit ?? 0,
+                                    )}
                                   </span>
-                                  <span className="text-eve-dim font-mono" title="Route capital">
-                                    C {formatISK(routeSummary?.routeTotalCapital ?? 0)}
+                                  <span
+                                    className="text-eve-dim font-mono"
+                                    title="Route capital"
+                                  >
+                                    C{" "}
+                                    {formatISK(
+                                      routeSummary?.routeTotalCapital ?? 0,
+                                    )}
                                   </span>
-                                  <span className="text-eve-dim font-mono" title="Route volume">
-                                    V {(routeSummary?.routeTotalVolume ?? 0).toLocaleString()} m³
+                                  <span
+                                    className="text-eve-dim font-mono"
+                                    title="Route volume"
+                                  >
+                                    V{" "}
+                                    {(
+                                      routeSummary?.routeTotalVolume ?? 0
+                                    ).toLocaleString()}{" "}
+                                    m³
                                   </span>
-                                  <span className="text-eve-dim font-mono" title="Capacity used">
-                                    Cap {formatBatchSyntheticCell("RoutePackCapacityUsedPercent", routeSummary?.routeCapacityUsedPercent ?? null)}
+                                  <span
+                                    className="text-eve-dim font-mono"
+                                    title="Capacity used"
+                                  >
+                                    Cap{" "}
+                                    {formatBatchSyntheticCell(
+                                      "RoutePackCapacityUsedPercent",
+                                      routeSummary?.routeCapacityUsedPercent ??
+                                        null,
+                                    )}
                                   </span>
-                                  <span className="text-eve-accent font-mono" title="Daily ISK per jump">
-                                    D/J {formatBatchSyntheticCell("RoutePackDailyIskPerJump", routeSummary?.routeDailyIskPerJump ?? null)}
+                                  <span
+                                    className="text-eve-accent font-mono"
+                                    title="Daily ISK per jump"
+                                  >
+                                    D/J{" "}
+                                    {formatBatchSyntheticCell(
+                                      "RoutePackDailyIskPerJump",
+                                      routeSummary?.routeDailyIskPerJump ??
+                                        null,
+                                    )}
                                   </span>
-                                  <span className="text-eve-dim font-mono" title="Real ISK per m3 per jump">
-                                    m³/J {formatBatchSyntheticCell("RoutePackRealIskPerM3PerJump", routeSummary?.routeRealIskPerM3PerJump ?? null)}
+                                  <span
+                                    className="text-eve-dim font-mono"
+                                    title="Real ISK per m3 per jump"
+                                  >
+                                    m³/J{" "}
+                                    {formatBatchSyntheticCell(
+                                      "RoutePackRealIskPerM3PerJump",
+                                      routeSummary?.routeRealIskPerM3PerJump ??
+                                        null,
+                                    )}
                                   </span>
                                   <span className="text-eve-dim font-mono">
-                                    EQ min {(routeSummary?.routeWeakestExecutionQuality ?? 0).toFixed(1)}
+                                    EQ min{" "}
+                                    {(
+                                      routeSummary?.routeWeakestExecutionQuality ??
+                                      0
+                                    ).toFixed(1)}
                                   </span>
-                                  <span className="text-eve-dim font-mono" title="Weighted slippage percent">
-                                    Slip {formatBatchSyntheticCell("RoutePackWeightedSlippagePct", routeSummary?.routeWeightedSlippagePct ?? null)}
+                                  <span
+                                    className="text-eve-dim font-mono"
+                                    title="Weighted slippage percent"
+                                  >
+                                    Slip{" "}
+                                    {formatBatchSyntheticCell(
+                                      "RoutePackWeightedSlippagePct",
+                                      routeSummary?.routeWeightedSlippagePct ??
+                                        null,
+                                    )}
                                   </span>
-                                  <span className="text-eve-dim font-mono" title="Exit overhang">
-                                    OH {formatBatchSyntheticCell("RoutePackExitOverhangDays", routeSummary?.routeExitOverhangDays ?? null)}
+                                  <span
+                                    className="text-eve-dim font-mono"
+                                    title="Exit overhang"
+                                  >
+                                    OH{" "}
+                                    {formatBatchSyntheticCell(
+                                      "RoutePackExitOverhangDays",
+                                      routeSummary?.routeExitOverhangDays ??
+                                        null,
+                                    )}
                                   </span>
-                                  <span className="text-eve-dim font-mono" title="Route safety">
-                                    Safety {routeAggregate?.routeSafetyRank === 0 ? "🟢" : routeAggregate?.routeSafetyRank === 1 ? "🟡" : "🔴"}
+                                  <span
+                                    className="text-eve-dim font-mono"
+                                    title="Route safety"
+                                  >
+                                    Safety{" "}
+                                    {routeAggregate?.routeSafetyRank === 0
+                                      ? "🟢"
+                                      : routeAggregate?.routeSafetyRank === 1
+                                        ? "🟡"
+                                        : "🔴"}
                                   </span>
-                                  {(routeAggregate?.riskSpikeCount ?? 0) > 0 && (
-                                    <span className="px-1 py-0.5 rounded-sm border border-red-500/60 text-[10px] font-bold text-red-300 bg-red-900/20" title="Price spike warnings">
+                                  {(routeAggregate?.riskSpikeCount ?? 0) >
+                                    0 && (
+                                    <span
+                                      className="px-1 py-0.5 rounded-sm border border-red-500/60 text-[10px] font-bold text-red-300 bg-red-900/20"
+                                      title="Price spike warnings"
+                                    >
                                       SPIKE {routeAggregate?.riskSpikeCount}
                                     </span>
                                   )}
-                                  {(routeAggregate?.riskNoHistoryCount ?? 0) > 0 && (
-                                    <span className="px-1 py-0.5 rounded-sm border border-amber-500/60 text-[10px] font-bold text-amber-300 bg-amber-900/20" title="No history warnings">
-                                      NO HIST {routeAggregate?.riskNoHistoryCount}
+                                  {(routeAggregate?.riskNoHistoryCount ?? 0) >
+                                    0 && (
+                                    <span
+                                      className="px-1 py-0.5 rounded-sm border border-amber-500/60 text-[10px] font-bold text-amber-300 bg-amber-900/20"
+                                      title="No history warnings"
+                                    >
+                                      NO HIST{" "}
+                                      {routeAggregate?.riskNoHistoryCount}
                                     </span>
                                   )}
-                                  {(routeAggregate?.riskUnstableHistoryCount ?? 0) > 0 && (
-                                    <span className="px-1 py-0.5 rounded-sm border border-yellow-500/60 text-[10px] font-bold text-yellow-300 bg-yellow-900/20" title="Unstable history warnings">
-                                      UNSTABLE {routeAggregate?.riskUnstableHistoryCount}
+                                  {(routeAggregate?.riskUnstableHistoryCount ??
+                                    0) > 0 && (
+                                    <span
+                                      className="px-1 py-0.5 rounded-sm border border-yellow-500/60 text-[10px] font-bold text-yellow-300 bg-yellow-900/20"
+                                      title="Unstable history warnings"
+                                    >
+                                      UNSTABLE{" "}
+                                      {routeAggregate?.riskUnstableHistoryCount}
                                     </span>
                                   )}
-                                  {(routeAggregate?.riskThinFillCount ?? 0) > 0 && (
-                                    <span className="px-1 py-0.5 rounded-sm border border-orange-500/60 text-[10px] font-bold text-orange-300 bg-orange-900/20" title="Thin fill warnings">
+                                  {(routeAggregate?.riskThinFillCount ?? 0) >
+                                    0 && (
+                                    <span
+                                      className="px-1 py-0.5 rounded-sm border border-orange-500/60 text-[10px] font-bold text-orange-300 bg-orange-900/20"
+                                      title="Thin fill warnings"
+                                    >
                                       THIN {routeAggregate?.riskThinFillCount}
                                     </span>
                                   )}
@@ -4146,7 +4328,8 @@ export function ScanResultsTable({
                                     className={`px-1 py-0.5 rounded-sm border text-[10px] font-bold ${routeConfidence.color}`}
                                     title={routeConfidence.hint}
                                   >
-                                    {routeConfidence.label} {routeConfidence.score}
+                                    {routeConfidence.label}{" "}
+                                    {routeConfidence.score}
                                   </span>
                                 </button>
                               </td>
@@ -4161,9 +4344,9 @@ export function ScanResultsTable({
                         );
                       });
                     })()
-                : pageRows.map((ir, i) =>
-                    renderDataRow(ir, safePage * PAGE_SIZE + i),
-                  )}
+                  : pageRows.map((ir, i) =>
+                      renderDataRow(ir, safePage * PAGE_SIZE + i),
+                    )}
             {displaySorted.length === 0 && !scanning && (
               <tr>
                 <td colSpan={columnDefs.length + 2} className="p-0">
@@ -4228,7 +4411,11 @@ export function ScanResultsTable({
               Why this score?
             </div>
             <OpportunityScoreDetails
-              explanation={scoreFlipResult(scoreExplainRow, opportunityProfile, displayScoreContext)}
+              explanation={scoreFlipResult(
+                scoreExplainRow,
+                opportunityProfile,
+                displayScoreContext,
+              )}
               executionQuality={executionQualityForFlip(scoreExplainRow)}
             />
             <div className="mt-2 text-center">
@@ -4743,10 +4930,7 @@ interface DataRowProps {
     e: import("react").MouseEvent,
   ) => void;
   onOpenScore: (row: FlipResult) => void;
-  batchMetricsByRow: Record<
-    string,
-    RouteBatchMetadata
-  >;
+  batchMetricsByRow: Record<string, RouteBatchMetadata>;
   opportunityProfile?: OpportunityWeightProfile;
   scoreContext?: OpportunityScanContext;
 }
@@ -4915,13 +5099,13 @@ const DataRow = memo(
                 <span className="truncate">{ir.row.TypeName}</span>
                 {/* Price-spike warning: now-profit > 0 but period-profit < 0 means temp spike */}
                 {hasDestinationPriceSpike(ir.row) && (
-                    <span
-                      title="Price spike: current profit looks positive but historical average is below break-even. This trade may be risky."
-                      className="shrink-0 inline-flex items-center px-1 py-px rounded-[2px] border border-yellow-400/50 bg-yellow-400/10 text-yellow-300 text-[9px] leading-none font-medium uppercase"
-                    >
-                      SPIKE
-                    </span>
-                  )}
+                  <span
+                    title="Price spike: current profit looks positive but historical average is below break-even. This trade may be risky."
+                    className="shrink-0 inline-flex items-center px-1 py-px rounded-[2px] border border-yellow-400/50 bg-yellow-400/10 text-yellow-300 text-[9px] leading-none font-medium uppercase"
+                  >
+                    SPIKE
+                  </span>
+                )}
                 {variant &&
                   (variantExpandable && isItemGrouped ? (
                     <button
@@ -4967,9 +5151,11 @@ const DataRow = memo(
                 }}
                 aria-label="Why this score?"
               >
-                {scoreFlipResult(ir.row, opportunityProfile, scoreContext).finalScore.toFixed(
-                  1,
-                )}
+                {scoreFlipResult(
+                  ir.row,
+                  opportunityProfile,
+                  scoreContext,
+                ).finalScore.toFixed(1)}
               </button>
             ) : col.key === ("RouteSafety" as SortKey) ? (
               <RouteSafetyCell
@@ -4980,10 +5166,22 @@ const DataRow = memo(
               />
             ) : col.key === "BuyStation" ? (
               <span className="truncate">
-                {fmtCell(col, ir.row, batchMetricsByRow, opportunityProfile, scoreContext)}
+                {fmtCell(
+                  col,
+                  ir.row,
+                  batchMetricsByRow,
+                  opportunityProfile,
+                  scoreContext,
+                )}
               </span>
             ) : (
-              fmtCell(col, ir.row, batchMetricsByRow, opportunityProfile, scoreContext)
+              fmtCell(
+                col,
+                ir.row,
+                batchMetricsByRow,
+                opportunityProfile,
+                scoreContext,
+              )
             )}
           </td>
         ))}

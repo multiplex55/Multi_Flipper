@@ -149,6 +149,10 @@ function makeRouteResponse(): BatchCreateRouteResponse {
         total_jumps: 8,
         isk_per_jump: 5000,
         execution_score: 82.5,
+        recommended: true,
+        recommendation_score: 91.5,
+        reason_chips: ["High ISK/jump", "Good fill confidence"],
+        warning_chips: [],
         core_line_count: 1,
         safe_filler_line_count: 0,
         stretch_filler_line_count: 0,
@@ -200,6 +204,10 @@ function makeRouteResponse(): BatchCreateRouteResponse {
         total_jumps: 10,
         isk_per_jump: 9000,
         execution_score: 88.1,
+        recommended: false,
+        recommendation_score: 79.1,
+        reason_chips: ["High ISK/jump"],
+        warning_chips: ["Thin fill"],
         core_line_count: 0,
         safe_filler_line_count: 1,
         stretch_filler_line_count: 0,
@@ -432,7 +440,7 @@ describe("BatchBuilderPopup route creation", () => {
     );
   });
 
-  it("defaults to execution score sorting for route option cards", async () => {
+  it("defaults to recommended sorting for route option cards", async () => {
     batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
 
     renderPopup({ anchorRow, rows });
@@ -443,8 +451,8 @@ describe("BatchBuilderPopup route creation", () => {
 
     const options = await screen.findAllByTestId(/route-option-/);
     expect(options.map((node) => node.getAttribute("data-testid"))).toEqual([
-      "route-option-rank-2",
       "route-option-rank-1",
+      "route-option-rank-2",
     ]);
   });
 
@@ -479,7 +487,7 @@ describe("BatchBuilderPopup route creation", () => {
       screen.getByRole("button", { name: "Copy merged manifest" }),
     ).toBeEnabled();
 
-    fireEvent.change(screen.getByDisplayValue("Execution Score"), {
+    fireEvent.change(screen.getByDisplayValue("Recommended"), {
       target: { value: "total_profit_isk" },
     });
     const reordered = await screen.findAllByTestId(/route-option-/);
@@ -604,10 +612,10 @@ describe("BatchBuilderPopup route creation", () => {
     const first = await screen.findByTestId("route-option-rank-1");
     const second = await screen.findByTestId("route-option-rank-2");
 
-    expect(first).toHaveTextContent("#2");
+    expect(first).toHaveTextContent("#1");
     expect(first).toHaveTextContent("Added profit: 40 K");
     expect(first).toHaveTextContent("Jump segments: 8");
-    expect(second).toHaveTextContent("#1");
+    expect(second).toHaveTextContent("#2");
     expect(second).toHaveTextContent("Added items: 1");
     expect(second).toHaveTextContent("Jump segments: 10");
     expect(first).toHaveTextContent("Core: 1 items / 40 K");
@@ -643,7 +651,7 @@ describe("BatchBuilderPopup route creation", () => {
     const secondOption = await screen.findByTestId("route-option-rank-2");
     expect(
       screen.getByRole("button", { name: "Copy merged manifest" }),
-    ).toBeDisabled();
+    ).toBeEnabled();
     fireEvent.click(secondOption);
 
     expect(secondOption).toHaveTextContent("Merged volume: 15,580");
@@ -1060,7 +1068,22 @@ describe("BatchBuilderPopup route creation", () => {
 
     expect(
       screen.getByRole("button", { name: "Copy merged manifest" }),
-    ).toBeDisabled();
+    ).toBeEnabled();
+  });
+
+  it("shows recommended badge, auto-selects recommended option, and renders chips", async () => {
+    batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
+    renderPopup({ anchorRow, rows });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
+    const top = await screen.findByTestId("route-option-rank-1");
+    expect(top).toHaveTextContent("Recommended");
+    expect(top).toHaveTextContent("High ISK/jump");
+    expect(top).toHaveTextContent("Good fill confidence");
+    expect(
+      screen.getByRole("button", { name: "Copy merged manifest" }),
+    ).toBeEnabled();
   });
 
   it("renders Open Price Validation button and emits deterministic manifest payload", async () => {

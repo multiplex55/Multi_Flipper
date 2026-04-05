@@ -327,6 +327,10 @@ export interface RouteAdditionOption {
   total_jumps: number;
   isk_per_jump: number;
   execution_score: number;
+  recommended?: boolean;
+  recommendation_score?: number;
+  reason_chips?: string[];
+  warning_chips?: string[];
   score_breakdown?: Array<{
     key: string;
     label: string;

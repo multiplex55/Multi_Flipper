@@ -93,6 +93,10 @@ type RouteAdditionOption struct {
 	TotalJumps             int                                `json:"total_jumps"`
 	ISKPerJump             float64                            `json:"isk_per_jump"`
 	ExecutionScore         float64                            `json:"execution_score"`
+	Recommended            bool                               `json:"recommended"`
+	RecommendationScore    float64                            `json:"recommendation_score"`
+	ReasonChips            []string                           `json:"reason_chips,omitempty"`
+	WarningChips           []string                           `json:"warning_chips,omitempty"`
 	ScoreBreakdown         []engine.RouteScoreFactorBreakdown `json:"score_breakdown,omitempty"`
 	RankingInputs          RouteOptionRankingInputs           `json:"ranking_inputs"`
 	RankingTieBreakValues  []float64                          `json:"ranking_tie_break_values"`
