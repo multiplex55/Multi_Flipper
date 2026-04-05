@@ -273,4 +273,163 @@ describe("batchMetrics", () => {
     expect(byRoute[routeGroupKey(routeActuallyPerfect)].routeWeakestExecutionQuality).toBe(100);
     expect(rankedRouteKeys[0]).toBe(routeGroupKey(routeActuallyPerfect));
   });
+
+  it("computes primary route-pack summary from selected pack lines only and keeps route-universe context separate", () => {
+    const selectedAnchor = makeRow({
+      TypeID: 5101,
+      BuyLocationID: 1501,
+      SellLocationID: 2501,
+      BuySystemID: 35000001,
+      SellSystemID: 35000002,
+      Volume: 30,
+      UnitsToBuy: 1,
+      ProfitPerUnit: 100,
+      ExpectedBuyPrice: 120,
+      SlippageBuyPct: 2,
+      SlippageSellPct: 1,
+      DayTargetPeriodPrice: 130,
+      DayTargetNowPrice: 132,
+      FilledQty: 1,
+      PreExecutionUnits: 1,
+      DailyProfit: 40,
+      DailyVolume: 100,
+      TotalJumps: 2,
+    });
+    const excludedStable = makeRow({
+      TypeID: 5102,
+      BuyLocationID: selectedAnchor.BuyLocationID,
+      SellLocationID: selectedAnchor.SellLocationID,
+      BuySystemID: selectedAnchor.BuySystemID,
+      SellSystemID: selectedAnchor.SellSystemID,
+      Volume: 25,
+      UnitsToBuy: 1,
+      ProfitPerUnit: 80,
+      ExpectedBuyPrice: 90,
+      SlippageBuyPct: 11,
+      SlippageSellPct: 8,
+      DayTargetPeriodPrice: 125,
+      DayTargetNowPrice: 126,
+      FilledQty: 1,
+      PreExecutionUnits: 1,
+      DailyProfit: 15,
+      DailyVolume: 20,
+      TotalJumps: 2,
+    });
+    const excludedRisky = makeRow({
+      TypeID: 5103,
+      BuyLocationID: selectedAnchor.BuyLocationID,
+      SellLocationID: selectedAnchor.SellLocationID,
+      BuySystemID: selectedAnchor.BuySystemID,
+      SellSystemID: selectedAnchor.SellSystemID,
+      Volume: 25,
+      UnitsToBuy: 1,
+      ProfitPerUnit: 30,
+      ExpectedBuyPrice: 70,
+      SlippageBuyPct: 20,
+      SlippageSellPct: 15,
+      DayNowProfit: 30,
+      DayPeriodProfit: -10,
+      DayPriceHistory: [],
+      DayTargetPeriodPrice: 0,
+      HistoryAvailable: false,
+      FilledQty: 0,
+      PreExecutionUnits: 1,
+      DailyProfit: 8,
+      DailyVolume: 5,
+      TotalJumps: 2,
+    });
+
+    const { byRoute } = buildRouteBatchMetadata(
+      [selectedAnchor, excludedStable, excludedRisky],
+      40,
+    );
+    const meta = byRoute[routeGroupKey(selectedAnchor)];
+
+    // Primary summary must only use selected pack lines (selectedAnchor only under 40 m3).
+    expect(meta.routeItemCount).toBe(1);
+    expect(meta.routeTotalProfit).toBe(100);
+    expect(meta.routeTotalCapital).toBe(120);
+    expect(meta.routeTotalVolume).toBe(30);
+    expect(meta.routeWeightedSlippagePct).toBe(3);
+    expect(meta.routeWeakestExecutionQuality).toBeGreaterThan(95);
+    expect(meta.routeDailyProfit).toBe(40);
+    expect(meta.routeDailyProfitOverCapital).toBeCloseTo(40 / 120, 6);
+
+    // Risk counts in primary summary ignore excluded rows.
+    expect(meta.routeRiskSpikeCount).toBe(0);
+    expect(meta.routeRiskNoHistoryCount).toBe(0);
+    expect(meta.routeRiskUnstableHistoryCount).toBe(0);
+    expect(meta.routeRiskThinFillCount).toBe(0);
+
+    // Optional route-universe context is separated and does not change primary numbers.
+    expect(meta.routeUniverseCandidateItemCount).toBe(3);
+    expect(meta.routeUniverseExcludedItemCount).toBe(2);
+    expect(meta.routeUniverseWarningCount).toBeGreaterThan(0);
+    expect(meta.routeTotalProfit).toBe(100);
+    expect(meta.routeWeightedSlippagePct).toBe(3);
+  });
+
+  it("regression: best-route-pack quality ranking must not be penalized by excluded universe lines", () => {
+    const routeASelected = makeRow({
+      TypeID: 5201,
+      BuyLocationID: 1601,
+      SellLocationID: 2601,
+      BuySystemID: 36000001,
+      SellSystemID: 36000002,
+      Volume: 30,
+      UnitsToBuy: 1,
+      ProfitPerUnit: 80,
+      FilledQty: 1,
+      PreExecutionUnits: 1,
+      DayTargetPeriodPrice: 100,
+      DayTargetNowPrice: 100,
+    });
+    const routeAExcludedBad = makeRow({
+      TypeID: 5202,
+      BuyLocationID: routeASelected.BuyLocationID,
+      SellLocationID: routeASelected.SellLocationID,
+      BuySystemID: routeASelected.BuySystemID,
+      SellSystemID: routeASelected.SellSystemID,
+      Volume: 25,
+      UnitsToBuy: 1,
+      ProfitPerUnit: 20,
+      FilledQty: 0,
+      PreExecutionUnits: 1,
+      SlippageBuyPct: 25,
+      SlippageSellPct: 25,
+      DayNowProfit: 10,
+      DayPeriodProfit: -10,
+      DayTargetPeriodPrice: 0,
+      DayPriceHistory: [],
+      HistoryAvailable: false,
+    });
+    const routeBSelected = makeRow({
+      TypeID: 5301,
+      BuyLocationID: 1602,
+      SellLocationID: 2602,
+      BuySystemID: 36000003,
+      SellSystemID: 36000004,
+      Volume: 30,
+      UnitsToBuy: 1,
+      ProfitPerUnit: 70,
+      FilledQty: 1,
+      PreExecutionUnits: 1,
+      DayTargetPeriodPrice: 100,
+      DayTargetNowPrice: 130, // stable=false but still selected
+    });
+
+    const { byRoute } = buildRouteBatchMetadata(
+      [routeASelected, routeAExcludedBad, routeBSelected],
+      40,
+    );
+    const rankedRouteKeys = Object.entries(byRoute)
+      .sort((a, b) => b[1].routeWeakestExecutionQuality - a[1].routeWeakestExecutionQuality)
+      .map(([key]) => key);
+
+    expect(byRoute[routeGroupKey(routeASelected)].routeItemCount).toBe(1);
+    expect(byRoute[routeGroupKey(routeASelected)].routeWeakestExecutionQuality).toBeGreaterThan(
+      byRoute[routeGroupKey(routeBSelected)].routeWeakestExecutionQuality,
+    );
+    expect(rankedRouteKeys[0]).toBe(routeGroupKey(routeASelected));
+  });
 });
