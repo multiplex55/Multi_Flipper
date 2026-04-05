@@ -1083,7 +1083,9 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
       const { allRows, safeTrimmed, unknownRoute } = focusedRouteFixtures();
       vi.mocked(getGankCheckBatch).mockResolvedValueOnce([
         { key: `${safeTrimmed.BuySystemID}:${safeTrimmed.SellSystemID}`, danger: "green", kills: 0, totalISK: 0 },
-        { key: `${unknownRoute.BuySystemID}:${unknownRoute.SellSystemID}`, danger: "loading", kills: 0, totalISK: 0 },
+        // Intentionally simulate an unexpected backend token to ensure unknown/loading ordering
+        // remains safe even if API response drifts.
+        { key: `${unknownRoute.BuySystemID}:${unknownRoute.SellSystemID}`, danger: "loading", kills: 0, totalISK: 0 } as never,
       ]);
 
       renderTable({ scanning: false, results: allRows });
@@ -1207,7 +1209,7 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
           danger: "loading",
           kills: 0,
           totalISK: 0,
-        },
+        } as never,
         {
           key: `${conflictingRowSignalWeakTop.BuySystemID}:${conflictingRowSignalWeakTop.SellSystemID}`,
           danger: "yellow",
