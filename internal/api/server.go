@@ -3426,6 +3426,28 @@ func (s *Server) handleBatchCreateRoute(w http.ResponseWriter, r *http.Request) 
 			})
 		}
 	}
+	if req.ExecutionScoring.Weights != nil {
+		params.ExecutionScoring = engine.RouteExecutionScoringConfig{
+			Preset:            req.ExecutionScoring.Preset,
+			UtilizationTarget: req.ExecutionScoring.UtilizationTarget,
+			Weights: &engine.RouteExecutionScoreWeights{
+				NetProfit:         req.ExecutionScoring.Weights.NetProfit,
+				ISKPerJump:        req.ExecutionScoring.Weights.ISKPerJump,
+				CargoUtilization:  req.ExecutionScoring.Weights.CargoUtilization,
+				StopPenalty:       req.ExecutionScoring.Weights.StopPenalty,
+				CapitalRequired:   req.ExecutionScoring.Weights.CapitalRequired,
+				DetourPenalty:     req.ExecutionScoring.Weights.DetourPenalty,
+				FillConfidence:    req.ExecutionScoring.Weights.FillConfidence,
+				ConcentrationRisk: req.ExecutionScoring.Weights.ConcentrationRisk,
+				StaleRisk:         req.ExecutionScoring.Weights.StaleRisk,
+			},
+		}
+	} else if req.ExecutionScoring.Preset != "" || req.ExecutionScoring.UtilizationTarget > 0 {
+		params.ExecutionScoring = engine.RouteExecutionScoringConfig{
+			Preset:            req.ExecutionScoring.Preset,
+			UtilizationTarget: req.ExecutionScoring.UtilizationTarget,
+		}
+	}
 	if !params.SplitTradeFees {
 		params.BrokerFeePercent = req.BuyBrokerFeePercent
 	}
@@ -3482,6 +3504,8 @@ func (s *Server) handleBatchCreateRoute(w http.ResponseWriter, r *http.Request) 
 			TotalProfitISK: opt.TotalProfitISK,
 			TotalJumps:     opt.TotalJumps,
 			ISKPerJump:     opt.ISKPerJump,
+			ExecutionScore: opt.ExecutionScore,
+			ScoreBreakdown: append([]engine.RouteScoreFactorBreakdown(nil), opt.ScoreBreakdown...),
 			RankingInputs: RouteOptionRankingInputs{
 				TotalProfitISK: opt.TotalProfitISK,
 				TotalJumps:     opt.TotalJumps,
@@ -3631,6 +3655,28 @@ func (s *Server) handleRoutePlanner(w http.ResponseWriter, r *http.Request) {
 		BuyBrokerFeePercent:   req.BuyBrokerFeePercent,
 		SellBrokerFeePercent:  req.SellBrokerFeePercent,
 	}
+	if req.ExecutionScoring.Weights != nil {
+		params.ExecutionScoring = engine.RouteExecutionScoringConfig{
+			Preset:            req.ExecutionScoring.Preset,
+			UtilizationTarget: req.ExecutionScoring.UtilizationTarget,
+			Weights: &engine.RouteExecutionScoreWeights{
+				NetProfit:         req.ExecutionScoring.Weights.NetProfit,
+				ISKPerJump:        req.ExecutionScoring.Weights.ISKPerJump,
+				CargoUtilization:  req.ExecutionScoring.Weights.CargoUtilization,
+				StopPenalty:       req.ExecutionScoring.Weights.StopPenalty,
+				CapitalRequired:   req.ExecutionScoring.Weights.CapitalRequired,
+				DetourPenalty:     req.ExecutionScoring.Weights.DetourPenalty,
+				FillConfidence:    req.ExecutionScoring.Weights.FillConfidence,
+				ConcentrationRisk: req.ExecutionScoring.Weights.ConcentrationRisk,
+				StaleRisk:         req.ExecutionScoring.Weights.StaleRisk,
+			},
+		}
+	} else if req.ExecutionScoring.Preset != "" || req.ExecutionScoring.UtilizationTarget > 0 {
+		params.ExecutionScoring = engine.RouteExecutionScoringConfig{
+			Preset:            req.ExecutionScoring.Preset,
+			UtilizationTarget: req.ExecutionScoring.UtilizationTarget,
+		}
+	}
 	if len(req.SelectedRouteStops) > 0 {
 		params.SelectedRouteStops = make([]engine.RouteSelectedStop, 0, len(req.SelectedRouteStops))
 		for _, stop := range req.SelectedRouteStops {
@@ -3776,6 +3822,8 @@ func (s *Server) handleRoutePlanner(w http.ResponseWriter, r *http.Request) {
 			Rank:            idx + 1,
 			Lines:           lines,
 			ExpectedTotals:  RouteOptionRankingInputs{TotalProfitISK: opt.TotalProfitISK, TotalJumps: opt.TotalJumps, ISKPerJump: opt.ISKPerJump},
+			ExecutionScore:  opt.ExecutionScore,
+			ScoreBreakdown:  append([]engine.RouteScoreFactorBreakdown(nil), opt.ScoreBreakdown...),
 			ManifestByStop:  manifest,
 			OrderedBuyStops: append([]int32(nil), opt.OrderedBuySystems...),
 			RouteSequence:   append([]int32(nil), opt.RouteSequence...),

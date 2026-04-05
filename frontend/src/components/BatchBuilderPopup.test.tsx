@@ -137,6 +137,7 @@ function makeRouteResponse(): BatchCreateRouteResponse {
         total_profit_isk: 40000,
         total_jumps: 8,
         isk_per_jump: 5000,
+        execution_score: 82.5,
         ordered_buy_systems: [30000142],
         route_sequence: [30000142, 30002187],
         route_total_jumps: 8,
@@ -176,6 +177,7 @@ function makeRouteResponse(): BatchCreateRouteResponse {
         total_profit_isk: 90000,
         total_jumps: 10,
         isk_per_jump: 9000,
+        execution_score: 88.1,
         ordered_buy_systems: [30000142],
         route_sequence: [30000142, 30002187],
         route_total_jumps: 10,
@@ -240,6 +242,7 @@ function makeDuplicateTotalsRouteResponse(): BatchCreateRouteResponse {
       total_profit_isk: 104000,
       total_jumps: 7,
       isk_per_jump: 14857.14,
+      execution_score: 91.2,
       ordered_buy_systems: [30000142],
       route_sequence: [30000142, 30002187],
       route_total_jumps: 7,
@@ -377,7 +380,7 @@ describe("BatchBuilderPopup route creation", () => {
     await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
   });
 
-  it("renders option cards in returned sort order", async () => {
+  it("defaults to execution score sorting for route option cards", async () => {
     batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
 
     renderPopup({ anchorRow, rows });
@@ -386,9 +389,40 @@ describe("BatchBuilderPopup route creation", () => {
 
     const options = await screen.findAllByTestId(/route-option-/);
     expect(options.map((node) => node.getAttribute("data-testid"))).toEqual([
+      "route-option-rank-2",
+      "route-option-rank-1",
+    ]);
+  });
+
+  it("sort selector is stable for equal execution scores", async () => {
+    const response = makeRouteResponse();
+    response.ranked_options[0].execution_score = 80;
+    response.ranked_options[1].execution_score = 80;
+    batchCreateRouteMock.mockResolvedValue(response);
+
+    renderPopup({ anchorRow, rows });
+    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+
+    const options = await screen.findAllByTestId(/route-option-/);
+    expect(options.map((node) => node.getAttribute("data-testid"))).toEqual([
       "route-option-rank-1",
       "route-option-rank-2",
     ]);
+  });
+
+  it("switching sort updates displayed rank without losing selection", async () => {
+    batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
+    renderPopup({ anchorRow, rows });
+    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+
+    const selectedOption = await screen.findByTestId("route-option-rank-1");
+    fireEvent.click(selectedOption);
+    expect(screen.getByRole("button", { name: "Copy merged manifest" })).toBeEnabled();
+
+    fireEvent.change(screen.getByDisplayValue("Execution Score"), { target: { value: "total_profit_isk" } });
+    const reordered = await screen.findAllByTestId(/route-option-/);
+    expect(reordered[0]).toHaveAttribute("data-testid", "route-option-rank-2");
+    expect(screen.getByRole("button", { name: "Copy merged manifest" })).toBeEnabled();
   });
 
   it("includes scan params, routing limits, and candidate snapshot in request payload", async () => {
@@ -484,10 +518,10 @@ describe("BatchBuilderPopup route creation", () => {
     const first = await screen.findByTestId("route-option-rank-1");
     const second = await screen.findByTestId("route-option-rank-2");
 
-    expect(first).toHaveTextContent("#1");
+    expect(first).toHaveTextContent("#2");
     expect(first).toHaveTextContent("Added profit: 40 K");
     expect(first).toHaveTextContent("Jump segments: 8");
-    expect(second).toHaveTextContent("#2");
+    expect(second).toHaveTextContent("#1");
     expect(second).toHaveTextContent("Added items: 1");
     expect(second).toHaveTextContent("Jump segments: 10");
   });

@@ -35,25 +35,26 @@ type RoutePlannerHop struct {
 }
 
 type RoutePlannerRequest struct {
-	SelectedRouteStops    []RoutePlannerStop        `json:"selected_route_stops"`
-	SelectedRouteHops     []RoutePlannerHop         `json:"selected_route_hops"`
-	CandidateSnapshotID   string                    `json:"candidate_snapshot_id,omitempty"`
-	CandidateSnapshot     []BatchRouteCandidateLine `json:"candidate_snapshot,omitempty"`
-	CargoLimitM3          float64                   `json:"cargo_limit_m3"`
-	RemainingCapacityM3   float64                   `json:"remaining_capacity_m3"`
-	OriginSystemID        int32                     `json:"origin_system_id"`
-	CurrentSystemID       int32                     `json:"current_system_id"`
-	RouteMaxJumps         int                       `json:"route_max_jumps"`
-	MaxDetourJumpsPerNode int                       `json:"max_detour_jumps_per_node"`
-	MinMargin             float64                   `json:"min_margin"`
-	MinRouteSecurity      float64                   `json:"min_route_security"`
-	AllowLowsec           bool                      `json:"allow_lowsec"`
-	AllowNullsec          bool                      `json:"allow_nullsec"`
-	AllowWormhole         bool                      `json:"allow_wormhole"`
-	IncludeStructures     bool                      `json:"include_structures"`
-	SalesTaxPercent       float64                   `json:"sales_tax_percent"`
-	BuyBrokerFeePercent   float64                   `json:"buy_broker_fee_percent"`
-	SellBrokerFeePercent  float64                   `json:"sell_broker_fee_percent"`
+	SelectedRouteStops    []RoutePlannerStop          `json:"selected_route_stops"`
+	SelectedRouteHops     []RoutePlannerHop           `json:"selected_route_hops"`
+	CandidateSnapshotID   string                      `json:"candidate_snapshot_id,omitempty"`
+	CandidateSnapshot     []BatchRouteCandidateLine   `json:"candidate_snapshot,omitempty"`
+	CargoLimitM3          float64                     `json:"cargo_limit_m3"`
+	RemainingCapacityM3   float64                     `json:"remaining_capacity_m3"`
+	OriginSystemID        int32                       `json:"origin_system_id"`
+	CurrentSystemID       int32                       `json:"current_system_id"`
+	RouteMaxJumps         int                         `json:"route_max_jumps"`
+	MaxDetourJumpsPerNode int                         `json:"max_detour_jumps_per_node"`
+	MinMargin             float64                     `json:"min_margin"`
+	MinRouteSecurity      float64                     `json:"min_route_security"`
+	AllowLowsec           bool                        `json:"allow_lowsec"`
+	AllowNullsec          bool                        `json:"allow_nullsec"`
+	AllowWormhole         bool                        `json:"allow_wormhole"`
+	IncludeStructures     bool                        `json:"include_structures"`
+	SalesTaxPercent       float64                     `json:"sales_tax_percent"`
+	BuyBrokerFeePercent   float64                     `json:"buy_broker_fee_percent"`
+	SellBrokerFeePercent  float64                     `json:"sell_broker_fee_percent"`
+	ExecutionScoring      RouteExecutionScoringConfig `json:"execution_scoring,omitempty"`
 }
 
 type RoutePlannerStopManifest struct {
@@ -73,13 +74,15 @@ type RoutePlannerStopManifest struct {
 }
 
 type RoutePlannerOption struct {
-	OptionID        string                     `json:"option_id"`
-	Rank            int                        `json:"rank"`
-	Lines           []RouteAdditionLine        `json:"lines"`
-	ExpectedTotals  RouteOptionRankingInputs   `json:"expected_totals"`
-	ManifestByStop  []RoutePlannerStopManifest `json:"manifest_by_stop"`
-	OrderedBuyStops []int32                    `json:"ordered_buy_stops,omitempty"`
-	RouteSequence   []int32                    `json:"route_sequence,omitempty"`
+	OptionID        string                             `json:"option_id"`
+	Rank            int                                `json:"rank"`
+	Lines           []RouteAdditionLine                `json:"lines"`
+	ExpectedTotals  RouteOptionRankingInputs           `json:"expected_totals"`
+	ExecutionScore  float64                            `json:"execution_score"`
+	ScoreBreakdown  []engine.RouteScoreFactorBreakdown `json:"score_breakdown,omitempty"`
+	ManifestByStop  []RoutePlannerStopManifest         `json:"manifest_by_stop"`
+	OrderedBuyStops []int32                            `json:"ordered_buy_stops,omitempty"`
+	RouteSequence   []int32                            `json:"route_sequence,omitempty"`
 }
 
 type RoutePlannerResponse struct {

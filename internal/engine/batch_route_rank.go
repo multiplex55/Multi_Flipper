@@ -170,58 +170,9 @@ func mergeBaseAndAdditions(baseLines, additionLines []BatchCreateRouteLine) []Ba
 	return merged
 }
 
-func rankRouteOptions(options []BatchCreateRouteOption, addedProfitByOptionID map[string]float64, cargoLimitM3 float64) []BatchCreateRouteOption {
+func rankRouteOptions(options []BatchCreateRouteOption, addedProfitByOptionID map[string]float64, cargoLimitM3 float64, scoring RouteExecutionScoringConfig) []BatchCreateRouteOption {
 	ranked := append([]BatchCreateRouteOption(nil), options...)
-	profitPerJump := func(opt BatchCreateRouteOption) float64 {
-		if opt.TotalJumps <= 0 {
-			return 0
-		}
-		return opt.TotalProfitISK / float64(opt.TotalJumps)
-	}
-	cargoUtil := func(opt BatchCreateRouteOption) float64 {
-		if cargoLimitM3 <= 0 {
-			return 0
-		}
-		return opt.AddedVolumeM3 / cargoLimitM3
-	}
-	routeKey := func(opt BatchCreateRouteOption) string {
-		if opt.OptionID != "" {
-			return opt.OptionID
-		}
-		return "~"
-	}
-
-	sort.SliceStable(ranked, func(i, j int) bool {
-		left := ranked[i]
-		right := ranked[j]
-
-		if left.TotalProfitISK != right.TotalProfitISK {
-			return left.TotalProfitISK > right.TotalProfitISK
-		}
-
-		leftAdded := addedProfitByOptionID[left.OptionID]
-		rightAdded := addedProfitByOptionID[right.OptionID]
-		if leftAdded != rightAdded {
-			return leftAdded > rightAdded
-		}
-
-		leftPPJ := profitPerJump(left)
-		rightPPJ := profitPerJump(right)
-		if leftPPJ != rightPPJ {
-			return leftPPJ > rightPPJ
-		}
-
-		leftCargoUtil := cargoUtil(left)
-		rightCargoUtil := cargoUtil(right)
-		if leftCargoUtil != rightCargoUtil {
-			return leftCargoUtil > rightCargoUtil
-		}
-
-		if left.TotalJumps != right.TotalJumps {
-			return left.TotalJumps < right.TotalJumps
-		}
-
-		return routeKey(left) < routeKey(right)
-	})
+	applyExecutionScoring(ranked, cargoLimitM3, scoring)
+	sortByExecutionScore(ranked, addedProfitByOptionID, cargoLimitM3)
 	return ranked
 }

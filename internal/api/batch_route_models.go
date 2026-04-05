@@ -3,6 +3,8 @@ package api
 import (
 	"errors"
 	"fmt"
+
+	"eve-flipper/internal/engine"
 )
 
 var (
@@ -74,23 +76,43 @@ type RouteOptionRankingInputs struct {
 }
 
 type RouteAdditionOption struct {
-	OptionID              string                   `json:"option_id"`
-	Rank                  int                      `json:"rank"`
-	Lines                 []RouteAdditionLine      `json:"lines"`
-	LineCount             int                      `json:"line_count"`
-	AddedVolumeM3         float64                  `json:"added_volume_m3"`
-	UtilizationPct        float64                  `json:"utilization_pct"`
-	TotalBuyISK           float64                  `json:"total_buy_isk"`
-	TotalSellISK          float64                  `json:"total_sell_isk"`
-	TotalProfitISK        float64                  `json:"total_profit_isk"`
-	TotalJumps            int                      `json:"total_jumps"`
-	ISKPerJump            float64                  `json:"isk_per_jump"`
-	RankingInputs         RouteOptionRankingInputs `json:"ranking_inputs"`
-	RankingTieBreakValues []float64                `json:"ranking_tie_break_values"`
-	RankingSortKey        string                   `json:"ranking_sort_key"`
-	OrderedBuySystems     []int32                  `json:"ordered_buy_systems,omitempty"`
-	RouteSequence         []int32                  `json:"route_sequence,omitempty"`
-	RouteTotalJumps       int                      `json:"route_total_jumps,omitempty"`
+	OptionID              string                             `json:"option_id"`
+	Rank                  int                                `json:"rank"`
+	Lines                 []RouteAdditionLine                `json:"lines"`
+	LineCount             int                                `json:"line_count"`
+	AddedVolumeM3         float64                            `json:"added_volume_m3"`
+	UtilizationPct        float64                            `json:"utilization_pct"`
+	TotalBuyISK           float64                            `json:"total_buy_isk"`
+	TotalSellISK          float64                            `json:"total_sell_isk"`
+	TotalProfitISK        float64                            `json:"total_profit_isk"`
+	TotalJumps            int                                `json:"total_jumps"`
+	ISKPerJump            float64                            `json:"isk_per_jump"`
+	ExecutionScore        float64                            `json:"execution_score"`
+	ScoreBreakdown        []engine.RouteScoreFactorBreakdown `json:"score_breakdown,omitempty"`
+	RankingInputs         RouteOptionRankingInputs           `json:"ranking_inputs"`
+	RankingTieBreakValues []float64                          `json:"ranking_tie_break_values"`
+	RankingSortKey        string                             `json:"ranking_sort_key"`
+	OrderedBuySystems     []int32                            `json:"ordered_buy_systems,omitempty"`
+	RouteSequence         []int32                            `json:"route_sequence,omitempty"`
+	RouteTotalJumps       int                                `json:"route_total_jumps,omitempty"`
+}
+
+type RouteExecutionScoreWeights struct {
+	NetProfit         float64 `json:"net_profit"`
+	ISKPerJump        float64 `json:"isk_per_jump"`
+	CargoUtilization  float64 `json:"cargo_utilization"`
+	StopPenalty       float64 `json:"stop_penalty"`
+	CapitalRequired   float64 `json:"capital_required"`
+	DetourPenalty     float64 `json:"detour_penalty"`
+	FillConfidence    float64 `json:"fill_confidence"`
+	ConcentrationRisk float64 `json:"concentration_risk"`
+	StaleRisk         float64 `json:"stale_risk"`
+}
+
+type RouteExecutionScoringConfig struct {
+	Preset            string                      `json:"preset,omitempty"`
+	UtilizationTarget float64                     `json:"utilization_target,omitempty"`
+	Weights           *RouteExecutionScoreWeights `json:"weights,omitempty"`
 }
 
 type DeterministicSortConfig struct {
@@ -120,6 +142,7 @@ type BatchCreateRouteRequest struct {
 	BuyBrokerFeePercent   float64                     `json:"buy_broker_fee_percent"`
 	SellBrokerFeePercent  float64                     `json:"sell_broker_fee_percent"`
 	DeterministicSort     DeterministicSortConfig     `json:"deterministic_sort"`
+	ExecutionScoring      RouteExecutionScoringConfig `json:"execution_scoring,omitempty"`
 	CandidateContext      *BatchRouteCandidateContext `json:"candidate_context,omitempty"`
 	CandidateSnapshot     []BatchRouteCandidateLine   `json:"candidate_snapshot,omitempty"`
 }

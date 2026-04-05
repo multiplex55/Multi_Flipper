@@ -36,6 +36,7 @@ type BatchCreateRouteParams struct {
 	BaseLines             []BatchCreateRouteLine
 	CandidateLines        []BatchRouteCandidateOpportunity
 	CandidateContextSeen  bool
+	ExecutionScoring      RouteExecutionScoringConfig
 }
 
 type BatchRouteCandidateOpportunity struct {
@@ -85,6 +86,8 @@ type BatchCreateRouteOption struct {
 	TotalProfitISK    float64
 	TotalJumps        int
 	ISKPerJump        float64
+	ExecutionScore    float64
+	ScoreBreakdown    []RouteScoreFactorBreakdown
 }
 
 type BatchCreateRouteResult struct {
@@ -218,7 +221,7 @@ func (s *Scanner) CreateBatchRoute(ctx context.Context, params BatchCreateRouteP
 	for _, opt := range options {
 		addedProfit[opt.OptionID] = opt.TotalProfitISK
 	}
-	ranked := rankRouteOptions(options, addedProfit, params.CargoLimitM3)
+	ranked := rankRouteOptions(options, addedProfit, params.CargoLimitM3, params.ExecutionScoring)
 	result.Options = ranked
 	result.Diagnostics = append(result.Diagnostics, formatBatchRoutePruneDiagnostics(pruned)...)
 	result.SelectedID = ranked[0].OptionID

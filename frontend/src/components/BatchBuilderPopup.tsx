@@ -147,6 +147,9 @@ export function BatchBuilderPopup({
   );
   const [routeState, setRouteState] = useState<RouteState>("idle");
   const [routeOptions, setRouteOptions] = useState<RouteAdditionOption[]>([]);
+  const [routeSortBy, setRouteSortBy] = useState<"execution_score" | "isk_per_jump" | "total_profit_isk">(
+    "execution_score",
+  );
   const [routeError, setRouteError] = useState<string | null>(null);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [mergedManifest, setMergedManifest] = useState<MergedBatchManifest | null>(null);
@@ -160,6 +163,7 @@ export function BatchBuilderPopup({
     setCargoLimitM3(defaultCargoM3 > 0 ? defaultCargoM3 : 0);
     setRouteState("idle");
     setRouteOptions([]);
+    setRouteSortBy("execution_score");
     setRouteError(null);
     setSelectedOptionId(null);
     setMergedManifest(null);
@@ -277,6 +281,25 @@ export function BatchBuilderPopup({
     if (baseBatchManifest.remaining_capacity_m3 <= 0) return t("batchBuilderRouteNoRemainingCargo");
     return null;
   }, [safeAnchorRow, baseBatchManifest, t]);
+
+  const sortedRouteOptions = useMemo(() => {
+    const decorated = routeOptions.map((option, index) => ({ option, index }));
+    decorated.sort((a, b) => {
+      const left = a.option;
+      const right = b.option;
+      if (routeSortBy === "isk_per_jump" && left.isk_per_jump !== right.isk_per_jump) {
+        return right.isk_per_jump - left.isk_per_jump;
+      }
+      if (routeSortBy === "total_profit_isk" && left.total_profit_isk !== right.total_profit_isk) {
+        return right.total_profit_isk - left.total_profit_isk;
+      }
+      if (left.execution_score !== right.execution_score) {
+        return right.execution_score - left.execution_score;
+      }
+      return a.index - b.index;
+    });
+    return decorated.map((entry, idx) => ({ ...entry.option, rank: idx + 1 }));
+  }, [routeOptions, routeSortBy]);
 
   const getBaseManifestText = useCallback((): string => {
     if (!anchorRow || batch.lines.length === 0) return "";
@@ -664,6 +687,9 @@ export function BatchBuilderPopup({
         secondary: "total_profit_isk",
         tie_break_order: ["utilization_pct", "type_id"],
       },
+      execution_scoring: {
+        preset: "practical-hauling",
+      },
     };
 
     setRouteState("searching");
@@ -839,9 +865,25 @@ export function BatchBuilderPopup({
 
         {routeOptions.length > 0 && (
           <div className="flex flex-col gap-2">
-            <div className="text-xs text-eve-dim">{t("batchBuilderRouteOptionsTitle")}</div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs text-eve-dim">{t("batchBuilderRouteOptionsTitle")}</div>
+              <label className="text-xs text-eve-dim flex items-center gap-2">
+                <span>Sort</span>
+                <select
+                  value={routeSortBy}
+                  onChange={(e) =>
+                    setRouteSortBy(e.target.value as "execution_score" | "isk_per_jump" | "total_profit_isk")
+                  }
+                  className="px-2 py-1 bg-eve-input border border-eve-border rounded-sm text-eve-text"
+                >
+                  <option value="execution_score">Execution Score</option>
+                  <option value="isk_per_jump">ISK / Jump</option>
+                  <option value="total_profit_isk">Net Profit</option>
+                </select>
+              </label>
+            </div>
             <div className="grid grid-cols-1 gap-2">
-              {routeOptions.map((option) => {
+              {sortedRouteOptions.map((option) => {
                 const optionMerged = baseBatchManifest ? buildMergedManifest(baseBatchManifest, option) : null;
                 const selected = option.option_id === selectedOptionId;
                 return (
@@ -865,6 +907,9 @@ export function BatchBuilderPopup({
                       </span>
                       <span className="text-eve-dim">#{option.rank}</span>
                     </div>
+                    <div className="mt-1 text-[11px] text-blue-300">
+                      Execution Score: {option.execution_score.toFixed(1)}
+                    </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-1 text-[11px] mt-2">
                       <div className="text-eve-dim">{t("batchBuilderRouteAddedItems")}: {option.line_count}</div>
                       <div className="text-eve-dim">
@@ -882,6 +927,20 @@ export function BatchBuilderPopup({
                     <div className="mt-2 text-[11px] text-eve-dim">
                       {t("batchBuilderRouteIskPerJump")}: {formatISK(option.isk_per_jump)} | {t("batchBuilderRouteJumpSegments")}: {option.total_jumps}
                     </div>
+                    {!!option.score_breakdown?.length && (
+                      <details className="mt-2 text-[11px] text-eve-dim">
+                        <summary className="cursor-pointer">Why this rank?</summary>
+                        <div className="mt-1 grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-1">
+                          {option.score_breakdown.map((factor) => (
+                            <div key={`${option.option_id}-${factor.key}`} className="font-mono">
+                              {factor.label}: {factor.contribution >= 0 ? "+" : ""}
+                              {factor.contribution.toFixed(3)} (w {factor.weight.toFixed(2)} · n{" "}
+                              {factor.normalized.toFixed(2)})
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
                   </button>
                 );
               })}
