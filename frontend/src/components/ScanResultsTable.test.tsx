@@ -4,6 +4,7 @@ import { I18nProvider } from "@/lib/i18n";
 import { ToastProvider } from "@/components/Toast";
 import { ScanResultsTable, calcRouteConfidence } from "@/components/ScanResultsTable";
 import type { FlipResult } from "@/lib/types";
+import { executionQualityForFlip, requestedUnitsForFlip } from "@/lib/executionQuality";
 import {
   addPinnedOpportunity,
   getGankCheckBatch,
@@ -88,6 +89,121 @@ function groupedRouteButtons() {
     const text = node.textContent ?? "";
     return text.includes("→") && text.includes("items");
   });
+}
+
+function focusedRouteFixtures() {
+  const safeTrimmed = makeRow({
+    TypeID: 1201,
+    TypeName: "Safe Trimmed",
+    BuyStation: "R-1001 Buy",
+    SellStation: "R-1001 Sell",
+    BuySystemID: 41000001,
+    SellSystemID: 41000002,
+    PreExecutionUnits: 100,
+    UnitsToBuy: 60,
+    FilledQty: 60,
+    BuyOrderRemain: 60,
+    SellOrderRemain: 60,
+    RealProfit: 120,
+    DailyProfit: 80,
+    SlippageBuyPct: 0.3,
+    SlippageSellPct: 0.2,
+    DayTargetPeriodPrice: 100,
+    DayTargetNowPrice: 101,
+    TotalJumps: 2,
+    Volume: 1,
+  });
+  const safeCompanion = makeRow({
+    TypeID: 1202,
+    TypeName: "Safe Companion",
+    BuyStation: safeTrimmed.BuyStation,
+    SellStation: safeTrimmed.SellStation,
+    BuySystemID: safeTrimmed.BuySystemID,
+    SellSystemID: safeTrimmed.SellSystemID,
+    RealProfit: 300,
+    DailyProfit: 220,
+    UnitsToBuy: 100,
+    FilledQty: 95,
+    BuyOrderRemain: 150,
+    SellOrderRemain: 140,
+    SlippageBuyPct: 1,
+    SlippageSellPct: 1,
+    DayTargetPeriodPrice: 110,
+    DayTargetNowPrice: 111,
+    TotalJumps: 2,
+    Volume: 1,
+  });
+  const unknownRoute = makeRow({
+    TypeID: 1301,
+    TypeName: "Unknown Safety",
+    BuyStation: "R-1002 Buy",
+    SellStation: "R-1002 Sell",
+    BuySystemID: 42000001,
+    SellSystemID: 42000002,
+    RealProfit: 250,
+    DailyProfit: 190,
+    UnitsToBuy: 50,
+    FilledQty: 40,
+    BuyOrderRemain: 60,
+    SellOrderRemain: 60,
+    SlippageBuyPct: 2,
+    SlippageSellPct: 1,
+    DayTargetPeriodPrice: 125,
+    DayTargetNowPrice: 125,
+    TotalJumps: 2,
+    Volume: 1,
+  });
+  const conflictingRowSignalWeakTop = makeRow({
+    TypeID: 1401,
+    TypeName: "Conflicting Weak Top",
+    BuyStation: "R-1003 Buy",
+    SellStation: "R-1003 Sell",
+    BuySystemID: 43000001,
+    SellSystemID: 43000002,
+    RealProfit: 5,
+    DailyProfit: 5,
+    UnitsToBuy: 3,
+    FilledQty: 2,
+    BuyOrderRemain: 4,
+    SellOrderRemain: 4,
+    SlippageBuyPct: 10,
+    SlippageSellPct: 10,
+    TotalJumps: 1,
+    Volume: 1,
+  });
+  const conflictingRowSignalStrongSecond = makeRow({
+    TypeID: 1402,
+    TypeName: "Conflicting Strong Second",
+    BuyStation: conflictingRowSignalWeakTop.BuyStation,
+    SellStation: conflictingRowSignalWeakTop.SellStation,
+    BuySystemID: conflictingRowSignalWeakTop.BuySystemID,
+    SellSystemID: conflictingRowSignalWeakTop.SellSystemID,
+    RealProfit: 600,
+    DailyProfit: 400,
+    UnitsToBuy: 200,
+    FilledQty: 180,
+    BuyOrderRemain: 220,
+    SellOrderRemain: 220,
+    SlippageBuyPct: 0.5,
+    SlippageSellPct: 0.5,
+    TotalJumps: 1,
+    Volume: 1,
+  });
+
+  return {
+    safeTrimmed,
+    safeCompanion,
+    unknownRoute,
+    conflictingRowSignalWeakTop,
+    conflictingRowSignalStrongSecond,
+    allRows: [
+      unknownRoute,
+      safeTrimmed,
+      safeCompanion,
+      conflictingRowSignalWeakTop,
+      conflictingRowSignalStrongSecond,
+    ],
+  };
 }
 
 describe("ScanResultsTable compact mode defaults", () => {
@@ -802,14 +918,28 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
       DayTargetPeriodPrice: 100,
       DayTargetNowPrice: 180,
     });
-    const { container } = renderTable({ scanning: false, results: [high, medium, low] });
+    renderTable({ scanning: false, results: [high, medium, low] });
     fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
     await waitFor(() => {
-      expect(screen.getAllByText(/High \d+/).length).toBeGreaterThan(0);
-      expect(screen.getAllByText(/Medium \d+/).length).toBeGreaterThan(0);
-      expect(screen.getAllByText(/Low \d+/).length).toBeGreaterThan(0);
+      expect(groupedRouteButtons()).toHaveLength(3);
     });
-    expect(container.querySelector("tbody")?.innerHTML).toMatchSnapshot();
+    const routes = groupedRouteButtons();
+    const byRouteLabel = new Map(routes.map((node) => [node.textContent ?? "", node]));
+    const highBadgeRoute = [...byRouteLabel.entries()].find(([text]) =>
+      text.includes("Jita Hub → Amarr Hub"),
+    )?.[1];
+    const mediumBadgeRoute = [...byRouteLabel.entries()].find(([text]) =>
+      text.includes("Dodixie Hub → Rens Hub"),
+    )?.[1];
+    const lowBadgeRoute = [...byRouteLabel.entries()].find(([text]) =>
+      text.includes("Hek Hub → Jita Hub"),
+    )?.[1];
+    expect(highBadgeRoute).toBeDefined();
+    expect(highBadgeRoute).toHaveTextContent(/High \d+/);
+    expect(mediumBadgeRoute).toBeDefined();
+    expect(mediumBadgeRoute).toHaveTextContent(/Medium \d+/);
+    expect(lowBadgeRoute).toBeDefined();
+    expect(lowBadgeRoute).toHaveTextContent(/Low \d+/);
   });
 
   it("switching rows ↔ route mode changes comparator source", () => {
@@ -932,5 +1062,177 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
       .filter((row) => row.textContent?.includes("Tie Item"));
     const secondOrder = secondRenderRows.map((row) => row.textContent);
     expect(secondOrder).toEqual(firstOrder);
+  });
+
+  describe("focused fixture regressions", () => {
+    it("execution quality uses original desired quantity when partial-fill trim happened", () => {
+      const { safeTrimmed } = focusedRouteFixtures();
+      const quality = executionQualityForFlip(safeTrimmed);
+
+      expect(
+        requestedUnitsForFlip(safeTrimmed),
+        "requested units should preserve original desired quantity",
+      ).toBe(100);
+      expect(
+        quality.factors.find((factor) => factor.factor === "fillRatio")?.score,
+        "execution quality must score fill ratio against original desired quantity",
+      ).toBe(60);
+    });
+
+    it("safest lens ordering keeps green ahead of unknown/loading", async () => {
+      const { allRows, safeTrimmed, unknownRoute } = focusedRouteFixtures();
+      vi.mocked(getGankCheckBatch).mockResolvedValueOnce([
+        { key: `${safeTrimmed.BuySystemID}:${safeTrimmed.SellSystemID}`, danger: "green", kills: 0, totalISK: 0 },
+        // Intentionally simulate an unexpected backend token to ensure unknown/loading ordering
+        // remains safe even if API response drifts.
+        { key: `${unknownRoute.BuySystemID}:${unknownRoute.SellSystemID}`, danger: "loading", kills: 0, totalISK: 0 } as never,
+      ]);
+
+      renderTable({ scanning: false, results: allRows });
+      fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+      fireEvent.click(screen.getByRole("button", { name: "Safest Route" }));
+
+      await waitFor(() => {
+        const routeButtons = groupedRouteButtons();
+        expect(
+          routeButtons[0],
+          "unknown must not outrank safe when Safest Route lens is applied",
+        ).toHaveTextContent(`${safeTrimmed.BuyStation} → ${safeTrimmed.SellStation}`);
+      });
+
+      const orderedRouteLabels = groupedRouteButtons().map((btn) => btn.textContent ?? "");
+      const safeIdx = orderedRouteLabels.findIndex((text) =>
+        text.includes(`${safeTrimmed.BuyStation} → ${safeTrimmed.SellStation}`),
+      );
+      const unknownIdx = orderedRouteLabels.findIndex((text) =>
+        text.includes(`${unknownRoute.BuyStation} → ${unknownRoute.SellStation}`),
+      );
+      expect(
+        safeIdx,
+        "green route should come before unknown/loading route in safest lens",
+      ).toBeLessThan(unknownIdx);
+    });
+
+    it("route mode sorting uses route aggregates for conflicting row-vs-route signals", () => {
+      const {
+        unknownRoute,
+        conflictingRowSignalWeakTop,
+        conflictingRowSignalStrongSecond,
+      } = focusedRouteFixtures();
+      renderTable({
+        scanning: false,
+        results: [unknownRoute, conflictingRowSignalWeakTop, conflictingRowSignalStrongSecond],
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "Fastest ISK" }));
+      const rowModeRows = screen.getAllByRole("row");
+      expect(
+        rowModeRows[2],
+        "row mode sorts directly by best row metric",
+      ).toHaveTextContent("Conflicting Strong Second");
+
+      fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+      fireEvent.click(screen.getByRole("button", { name: "Fastest Route" }));
+      const routeButtons = groupedRouteButtons();
+      expect(
+        routeButtons[0],
+        "route mode must sort by route aggregate, not first row values",
+      ).toHaveTextContent("R-1003 Buy → R-1003 Sell");
+    });
+
+    it("route-pack summary scope remains selected-pack only", () => {
+      const selectedOnly = makeRow({
+        TypeID: 1501,
+        BuyStation: "R-2001 Buy",
+        SellStation: "R-2001 Sell",
+        BuySystemID: 44000001,
+        SellSystemID: 44000002,
+        Volume: 30,
+        UnitsToBuy: 1,
+        ProfitPerUnit: 100,
+        ExpectedBuyPrice: 120,
+        SlippageBuyPct: 1,
+        SlippageSellPct: 1,
+        FilledQty: 1,
+        PreExecutionUnits: 1,
+      });
+      const excludedUniverseOnly = makeRow({
+        TypeID: 1502,
+        BuyStation: selectedOnly.BuyStation,
+        SellStation: selectedOnly.SellStation,
+        BuySystemID: selectedOnly.BuySystemID,
+        SellSystemID: selectedOnly.SellSystemID,
+        Volume: 30,
+        UnitsToBuy: 1,
+        ProfitPerUnit: 400,
+        ExpectedBuyPrice: 100,
+        SlippageBuyPct: 30,
+        SlippageSellPct: 30,
+        FilledQty: 0,
+        PreExecutionUnits: 1,
+      });
+
+      render(
+        <I18nProvider>
+          <ToastProvider>
+            <ScanResultsTable
+              results={[selectedOnly, excludedUniverseOnly]}
+              scanning={false}
+              progress=""
+              tradeStateTab="radius"
+              cargoLimit={35}
+            />
+          </ToastProvider>
+        </I18nProvider>,
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+      const routeSummary = groupedRouteButtons()[0];
+      expect(routeSummary).toHaveTextContent("1 items");
+      expect(routeSummary).toHaveTextContent("P 100");
+      expect(routeSummary).toHaveTextContent("C 120");
+    });
+
+    it("slippage percent and slippage ISK stay distinct and correctly labeled", () => {
+      renderTable({ scanning: false, results: [makeRow({ SlippageBuyPct: 6, SlippageSellPct: 4, FilledQty: 10 })] });
+      fireEvent.click(screen.getByTitle("Column setup"));
+      expect(screen.getAllByText("Weighted Slippage %").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Slippage Cost").length).toBeGreaterThan(0);
+    });
+
+    it("end-to-end: route mode + selected lens yields expected route order and top-card metrics", async () => {
+      const { allRows, safeTrimmed, conflictingRowSignalWeakTop } = focusedRouteFixtures();
+      vi.mocked(getGankCheckBatch).mockResolvedValue([
+        { key: `${safeTrimmed.BuySystemID}:${safeTrimmed.SellSystemID}`, danger: "green", kills: 0, totalISK: 0 },
+        {
+          key: "42000001:42000002",
+          danger: "loading",
+          kills: 0,
+          totalISK: 0,
+        } as never,
+        {
+          key: `${conflictingRowSignalWeakTop.BuySystemID}:${conflictingRowSignalWeakTop.SellSystemID}`,
+          danger: "yellow",
+          kills: 1,
+          totalISK: 1_000_000,
+        },
+      ]);
+
+      renderTable({ scanning: false, results: allRows });
+      fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+      fireEvent.click(screen.getByRole("button", { name: "Safest Route" }));
+
+      await waitFor(() => {
+        const routeButtons = groupedRouteButtons();
+        expect(routeButtons[0]).toHaveTextContent("R-1001 Buy → R-1001 Sell");
+        expect(routeButtons[0]).toHaveTextContent("P ");
+        expect(routeButtons[0]).toHaveTextContent("C ");
+        expect(routeButtons[0]).toHaveTextContent("V ");
+        expect(routeButtons[0]).toHaveTextContent("D/J ");
+        expect(routeButtons[0]).toHaveTextContent("m³/J ");
+        expect(routeButtons[0]).toHaveTextContent("EQ min");
+        expect(routeButtons[0]).toHaveTextContent("Slip ");
+      });
+    });
   });
 });
