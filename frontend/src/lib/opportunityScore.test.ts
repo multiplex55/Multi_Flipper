@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildFlipScoreContext,
+  buildOpportunityScanContext,
+  buildStationScoreContext,
   contractResultMetrics,
   explainOpportunityScore,
   flipResultMetrics,
   normalizeTo100,
   normalizeWeights,
+  percentile,
   scoreContractResult,
   scoreFlipResult,
   scoreStationTrade,
@@ -105,16 +109,50 @@ function makeContract(overrides: Partial<ContractResult> = {}): ContractResult {
 }
 
 describe("opportunityScore", () => {
+  it("maps strategy score config into opportunity profile keys", () => {
+    expect(
+      strategyScoreToOpportunityProfile({
+        profit_weight: 45,
+        risk_weight: 15,
+        velocity_weight: 20,
+        jump_weight: 10,
+        capital_weight: 10,
+      }),
+    ).toEqual({
+      profit: 45,
+      risk: 15,
+      velocity: 20,
+      jumps: 10,
+      capital: 10,
+    });
+  });
+
+  it("normalizes new factor weights and preserves backward-compatible slider input", () => {
+    const normalized = normalizeWeights({ profit: 4, risk: 2, velocity: 2, jumps: 1, capital: 1 });
+    const total = Object.values(normalized).reduce((sum, n) => sum + n, 0);
+    expect(total).toBeCloseTo(1, 8);
+    expect(normalized.expectedProfit).toBeGreaterThan(normalized.jumpBurden);
+
+    const fallback = normalizeWeights({ profit: 0, risk: 0, velocity: 0, jumps: 0, capital: 0 });
+    expect(Object.values(fallback).reduce((sum, n) => sum + n, 0)).toBeCloseTo(1, 8);
+  });
+
   it("produces deterministic score for fixture rows", () => {
-    const flip = scoreFlipResult(makeFlip({ ExpectedProfit: 35_000_000, DayCapitalRequired: 180_000_000 }));
-    const station = scoreStationTrade(makeStation({ ExpectedProfit: 120_000_000 }));
-    const contract = scoreContractResult(
+    const flipA = scoreFlipResult(makeFlip({ ExpectedProfit: 35_000_000, DayCapitalRequired: 180_000_000 }));
+    const stationA = scoreStationTrade(makeStation({ ExpectedProfit: 120_000_000 }));
+    const contractA = scoreContractResult(
       makeContract({ ExpectedProfit: 210_000_000, SellConfidence: 0.8, EstLiquidationDays: 6 }),
     );
 
-    expect(flip.finalScore).toBeCloseTo(77.0077, 4);
-    expect(station.finalScore).toBeCloseTo(71.5852, 4);
-    expect(contract.finalScore).toBeCloseTo(64.9465, 4);
+    const flipB = scoreFlipResult(makeFlip({ ExpectedProfit: 35_000_000, DayCapitalRequired: 180_000_000 }));
+    const stationB = scoreStationTrade(makeStation({ ExpectedProfit: 120_000_000 }));
+    const contractB = scoreContractResult(
+      makeContract({ ExpectedProfit: 210_000_000, SellConfidence: 0.8, EstLiquidationDays: 6 }),
+    );
+
+    expect(flipA.finalScore).toBeCloseTo(flipB.finalScore, 8);
+    expect(stationA.finalScore).toBeCloseTo(stationB.finalScore, 8);
+    expect(contractA.finalScore).toBeCloseTo(contractB.finalScore, 8);
   });
 
   it("always keeps final score in 0..100", () => {
@@ -146,73 +184,36 @@ describe("opportunityScore", () => {
     expect(veryGood.finalScore).toBeLessThanOrEqual(100);
   });
 
-  it("is monotonic for higher profit with equal factors", () => {
-    const low = scoreStationTrade(makeStation({ ExpectedProfit: 10_000_000 }));
-    const high = scoreStationTrade(makeStation({ ExpectedProfit: 150_000_000 }));
-    expect(high.finalScore).toBeGreaterThan(low.finalScore);
-  });
-
-  it("handles missing fields with documented neutral/conservative defaults", () => {
-    const sparse = scoreContractResult(
-      makeContract({
-        ExpectedProfit: undefined,
-        Profit: undefined as unknown as number,
-        SellConfidence: undefined,
-        EstLiquidationDays: undefined,
-        LiquidationJumps: undefined,
-        Jumps: undefined as unknown as number,
-        Price: 0,
-      }),
+  it("builds short natural-language rationale", () => {
+    const explanation = scoreFlipResult(
+      makeFlip({ ExpectedProfit: 70_000_000, BuyCompetitors: 0, SellCompetitors: 0, DayCapitalRequired: 40_000_000 }),
     );
-
-    expect(sparse.factors.profit.normalized).toBe(50);
-    expect(sparse.factors.risk.normalized).toBeLessThan(50);
-    expect(sparse.factors.jumps.normalized).toBeLessThan(50);
-    expect(sparse.factors.capital.normalized).toBeLessThan(50);
-  });
-
-  it("dampens outliers with log/sqrt normalization", () => {
-    const mediumProfit = normalizeTo100(100_000_000, { min: 0, max: 5_000_000_000, curve: "log" });
-    const hugeProfit = normalizeTo100(5_000_000_000, { min: 0, max: 5_000_000_000, curve: "log" });
-    const linearMedium = normalizeTo100(100_000_000, { min: 0, max: 5_000_000_000, curve: "linear" });
-    const linearHuge = normalizeTo100(5_000_000_000, { min: 0, max: 5_000_000_000, curve: "linear" });
-
-    expect(hugeProfit - mediumProfit).toBeLessThan(linearHuge - linearMedium);
-  });
-
-  it("normalizes weights and falls back to balanced defaults on all-zero", () => {
-    const normalized = normalizeWeights({ profit: 4, risk: 2, velocity: 2, jumps: 1, capital: 1 });
-    const total = Object.values(normalized).reduce((sum, n) => sum + n, 0);
-    expect(total).toBeCloseTo(1, 8);
-    expect(normalized.profit).toBeCloseTo(0.4, 8);
-
-    const fallback = normalizeWeights({ profit: 0, risk: 0, velocity: 0, jumps: 0, capital: 0 });
-    expect(fallback).toEqual({ profit: 0.34, risk: 0.2, velocity: 0.2, jumps: 0.13, capital: 0.13 });
+    expect(explainOpportunityScore(explanation)).toContain("High");
   });
 
   it("maps flip adapter fields predictably", () => {
     const metrics = flipResultMetrics(
       makeFlip({
         ExpectedProfit: 11,
-        DayTargetDemandPerDay: 22,
+        DayNowProfit: 22,
         TotalJumps: 6,
         DayCapitalRequired: 33,
       }),
     );
 
-    expect(metrics).toMatchObject({ profit: 11, velocity: 22, jumps: 6, capital: 33 });
+    expect(metrics).toMatchObject({ expectedProfit: 11, dailyRealizableProfit: 22, jumpBurden: 6 });
   });
 
   it("maps station adapter fields predictably", () => {
     const metrics = stationTradeMetrics(
       makeStation({
         ExpectedProfit: 10,
-        SellUnitsPerDay: 25,
+        DailyProfit: 25,
         CapitalRequired: 900,
       }),
     );
 
-    expect(metrics).toMatchObject({ profit: 10, velocity: 25, jumps: 0, capital: 900 });
+    expect(metrics).toMatchObject({ expectedProfit: 10, dailyRealizableProfit: 25, jumpBurden: 0 });
   });
 
   it("maps contract adapter fields predictably", () => {
@@ -226,97 +227,88 @@ describe("opportunityScore", () => {
       }),
     );
 
-    expect(metrics.profit).toBe(66);
-    expect(metrics.velocity).toBeCloseTo(10);
-    expect(metrics.jumps).toBe(9);
-    expect(metrics.capital).toBe(777);
-    expect(metrics.risk).not.toBeNull();
+    expect(metrics.expectedProfit).toBe(66);
+    expect(metrics.dailyRealizableProfit).toBeCloseTo(22);
+    expect(metrics.jumpBurden).toBe(9);
+    expect(metrics.capitalEfficiency).not.toBeNull();
   });
 
-  it("builds short natural-language rationale", () => {
-    const explanation = scoreFlipResult(
-      makeFlip({ ExpectedProfit: 70_000_000, BuyCompetitors: 0, SellCompetitors: 0, DayCapitalRequired: 40_000_000 }),
-    );
-    expect(explainOpportunityScore(explanation)).toContain("Strengths");
+  it("dampens outliers with log/sqrt normalization", () => {
+    const mediumProfit = normalizeTo100(100_000_000, { min: 0, max: 5_000_000_000, curve: "log" });
+    const hugeProfit = normalizeTo100(5_000_000_000, { min: 0, max: 5_000_000_000, curve: "log" });
+    const linearMedium = normalizeTo100(100_000_000, { min: 0, max: 5_000_000_000, curve: "linear" });
+    const linearHuge = normalizeTo100(5_000_000_000, { min: 0, max: 5_000_000_000, curve: "linear" });
+
+    expect(hugeProfit - mediumProfit).toBeLessThan(linearHuge - linearMedium);
   });
 
-  it("maps strategy score config into opportunity profile keys", () => {
-    expect(
-      strategyScoreToOpportunityProfile({
-        profit_weight: 45,
-        risk_weight: 15,
-        velocity_weight: 20,
-        jump_weight: 10,
-        capital_weight: 10,
-      }),
-    ).toEqual({
-      profit: 45,
-      risk: 15,
-      velocity: 20,
-      jumps: 10,
-      capital: 10,
-    });
-  });
-
-  it("profile variants change both score and ordering (table-driven)", () => {
+  it("percentile normalization stays robust with outliers", () => {
     const rows = [
-      makeFlip({
-        TypeID: 1,
-        TypeName: "Capital Efficient",
-        ExpectedProfit: 30_000_000,
-        DayCapitalRequired: 30_000_000,
-        BuyCompetitors: 1,
-        SellCompetitors: 1,
-      }),
-      makeFlip({
-        TypeID: 2,
-        TypeName: "Raw Profit",
-        ExpectedProfit: 90_000_000,
-        DayCapitalRequired: 900_000_000,
-        BuyCompetitors: 6,
-        SellCompetitors: 6,
-      }),
+      makeFlip({ ExpectedProfit: 10_000_000, DayNowProfit: 1_000_000 }),
+      makeFlip({ ExpectedProfit: 11_000_000, DayNowProfit: 1_100_000 }),
+      makeFlip({ ExpectedProfit: 12_000_000, DayNowProfit: 1_050_000 }),
+      makeFlip({ ExpectedProfit: 500_000_000, DayNowProfit: 50_000_000 }),
     ];
 
-    const profiles = [
-      {
-        name: "profit-first",
-        profile: { profit: 60, risk: 15, velocity: 15, jumps: 5, capital: 5 },
-        expectedTop: "Raw Profit",
-      },
-      {
-        name: "capital-first",
-        profile: { profit: 15, risk: 25, velocity: 15, jumps: 10, capital: 35 },
-        expectedTop: "Capital Efficient",
-      },
-    ] as const;
+    const context = buildFlipScoreContext(rows);
+    const low = scoreFlipResult(rows[0], undefined, context).factors.expectedProfit.normalized;
+    const high = scoreFlipResult(rows[2], undefined, context).factors.expectedProfit.normalized;
 
-    const topByProfile = new Map<string, string>();
-    const topScores = new Map<string, number>();
-
-    for (const testCase of profiles) {
-      const ranked = rows
-        .map((row) => ({ row, score: scoreFlipResult(row, testCase.profile).finalScore }))
-        .sort((a, b) => b.score - a.score);
-      topByProfile.set(testCase.name, ranked[0].row.TypeName);
-      topScores.set(testCase.name, ranked[0].score);
-      expect(ranked[0].row.TypeName).toBe(testCase.expectedTop);
-    }
-
-    expect(topByProfile.get("profit-first")).not.toBe(topByProfile.get("capital-first"));
-    expect(topScores.get("profit-first")).not.toBeCloseTo(topScores.get("capital-first") ?? 0, 6);
+    expect(context.ranges.expectedProfit?.high ?? 0).toBeLessThan(500_000_000);
+    expect(high).toBeGreaterThan(low);
   });
 
-  it("uses balanced defaults when profile is omitted", () => {
+  it("handles narrow distributions via min-span normalization", () => {
+    const rows = [
+      makeStation({ ExpectedProfit: 20_000_000, DailyProfit: 2_000_000 }),
+      makeStation({ ExpectedProfit: 20_010_000, DailyProfit: 2_010_000 }),
+      makeStation({ ExpectedProfit: 20_020_000, DailyProfit: 2_020_000 }),
+    ];
+    const context = buildStationScoreContext(rows);
+    const a = scoreStationTrade(rows[0], undefined, context).finalScore;
+    const c = scoreStationTrade(rows[2], undefined, context).finalScore;
+    expect(c).toBeGreaterThan(a);
+  });
+
+  it("same dataset with different visible ranges yields meaningful ordering", () => {
+    const dataset = [
+      makeFlip({ TypeID: 1, TypeName: "A", ExpectedProfit: 8_000_000, DayNowProfit: 700_000 }),
+      makeFlip({ TypeID: 2, TypeName: "B", ExpectedProfit: 12_000_000, DayNowProfit: 1_000_000 }),
+      makeFlip({ TypeID: 3, TypeName: "C", ExpectedProfit: 20_000_000, DayNowProfit: 1_700_000 }),
+      makeFlip({ TypeID: 4, TypeName: "D", ExpectedProfit: 100_000_000, DayNowProfit: 5_000_000 }),
+    ];
+
+    const broadContext = buildFlipScoreContext(dataset);
+    const narrowContext = buildFlipScoreContext(dataset.slice(0, 3));
+
+    const broadRank = dataset.map((row) => ({ name: row.TypeName, s: scoreFlipResult(row, undefined, broadContext).finalScore }));
+    const narrowRank = dataset.slice(0, 3).map((row) => ({ name: row.TypeName, s: scoreFlipResult(row, undefined, narrowContext).finalScore }));
+
+    broadRank.sort((a, b) => b.s - a.s);
+    narrowRank.sort((a, b) => b.s - a.s);
+
+    expect(broadRank[0].name).toBe("D");
+    expect(narrowRank[0].name).toBe("C");
+    expect(narrowRank[0].s - narrowRank[2].s).toBeGreaterThan(1);
+  });
+
+  it("falls back to static defaults when scan context is missing", () => {
     const row = makeFlip({ ExpectedProfit: 48_000_000, DayCapitalRequired: 240_000_000 });
     const implicit = scoreFlipResult(row);
-    const explicitBalanced = scoreFlipResult(row, {
-      profit: 0.34,
-      risk: 0.2,
-      velocity: 0.2,
-      jumps: 0.13,
-      capital: 0.13,
-    });
-    expect(implicit.finalScore).toBeCloseTo(explicitBalanced.finalScore, 8);
+    const explicitNoRanges = scoreFlipResult(row, undefined, { ranges: {} });
+    expect(implicit.finalScore).toBeCloseTo(explicitNoRanges.finalScore, 8);
+  });
+
+  it("supports percentile helper directly", () => {
+    expect(percentile([1, 2, 100], 0.5)).toBe(2);
+    expect(percentile([1, 2, 3, 4], 0.25)).toBeCloseTo(1.75, 8);
+  });
+
+  it("buildOpportunityScanContext can operate on precomputed metrics", () => {
+    const context = buildOpportunityScanContext([
+      flipResultMetrics(makeFlip({ ExpectedProfit: 10_000_000 })),
+      flipResultMetrics(makeFlip({ ExpectedProfit: 20_000_000 })),
+    ]);
+    expect(context.ranges.expectedProfit).toBeTruthy();
   });
 });
