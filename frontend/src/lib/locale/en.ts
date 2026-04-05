@@ -185,6 +185,11 @@ export const en = {
     decisionLensCargo: "Best Cargo",
     decisionLensSafest: "Safest",
     decisionLensCapital: "Capital Efficient",
+    decisionLensBestRoutePack: "Best Route Pack",
+    decisionLensFastestRoute: "Fastest Route",
+    decisionLensSafestRoute: "Safest Route",
+    decisionLensBestCargoUse: "Best Cargo Use",
+    decisionLensLowestCapitalLockup: "Lowest Capital Lock-up",
 
     // Contract table
     colTitle: "Title",

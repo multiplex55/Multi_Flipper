@@ -102,9 +102,15 @@ type SyntheticSortKey =
   | "RoutePackCapacityUsedPercent"
   | "RoutePackRealIskPerJump"
   | "RoutePackDailyIskPerJump"
+  | "RoutePackRealIskPerM3PerJump"
+  | "RoutePackDailyProfitOverCapital"
   | "RoutePackWeightedSlippagePct"
   | "RoutePackWeakestExecutionQuality"
   | "RoutePackTurnoverDays"
+  | "RoutePackRiskSpikeCount"
+  | "RoutePackRiskNoHistoryCount"
+  | "RoutePackRiskUnstableHistoryCount"
+  | "RoutePackTotalRiskCount"
   | "OpportunityScore"
   | "ExecutionQuality"
   | "ExitOverhangDays"
@@ -119,6 +125,12 @@ type SortDir = "asc" | "desc";
 type RegionGroupSortMode = "period_profit" | "now_profit" | "trade_score";
 type HiddenMode = "done" | "ignored";
 type HiddenFilterTab = "all" | "done" | "ignored";
+type DecisionLensPreset =
+  | "best_route_pack"
+  | "fastest_isk"
+  | "cargo"
+  | "safest"
+  | "capital_efficient";
 
 type HiddenFlipEntry = {
   key: string;
@@ -833,6 +845,22 @@ interface RouteGroup {
   rows: IndexedRow[];
 }
 
+type RouteAggregateMetrics = {
+  routeSafetyRank: number;
+  dailyIskPerJump: number;
+  iskPerM3PerJump: number;
+  fastestIskPerJump: number;
+  weakestExecutionQuality: number;
+  riskSpikeCount: number;
+  riskNoHistoryCount: number;
+  riskUnstableHistoryCount: number;
+  riskTotalCount: number;
+  turnoverDays: number;
+  dailyProfitOverCapital: number;
+  routeTotalProfit: number;
+  routeTotalCapital: number;
+};
+
 const BATCH_SYNTHETIC_KEYS: Set<SortKey> = new Set([
   "BatchNumber",
   "BatchProfit",
@@ -845,9 +873,15 @@ const BATCH_SYNTHETIC_KEYS: Set<SortKey> = new Set([
   "RoutePackCapacityUsedPercent",
   "RoutePackRealIskPerJump",
   "RoutePackDailyIskPerJump",
+  "RoutePackRealIskPerM3PerJump",
+  "RoutePackDailyProfitOverCapital",
   "RoutePackWeightedSlippagePct",
   "RoutePackWeakestExecutionQuality",
   "RoutePackTurnoverDays",
+  "RoutePackRiskSpikeCount",
+  "RoutePackRiskNoHistoryCount",
+  "RoutePackRiskUnstableHistoryCount",
+  "RoutePackTotalRiskCount",
 ]);
 
 function isBatchSyntheticKey(key: SortKey): key is BatchSyntheticKey {
@@ -1135,6 +1169,34 @@ function compareRowsStable(a: IndexedRow, b: IndexedRow): number {
   return a.id - b.id;
 }
 
+function routeAggregateValueForSortKey(
+  metrics: RouteAggregateMetrics | undefined,
+  sortKey: SortKey,
+): number | null {
+  if (!metrics) return null;
+  if (sortKey === "RouteSafety") return metrics.routeSafetyRank;
+  if (sortKey === "RoutePackDailyIskPerJump" || sortKey === "DailyIskPerJump")
+    return metrics.dailyIskPerJump;
+  if (sortKey === "RoutePackRealIskPerJump" || sortKey === "RealIskPerJump")
+    return metrics.fastestIskPerJump;
+  if (sortKey === "RoutePackRealIskPerM3PerJump" || sortKey === "RealIskPerM3PerJump")
+    return metrics.iskPerM3PerJump;
+  if (sortKey === "RoutePackWeakestExecutionQuality")
+    return metrics.weakestExecutionQuality;
+  if (sortKey === "RoutePackTurnoverDays" || sortKey === "TurnoverDays")
+    return metrics.turnoverDays;
+  if (sortKey === "RoutePackDailyProfitOverCapital")
+    return metrics.dailyProfitOverCapital;
+  if (sortKey === "RoutePackRiskSpikeCount") return metrics.riskSpikeCount;
+  if (sortKey === "RoutePackRiskNoHistoryCount") return metrics.riskNoHistoryCount;
+  if (sortKey === "RoutePackRiskUnstableHistoryCount")
+    return metrics.riskUnstableHistoryCount;
+  if (sortKey === "RoutePackTotalRiskCount") return metrics.riskTotalCount;
+  if (sortKey === "RoutePackTotalProfit") return metrics.routeTotalProfit;
+  if (sortKey === "RoutePackTotalCapital") return metrics.routeTotalCapital;
+  return null;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
  * COMPONENT
  * ═══════════════════════════════════════════════════════════════════════ */
@@ -1193,7 +1255,7 @@ export function ScanResultsTable({
     columnProfile === "region_eveguru" ? "DayPeriodProfit" : "RealProfit",
   );
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [decisionLens, setDecisionLens] = useState<"custom" | "fastest_isk" | "cargo" | "safest" | "capital_efficient">("custom");
+  const [decisionLens, setDecisionLens] = useState<"custom" | DecisionLensPreset>("custom");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [showFilters, setShowFilters] = useState(
     () => tradeStateTab === "radius",
@@ -1956,6 +2018,45 @@ export function ScanResultsTable({
     return [...byType.values()];
   }, [displaySorted, isItemGrouped, t]);
 
+  const routeAggregateMetricsByRoute = useMemo<
+    Record<string, RouteAggregateMetrics>
+  >(() => {
+    const routeKeyToSystemPair: Record<string, string> = {};
+    for (const ir of displaySorted) {
+      const key = routeGroupKey(ir.row);
+      if (!(key in routeKeyToSystemPair)) {
+        routeKeyToSystemPair[key] = `${ir.row.BuySystemID}:${ir.row.SellSystemID}`;
+      }
+    }
+
+    const aggregates: Record<string, RouteAggregateMetrics> = {};
+    for (const [routeKey, meta] of Object.entries(batchMetricsByRoute)) {
+      const routeSafetyRank = routeSafetyRankFromState(
+        routeSafetyMap[routeKeyToSystemPair[routeKey] ?? ""],
+      );
+      const riskTotalCount =
+        meta.routeRiskSpikeCount +
+        meta.routeRiskNoHistoryCount +
+        meta.routeRiskUnstableHistoryCount;
+      aggregates[routeKey] = {
+        routeSafetyRank,
+        dailyIskPerJump: meta.routeDailyIskPerJump,
+        iskPerM3PerJump: meta.routeRealIskPerM3PerJump,
+        fastestIskPerJump: meta.routeRealIskPerJump,
+        weakestExecutionQuality: meta.routeWeakestExecutionQuality,
+        riskSpikeCount: meta.routeRiskSpikeCount,
+        riskNoHistoryCount: meta.routeRiskNoHistoryCount,
+        riskUnstableHistoryCount: meta.routeRiskUnstableHistoryCount,
+        riskTotalCount,
+        turnoverDays: meta.routeTurnoverDays,
+        dailyProfitOverCapital: meta.routeDailyProfitOverCapital,
+        routeTotalProfit: meta.routeTotalProfit,
+        routeTotalCapital: meta.routeTotalCapital,
+      };
+    }
+    return aggregates;
+  }, [batchMetricsByRoute, displaySorted, routeSafetyMap]);
+
   const routeGroups = useMemo<RouteGroup[]>(() => {
     if (!isRouteGrouped) return [];
     const byRoute = new Map<string, RouteGroup>();
@@ -1976,35 +2077,48 @@ export function ScanResultsTable({
     }
     const groups = [...byRoute.values()];
     const routeSafetyTieBreaker = (left: RouteGroup, right: RouteGroup): number => {
-      const leftMeta = batchMetricsByRoute[left.key];
-      const rightMeta = batchMetricsByRoute[right.key];
+      const leftMeta = routeAggregateMetricsByRoute[left.key];
+      const rightMeta = routeAggregateMetricsByRoute[right.key];
       const eqDiff =
-        (rightMeta?.routeWeakestExecutionQuality ?? 0) -
-        (leftMeta?.routeWeakestExecutionQuality ?? 0);
+        (rightMeta?.weakestExecutionQuality ?? 0) -
+        (leftMeta?.weakestExecutionQuality ?? 0);
       if (eqDiff !== 0) return eqDiff;
 
-      const leftRiskCount =
-        (leftMeta?.routeRiskSpikeCount ?? 0) +
-        (leftMeta?.routeRiskNoHistoryCount ?? 0) +
-        (leftMeta?.routeRiskUnstableHistoryCount ?? 0);
-      const rightRiskCount =
-        (rightMeta?.routeRiskSpikeCount ?? 0) +
-        (rightMeta?.routeRiskNoHistoryCount ?? 0) +
-        (rightMeta?.routeRiskUnstableHistoryCount ?? 0);
+      const leftRiskCount = leftMeta?.riskTotalCount ?? 0;
+      const rightRiskCount = rightMeta?.riskTotalCount ?? 0;
       const riskCountDiff = leftRiskCount - rightRiskCount;
       if (riskCountDiff !== 0) return riskCountDiff;
 
       return left.label.localeCompare(right.label);
     };
     groups.sort((a, b) => {
+      const leftAggregate = routeAggregateMetricsByRoute[a.key];
+      const rightAggregate = routeAggregateMetricsByRoute[b.key];
+      const leftAggregateValue = routeAggregateValueForSortKey(leftAggregate, sortKey);
+      const rightAggregateValue = routeAggregateValueForSortKey(rightAggregate, sortKey);
+      if (leftAggregateValue != null || rightAggregateValue != null) {
+        const cmp = compareBatchSyntheticValues(
+          leftAggregateValue,
+          rightAggregateValue,
+          sortDir,
+        );
+        if (cmp !== 0) return cmp;
+        if (sortKey === ("RouteSafety" as SortKey)) {
+          return routeSafetyTieBreaker(a, b);
+        }
+        const secondarySafety = compareBatchSyntheticValues(
+          leftAggregate?.routeSafetyRank ?? null,
+          rightAggregate?.routeSafetyRank ?? null,
+          "asc",
+        );
+        if (secondarySafety !== 0) return secondarySafety;
+        return routeSafetyTieBreaker(a, b);
+      }
+
       if (sortKey === ("RouteSafety" as SortKey)) {
-        const aRank = routeSafetyRankFromState(
-          routeSafetyMap[`${a.rows[0].row.BuySystemID}:${a.rows[0].row.SellSystemID}`],
-        );
-        const bRank = routeSafetyRankFromState(
-          routeSafetyMap[`${b.rows[0].row.BuySystemID}:${b.rows[0].row.SellSystemID}`],
-        );
-        const diff = sortDir === "asc" ? aRank - bRank : bRank - aRank;
+        const diff = sortDir === "asc"
+          ? (leftAggregate?.routeSafetyRank ?? 3) - (rightAggregate?.routeSafetyRank ?? 3)
+          : (rightAggregate?.routeSafetyRank ?? 3) - (leftAggregate?.routeSafetyRank ?? 3);
         if (diff !== 0) return diff;
         return routeSafetyTieBreaker(a, b);
       }
@@ -2022,12 +2136,14 @@ export function ScanResultsTable({
         const cmp = compareBatchSyntheticValues(left, right, sortDir);
         if (cmp !== 0) return cmp;
       }
+      const labelCmp = a.label.localeCompare(b.label);
+      if (labelCmp !== 0) return labelCmp;
       const aRow = a.rows[0];
       const bRow = b.rows[0];
       return compareRowsStable(aRow, bRow);
     });
     return groups;
-  }, [batchMetricsByRow, batchMetricsByRoute, displaySorted, isRouteGrouped, routeSafetyMap, sortDir, sortKey]);
+  }, [batchMetricsByRow, batchMetricsByRoute, displaySorted, isRouteGrouped, routeAggregateMetricsByRoute, sortDir, sortKey]);
 
   useEffect(() => {
     if (!isRouteGrouped) {
@@ -2395,19 +2511,32 @@ export function ScanResultsTable({
     setFilters({});
   }, []);
   const applyDecisionLens = useCallback(
-    (preset: "fastest_isk" | "cargo" | "safest" | "capital_efficient") => {
-      const mapping: Record<typeof preset, { key: SortKey; dir: SortDir }> = {
+    (
+      preset: DecisionLensPreset,
+    ) => {
+      const rowModeMapping: Record<Exclude<DecisionLensPreset, "best_route_pack">, { key: SortKey; dir: SortDir }> = {
         fastest_isk: { key: "RealIskPerJump", dir: "desc" },
         cargo: { key: "RealIskPerM3PerJump", dir: "desc" },
         safest: { key: "RouteSafety", dir: "asc" },
         capital_efficient: { key: "TurnoverDays", dir: "asc" },
       };
-      const next = mapping[preset];
+      const routeModeMapping: Record<DecisionLensPreset, { key: SortKey; dir: SortDir }> = {
+        best_route_pack: { key: "RoutePackDailyIskPerJump", dir: "desc" },
+        fastest_isk: { key: "RoutePackRealIskPerJump", dir: "desc" },
+        safest: { key: "RouteSafety", dir: "asc" },
+        cargo: { key: "RoutePackRealIskPerM3PerJump", dir: "desc" },
+        capital_efficient: { key: "RoutePackDailyProfitOverCapital", dir: "desc" },
+      };
+      const next =
+        routeViewMode === "route"
+          ? routeModeMapping[preset]
+          : rowModeMapping[preset as Exclude<typeof preset, "best_route_pack">] ??
+            routeModeMapping.fastest_isk;
       setSortKey(next.key);
       setSortDir(next.dir);
       setDecisionLens(preset);
     },
-    [],
+    [routeViewMode],
   );
 
   const hasActiveFilters = Object.values(filters).some((v) => !!v);
@@ -3164,12 +3293,20 @@ export function ScanResultsTable({
           <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
             <span className="text-eve-dim px-1">{t("decisionLensTitle")}</span>
             {(
-              [
-                ["fastest_isk", "decisionLensFastest"],
-                ["cargo", "decisionLensCargo"],
-                ["safest", "decisionLensSafest"],
-                ["capital_efficient", "decisionLensCapital"],
-              ] as const
+              routeViewMode === "route"
+                ? ([
+                    ["best_route_pack", "decisionLensBestRoutePack"],
+                    ["fastest_isk", "decisionLensFastestRoute"],
+                    ["safest", "decisionLensSafestRoute"],
+                    ["cargo", "decisionLensBestCargoUse"],
+                    ["capital_efficient", "decisionLensLowestCapitalLockup"],
+                  ] as const)
+                : ([
+                    ["fastest_isk", "decisionLensFastest"],
+                    ["cargo", "decisionLensCargo"],
+                    ["safest", "decisionLensSafest"],
+                    ["capital_efficient", "decisionLensCapital"],
+                  ] as const)
             ).map(([preset, labelKey]) => {
               const active = decisionLens === preset;
               return (

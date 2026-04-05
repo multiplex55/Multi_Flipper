@@ -83,6 +83,13 @@ function renderTable({
   );
 }
 
+function groupedRouteButtons() {
+  return screen.getAllByRole("button").filter((node) => {
+    const text = node.textContent ?? "";
+    return text.includes("→") && text.includes("items");
+  });
+}
+
 describe("ScanResultsTable compact mode defaults", () => {
   afterEach(() => {
     cleanup();
@@ -413,10 +420,7 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
     fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
     fireEvent.click(screen.getAllByText("Batch Profit")[0]);
 
-    const routeButtons = screen.getAllByRole("button").filter((node) => {
-      const text = node.textContent ?? "";
-      return text.includes("→") && text.includes("items");
-    });
+    const routeButtons = groupedRouteButtons();
     expect(routeButtons[0]).toHaveTextContent("Jita Hub → Amarr Hub");
 
     expect(screen.queryByText("High A")).not.toBeInTheDocument();
@@ -456,17 +460,259 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
-    fireEvent.click(screen.getAllByRole("button", { name: "Safest" })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Safest Route" }));
 
     await waitFor(() => {
-      const groupedRouteButtons = screen
-        .getAllByRole("button")
-        .filter((node) => {
-          const text = node.textContent ?? "";
-          return text.includes("→") && text.includes("items");
-        });
-      expect(groupedRouteButtons[0]).toHaveTextContent("Dodixie Hub → Rens Hub");
-      expect(groupedRouteButtons[1]).toHaveTextContent("Jita Hub → Amarr Hub");
+      const routeButtons = groupedRouteButtons();
+      expect(routeButtons[0]).toHaveTextContent("Dodixie Hub → Rens Hub");
+      expect(routeButtons[1]).toHaveTextContent("Jita Hub → Amarr Hub");
+    });
+  });
+
+  it("uses route aggregate values (not first row values) for route mode ordering", () => {
+    const routeOneLowFirst = makeRow({
+      TypeID: 601,
+      TypeName: "Route One Low",
+      BuyStation: "Jita Hub",
+      SellStation: "Amarr Hub",
+      BuySystemID: 30000142,
+      SellSystemID: 30002187,
+      RealProfit: 10,
+      TotalJumps: 2,
+      Volume: 1,
+      UnitsToBuy: 20,
+      ProfitPerUnit: 0.5,
+    });
+    const routeOneStrongSecond = makeRow({
+      TypeID: 602,
+      TypeName: "Route One Strong",
+      BuyStation: "Jita Hub",
+      SellStation: "Amarr Hub",
+      BuySystemID: 30000142,
+      SellSystemID: 30002187,
+      RealProfit: 400,
+      TotalJumps: 2,
+      Volume: 1,
+      UnitsToBuy: 100,
+      ProfitPerUnit: 4,
+    });
+    const routeTwoMid = makeRow({
+      TypeID: 603,
+      TypeName: "Route Two Mid",
+      BuyStation: "Dodixie Hub",
+      SellStation: "Rens Hub",
+      BuySystemID: 30002659,
+      SellSystemID: 30002510,
+      RealProfit: 150,
+      TotalJumps: 2,
+      Volume: 1,
+      UnitsToBuy: 20,
+      ProfitPerUnit: 7.5,
+    });
+
+    renderTable({
+      scanning: false,
+      results: [routeTwoMid, routeOneLowFirst, routeOneStrongSecond],
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fastest Route" }));
+
+    const routeButtons = groupedRouteButtons();
+    expect(routeButtons[0]).toHaveTextContent("Jita Hub → Amarr Hub");
+    expect(routeButtons[1]).toHaveTextContent("Dodixie Hub → Rens Hub");
+  });
+
+  it("orders route mode lenses by their intended aggregate metrics", async () => {
+    vi.mocked(getGankCheckBatch).mockResolvedValue([
+      { key: "30000142:30002187", danger: "yellow", kills: 2, totalISK: 1_000_000 },
+      { key: "30002659:30002510", danger: "green", kills: 0, totalISK: 0 },
+      { key: "30002053:30002537", danger: "red", kills: 5, totalISK: 2_000_000 },
+    ]);
+
+    const alpha = makeRow({
+      TypeID: 701,
+      TypeName: "Alpha",
+      BuyStation: "Jita Hub",
+      SellStation: "Amarr Hub",
+      BuySystemID: 30000142,
+      SellSystemID: 30002187,
+      RealProfit: 200,
+      DailyProfit: 150,
+      TotalJumps: 2,
+      Volume: 4,
+      UnitsToBuy: 100,
+      ProfitPerUnit: 2,
+      BuyPrice: 10,
+    });
+    const beta = makeRow({
+      TypeID: 702,
+      TypeName: "Beta",
+      BuyStation: "Dodixie Hub",
+      SellStation: "Rens Hub",
+      BuySystemID: 30002659,
+      SellSystemID: 30002510,
+      RealProfit: 120,
+      DailyProfit: 80,
+      TotalJumps: 1,
+      Volume: 1,
+      UnitsToBuy: 20,
+      ProfitPerUnit: 6,
+      BuyPrice: 200,
+    });
+    const gamma = makeRow({
+      TypeID: 703,
+      TypeName: "Gamma",
+      BuyStation: "Hek Hub",
+      SellStation: "Jita Hub",
+      BuySystemID: 30002053,
+      SellSystemID: 30002537,
+      RealProfit: 50,
+      DailyProfit: 20,
+      TotalJumps: 1,
+      Volume: 3,
+      UnitsToBuy: 10,
+      ProfitPerUnit: 5,
+      BuyPrice: 500,
+    });
+
+    renderTable({ scanning: false, results: [gamma, beta, alpha] });
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Best Route Pack" }));
+    let routeButtons = groupedRouteButtons();
+    expect(routeButtons[0]).toHaveTextContent("Dodixie Hub → Rens Hub");
+
+    fireEvent.click(screen.getByRole("button", { name: "Fastest Route" }));
+    routeButtons = groupedRouteButtons();
+    expect(routeButtons[0]).toHaveTextContent("Dodixie Hub → Rens Hub");
+
+    fireEvent.click(screen.getByRole("button", { name: "Safest Route" }));
+    await waitFor(() => {
+      const safest = groupedRouteButtons();
+      expect(safest[0]).toHaveTextContent("Dodixie Hub → Rens Hub");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Best Cargo Use" }));
+    routeButtons = groupedRouteButtons();
+    expect(routeButtons[0]).toHaveTextContent("Dodixie Hub → Rens Hub");
+
+    fireEvent.click(screen.getByRole("button", { name: "Lowest Capital Lock-up" }));
+    routeButtons = groupedRouteButtons();
+    expect(routeButtons[0]).toHaveTextContent("Dodixie Hub → Rens Hub");
+  });
+
+  it("keeps route tie ordering stable and deterministic", () => {
+    const routeA = makeRow({
+      TypeID: 801,
+      TypeName: "A",
+      BuyStation: "AAA",
+      SellStation: "ZZZ",
+      BuySystemID: 30001001,
+      SellSystemID: 30001002,
+      RealProfit: 100,
+      DailyProfit: 50,
+      TotalJumps: 2,
+      UnitsToBuy: 20,
+      Volume: 1,
+    });
+    const routeB = makeRow({
+      TypeID: 802,
+      TypeName: "B",
+      BuyStation: "BBB",
+      SellStation: "YYY",
+      BuySystemID: 30001003,
+      SellSystemID: 30001004,
+      RealProfit: 100,
+      DailyProfit: 50,
+      TotalJumps: 2,
+      UnitsToBuy: 20,
+      Volume: 1,
+    });
+
+    renderTable({ scanning: false, results: [routeB, routeA] });
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fastest Route" }));
+    const first = groupedRouteButtons().map((node) => node.textContent);
+
+    fireEvent.click(screen.getByRole("button", { name: "Fastest Route" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fastest Route" }));
+    const second = groupedRouteButtons().map((node) => node.textContent);
+    expect(second).toEqual(first);
+  });
+
+  it("switching rows ↔ route mode changes comparator source", () => {
+    const routeAFirstRowWeak = makeRow({
+      TypeID: 901,
+      TypeName: "RouteA weak row",
+      BuyStation: "Jita Hub",
+      SellStation: "Amarr Hub",
+      BuySystemID: 30000142,
+      SellSystemID: 30002187,
+      RealProfit: 5,
+      TotalJumps: 1,
+      UnitsToBuy: 5,
+      Volume: 1,
+    });
+    const routeASecondRowStrong = makeRow({
+      TypeID: 902,
+      TypeName: "RouteA strong row",
+      BuyStation: "Jita Hub",
+      SellStation: "Amarr Hub",
+      BuySystemID: 30000142,
+      SellSystemID: 30002187,
+      RealProfit: 500,
+      TotalJumps: 1,
+      UnitsToBuy: 200,
+      Volume: 1,
+    });
+    const routeB = makeRow({
+      TypeID: 903,
+      TypeName: "RouteB row",
+      BuyStation: "Dodixie Hub",
+      SellStation: "Rens Hub",
+      BuySystemID: 30002659,
+      SellSystemID: 30002510,
+      RealProfit: 150,
+      TotalJumps: 1,
+      UnitsToBuy: 20,
+      Volume: 1,
+    });
+
+    renderTable({ scanning: false, results: [routeB, routeAFirstRowWeak, routeASecondRowStrong] });
+
+    fireEvent.click(screen.getByRole("button", { name: "Fastest ISK" }));
+    const rows = screen.getAllByRole("row");
+    expect(rows[2]).toHaveTextContent("RouteA strong row");
+
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fastest Route" }));
+    const routeButtons = groupedRouteButtons();
+    expect(routeButtons[0]).toHaveTextContent("Jita Hub → Amarr Hub");
+  });
+
+  it("integration: top route ordering for mixed dataset in route mode", async () => {
+    vi.mocked(getGankCheckBatch).mockResolvedValue([
+      { key: "30000142:30002187", danger: "yellow", kills: 1, totalISK: 1_000_000 },
+      { key: "30002659:30002510", danger: "green", kills: 0, totalISK: 0 },
+      { key: "30002053:30002537", danger: "red", kills: 4, totalISK: 3_000_000 },
+      { key: "30003068:30000142", danger: "green", kills: 0, totalISK: 0 },
+    ]);
+    const rows = [
+      makeRow({ TypeID: 1001, TypeName: "A1", BuyStation: "Jita Hub", SellStation: "Amarr Hub", BuySystemID: 30000142, SellSystemID: 30002187, RealProfit: 320, DailyProfit: 180, TotalJumps: 2, Volume: 2, UnitsToBuy: 80, ProfitPerUnit: 4 }),
+      makeRow({ TypeID: 1002, TypeName: "A2", BuyStation: "Jita Hub", SellStation: "Amarr Hub", BuySystemID: 30000142, SellSystemID: 30002187, RealProfit: 120, DailyProfit: 60, TotalJumps: 2, Volume: 2, UnitsToBuy: 20, ProfitPerUnit: 6 }),
+      makeRow({ TypeID: 1003, TypeName: "B1", BuyStation: "Dodixie Hub", SellStation: "Rens Hub", BuySystemID: 30002659, SellSystemID: 30002510, RealProfit: 150, DailyProfit: 100, TotalJumps: 1, Volume: 1, UnitsToBuy: 10, ProfitPerUnit: 15 }),
+      makeRow({ TypeID: 1004, TypeName: "C1", BuyStation: "Hek Hub", SellStation: "Jita Hub", BuySystemID: 30002053, SellSystemID: 30002537, RealProfit: 75, DailyProfit: 25, TotalJumps: 1, Volume: 3, UnitsToBuy: 10, ProfitPerUnit: 7.5 }),
+      makeRow({ TypeID: 1005, TypeName: "D1", BuyStation: "Plex Outpost", SellStation: "Jita Hub", BuySystemID: 30003068, SellSystemID: 30000142, RealProfit: 180, DailyProfit: 120, TotalJumps: 3, Volume: 1, UnitsToBuy: 30, ProfitPerUnit: 6 }),
+    ];
+    renderTable({ scanning: false, results: rows });
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+    fireEvent.click(screen.getByRole("button", { name: "Best Route Pack" }));
+    await waitFor(() => {
+      const top3 = groupedRouteButtons().slice(0, 3).map((n) => n.textContent ?? "");
+      expect(top3[0]).toContain("Jita Hub → Amarr Hub");
+      expect(top3[1]).toContain("Dodixie Hub → Rens Hub");
+      expect(top3[2]).toContain("Plex Outpost → Jita Hub");
     });
   });
 

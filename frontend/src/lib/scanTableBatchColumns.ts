@@ -14,9 +14,15 @@ export type BatchSyntheticKey =
   | "RoutePackCapacityUsedPercent"
   | "RoutePackRealIskPerJump"
   | "RoutePackDailyIskPerJump"
+  | "RoutePackRealIskPerM3PerJump"
+  | "RoutePackDailyProfitOverCapital"
   | "RoutePackWeightedSlippagePct"
   | "RoutePackWeakestExecutionQuality"
-  | "RoutePackTurnoverDays";
+  | "RoutePackTurnoverDays"
+  | "RoutePackRiskSpikeCount"
+  | "RoutePackRiskNoHistoryCount"
+  | "RoutePackRiskUnstableHistoryCount"
+  | "RoutePackTotalRiskCount";
 
 export type BatchMetadataByRow = Record<string, RouteBatchMetadata>;
 
@@ -41,15 +47,34 @@ export function getBatchSyntheticValue(
   if (key === "RoutePackCapacityUsedPercent") return metadata.routeCapacityUsedPercent;
   if (key === "RoutePackRealIskPerJump") return metadata.routeRealIskPerJump;
   if (key === "RoutePackDailyIskPerJump") return metadata.routeDailyIskPerJump;
+  if (key === "RoutePackRealIskPerM3PerJump") return metadata.routeRealIskPerM3PerJump;
+  if (key === "RoutePackDailyProfitOverCapital") return metadata.routeDailyProfitOverCapital;
   if (key === "RoutePackWeightedSlippagePct") return metadata.routeWeightedSlippagePct;
   if (key === "RoutePackWeakestExecutionQuality")
     return metadata.routeWeakestExecutionQuality;
   if (key === "RoutePackTurnoverDays") return metadata.routeTurnoverDays;
+  if (key === "RoutePackRiskSpikeCount") return metadata.routeRiskSpikeCount;
+  if (key === "RoutePackRiskNoHistoryCount") return metadata.routeRiskNoHistoryCount;
+  if (key === "RoutePackRiskUnstableHistoryCount")
+    return metadata.routeRiskUnstableHistoryCount;
+  if (key === "RoutePackTotalRiskCount")
+    return (
+      metadata.routeRiskSpikeCount +
+      metadata.routeRiskNoHistoryCount +
+      metadata.routeRiskUnstableHistoryCount
+    );
   return metadata.batchTotalCapital;
 }
 
 export function formatBatchSyntheticCell(key: BatchSyntheticKey, value: number | null): string {
-  if (key === "BatchNumber" || key === "RoutePackItemCount") {
+  if (
+    key === "BatchNumber" ||
+    key === "RoutePackItemCount" ||
+    key === "RoutePackRiskSpikeCount" ||
+    key === "RoutePackRiskNoHistoryCount" ||
+    key === "RoutePackRiskUnstableHistoryCount" ||
+    key === "RoutePackTotalRiskCount"
+  ) {
     if (value == null || value <= 0) return "\u2014";
     return value.toLocaleString();
   }

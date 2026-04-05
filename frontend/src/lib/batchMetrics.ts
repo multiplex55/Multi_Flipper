@@ -49,6 +49,9 @@ export type RouteBatchMetadata = {
   routeCapacityUsedPercent: number | null;
   routeRealIskPerJump: number;
   routeDailyIskPerJump: number;
+  routeRealIskPerM3PerJump: number;
+  routeDailyProfit: number;
+  routeDailyProfitOverCapital: number;
   routeWeightedSlippagePct: number;
   routeWeakestExecutionQuality: number;
   routeTurnoverDays: number;
@@ -339,6 +342,16 @@ export function buildRouteBatchMetadata(
       (sum, routeRow) => sum + Math.max(0, safeNumber(routeRow.DailyProfit)),
       0,
     );
+    const routeRealIskPerJump =
+      routeJumps > 0
+        ? routeRows.reduce((sum, routeRow) => sum + realIskPerJump(routeRow), 0)
+        : 0;
+    const routeRealIskPerM3PerJump =
+      batch.totalVolume > 0 && routeJumps > 0
+        ? batch.totalProfit / batch.totalVolume / routeJumps
+        : 0;
+    const routeDailyProfitOverCapital =
+      batch.totalCapital > 0 ? routeDailyProfit / batch.totalCapital : 0;
     const riskSpikeCount = routeRows.filter((routeRow) =>
       hasDestinationPriceSpike(routeRow),
     ).length;
@@ -364,11 +377,11 @@ export function buildRouteBatchMetadata(
       routeTotalCapital: batch.totalCapital,
       routeTotalVolume: batch.totalVolume,
       routeCapacityUsedPercent: batch.usedPercent,
-      routeRealIskPerJump:
-        routeJumps > 0
-          ? routeRows.reduce((sum, routeRow) => sum + realIskPerJump(routeRow), 0)
-          : 0,
+      routeRealIskPerJump,
       routeDailyIskPerJump: routeJumps > 0 ? routeDailyProfit / routeJumps : 0,
+      routeRealIskPerM3PerJump,
+      routeDailyProfit,
+      routeDailyProfitOverCapital,
       routeWeightedSlippagePct:
         weightedSlippageDenominator > 0
           ? weightedSlippage / weightedSlippageDenominator

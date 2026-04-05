@@ -185,6 +185,11 @@ export const ru = {
     decisionLensCargo: "Эфф. карго",
     decisionLensSafest: "Безопаснее",
     decisionLensCapital: "Эфф. капитал",
+    decisionLensBestRoutePack: "Лучший маршрут-пак",
+    decisionLensFastestRoute: "Самый быстрый маршрут",
+    decisionLensSafestRoute: "Самый безопасный маршрут",
+    decisionLensBestCargoUse: "Лучшее карго-исп.",
+    decisionLensLowestCapitalLockup: "Минимум капитала",
 
     // Contract table
     colTitle: "Название",
