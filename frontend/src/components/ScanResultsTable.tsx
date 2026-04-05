@@ -23,6 +23,7 @@ import {
   routeGroupKey,
   type RouteBatchMetadata,
 } from "@/lib/batchMetrics";
+import { routeSafetyRankFromState } from "@/lib/routeSafetySort";
 import {
   dailyIskPerJump,
   radiusRouteKey,
@@ -1670,13 +1671,36 @@ export function ScanResultsTable({
 
     const filteredScoreContext = buildFlipScoreContext(filtered.map((item) => item.row));
 
-    const dangerRank = (row: FlipResult): number => {
+    const routeSafetyRankForRow = (row: FlipResult): number => {
       const k = `${row.BuySystemID}:${row.SellSystemID}`;
       const rs = routeSafetyMap[k];
-      if (!rs || rs.status === "loading") return -1;
-      const d =
-        rs.status === "full" || rs.status === "summary" ? rs.danger : "green";
-      return d === "red" ? 2 : d === "yellow" ? 1 : 0;
+      return routeSafetyRankFromState(rs);
+    };
+
+    const routeSafetyTieBreaker = (a: IndexedRow, b: IndexedRow): number => {
+      const aMeta = batchMetricsByRoute[routeGroupKey(a.row)];
+      const bMeta = batchMetricsByRoute[routeGroupKey(b.row)];
+
+      // Conservative tie-breakers for equally-ranked safety buckets:
+      // 1) higher weakest execution quality is safer/more reliable (better),
+      // 2) fewer route risk flags is better.
+      const eqDiff =
+        (bMeta?.routeWeakestExecutionQuality ?? 0) -
+        (aMeta?.routeWeakestExecutionQuality ?? 0);
+      if (eqDiff !== 0) return eqDiff;
+
+      const aRiskCount =
+        (aMeta?.routeRiskSpikeCount ?? 0) +
+        (aMeta?.routeRiskNoHistoryCount ?? 0) +
+        (aMeta?.routeRiskUnstableHistoryCount ?? 0);
+      const bRiskCount =
+        (bMeta?.routeRiskSpikeCount ?? 0) +
+        (bMeta?.routeRiskNoHistoryCount ?? 0) +
+        (bMeta?.routeRiskUnstableHistoryCount ?? 0);
+      const riskCountDiff = aRiskCount - bRiskCount;
+      if (riskCountDiff !== 0) return riskCountDiff;
+
+      return compareRowsStable(a, b);
     };
 
     const sorted = filtered.slice();
@@ -1690,10 +1714,10 @@ export function ScanResultsTable({
       if (aPin !== bPin) return aPin ? -1 : 1;
 
       if (sortKey === ("RouteSafety" as SortKey)) {
-        const diff = dangerRank(a.row) - dangerRank(b.row);
+        const diff = routeSafetyRankForRow(a.row) - routeSafetyRankForRow(b.row);
         const primaryRisk = sortDir === "asc" ? diff : -diff;
         if (primaryRisk !== 0) return primaryRisk;
-        return compareRowsStable(a, b);
+        return routeSafetyTieBreaker(a, b);
       }
 
       const av = getCellValue(
@@ -1758,6 +1782,7 @@ export function ScanResultsTable({
     sortDir,
     pinnedKeys,
     routeSafetyMap,
+    batchMetricsByRoute,
     batchMetricsByRow,
     opportunityProfile,
   ]);
@@ -1824,11 +1849,13 @@ export function ScanResultsTable({
       rows = rows.filter((ir) => {
         const k = `${ir.row.BuySystemID}:${ir.row.SellSystemID}`;
         const rs = routeSafetyMap[k];
-        if (!rs || rs.status === "loading")
-          return routeSafetyFilter === "green";
-        const d =
-          rs.status === "full" || rs.status === "summary" ? rs.danger : "green";
-        return d === routeSafetyFilter;
+        if (routeSafetyFilter === "green") {
+          return routeSafetyRankFromState(rs) === 0;
+        }
+        if (routeSafetyFilter === "yellow") {
+          return routeSafetyRankFromState(rs) === 1;
+        }
+        return routeSafetyRankFromState(rs) === 2;
       });
     }
     return rows;
@@ -1948,7 +1975,39 @@ export function ScanResultsTable({
       }
     }
     const groups = [...byRoute.values()];
+    const routeSafetyTieBreaker = (left: RouteGroup, right: RouteGroup): number => {
+      const leftMeta = batchMetricsByRoute[left.key];
+      const rightMeta = batchMetricsByRoute[right.key];
+      const eqDiff =
+        (rightMeta?.routeWeakestExecutionQuality ?? 0) -
+        (leftMeta?.routeWeakestExecutionQuality ?? 0);
+      if (eqDiff !== 0) return eqDiff;
+
+      const leftRiskCount =
+        (leftMeta?.routeRiskSpikeCount ?? 0) +
+        (leftMeta?.routeRiskNoHistoryCount ?? 0) +
+        (leftMeta?.routeRiskUnstableHistoryCount ?? 0);
+      const rightRiskCount =
+        (rightMeta?.routeRiskSpikeCount ?? 0) +
+        (rightMeta?.routeRiskNoHistoryCount ?? 0) +
+        (rightMeta?.routeRiskUnstableHistoryCount ?? 0);
+      const riskCountDiff = leftRiskCount - rightRiskCount;
+      if (riskCountDiff !== 0) return riskCountDiff;
+
+      return left.label.localeCompare(right.label);
+    };
     groups.sort((a, b) => {
+      if (sortKey === ("RouteSafety" as SortKey)) {
+        const aRank = routeSafetyRankFromState(
+          routeSafetyMap[`${a.rows[0].row.BuySystemID}:${a.rows[0].row.SellSystemID}`],
+        );
+        const bRank = routeSafetyRankFromState(
+          routeSafetyMap[`${b.rows[0].row.BuySystemID}:${b.rows[0].row.SellSystemID}`],
+        );
+        const diff = sortDir === "asc" ? aRank - bRank : bRank - aRank;
+        if (diff !== 0) return diff;
+        return routeSafetyTieBreaker(a, b);
+      }
       if (isBatchSyntheticKey(sortKey)) {
         const left = getBatchSyntheticValue(
           a.rows[0].row,
@@ -1968,7 +2027,7 @@ export function ScanResultsTable({
       return compareRowsStable(aRow, bRow);
     });
     return groups;
-  }, [batchMetricsByRow, displaySorted, isRouteGrouped, sortDir, sortKey]);
+  }, [batchMetricsByRow, batchMetricsByRoute, displaySorted, isRouteGrouped, routeSafetyMap, sortDir, sortKey]);
 
   useEffect(() => {
     if (!isRouteGrouped) {
