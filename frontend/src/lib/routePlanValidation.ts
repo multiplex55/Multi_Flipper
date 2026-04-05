@@ -11,6 +11,10 @@ export interface RouteValidationThresholds {
 
 export interface RoutePlanStopValidation {
   stop_key: string;
+  snapshot_buy_isk: number;
+  snapshot_sell_isk: number;
+  expected_net_isk: number;
+  fill_confidence_pct: number;
   buy_ceiling_isk: number;
   sell_floor_isk: number;
   buy_drift_pct: number;
@@ -23,10 +27,17 @@ export interface RoutePlanStopValidation {
 export interface RoutePlanValidationResult {
   band: ValidationBand;
   snapshot_stale: boolean;
+  snapshot_age_minutes: number | null;
   total_buy_drift_pct: number;
   total_sell_drift_pct: number;
+  snapshot_buy_isk: number;
+  snapshot_sell_isk: number;
+  expected_net_isk: number;
   route_profit_retained_pct: number;
+  edge_retained_pct: number;
   min_stop_liquidity_retained_pct: number;
+  avg_fill_confidence_pct: number;
+  degraded_stop_count: number;
   checkpoints: Array<{ name: "pre-undock" | "pre-sale"; band: ValidationBand }>;
   stops: RoutePlanStopValidation[];
 }
@@ -128,6 +139,10 @@ export function evaluateRoutePlanValidation(input: {
 
     return {
       stop_key: `${hop.SystemID}:${hop.DestSystemID}:${idx}`,
+      snapshot_buy_isk: snapBuy,
+      snapshot_sell_isk: snapSell,
+      expected_net_isk: currentSell - currentBuy,
+      fill_confidence_pct: liquidityRetained,
       buy_ceiling_isk: snapBuy * (1 + input.thresholds.max_buy_drift_pct / 100),
       sell_floor_isk:
         snapSell * (1 - input.thresholds.max_sell_drift_pct / 100),
@@ -161,8 +176,15 @@ export function evaluateRoutePlanValidation(input: {
       currentBuy: 0,
       currentSell: 0,
       minLiquidity: 100,
+      fillConfidenceTotal: 0,
+      degradedStops: 0,
     },
   );
+  totals.fillConfidenceTotal = stops.reduce(
+    (sum, stop) => sum + stop.fill_confidence_pct,
+    0,
+  );
+  totals.degradedStops = stops.filter((stop) => stop.band !== "green").length;
 
   const totalBuyDrift = pctIncrease(totals.snapBuy, totals.currentBuy);
   const totalSellDrift = pctDown(totals.snapSell, totals.currentSell);
@@ -179,6 +201,9 @@ export function evaluateRoutePlanValidation(input: {
   const snapshotStale = Number.isFinite(snapshotTs)
     ? nowMs - snapshotTs > staleAfterMs
     : false;
+  const snapshotAgeMinutes = Number.isFinite(snapshotTs)
+    ? Math.max(0, (nowMs - snapshotTs) / 60000)
+    : null;
 
   let preUndock = maxBand(
     bandByMax(totalBuyDrift, input.thresholds.max_buy_drift_pct),
@@ -202,10 +227,18 @@ export function evaluateRoutePlanValidation(input: {
   return {
     band: maxBand(preUndock, preSale),
     snapshot_stale: snapshotStale,
+    snapshot_age_minutes: snapshotAgeMinutes,
     total_buy_drift_pct: totalBuyDrift,
     total_sell_drift_pct: totalSellDrift,
+    snapshot_buy_isk: totals.snapBuy,
+    snapshot_sell_isk: totals.snapSell,
+    expected_net_isk: totals.currentSell - totals.currentBuy,
     route_profit_retained_pct: routeProfitRetained,
+    edge_retained_pct: routeProfitRetained,
     min_stop_liquidity_retained_pct: totals.minLiquidity,
+    avg_fill_confidence_pct:
+      stops.length > 0 ? totals.fillConfidenceTotal / stops.length : 0,
+    degraded_stop_count: totals.degradedStops,
     checkpoints: [
       { name: "pre-undock", band: preUndock },
       { name: "pre-sale", band: preSale },

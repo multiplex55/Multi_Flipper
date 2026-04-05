@@ -10,6 +10,12 @@ import {
   evaluateRoutePlanValidation,
   type ValidationBand,
 } from "@/lib/routePlanValidation";
+import {
+  formatFullRunSummary,
+  formatMultibuyByStop,
+  formatSellChecklistByStop,
+  formatValidationSummary,
+} from "@/lib/routePlannerExportFormat";
 import { Modal } from "./Modal";
 import { useGlobalToast } from "./Toast";
 
@@ -24,6 +30,14 @@ export interface RoutePlannerActiveFilters {
   targetSystemName: string;
   minISKPerJump: number;
   allowEmptyHops: boolean;
+  lowAttention?: {
+    maxStops?: number;
+    maxItems?: number;
+    minFillConfidence?: number;
+    minStopProfitISK?: number;
+    avoidStructureOnly?: boolean;
+    avoidItemConcentration?: boolean;
+  };
 }
 
 export interface RoutePlannerExecutionSettings {
@@ -102,9 +116,16 @@ export function RouteExecutionPlanner({
   );
   const [validationRequested, setValidationRequested] = useState(false);
   const [validationRunAt, setValidationRunAt] = useState<number>(Date.now());
+  const hasLowAttentionFilters = useMemo(() => {
+    const filter = selection?.activeFilters.lowAttention;
+    if (!filter) return false;
+    return Object.values(filter).some((value) => value != null && value !== false);
+  }, [selection?.activeFilters.lowAttention]);
+  const [executionMode, setExecutionMode] = useState<"all" | "low_attention">("all");
 
   useEffect(() => {
     if (!open || !selection) return;
+    setExecutionMode(hasLowAttentionFilters ? "low_attention" : "all");
     if (initialAction) {
       setSelectedAction(initialAction);
       setPlannerStep("manifest");
@@ -115,7 +136,7 @@ export function RouteExecutionPlanner({
     setPlannerStep("options");
     setValidationRequested(false);
     setValidationRunAt(Date.now());
-  }, [open, selection?.route, initialAction]);
+  }, [open, selection?.route, initialAction, hasLowAttentionFilters]);
 
   const validation = useMemo(() => {
     if (!selection) return null;
@@ -157,8 +178,33 @@ export function RouteExecutionPlanner({
       `Route filters: hops ${selection.activeFilters.minHops}-${selection.activeFilters.maxHops}, min ISK/jump ${selection.activeFilters.minISKPerJump}`,
       `Risk: min security ${selection.executionSettings.riskConstraints.minRouteSecurity.toFixed(2)}, detour <= ${selection.executionSettings.riskConstraints.maxDetourJumpsPerNode}`,
     ];
+    if (selection.activeFilters.lowAttention) {
+      const mode = selection.activeFilters.lowAttention;
+      lines.push(
+        `Low-attention filters: max stops ${mode.maxStops ?? "N/A"}, max items ${mode.maxItems ?? "N/A"}, min fill confidence ${mode.minFillConfidence ?? "N/A"}%, min stop profit ${mode.minStopProfitISK ?? "N/A"} ISK, avoid structure-only ${Boolean(mode.avoidStructureOnly)}, avoid item concentration ${Boolean(mode.avoidItemConcentration)}`,
+      );
+    }
     return lines.join("\n");
   }, [selection, selectedAction, t]);
+  const visibleOptions = useMemo(
+    () =>
+      executionMode === "low_attention"
+        ? OPTION_CONFIG.filter((option) => option.id !== "expand_route")
+        : OPTION_CONFIG,
+    [executionMode],
+  );
+
+  const copyExport = async (
+    formatter: (selection: RoutePlannerSelection, validationText: typeof validation) => string,
+  ) => {
+    if (!selection) return;
+    try {
+      await navigator.clipboard.writeText(formatter(selection, validation));
+      addToast(t("copied"), "success", 1400);
+    } catch {
+      addToast(t("errorSomethingWentWrong"), "error", 2200);
+    }
+  };
 
   const onSelectAction = (action: RoutePlannerAction) => {
     setSelectedAction(action);
@@ -209,9 +255,31 @@ export function RouteExecutionPlanner({
               </div>
             </div>
 
+            {hasLowAttentionFilters ? (
+              <div className="flex flex-wrap gap-2 text-[11px]" data-testid="route-execution-mode-filters">
+                <button
+                  type="button"
+                  className={`px-2 py-1 rounded-full border ${executionMode === "low_attention" ? "border-blue-400 text-blue-200" : "border-eve-border text-eve-dim"}`}
+                  onClick={() => setExecutionMode("low_attention")}
+                  data-testid="route-filter-chip-low-attention"
+                  aria-label="Filter planner options for low-attention route execution mode"
+                >
+                  Low-attention mode
+                </button>
+                <button
+                  type="button"
+                  className={`px-2 py-1 rounded-full border ${executionMode === "all" ? "border-blue-400 text-blue-200" : "border-eve-border text-eve-dim"}`}
+                  onClick={() => setExecutionMode("all")}
+                  data-testid="route-filter-chip-all-options"
+                  aria-label="Show all planner options"
+                >
+                  All options
+                </button>
+              </div>
+            ) : null}
             <div className="text-xs text-eve-dim">Select a planner option:</div>
             <div className="grid grid-cols-1 gap-2">
-              {OPTION_CONFIG.map((option) => {
+              {visibleOptions.map((option) => {
                 const active = option.id === selectedAction;
                 return (
                   <button
@@ -224,6 +292,7 @@ export function RouteExecutionPlanner({
                         : "border-eve-border bg-eve-panel hover:border-blue-400/70"
                     }`}
                     onClick={() => onSelectAction(option.id)}
+                    aria-label={`Planner option ${option.title}`}
                   >
                     <div className="text-xs font-semibold text-eve-text">
                       {option.title}
@@ -244,7 +313,7 @@ export function RouteExecutionPlanner({
                       className={`border rounded-sm p-2 text-xs ${bandClass(validation?.band ?? "yellow")}`}
                       data-testid="route-validation-band"
                     >
-                      Validation {validation?.band ?? "yellow"} — pre-undock{" "}
+                      Validation status: {validation?.band ?? "yellow"} — pre-undock{" "}
                       {validation?.checkpoints[0]?.band ?? "yellow"}, pre-sale{" "}
                       {validation?.checkpoints[1]?.band ?? "yellow"}.
                     </div>
@@ -272,20 +341,27 @@ export function RouteExecutionPlanner({
                       data-testid="route-validation-summary"
                     >
                       <div className="border border-eve-border rounded-sm p-2">
-                        Buy drift: {validation?.total_buy_drift_pct.toFixed(1)}%
+                        Snapshot buy: {formatISK(validation?.snapshot_buy_isk ?? 0)}
                       </div>
                       <div className="border border-eve-border rounded-sm p-2">
-                        Sell drift:{" "}
-                        {validation?.total_sell_drift_pct.toFixed(1)}%
+                        Snapshot sell: {formatISK(validation?.snapshot_sell_isk ?? 0)}
                       </div>
                       <div className="border border-eve-border rounded-sm p-2">
-                        Profit retained:{" "}
-                        {validation?.route_profit_retained_pct.toFixed(1)}%
+                        Expected net: {formatISK(validation?.expected_net_isk ?? 0)}
                       </div>
                       <div className="border border-eve-border rounded-sm p-2">
-                        Min stop liquidity:{" "}
-                        {validation?.min_stop_liquidity_retained_pct.toFixed(1)}
-                        %
+                        Fill confidence: {validation?.avg_fill_confidence_pct.toFixed(1)}%
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[11px]" data-testid="route-degradation-indicators">
+                      <div className="border border-amber-400/60 bg-amber-500/10 rounded-sm p-2">
+                        Snapshot age: {validation?.snapshot_age_minutes == null ? "N/A" : `${validation.snapshot_age_minutes.toFixed(1)} min`}
+                      </div>
+                      <div className="border border-yellow-400/60 bg-yellow-500/10 rounded-sm p-2">
+                        Edge retained %: {validation?.edge_retained_pct.toFixed(1)}%
+                      </div>
+                      <div className="border border-red-400/60 bg-red-500/10 rounded-sm p-2">
+                        Degraded stop count: {validation?.degraded_stop_count ?? 0}
                       </div>
                     </div>
                     <div
@@ -299,20 +375,19 @@ export function RouteExecutionPlanner({
                           className={`border rounded-sm p-2 text-[11px] ${bandClass(stop.band)}`}
                         >
                           <div className="font-semibold">
-                            Stop {stop.stop_key} · {stop.band}
+                            Stop {stop.stop_key} · Validation status: {stop.band}
                           </div>
                           <div>
-                            Buy ceiling: {formatISK(stop.buy_ceiling_isk)} |
-                            Sell floor: {formatISK(stop.sell_floor_isk)}
+                            Snapshot buy: {formatISK(stop.snapshot_buy_isk)} | Snapshot sell: {formatISK(stop.snapshot_sell_isk)}
                           </div>
                           <div>
-                            Buy drift: {stop.buy_drift_pct.toFixed(1)}% | Sell
-                            drift: {stop.sell_drift_pct.toFixed(1)}%
+                            Expected net: {formatISK(stop.expected_net_isk)} | Fill confidence: {stop.fill_confidence_pct.toFixed(1)}%
                           </div>
                           <div>
-                            Profit retained:{" "}
-                            {stop.retained_profit_pct.toFixed(1)}% | Liquidity
-                            retained: {stop.liquidity_retained_pct.toFixed(1)}%
+                            Buy drift: {stop.buy_drift_pct.toFixed(1)}% | Sell drift: {stop.sell_drift_pct.toFixed(1)}%
+                          </div>
+                          <div>
+                            Profit retained: {stop.retained_profit_pct.toFixed(1)}% | Liquidity retained: {stop.liquidity_retained_pct.toFixed(1)}%
                           </div>
                         </div>
                       ))}
@@ -325,8 +400,61 @@ export function RouteExecutionPlanner({
                     className="px-3 py-1.5 rounded-sm border border-yellow-400/70 text-yellow-200 hover:bg-yellow-500/10 transition-colors text-xs font-semibold uppercase tracking-wider mr-2"
                     onClick={() => setValidationRunAt(Date.now())}
                     data-testid="route-validation-rerun"
+                    aria-label="Re-run route validation checks"
                   >
                     Re-run Validation
+                  </button>
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 rounded-sm border border-eve-border text-eve-text hover:bg-eve-panel transition-colors text-xs font-semibold uppercase tracking-wider mr-2"
+                    onClick={() => {
+                      void copyExport((activeSelection) =>
+                        formatMultibuyByStop(activeSelection),
+                      );
+                    }}
+                    data-testid="route-copy-export-multibuy"
+                    aria-label="Copy multibuy by stop export"
+                  >
+                    Multibuy by Stop
+                  </button>
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 rounded-sm border border-eve-border text-eve-text hover:bg-eve-panel transition-colors text-xs font-semibold uppercase tracking-wider mr-2"
+                    onClick={() => {
+                      void copyExport((activeSelection) =>
+                        formatSellChecklistByStop(activeSelection),
+                      );
+                    }}
+                    data-testid="route-copy-export-sell-checklist"
+                    aria-label="Copy sell checklist by stop export"
+                  >
+                    Sell Checklist
+                  </button>
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 rounded-sm border border-eve-border text-eve-text hover:bg-eve-panel transition-colors text-xs font-semibold uppercase tracking-wider mr-2"
+                    onClick={() => {
+                      void copyExport((activeSelection, activeValidation) =>
+                        formatFullRunSummary(activeSelection, activeValidation),
+                      );
+                    }}
+                    data-testid="route-copy-export-full-run"
+                    aria-label="Copy full run summary export"
+                  >
+                    Full Run Summary
+                  </button>
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 rounded-sm border border-eve-border text-eve-text hover:bg-eve-panel transition-colors text-xs font-semibold uppercase tracking-wider mr-2"
+                    onClick={() => {
+                      void copyExport((_, activeValidation) =>
+                        formatValidationSummary(activeValidation),
+                      );
+                    }}
+                    data-testid="route-copy-export-validation"
+                    aria-label="Copy validation summary export"
+                  >
+                    Validation Summary
                   </button>
                   <button
                     type="button"
@@ -334,6 +462,7 @@ export function RouteExecutionPlanner({
                     onClick={() => {
                       void copyManifest();
                     }}
+                    aria-label="Copy planner manifest"
                   >
                     Copy Planner Manifest
                   </button>

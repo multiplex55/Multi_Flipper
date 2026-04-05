@@ -68,6 +68,12 @@ const baseParams: ScanParams = {
   route_max_hops: 4,
   route_min_isk_per_jump: 0,
   route_allow_empty_hops: false,
+  route_low_attention_max_stops: 2,
+  route_low_attention_max_items: 4,
+  route_low_attention_min_fill_confidence: 75,
+  route_low_attention_min_stop_profit_isk: 1000,
+  route_low_attention_avoid_structure_only: true,
+  route_low_attention_avoid_item_concentration: true,
 };
 
 function renderRouteBuilder(routes: RouteResult[] = [makeRouteResult()]) {
@@ -257,6 +263,9 @@ describe("RouteBuilder planner interactions", () => {
       await screen.findByTestId("route-validation-summary"),
     ).toBeInTheDocument();
     expect(
+      await screen.findByTestId("route-degradation-indicators"),
+    ).toBeInTheDocument();
+    expect(
       await screen.findByTestId("route-validation-stops"),
     ).toBeInTheDocument();
 
@@ -268,8 +277,52 @@ describe("RouteBuilder planner interactions", () => {
       await screen.findByTestId("route-validation-summary"),
     ).toBeInTheDocument();
     expect(
+      await screen.findByTestId("route-degradation-indicators"),
+    ).toBeInTheDocument();
+    expect(
       await screen.findByTestId("route-validation-stops"),
     ).toBeInTheDocument();
+  });
+
+  it("filter chips modify planner option list for low-attention mode", async () => {
+    renderRouteBuilder();
+    fireEvent.doubleClick(await screen.findByTestId("route-result-row-0"));
+    fireEvent.click(await screen.findByTestId("route-planner-cta-expand"));
+
+    expect(
+      await screen.findByTestId("route-filter-chip-low-attention"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("route-planner-option-expand_route"),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("route-filter-chip-all-options"));
+    expect(
+      await screen.findByTestId("route-planner-option-expand_route"),
+    ).toBeInTheDocument();
+  });
+
+  it("planner controls expose aria labels and keyboard activation", async () => {
+    renderRouteBuilder();
+    fireEvent.doubleClick(await screen.findByTestId("route-result-row-0"));
+    fireEvent.click(await screen.findByTestId("route-planner-cta-validate"));
+
+    const rerunButton = await screen.findByLabelText(
+      "Re-run route validation checks",
+    );
+    const copyValidationButton = screen.getByLabelText(
+      "Copy validation summary export",
+    );
+
+    expect(rerunButton).toBeVisible();
+    expect(copyValidationButton).toBeVisible();
+    rerunButton.focus();
+    fireEvent.keyDown(rerunButton, { key: "Enter", code: "Enter" });
+    fireEvent.click(copyValidationButton);
+
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalled();
+    });
   });
 
   it("renders station labels with enriched-field fallback when fields are missing", async () => {

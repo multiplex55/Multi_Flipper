@@ -860,6 +860,12 @@ export interface ScanParams {
   route_validation_max_sell_drift_pct?: number;
   route_validation_min_profit_retained_pct?: number;
   route_validation_min_liquidity_retained_pct?: number;
+  route_low_attention_max_stops?: number;
+  route_low_attention_max_items?: number;
+  route_low_attention_min_fill_confidence?: number;
+  route_low_attention_min_stop_profit_isk?: number;
+  route_low_attention_avoid_structure_only?: boolean;
+  route_low_attention_avoid_item_concentration?: boolean;
   // Player structures
   include_structures?: boolean;
   /** Category filter for regional day trader. Empty = all. */
