@@ -228,6 +228,8 @@ describe("batchMetrics", () => {
     expect(byRoute[routeAKey].routeRealIskPerM3PerJump).toBeGreaterThan(0);
     expect(byRoute[routeAKey].routeDailyProfit).toBeGreaterThan(0);
     expect(byRoute[routeAKey].routeDailyProfitOverCapital).toBeGreaterThanOrEqual(0);
+    expect(byRoute[routeAKey].routeExitOverhangDays).toBeGreaterThanOrEqual(0);
+    expect(byRoute[routeAKey].routeBreakevenBuffer).toBeGreaterThanOrEqual(0);
     expect(byRoute[routeAKey].routeRiskNoHistoryCount).toBeGreaterThanOrEqual(0);
     expect(byRoute[routeBKey].routeItemCount).toBe(1);
   });
@@ -353,7 +355,7 @@ describe("batchMetrics", () => {
     expect(meta.routeWeightedSlippagePct).toBe(3);
     expect(meta.routeWeakestExecutionQuality).toBeGreaterThan(95);
     expect(meta.routeDailyProfit).toBe(40);
-    expect(meta.routeDailyProfitOverCapital).toBeCloseTo(40 / 120, 6);
+    expect(meta.routeDailyProfitOverCapital).toBeCloseTo((40 / 120) * 100, 6);
 
     // Risk counts in primary summary ignore excluded rows.
     expect(meta.routeRiskSpikeCount).toBe(0);
@@ -431,5 +433,32 @@ describe("batchMetrics", () => {
       byRoute[routeGroupKey(routeBSelected)].routeWeakestExecutionQuality,
     );
     expect(rankedRouteKeys[0]).toBe(routeGroupKey(routeASelected));
+  });
+
+  it("sets route aggregate derived metrics to null when required inputs are missing", () => {
+    const noJumpsNoCapital = makeRow({
+      TypeID: 9001,
+      TotalJumps: 0,
+      DailyProfit: 10,
+      UnitsToBuy: 0,
+      FilledQty: 0,
+      ProfitPerUnit: 5,
+      ExpectedBuyPrice: 0,
+      BuyPrice: 0,
+      Volume: 0,
+      DayCapitalRequired: 0,
+      DayTargetPeriodPrice: 0,
+      DayPriceHistory: [],
+      HistoryAvailable: false,
+    });
+
+    const meta = buildRouteBatchMetadata([noJumpsNoCapital], 1_000).byRoute[
+      routeGroupKey(noJumpsNoCapital)
+    ];
+    expect(meta.routeDailyProfit).toBe(0);
+    expect(meta.routeDailyProfitOverCapital).toBeNull();
+    expect(meta.routeTurnoverDays).toBeNull();
+    expect(meta.routeExitOverhangDays).toBeNull();
+    expect(meta.routeBreakevenBuffer).toBeNull();
   });
 });

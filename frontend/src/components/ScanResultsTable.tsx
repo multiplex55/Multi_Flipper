@@ -102,11 +102,14 @@ type SyntheticSortKey =
   | "RoutePackCapacityUsedPercent"
   | "RoutePackRealIskPerJump"
   | "RoutePackDailyIskPerJump"
+  | "RoutePackDailyProfit"
   | "RoutePackRealIskPerM3PerJump"
   | "RoutePackDailyProfitOverCapital"
   | "RoutePackWeightedSlippagePct"
   | "RoutePackWeakestExecutionQuality"
   | "RoutePackTurnoverDays"
+  | "RoutePackExitOverhangDays"
+  | "RoutePackBreakevenBuffer"
   | "RoutePackRiskSpikeCount"
   | "RoutePackRiskNoHistoryCount"
   | "RoutePackRiskUnstableHistoryCount"
@@ -425,6 +428,24 @@ const baseColumnDefs: ColumnDef[] = [
     numeric: true,
   },
   {
+    key: "RoutePackDailyProfit",
+    labelKey: "colDailyProfit",
+    width: "min-w-[145px]",
+    numeric: true,
+  },
+  {
+    key: "RoutePackRealIskPerM3PerJump",
+    labelKey: "colRealIskPerM3PerJump",
+    width: "min-w-[170px]",
+    numeric: true,
+  },
+  {
+    key: "RoutePackDailyProfitOverCapital",
+    labelKey: "colROI",
+    width: "min-w-[160px]",
+    numeric: true,
+  },
+  {
     key: "RoutePackWeightedSlippagePct",
     labelKey: "colSlippageCostIsk",
     width: "min-w-[145px]",
@@ -440,6 +461,18 @@ const baseColumnDefs: ColumnDef[] = [
     key: "RoutePackTurnoverDays",
     labelKey: "colTurnoverDays",
     width: "min-w-[130px]",
+    numeric: true,
+  },
+  {
+    key: "RoutePackExitOverhangDays",
+    labelKey: "colExitOverhangDays",
+    width: "min-w-[150px]",
+    numeric: true,
+  },
+  {
+    key: "RoutePackBreakevenBuffer",
+    labelKey: "colBreakevenBuffer",
+    width: "min-w-[150px]",
     numeric: true,
   },
   {
@@ -848,6 +881,7 @@ interface RouteGroup {
 type RouteAggregateMetrics = {
   routeSafetyRank: number;
   dailyIskPerJump: number;
+  dailyProfit: number;
   iskPerM3PerJump: number;
   fastestIskPerJump: number;
   weakestExecutionQuality: number;
@@ -856,8 +890,10 @@ type RouteAggregateMetrics = {
   riskUnstableHistoryCount: number;
   riskThinFillCount: number;
   riskTotalCount: number;
-  turnoverDays: number;
-  dailyProfitOverCapital: number;
+  turnoverDays: number | null;
+  exitOverhangDays: number | null;
+  breakevenBuffer: number | null;
+  dailyProfitOverCapital: number | null;
   routeTotalProfit: number;
   routeTotalCapital: number;
 };
@@ -874,11 +910,14 @@ const BATCH_SYNTHETIC_KEYS: Set<SortKey> = new Set([
   "RoutePackCapacityUsedPercent",
   "RoutePackRealIskPerJump",
   "RoutePackDailyIskPerJump",
+  "RoutePackDailyProfit",
   "RoutePackRealIskPerM3PerJump",
   "RoutePackDailyProfitOverCapital",
   "RoutePackWeightedSlippagePct",
   "RoutePackWeakestExecutionQuality",
   "RoutePackTurnoverDays",
+  "RoutePackExitOverhangDays",
+  "RoutePackBreakevenBuffer",
   "RoutePackRiskSpikeCount",
   "RoutePackRiskNoHistoryCount",
   "RoutePackRiskUnstableHistoryCount",
@@ -1178,6 +1217,7 @@ function routeAggregateValueForSortKey(
   if (sortKey === "RouteSafety") return metrics.routeSafetyRank;
   if (sortKey === "RoutePackDailyIskPerJump" || sortKey === "DailyIskPerJump")
     return metrics.dailyIskPerJump;
+  if (sortKey === "RoutePackDailyProfit") return metrics.dailyProfit;
   if (sortKey === "RoutePackRealIskPerJump" || sortKey === "RealIskPerJump")
     return metrics.fastestIskPerJump;
   if (sortKey === "RoutePackRealIskPerM3PerJump" || sortKey === "RealIskPerM3PerJump")
@@ -1186,6 +1226,8 @@ function routeAggregateValueForSortKey(
     return metrics.weakestExecutionQuality;
   if (sortKey === "RoutePackTurnoverDays" || sortKey === "TurnoverDays")
     return metrics.turnoverDays;
+  if (sortKey === "RoutePackExitOverhangDays") return metrics.exitOverhangDays;
+  if (sortKey === "RoutePackBreakevenBuffer") return metrics.breakevenBuffer;
   if (sortKey === "RoutePackDailyProfitOverCapital")
     return metrics.dailyProfitOverCapital;
   if (sortKey === "RoutePackRiskSpikeCount") return metrics.riskSpikeCount;
@@ -1196,6 +1238,57 @@ function routeAggregateValueForSortKey(
   if (sortKey === "RoutePackTotalProfit") return metrics.routeTotalProfit;
   if (sortKey === "RoutePackTotalCapital") return metrics.routeTotalCapital;
   return null;
+}
+
+export function calcRouteConfidence(metrics: RouteAggregateMetrics | undefined): {
+  score: number;
+  label: string;
+  color: string;
+  hint: string;
+} {
+  if (!metrics) {
+    return {
+      score: 0,
+      label: "Low",
+      color: "text-red-300 border-red-500/60 bg-red-900/20",
+      hint: "Score 0/100 — route metrics unavailable",
+    };
+  }
+  let score = 100;
+  const reasons: string[] = [];
+  if ((metrics.exitOverhangDays ?? 0) > 30) {
+    score -= 18;
+    reasons.push(`overhang ${metrics.exitOverhangDays?.toFixed(1)}d`);
+  }
+  if ((metrics.turnoverDays ?? 0) > 30) {
+    score -= 12;
+    reasons.push(`turnover ${metrics.turnoverDays?.toFixed(1)}d`);
+  }
+  if ((metrics.breakevenBuffer ?? 0) < 2) {
+    score -= 12;
+    reasons.push(`breakeven buffer ${(metrics.breakevenBuffer ?? 0).toFixed(2)}%`);
+  }
+  if ((metrics.riskTotalCount ?? 0) > 0) {
+    score -= Math.min(25, metrics.riskTotalCount * 5);
+    reasons.push(`${metrics.riskTotalCount} risk flags`);
+  }
+  score = Math.max(0, Math.min(100, score));
+  const label = score >= 75 ? "High" : score >= 45 ? "Medium" : "Low";
+  const color =
+    score >= 75
+      ? "text-green-300 border-green-500/60 bg-green-900/20"
+      : score >= 45
+        ? "text-yellow-300 border-yellow-500/60 bg-yellow-900/20"
+        : "text-red-300 border-red-500/60 bg-red-900/20";
+  return {
+    score,
+    label,
+    color,
+    hint:
+      reasons.length > 0
+        ? `Score ${score}/100 — ${reasons.join("; ")}`
+        : `Score ${score}/100 — no route penalties`,
+  };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -2043,6 +2136,7 @@ export function ScanResultsTable({
       aggregates[routeKey] = {
         routeSafetyRank,
         dailyIskPerJump: meta.routeDailyIskPerJump,
+        dailyProfit: meta.routeDailyProfit,
         iskPerM3PerJump: meta.routeRealIskPerM3PerJump,
         fastestIskPerJump: meta.routeRealIskPerJump,
         weakestExecutionQuality: meta.routeWeakestExecutionQuality,
@@ -2052,6 +2146,8 @@ export function ScanResultsTable({
         riskThinFillCount: meta.routeRiskThinFillCount,
         riskTotalCount,
         turnoverDays: meta.routeTurnoverDays,
+        exitOverhangDays: meta.routeExitOverhangDays,
+        breakevenBuffer: meta.routeBreakevenBuffer,
         dailyProfitOverCapital: meta.routeDailyProfitOverCapital,
         routeTotalProfit: meta.routeTotalProfit,
         routeTotalCapital: meta.routeTotalCapital,
@@ -2528,7 +2624,7 @@ export function ScanResultsTable({
         fastest_isk: { key: "RoutePackRealIskPerJump", dir: "desc" },
         safest: { key: "RouteSafety", dir: "asc" },
         cargo: { key: "RoutePackRealIskPerM3PerJump", dir: "desc" },
-        capital_efficient: { key: "RoutePackDailyProfitOverCapital", dir: "desc" },
+        capital_efficient: { key: "RoutePackTurnoverDays", dir: "asc" },
       };
       const next =
         routeViewMode === "route"
@@ -3994,6 +4090,8 @@ export function ScanResultsTable({
                         if (group.rows.length === 0) return null;
                         const expanded = expandedRouteGroups.has(group.key);
                         const routeSummary = batchMetricsByRoute[group.key];
+                        const routeAggregate = routeAggregateMetricsByRoute[group.key];
+                        const routeConfidence = calcRouteConfidence(routeAggregate);
                         return (
                           <Fragment key={`route-group:${group.key}`}>
                             <tr className="border-b border-eve-border/60 bg-eve-dark/50">
@@ -4020,8 +4118,37 @@ export function ScanResultsTable({
                                   <span className="text-eve-accent font-mono">
                                     {formatISK(routeSummary?.routeTotalProfit ?? 0)}
                                   </span>
+                                  <span className="text-eve-accent font-mono">
+                                    {formatISK(routeSummary?.routeDailyProfit ?? 0)}/d
+                                  </span>
+                                  <span className="text-eve-dim font-mono">
+                                    {formatBatchSyntheticCell(
+                                      "RoutePackRealIskPerM3PerJump",
+                                      routeSummary?.routeRealIskPerM3PerJump ?? null,
+                                    )}
+                                  </span>
+                                  <span className="text-eve-dim font-mono">
+                                    TO{" "}
+                                    {formatBatchSyntheticCell(
+                                      "RoutePackTurnoverDays",
+                                      routeSummary?.routeTurnoverDays ?? null,
+                                    )}
+                                  </span>
+                                  <span className="text-eve-dim font-mono">
+                                    OH{" "}
+                                    {formatBatchSyntheticCell(
+                                      "RoutePackExitOverhangDays",
+                                      routeSummary?.routeExitOverhangDays ?? null,
+                                    )}
+                                  </span>
                                   <span className="text-eve-dim font-mono">
                                     EQ min {(routeSummary?.routeWeakestExecutionQuality ?? 0).toFixed(1)}
+                                  </span>
+                                  <span
+                                    className={`px-1 py-0.5 rounded-sm border text-[10px] font-bold ${routeConfidence.color}`}
+                                    title={routeConfidence.hint}
+                                  >
+                                    {routeConfidence.label} {routeConfidence.score}
                                   </span>
                                 </button>
                               </td>
