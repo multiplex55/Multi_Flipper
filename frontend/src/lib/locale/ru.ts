@@ -161,6 +161,8 @@ export const ru = {
     colTurnoverDaysHint: "Требуемый капитал / дневная прибыль (скрыто при дневной прибыли ≤ 0).",
     colSlippageCostIsk: "Цена проскальзывания",
     colSlippageCostIskHint: "Стоимость проскальзывания на показываемом объёме исполнения (buy + sell).",
+    colWeightedSlippagePct: "Взвеш. проскальзывание %",
+    colWeightedSlippagePctHint: "Взвешенный процент проскальзывания buy+sell по выбранным строкам маршрут-пака.",
     colProfit: "Прибыль top-book",
     colBatchNumber: "Батч №",
     colBatchProfit: "Прибыль батча",

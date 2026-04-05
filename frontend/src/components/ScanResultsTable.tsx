@@ -24,6 +24,7 @@ import {
   type RouteBatchMetadata,
 } from "@/lib/batchMetrics";
 import { routeSafetyRankFromState } from "@/lib/routeSafetySort";
+import { calcRouteConfidence as calcRouteConfidenceFromInputs } from "@/lib/routeConfidence";
 import {
   dailyIskPerJump,
   radiusRouteKey,
@@ -447,7 +448,7 @@ const baseColumnDefs: ColumnDef[] = [
   },
   {
     key: "RoutePackWeightedSlippagePct",
-    labelKey: "colSlippageCostIsk",
+    labelKey: "colWeightedSlippagePct",
     width: "min-w-[145px]",
     numeric: true,
   },
@@ -896,6 +897,7 @@ type RouteAggregateMetrics = {
   dailyProfitOverCapital: number | null;
   routeTotalProfit: number;
   routeTotalCapital: number;
+  weightedSlippagePct: number;
 };
 
 const BATCH_SYNTHETIC_KEYS: Set<SortKey> = new Set([
@@ -1254,41 +1256,15 @@ export function calcRouteConfidence(metrics: RouteAggregateMetrics | undefined):
       hint: "Score 0/100 — route metrics unavailable",
     };
   }
-  let score = 100;
-  const reasons: string[] = [];
-  if ((metrics.exitOverhangDays ?? 0) > 30) {
-    score -= 18;
-    reasons.push(`overhang ${metrics.exitOverhangDays?.toFixed(1)}d`);
-  }
-  if ((metrics.turnoverDays ?? 0) > 30) {
-    score -= 12;
-    reasons.push(`turnover ${metrics.turnoverDays?.toFixed(1)}d`);
-  }
-  if ((metrics.breakevenBuffer ?? 0) < 2) {
-    score -= 12;
-    reasons.push(`breakeven buffer ${(metrics.breakevenBuffer ?? 0).toFixed(2)}%`);
-  }
-  if ((metrics.riskTotalCount ?? 0) > 0) {
-    score -= Math.min(25, metrics.riskTotalCount * 5);
-    reasons.push(`${metrics.riskTotalCount} risk flags`);
-  }
-  score = Math.max(0, Math.min(100, score));
-  const label = score >= 75 ? "High" : score >= 45 ? "Medium" : "Low";
-  const color =
-    score >= 75
-      ? "text-green-300 border-green-500/60 bg-green-900/20"
-      : score >= 45
-        ? "text-yellow-300 border-yellow-500/60 bg-yellow-900/20"
-        : "text-red-300 border-red-500/60 bg-red-900/20";
-  return {
-    score,
-    label,
-    color,
-    hint:
-      reasons.length > 0
-        ? `Score ${score}/100 — ${reasons.join("; ")}`
-        : `Score ${score}/100 — no route penalties`,
-  };
+  return calcRouteConfidenceFromInputs({
+    routeSafetyRank: metrics.routeSafetyRank,
+    weakestExecutionQuality: metrics.weakestExecutionQuality,
+    weightedSlippagePct: metrics.weightedSlippagePct,
+    riskSpikeCount: metrics.riskSpikeCount,
+    riskNoHistoryCount: metrics.riskNoHistoryCount,
+    riskUnstableHistoryCount: metrics.riskUnstableHistoryCount,
+    exitOverhangDays: metrics.exitOverhangDays,
+  });
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -2151,6 +2127,7 @@ export function ScanResultsTable({
         dailyProfitOverCapital: meta.routeDailyProfitOverCapital,
         routeTotalProfit: meta.routeTotalProfit,
         routeTotalCapital: meta.routeTotalCapital,
+        weightedSlippagePct: meta.routeWeightedSlippagePct,
       };
     }
     return aggregates;
@@ -4115,35 +4092,56 @@ export function ScanResultsTable({
                                   <span className="text-eve-dim">
                                     {routeSummary?.routeItemCount ?? group.rows.length} items
                                   </span>
-                                  <span className="text-eve-accent font-mono">
-                                    {formatISK(routeSummary?.routeTotalProfit ?? 0)}
+                                  <span className="text-eve-accent font-mono" title="Total route profit">
+                                    P {formatISK(routeSummary?.routeTotalProfit ?? 0)}
                                   </span>
-                                  <span className="text-eve-accent font-mono">
-                                    {formatISK(routeSummary?.routeDailyProfit ?? 0)}/d
+                                  <span className="text-eve-dim font-mono" title="Route capital">
+                                    C {formatISK(routeSummary?.routeTotalCapital ?? 0)}
                                   </span>
-                                  <span className="text-eve-dim font-mono">
-                                    {formatBatchSyntheticCell(
-                                      "RoutePackRealIskPerM3PerJump",
-                                      routeSummary?.routeRealIskPerM3PerJump ?? null,
-                                    )}
+                                  <span className="text-eve-dim font-mono" title="Route volume">
+                                    V {(routeSummary?.routeTotalVolume ?? 0).toLocaleString()} m³
                                   </span>
-                                  <span className="text-eve-dim font-mono">
-                                    TO{" "}
-                                    {formatBatchSyntheticCell(
-                                      "RoutePackTurnoverDays",
-                                      routeSummary?.routeTurnoverDays ?? null,
-                                    )}
+                                  <span className="text-eve-dim font-mono" title="Capacity used">
+                                    Cap {formatBatchSyntheticCell("RoutePackCapacityUsedPercent", routeSummary?.routeCapacityUsedPercent ?? null)}
                                   </span>
-                                  <span className="text-eve-dim font-mono">
-                                    OH{" "}
-                                    {formatBatchSyntheticCell(
-                                      "RoutePackExitOverhangDays",
-                                      routeSummary?.routeExitOverhangDays ?? null,
-                                    )}
+                                  <span className="text-eve-accent font-mono" title="Daily ISK per jump">
+                                    D/J {formatBatchSyntheticCell("RoutePackDailyIskPerJump", routeSummary?.routeDailyIskPerJump ?? null)}
+                                  </span>
+                                  <span className="text-eve-dim font-mono" title="Real ISK per m3 per jump">
+                                    m³/J {formatBatchSyntheticCell("RoutePackRealIskPerM3PerJump", routeSummary?.routeRealIskPerM3PerJump ?? null)}
                                   </span>
                                   <span className="text-eve-dim font-mono">
                                     EQ min {(routeSummary?.routeWeakestExecutionQuality ?? 0).toFixed(1)}
                                   </span>
+                                  <span className="text-eve-dim font-mono" title="Weighted slippage percent">
+                                    Slip {formatBatchSyntheticCell("RoutePackWeightedSlippagePct", routeSummary?.routeWeightedSlippagePct ?? null)}
+                                  </span>
+                                  <span className="text-eve-dim font-mono" title="Exit overhang">
+                                    OH {formatBatchSyntheticCell("RoutePackExitOverhangDays", routeSummary?.routeExitOverhangDays ?? null)}
+                                  </span>
+                                  <span className="text-eve-dim font-mono" title="Route safety">
+                                    Safety {routeAggregate?.routeSafetyRank === 0 ? "🟢" : routeAggregate?.routeSafetyRank === 1 ? "🟡" : "🔴"}
+                                  </span>
+                                  {(routeAggregate?.riskSpikeCount ?? 0) > 0 && (
+                                    <span className="px-1 py-0.5 rounded-sm border border-red-500/60 text-[10px] font-bold text-red-300 bg-red-900/20" title="Price spike warnings">
+                                      SPIKE {routeAggregate?.riskSpikeCount}
+                                    </span>
+                                  )}
+                                  {(routeAggregate?.riskNoHistoryCount ?? 0) > 0 && (
+                                    <span className="px-1 py-0.5 rounded-sm border border-amber-500/60 text-[10px] font-bold text-amber-300 bg-amber-900/20" title="No history warnings">
+                                      NO HIST {routeAggregate?.riskNoHistoryCount}
+                                    </span>
+                                  )}
+                                  {(routeAggregate?.riskUnstableHistoryCount ?? 0) > 0 && (
+                                    <span className="px-1 py-0.5 rounded-sm border border-yellow-500/60 text-[10px] font-bold text-yellow-300 bg-yellow-900/20" title="Unstable history warnings">
+                                      UNSTABLE {routeAggregate?.riskUnstableHistoryCount}
+                                    </span>
+                                  )}
+                                  {(routeAggregate?.riskThinFillCount ?? 0) > 0 && (
+                                    <span className="px-1 py-0.5 rounded-sm border border-orange-500/60 text-[10px] font-bold text-orange-300 bg-orange-900/20" title="Thin fill warnings">
+                                      THIN {routeAggregate?.riskThinFillCount}
+                                    </span>
+                                  )}
                                   <span
                                     className={`px-1 py-0.5 rounded-sm border text-[10px] font-bold ${routeConfidence.color}`}
                                     title={routeConfidence.hint}
