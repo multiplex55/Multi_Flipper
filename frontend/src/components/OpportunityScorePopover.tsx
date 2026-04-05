@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { OpportunityExplanation } from "@/lib/opportunityScore";
 import { explainOpportunityScore } from "@/lib/opportunityScore";
+import type { ExecutionQualityBreakdown } from "@/lib/executionQuality";
 
 interface OpportunityScorePopoverProps {
   explanation: OpportunityExplanation;
@@ -23,8 +24,47 @@ function formatRaw(value: number | null): string {
   return value.toFixed(2);
 }
 
-export function OpportunityScoreDetails({ explanation }: { explanation: OpportunityExplanation }) {
+export function OpportunityScoreDetails({
+  explanation,
+  executionQuality,
+}: {
+  explanation: OpportunityExplanation;
+  executionQuality?: ExecutionQualityBreakdown;
+}) {
   const rationale = useMemo(() => explainOpportunityScore(explanation), [explanation]);
+  return (
+    <OpportunityScoreDetailsBody explanation={explanation} rationale={rationale} executionQuality={executionQuality} />
+  );
+}
+
+function executionFactorLabel(factor: ExecutionQualityBreakdown["factors"][number]["factor"]): string {
+  switch (factor) {
+    case "fillRatio":
+      return "Fill ratio";
+    case "slippage":
+      return "Slippage burden";
+    case "depthCoverage":
+      return "Top-of-book depth";
+    case "history":
+      return "History coverage";
+    case "spike":
+      return "Destination spike";
+    case "stability":
+      return "Price stability";
+    default:
+      return factor;
+  }
+}
+
+function OpportunityScoreDetailsBody({
+  explanation,
+  rationale,
+  executionQuality,
+}: {
+  explanation: OpportunityExplanation;
+  rationale: string;
+  executionQuality?: ExecutionQualityBreakdown;
+}) {
   return (
     <>
       <div className="flex items-center justify-between mb-2">
@@ -72,6 +112,18 @@ export function OpportunityScoreDetails({ explanation }: { explanation: Opportun
           ))}
         </tbody>
       </table>
+      {executionQuality && (
+        <div className="mt-3 border-t border-eve-border/40 pt-2">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-eve-dim uppercase tracking-wider">Execution quality</span>
+            <span className="font-mono text-eve-accent">{executionQuality.score.toFixed(1)}</span>
+          </div>
+          <div className="text-[10px] text-eve-dim mb-1">
+            Dominant drivers: +{executionFactorLabel(executionQuality.topPositives[0].factor)}; penalty from{" "}
+            {executionFactorLabel(executionQuality.topPenalties[0].factor)}.
+          </div>
+        </div>
+      )}
       <div className="mt-2 text-eve-dim">Ranks highly because: {rationale}</div>
     </>
   );

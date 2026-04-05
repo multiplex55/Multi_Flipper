@@ -28,6 +28,12 @@ import {
   turnoverDays,
 } from "@/lib/radiusMetrics";
 import {
+  breakevenBufferForFlip,
+  executionQualityForFlip,
+  exitOverhangDays,
+  hasDestinationPriceSpike,
+} from "@/lib/executionQuality";
+import {
   compareBatchSyntheticValues,
   formatBatchSyntheticCell,
   getBatchSyntheticValue,
@@ -81,6 +87,9 @@ type SyntheticSortKey =
   | "BatchTotalCapital"
   | "BatchIskPerJump"
   | "OpportunityScore"
+  | "ExecutionQuality"
+  | "ExitOverhangDays"
+  | "BreakevenBuffer"
   | "RealIskPerJump"
   | "DailyIskPerJump"
   | "RealIskPerM3PerJump"
@@ -290,6 +299,27 @@ const baseColumnDefs: ColumnDef[] = [
     width: "min-w-[120px]",
     numeric: true,
     tooltipKey: "colSlippageCostIskHint",
+  },
+  {
+    key: "ExecutionQuality",
+    labelKey: "colExecutionQuality" as TranslationKey,
+    width: "min-w-[110px]",
+    numeric: true,
+    tooltipKey: "colExecutionQualityHint" as TranslationKey,
+  },
+  {
+    key: "ExitOverhangDays",
+    labelKey: "colExitOverhangDays" as TranslationKey,
+    width: "min-w-[115px]",
+    numeric: true,
+    tooltipKey: "colExitOverhangDaysHint" as TranslationKey,
+  },
+  {
+    key: "BreakevenBuffer",
+    labelKey: "colBreakevenBuffer" as TranslationKey,
+    width: "min-w-[110px]",
+    numeric: true,
+    tooltipKey: "colBreakevenBufferHint" as TranslationKey,
   },
   {
     key: "TotalProfit",
@@ -847,6 +877,9 @@ function getCellValue(
   if (key === "RealIskPerM3PerJump") return realIskPerM3PerJump(row);
   if (key === "TurnoverDays") return turnoverDays(row);
   if (key === "SlippageCostIsk") return slippageCostIsk(row);
+  if (key === "ExecutionQuality") return executionQualityForFlip(row).score;
+  if (key === "ExitOverhangDays") return exitOverhangDays(row.TargetSellSupply, rowS2BPerDay(row));
+  if (key === "BreakevenBuffer") return breakevenBufferForFlip(row);
   if (key === "RouteSafety") return null;
   if (key === "OpportunityScore")
     return scoreFlipResult(row, profile).finalScore;
@@ -911,6 +944,20 @@ function fmtCell(
   if (col.key === "OpportunityScore") {
     const v = Number(val ?? 0);
     return Number.isFinite(v) ? v.toFixed(1) : "—";
+  }
+  if (col.key === "ExecutionQuality") {
+    const v = Number(val ?? 0);
+    return Number.isFinite(v) ? v.toFixed(1) : "—";
+  }
+  if (col.key === "ExitOverhangDays") {
+    if (val == null) return "—";
+    const v = Number(val);
+    if (!Number.isFinite(v)) return "∞";
+    return v.toFixed(1);
+  }
+  if (col.key === "BreakevenBuffer") {
+    const v = Number(val ?? 0);
+    return Number.isFinite(v) ? `${v.toFixed(2)}%` : "—";
   }
   if (
     col.key === "ExpectedProfit" ||
@@ -3597,6 +3644,7 @@ export function ScanResultsTable({
             </div>
             <OpportunityScoreDetails
               explanation={scoreFlipResult(scoreExplainRow, opportunityProfile)}
+              executionQuality={executionQualityForFlip(scoreExplainRow)}
             />
             <div className="mt-2 text-center">
               <button
@@ -4284,8 +4332,7 @@ const DataRow = memo(
                 )}
                 <span className="truncate">{ir.row.TypeName}</span>
                 {/* Price-spike warning: now-profit > 0 but period-profit < 0 means temp spike */}
-                {(ir.row.DayNowProfit ?? 0) > 0 &&
-                  (ir.row.DayPeriodProfit ?? 0) < 0 && (
+                {hasDestinationPriceSpike(ir.row) && (
                     <span
                       title="Price spike: current profit looks positive but historical average is below break-even. This trade may be risky."
                       className="shrink-0 inline-flex items-center px-1 py-px rounded-[2px] border border-yellow-400/50 bg-yellow-400/10 text-yellow-300 text-[9px] leading-none font-medium uppercase"
