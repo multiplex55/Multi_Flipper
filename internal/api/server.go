@@ -3654,6 +3654,10 @@ func (s *Server) handleRoutePlanner(w http.ResponseWriter, r *http.Request) {
 				SellLocationID: hop.SellLocationID,
 				BuyPriceISK:    hop.BuyPriceISK,
 				SellPriceISK:   hop.SellPriceISK,
+				FillConfidence: hop.FillConfidence,
+				CapitalLockup:  hop.CapitalLockup,
+				StaleRisk:      hop.StaleRisk,
+				Concentration:  hop.Concentration,
 			})
 		}
 	}
@@ -3671,6 +3675,10 @@ func (s *Server) handleRoutePlanner(w http.ResponseWriter, r *http.Request) {
 				SellLocationID: candidate.SellLocationID,
 				BuyPriceISK:    candidate.BuyPriceISK,
 				SellPriceISK:   candidate.SellPriceISK,
+				FillConfidence: candidate.FillConfidence,
+				CapitalLockup:  candidate.CapitalLockup,
+				StaleRisk:      candidate.StaleRisk,
+				Concentration:  candidate.Concentration,
 			})
 		}
 	}
@@ -3713,9 +3721,26 @@ func (s *Server) handleRoutePlanner(w http.ResponseWriter, r *http.Request) {
 		}
 		manifest := make([]RoutePlannerStopManifest, 0, len(opt.ManifestByStop))
 		for _, group := range opt.ManifestByStop {
-			groupLines := make([]RouteAdditionLine, 0, len(group.Lines))
-			for _, line := range group.Lines {
-				groupLines = append(groupLines, RouteAdditionLine{
+			buyLines := make([]RouteAdditionLine, 0, len(group.BuyLines))
+			for _, line := range group.BuyLines {
+				buyLines = append(buyLines, RouteAdditionLine{
+					TypeID:         line.TypeID,
+					TypeName:       line.TypeName,
+					Units:          line.Units,
+					UnitVolumeM3:   line.UnitVolumeM3,
+					BuySystemID:    line.BuySystemID,
+					BuyLocationID:  line.BuyLocationID,
+					SellSystemID:   line.SellSystemID,
+					SellLocationID: line.SellLocationID,
+					BuyTotalISK:    line.BuyTotalISK,
+					SellTotalISK:   line.SellTotalISK,
+					ProfitTotalISK: line.ProfitTotalISK,
+					RouteJumps:     line.RouteJumps,
+				})
+			}
+			sellLines := make([]RouteAdditionLine, 0, len(group.SellLines))
+			for _, line := range group.SellLines {
+				sellLines = append(sellLines, RouteAdditionLine{
 					TypeID:         line.TypeID,
 					TypeName:       line.TypeName,
 					Units:          line.Units,
@@ -3731,14 +3756,19 @@ func (s *Server) handleRoutePlanner(w http.ResponseWriter, r *http.Request) {
 				})
 			}
 			manifest = append(manifest, RoutePlannerStopManifest{
-				StopSystemID:   group.StopSystemID,
-				StopLocationID: group.StopLocationID,
-				Lines:          groupLines,
-				TotalUnits:     group.TotalUnits,
-				TotalVolumeM3:  group.TotalVolumeM3,
-				TotalBuyISK:    group.TotalBuyISK,
-				TotalSellISK:   group.TotalSellISK,
-				TotalProfitISK: group.TotalProfitISK,
+				StopSystemID:       group.StopSystemID,
+				StopLocationID:     group.StopLocationID,
+				BuyLines:           buyLines,
+				SellLines:          sellLines,
+				TotalBuyUnits:      group.TotalBuyUnits,
+				TotalSellUnits:     group.TotalSellUnits,
+				TotalBuyVolumeM3:   group.TotalBuyVolumeM3,
+				TotalSellVolumeM3:  group.TotalSellVolumeM3,
+				TotalBuyISK:        group.TotalBuyISK,
+				TotalSellISK:       group.TotalSellISK,
+				TotalProfitISK:     group.TotalProfitISK,
+				CargoUsedAfterM3:   group.CargoUsedAfterM3,
+				CargoRemainAfterM3: group.CargoRemainAfterM3,
 			})
 		}
 		resp.Options = append(resp.Options, RoutePlannerOption{

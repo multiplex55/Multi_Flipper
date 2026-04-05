@@ -49,6 +49,10 @@ type BatchRouteCandidateOpportunity struct {
 	SellLocationID int64
 	BuyPriceISK    float64
 	SellPriceISK   float64
+	FillConfidence float64
+	CapitalLockup  float64
+	StaleRisk      float64
+	Concentration  float64
 }
 
 type BatchCreateRouteLine struct {
@@ -64,6 +68,10 @@ type BatchCreateRouteLine struct {
 	SellTotalISK   float64
 	ProfitTotalISK float64
 	RouteJumps     int
+	FillConfidence float64
+	CapitalLockup  float64
+	StaleRisk      float64
+	Concentration  float64
 }
 
 type BatchCreateRouteOption struct {

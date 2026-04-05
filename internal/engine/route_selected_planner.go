@@ -23,6 +23,10 @@ type RouteSelectedHop struct {
 	SellLocationID int64
 	BuyPriceISK    float64
 	SellPriceISK   float64
+	FillConfidence float64
+	CapitalLockup  float64
+	StaleRisk      float64
+	Concentration  float64
 }
 
 type RouteSelectedPlannerParams struct {
@@ -61,14 +65,19 @@ type RouteSelectedExcludedCandidate struct {
 }
 
 type RouteSelectedManifestStopGroup struct {
-	StopSystemID   int32                  `json:"stop_system_id"`
-	StopLocationID int64                  `json:"stop_location_id"`
-	Lines          []BatchCreateRouteLine `json:"lines"`
-	TotalUnits     int64                  `json:"total_units"`
-	TotalVolumeM3  float64                `json:"total_volume_m3"`
-	TotalBuyISK    float64                `json:"total_buy_isk"`
-	TotalSellISK   float64                `json:"total_sell_isk"`
-	TotalProfitISK float64                `json:"total_profit_isk"`
+	StopSystemID       int32                  `json:"stop_system_id"`
+	StopLocationID     int64                  `json:"stop_location_id"`
+	BuyLines           []BatchCreateRouteLine `json:"buy_lines"`
+	SellLines          []BatchCreateRouteLine `json:"sell_lines"`
+	TotalBuyUnits      int64                  `json:"total_buy_units"`
+	TotalSellUnits     int64                  `json:"total_sell_units"`
+	TotalBuyVolumeM3   float64                `json:"total_buy_volume_m3"`
+	TotalSellVolumeM3  float64                `json:"total_sell_volume_m3"`
+	TotalBuyISK        float64                `json:"total_buy_isk"`
+	TotalSellISK       float64                `json:"total_sell_isk"`
+	TotalProfitISK     float64                `json:"total_profit_isk"`
+	CargoUsedAfterM3   float64                `json:"cargo_used_after_m3"`
+	CargoRemainAfterM3 float64                `json:"cargo_remain_after_m3"`
 }
 
 type RouteSelectedExpansionOption struct {
@@ -157,6 +166,11 @@ func (s *Scanner) PlanSelectedRouteExpansions(_ context.Context, params RouteSel
 			excluded = append(excluded, exc)
 			continue
 		}
+		if _, ok := selectedStops[fmt.Sprintf("%d|%d", candidate.BuySystemID, candidate.BuyLocationID)]; !ok {
+			exc.Reason = "not_selected_stop"
+			excluded = append(excluded, exc)
+			continue
+		}
 		if _, ok := selectedStops[fmt.Sprintf("%d|%d", candidate.SellSystemID, candidate.SellLocationID)]; !ok {
 			exc.Reason = "not_selected_stop"
 			excluded = append(excluded, exc)
@@ -218,6 +232,10 @@ func (s *Scanner) PlanSelectedRouteExpansions(_ context.Context, params RouteSel
 			SellTotalISK:   float64(units) * candidate.SellPriceISK,
 			ProfitTotalISK: float64(units) * profitPerUnit,
 			RouteJumps:     routeJumps,
+			FillConfidence: candidate.FillConfidence,
+			CapitalLockup:  candidate.CapitalLockup,
+			StaleRisk:      candidate.StaleRisk,
+			Concentration:  candidate.Concentration,
 		})
 	}
 	sort.SliceStable(lines, func(i, j int) bool { return batchRouteLineLess(lines[i], lines[j]) })
@@ -227,23 +245,22 @@ func (s *Scanner) PlanSelectedRouteExpansions(_ context.Context, params RouteSel
 		return result, nil
 	}
 
-	batchParams := BatchCreateRouteParams{
+	corridor := newCorridorPlanner(corridorPlannerParams{
+		RouteStops:          append([]RouteSelectedStop(nil), params.SelectedRouteStops...),
 		OriginSystemID:      params.OriginSystemID,
 		CurrentSystemID:     params.CurrentSystemID,
-		FinalSellSystemID:   canonicalPath[len(canonicalPath)-1],
 		RemainingCapacityM3: params.RemainingCapacityM3,
 		CargoLimitM3:        params.CargoLimitM3,
-		AllowLowsec:         params.AllowLowsec,
-		AllowNullsec:        params.AllowNullsec,
-		AllowWormhole:       params.AllowWormhole,
-		MinRouteSecurity:    params.MinRouteSecurity,
-	}
-	options := s.buildBatchRouteOptionsFromCandidates(lines, batchParams)
+		RouteMaxJumps:       params.RouteMaxJumps,
+		RoutePolicy:         routePolicy,
+	})
+	options := corridor.BuildOptions(s, lines)
 	if len(options) == 0 {
 		result.Diagnostics = append(result.Diagnostics, "no additions fit remaining cargo after capacity enforcement")
 		result.ExcludedCandidates = excluded
 		return result, nil
 	}
+
 	addedProfit := make(map[string]float64, len(options))
 	for _, opt := range options {
 		addedProfit[opt.OptionID] = opt.TotalProfitISK
@@ -253,42 +270,9 @@ func (s *Scanner) PlanSelectedRouteExpansions(_ context.Context, params RouteSel
 	for _, opt := range ranked {
 		result.Options = append(result.Options, RouteSelectedExpansionOption{
 			BatchCreateRouteOption: opt,
-			ManifestByStop:         groupManifestByStop(opt.Lines),
+			ManifestByStop:         corridor.BuildManifest(opt.Lines),
 		})
 	}
 	result.ExcludedCandidates = excluded
 	return result, nil
-}
-
-func groupManifestByStop(lines []BatchCreateRouteLine) []RouteSelectedManifestStopGroup {
-	if len(lines) == 0 {
-		return nil
-	}
-	byStop := make(map[string]*RouteSelectedManifestStopGroup, len(lines))
-	for _, line := range lines {
-		key := fmt.Sprintf("%d|%d", line.SellSystemID, line.SellLocationID)
-		group, ok := byStop[key]
-		if !ok {
-			group = &RouteSelectedManifestStopGroup{StopSystemID: line.SellSystemID, StopLocationID: line.SellLocationID}
-			byStop[key] = group
-		}
-		group.Lines = append(group.Lines, line)
-		group.TotalUnits += line.Units
-		group.TotalVolumeM3 += float64(line.Units) * line.UnitVolumeM3
-		group.TotalBuyISK += line.BuyTotalISK
-		group.TotalSellISK += line.SellTotalISK
-		group.TotalProfitISK += line.ProfitTotalISK
-	}
-	out := make([]RouteSelectedManifestStopGroup, 0, len(byStop))
-	for _, g := range byStop {
-		sort.SliceStable(g.Lines, func(i, j int) bool { return batchRouteLineLess(g.Lines[i], g.Lines[j]) })
-		out = append(out, *g)
-	}
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].StopSystemID == out[j].StopSystemID {
-			return out[i].StopLocationID < out[j].StopLocationID
-		}
-		return out[i].StopSystemID < out[j].StopSystemID
-	})
-	return out
 }
