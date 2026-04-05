@@ -225,6 +225,9 @@ describe("batchMetrics", () => {
     expect(byRoute[routeAKey].routeWeightedSlippagePct).toBeCloseTo(4, 6);
     expect(byRoute[routeAKey].routeRealIskPerJump).toBeCloseTo(115, 6);
     expect(byRoute[routeAKey].routeDailyIskPerJump).toBeCloseTo(33.3333333, 5);
+    expect(byRoute[routeAKey].routeRealIskPerM3PerJump).toBeGreaterThan(0);
+    expect(byRoute[routeAKey].routeDailyProfit).toBeGreaterThan(0);
+    expect(byRoute[routeAKey].routeDailyProfitOverCapital).toBeGreaterThanOrEqual(0);
     expect(byRoute[routeAKey].routeRiskNoHistoryCount).toBeGreaterThanOrEqual(0);
     expect(byRoute[routeBKey].routeItemCount).toBe(1);
   });
