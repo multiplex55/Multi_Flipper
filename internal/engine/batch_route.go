@@ -79,6 +79,8 @@ type BatchCreateRouteLine struct {
 
 type BatchCreateRouteOption struct {
 	OptionID               string
+	StrategyID             string
+	StrategyLabel          string
 	Lines                  []BatchCreateRouteLine
 	OrderedBuySystems      []int32
 	RouteSequence          []int32
@@ -876,80 +878,328 @@ func (s *Scanner) buildBatchRouteOptionsFromCandidates(lines []BatchCreateRouteL
 		return nil
 	}
 
-	type strategy struct {
-		id   string
-		sort func(i, j BatchCreateRouteLine) bool
+	type strategyMeta struct {
+		id    string
+		label string
 	}
+	type strategy struct {
+		meta  strategyMeta
+		build func([]BatchCreateRouteLine) []BatchCreateRouteLine
+	}
+
+	sortAndFit := func(source []BatchCreateRouteLine, less func(i, j BatchCreateRouteLine) bool) []BatchCreateRouteLine {
+		sorted := append([]BatchCreateRouteLine(nil), source...)
+		sort.SliceStable(sorted, func(i, j int) bool { return less(sorted[i], sorted[j]) })
+		return fitAdditionsToRemainingCargo(sorted, params.RemainingCapacityM3)
+	}
+	safeFillerScore := func(line BatchCreateRouteLine) float64 {
+		return (line.FillConfidence * 1.8) - (line.StaleRisk * 0.8) - (line.Concentration * 0.8)
+	}
+	lowAttentionScore := func(line BatchCreateRouteLine) float64 {
+		lineVol := float64(line.Units) * line.UnitVolumeM3
+		perHop := 0.0
+		if line.RouteJumps > 0 {
+			perHop = line.ProfitTotalISK / float64(line.RouteJumps)
+		}
+		liquidity := line.FillConfidence - (line.StaleRisk * 0.5)
+		return (perHop * 0.55) + (liquidity * 10000) + (lineVol * 3)
+	}
+	capitalLightTurnScore := func(line BatchCreateRouteLine) float64 {
+		lineVol := float64(line.Units) * line.UnitVolumeM3
+		efficiency := 0.0
+		if line.RouteJumps > 0 {
+			efficiency = line.ProfitTotalISK / float64(line.RouteJumps)
+		}
+		capitalPenalty := 0.0
+		if line.BuyTotalISK > 0 {
+			capitalPenalty = line.BuyTotalISK / math.Max(line.ProfitTotalISK, 1)
+		}
+		return (efficiency * 0.8) + (safeFillerScore(line) * 1000) + (lineVol * 2.5) - (capitalPenalty * 1000)
+	}
+	balancedPracticalScore := func(line BatchCreateRouteLine) float64 {
+		lineVol := float64(line.Units) * line.UnitVolumeM3
+		lineRisk := (line.StaleRisk + line.Concentration + (1 - line.FillConfidence)) / 3
+		executionStability := (1 - lineRisk) * 1.1
+		jumpEfficiency := 0.0
+		if line.RouteJumps > 0 {
+			jumpEfficiency = line.ProfitTotalISK / float64(line.RouteJumps)
+		}
+		volumeBalancePenalty := math.Abs(lineVol - 2.5)
+		jumpBalancePenalty := math.Abs(float64(line.RouteJumps) - 4)
+		return (executionStability * 15000) + (jumpEfficiency * 0.45) - (volumeBalancePenalty * 1400) - (jumpBalancePenalty * 600)
+	}
+	buildAnchorPlusFillers := func(source []BatchCreateRouteLine) []BatchCreateRouteLine {
+		if len(source) == 0 {
+			return nil
+		}
+		anchors := append([]BatchCreateRouteLine(nil), source...)
+		sort.SliceStable(anchors, func(i, j int) bool {
+			left := anchors[i]
+			right := anchors[j]
+			leftContribution := left.ProfitTotalISK
+			rightContribution := right.ProfitTotalISK
+			if left.RouteJumps > 0 {
+				leftContribution = left.ProfitTotalISK / float64(left.RouteJumps)
+			}
+			if right.RouteJumps > 0 {
+				rightContribution = right.ProfitTotalISK / float64(right.RouteJumps)
+			}
+			if leftContribution == rightContribution {
+				return batchRouteLineLess(left, right)
+			}
+			return leftContribution > rightContribution
+		})
+		anchorCount := 2
+		if len(anchors) < anchorCount {
+			anchorCount = len(anchors)
+		}
+		remainingCapacity := params.RemainingCapacityM3
+		selected := make([]BatchCreateRouteLine, 0, len(source))
+		usedKeys := make(map[string]bool, anchorCount)
+		for idx := 0; idx < anchorCount; idx++ {
+			line := anchors[idx]
+			lineVol := float64(line.Units) * line.UnitVolumeM3
+			if lineVol <= 0 || lineVol > remainingCapacity {
+				continue
+			}
+			remainingCapacity -= lineVol
+			selected = append(selected, line)
+			usedKeys[batchRouteTupleKey(line)] = true
+		}
+		if remainingCapacity <= 0 {
+			return selected
+		}
+		fillers := make([]BatchCreateRouteLine, 0, len(source))
+		for _, line := range source {
+			if usedKeys[batchRouteTupleKey(line)] {
+				continue
+			}
+			fillers = append(fillers, line)
+		}
+		sort.SliceStable(fillers, func(i, j int) bool {
+			left := safeFillerScore(fillers[i])
+			right := safeFillerScore(fillers[j])
+			if left == right {
+				return batchRouteLineLess(fillers[i], fillers[j])
+			}
+			return left > right
+		})
+		fittedFillers := fitAdditionsToRemainingCargo(fillers, remainingCapacity)
+		return append(selected, fittedFillers...)
+	}
+
 	strategies := []strategy{
 		{
-			id: "max-total-profit",
-			sort: func(i, j BatchCreateRouteLine) bool {
-				if i.ProfitTotalISK == j.ProfitTotalISK {
-					return batchRouteLineLess(i, j)
-				}
-				return i.ProfitTotalISK > j.ProfitTotalISK
-			},
-		},
-		{
-			id: "max-isk-per-jump",
-			sort: func(i, j BatchCreateRouteLine) bool {
-				left := 0.0
-				right := 0.0
-				if i.RouteJumps > 0 {
-					left = i.ProfitTotalISK / float64(i.RouteJumps)
-				}
-				if j.RouteJumps > 0 {
-					right = j.ProfitTotalISK / float64(j.RouteJumps)
-				}
-				if left == right {
-					return batchRouteLineLess(i, j)
-				}
-				return left > right
-			},
-		},
-		{
-			id: "max-cargo-utilization",
-			sort: func(i, j BatchCreateRouteLine) bool {
-				leftVol := float64(i.Units) * i.UnitVolumeM3
-				rightVol := float64(j.Units) * j.UnitVolumeM3
-				if leftVol == rightVol {
-					leftFiller := computeFillerScore(i, params.ExecutionScoring)
-					rightFiller := computeFillerScore(j, params.ExecutionScoring)
-					if leftFiller == rightFiller && i.ProfitTotalISK == j.ProfitTotalISK {
+			meta: strategyMeta{id: "max-total-profit", label: "Max Total Profit"},
+			build: func(source []BatchCreateRouteLine) []BatchCreateRouteLine {
+				return sortAndFit(source, func(i, j BatchCreateRouteLine) bool {
+					if i.ProfitTotalISK == j.ProfitTotalISK {
 						return batchRouteLineLess(i, j)
 					}
-					if leftFiller != rightFiller {
-						return leftFiller > rightFiller
-					}
 					return i.ProfitTotalISK > j.ProfitTotalISK
-				}
-				return leftVol > rightVol
+				})
 			},
 		},
 		{
-			id: "safe-fillers-first",
-			sort: func(i, j BatchCreateRouteLine) bool {
-				left := computeFillerScore(i, params.ExecutionScoring)
-				right := computeFillerScore(j, params.ExecutionScoring)
-				if left == right {
-					return batchRouteLineLess(i, j)
-				}
-				return left > right
+			meta: strategyMeta{id: "max-isk-per-jump", label: "Max ISK / Jump"},
+			build: func(source []BatchCreateRouteLine) []BatchCreateRouteLine {
+				return sortAndFit(source, func(i, j BatchCreateRouteLine) bool {
+					left := 0.0
+					right := 0.0
+					if i.RouteJumps > 0 {
+						left = i.ProfitTotalISK / float64(i.RouteJumps)
+					}
+					if j.RouteJumps > 0 {
+						right = j.ProfitTotalISK / float64(j.RouteJumps)
+					}
+					if left == right {
+						return batchRouteLineLess(i, j)
+					}
+					return left > right
+				})
 			},
+		},
+		{
+			meta: strategyMeta{id: "max-cargo-utilization", label: "Max Cargo Utilization"},
+			build: func(source []BatchCreateRouteLine) []BatchCreateRouteLine {
+				return sortAndFit(source, func(i, j BatchCreateRouteLine) bool {
+					leftVol := float64(i.Units) * i.UnitVolumeM3
+					rightVol := float64(j.Units) * j.UnitVolumeM3
+					if leftVol == rightVol {
+						leftFiller := computeFillerScore(i, params.ExecutionScoring)
+						rightFiller := computeFillerScore(j, params.ExecutionScoring)
+						if leftFiller == rightFiller && i.ProfitTotalISK == j.ProfitTotalISK {
+							return batchRouteLineLess(i, j)
+						}
+						if leftFiller != rightFiller {
+							return leftFiller > rightFiller
+						}
+						return i.ProfitTotalISK > j.ProfitTotalISK
+					}
+					return leftVol > rightVol
+				})
+			},
+		},
+		{
+			meta: strategyMeta{id: "safe-fillers-first", label: "Safe Fillers First"},
+			build: func(source []BatchCreateRouteLine) []BatchCreateRouteLine {
+				return sortAndFit(source, func(i, j BatchCreateRouteLine) bool {
+					left := computeFillerScore(i, params.ExecutionScoring)
+					right := computeFillerScore(j, params.ExecutionScoring)
+					if left == right {
+						return batchRouteLineLess(i, j)
+					}
+					return left > right
+				})
+			},
+		},
+		{
+			meta: strategyMeta{id: "safe_fillers_first", label: "Safe Fillers First"},
+			build: func(source []BatchCreateRouteLine) []BatchCreateRouteLine {
+				return sortAndFit(source, func(i, j BatchCreateRouteLine) bool {
+					left := safeFillerScore(i)
+					right := safeFillerScore(j)
+					if left == right {
+						return batchRouteLineLess(i, j)
+					}
+					return left > right
+				})
+			},
+		},
+		{
+			meta: strategyMeta{id: "low_attention", label: "Low Attention"},
+			build: func(source []BatchCreateRouteLine) []BatchCreateRouteLine {
+				sorted := append([]BatchCreateRouteLine(nil), source...)
+				sort.SliceStable(sorted, func(i, j int) bool {
+					left := lowAttentionScore(sorted[i])
+					right := lowAttentionScore(sorted[j])
+					if left == right {
+						if sorted[i].BuySystemID != sorted[j].BuySystemID {
+							return sorted[i].BuySystemID < sorted[j].BuySystemID
+						}
+						return batchRouteLineLess(sorted[i], sorted[j])
+					}
+					return left > right
+				})
+				fitted := fitAdditionsToRemainingCargo(sorted, params.RemainingCapacityM3)
+				if len(fitted) <= 1 {
+					return fitted
+				}
+				sort.SliceStable(fitted, func(i, j int) bool {
+					if fitted[i].BuySystemID != fitted[j].BuySystemID {
+						return fitted[i].BuySystemID < fitted[j].BuySystemID
+					}
+					return batchRouteLineLess(fitted[i], fitted[j])
+				})
+				compact := make([]BatchCreateRouteLine, 0, len(fitted))
+				seenSystems := make(map[int32]bool, len(fitted))
+				for _, line := range fitted {
+					if seenSystems[line.BuySystemID] {
+						continue
+					}
+					compact = append(compact, line)
+					seenSystems[line.BuySystemID] = true
+					if len(compact) >= 2 {
+						break
+					}
+				}
+				if len(compact) > 0 {
+					return compact
+				}
+				return fitted
+			},
+		},
+		{
+			meta: strategyMeta{id: "capital_light", label: "Capital Light"},
+			build: func(source []BatchCreateRouteLine) []BatchCreateRouteLine {
+				sorted := append([]BatchCreateRouteLine(nil), source...)
+				sort.SliceStable(sorted, func(i, j int) bool {
+					left := capitalLightTurnScore(sorted[i])
+					right := capitalLightTurnScore(sorted[j])
+					if left == right {
+						return batchRouteLineLess(sorted[i], sorted[j])
+					}
+					return left > right
+				})
+				capitalCap := 0.0
+				for _, line := range sorted {
+					capitalCap += line.BuyTotalISK
+				}
+				if capitalCap > 0 {
+					capitalCap *= 0.45
+				}
+				capitalUsed := 0.0
+				remainingCapacity := params.RemainingCapacityM3
+				selected := make([]BatchCreateRouteLine, 0, len(sorted))
+				for _, line := range sorted {
+					lineVol := float64(line.Units) * line.UnitVolumeM3
+					if lineVol <= 0 || lineVol > remainingCapacity {
+						continue
+					}
+					if capitalCap > 0 && (capitalUsed+line.BuyTotalISK) > capitalCap && len(selected) > 0 {
+						continue
+					}
+					capitalUsed += line.BuyTotalISK
+					remainingCapacity -= lineVol
+					selected = append(selected, line)
+					if remainingCapacity <= 0 {
+						break
+					}
+				}
+				return selected
+			},
+		},
+		{
+			meta: strategyMeta{id: "balanced_practical", label: "Balanced Practical"},
+			build: func(source []BatchCreateRouteLine) []BatchCreateRouteLine {
+				fitted := sortAndFit(source, func(i, j BatchCreateRouteLine) bool {
+					left := balancedPracticalScore(i)
+					right := balancedPracticalScore(j)
+					if left == right {
+						return batchRouteLineLess(i, j)
+					}
+					return left > right
+				})
+				if len(fitted) <= 3 {
+					return fitted
+				}
+				balanced := make([]BatchCreateRouteLine, 0, 3)
+				for _, line := range fitted {
+					lineRisk := (line.StaleRisk + line.Concentration + (1 - line.FillConfidence)) / 3
+					if lineRisk < 0.2 || lineRisk > 0.65 {
+						continue
+					}
+					balanced = append(balanced, line)
+					if len(balanced) >= 3 {
+						break
+					}
+				}
+				if len(balanced) > 0 {
+					return balanced
+				}
+				return fitted
+			},
+		},
+		{
+			meta:  strategyMeta{id: "anchor_plus_fillers", label: "Anchor + Fillers"},
+			build: buildAnchorPlusFillers,
 		},
 	}
 
 	options := make([]BatchCreateRouteOption, 0, len(strategies))
 	seenOptionSignature := make(map[string]bool, len(strategies))
 	for _, strat := range strategies {
-		sorted := append([]BatchCreateRouteLine(nil), lines...)
-		sort.SliceStable(sorted, func(i, j int) bool { return strat.sort(sorted[i], sorted[j]) })
-		fitted := fitAdditionsToRemainingCargo(sorted, params.RemainingCapacityM3)
+		fitted := strat.build(lines)
 		if len(fitted) == 0 {
 			continue
 		}
 
-		option := BatchCreateRouteOption{OptionID: strat.id, Lines: make([]BatchCreateRouteLine, 0, len(fitted))}
+		option := BatchCreateRouteOption{
+			OptionID:      strat.meta.id,
+			StrategyID:    strat.meta.id,
+			StrategyLabel: strat.meta.label,
+			Lines:         make([]BatchCreateRouteLine, 0, len(fitted)),
+		}
 		signature := ""
 		for _, line := range fitted {
 			lineVol := float64(line.Units) * line.UnitVolumeM3

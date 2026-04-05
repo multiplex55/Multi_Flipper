@@ -227,6 +227,30 @@ func TestRankRouteOptions_PreservesRoleSummariesAfterRanking(t *testing.T) {
 	}
 }
 
+func TestRankRouteOptions_PreservesStrategyMetadata(t *testing.T) {
+	options := []BatchCreateRouteOption{
+		{
+			OptionID:       "capital_light",
+			StrategyID:     "capital_light",
+			StrategyLabel:  "Capital Light",
+			TotalProfitISK: 100_000,
+			TotalBuyISK:    80_000,
+			AddedVolumeM3:  50,
+			TotalJumps:     4,
+			ISKPerJump:     25_000,
+			Lines:          []BatchCreateRouteLine{{TypeID: 11, Units: 2, UnitVolumeM3: 1, ProfitTotalISK: 100_000, BuySystemID: 1, BuyLocationID: 2, SellSystemID: 3, SellLocationID: 4}},
+		},
+	}
+
+	ranked := rankRouteOptions(options, map[string]float64{"capital_light": 100_000}, 100, RouteExecutionScoringConfig{})
+	if len(ranked) != 1 {
+		t.Fatalf("len(ranked) = %d, want 1", len(ranked))
+	}
+	if ranked[0].StrategyID != "capital_light" || ranked[0].StrategyLabel != "Capital Light" {
+		t.Fatalf("strategy metadata not preserved after ranking: %+v", ranked[0])
+	}
+}
+
 func TestRecommendation_ChangesWhenConfidenceWorsens(t *testing.T) {
 	options := []BatchCreateRouteOption{
 		{

@@ -3543,6 +3543,8 @@ func (s *Server) handleBatchCreateRoute(w http.ResponseWriter, r *http.Request) 
 		}
 		ranked = append(ranked, RouteAdditionOption{
 			OptionID:            opt.OptionID,
+			StrategyID:          opt.StrategyID,
+			StrategyLabel:       opt.StrategyLabel,
 			Rank:                idx + 1,
 			Lines:               lines,
 			LineCount:           len(lines),

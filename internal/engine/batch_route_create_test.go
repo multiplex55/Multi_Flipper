@@ -125,3 +125,38 @@ func TestBatchRouteRegression_SecurityPolicyTogglesChangeOptions(t *testing.T) {
 		t.Fatalf("expected options when lowsec transit is allowed")
 	}
 }
+
+func TestBatchRouteRegression_AnchorPlusFillersPreservesTopAnchors(t *testing.T) {
+	scanner := testBatchRouteScanner()
+	params := BatchCreateRouteParams{
+		OriginSystemID:      10,
+		CurrentSystemID:     10,
+		FinalSellSystemID:   30,
+		RemainingCapacityM3: 8,
+		CargoLimitM3:        12,
+	}
+	lines := []BatchCreateRouteLine{
+		{TypeID: 9001, Units: 2, UnitVolumeM3: 1, ProfitTotalISK: 260, BuyTotalISK: 150, SellTotalISK: 410, RouteJumps: 2, BuySystemID: 10, BuyLocationID: 60001, SellSystemID: 30, SellLocationID: 70001, FillConfidence: 0.9, StaleRisk: 0.1, Concentration: 0.2},
+		{TypeID: 9002, Units: 2, UnitVolumeM3: 1, ProfitTotalISK: 210, BuyTotalISK: 160, SellTotalISK: 370, RouteJumps: 2, BuySystemID: 20, BuyLocationID: 60002, SellSystemID: 30, SellLocationID: 70001, FillConfidence: 0.85, StaleRisk: 0.15, Concentration: 0.2},
+		{TypeID: 9003, Units: 3, UnitVolumeM3: 1, ProfitTotalISK: 160, BuyTotalISK: 100, SellTotalISK: 260, RouteJumps: 3, BuySystemID: 20, BuyLocationID: 60003, SellSystemID: 30, SellLocationID: 70001, FillConfidence: 0.8, StaleRisk: 0.1, Concentration: 0.2},
+		{TypeID: 9004, Units: 2, UnitVolumeM3: 1, ProfitTotalISK: 120, BuyTotalISK: 75, SellTotalISK: 195, RouteJumps: 4, BuySystemID: 40, BuyLocationID: 60004, SellSystemID: 30, SellLocationID: 70001, FillConfidence: 0.95, StaleRisk: 0.05, Concentration: 0.1},
+	}
+
+	options := scanner.buildBatchRouteOptionsFromCandidates(lines, params)
+	var anchorOption *BatchCreateRouteOption
+	for i := range options {
+		if options[i].StrategyID == "anchor_plus_fillers" {
+			anchorOption = &options[i]
+			break
+		}
+	}
+	if anchorOption == nil {
+		t.Fatalf("expected anchor_plus_fillers option to be present")
+	}
+	if len(anchorOption.Lines) < 2 {
+		t.Fatalf("expected anchor option to keep anchor lines")
+	}
+	if anchorOption.Lines[0].TypeID != 9001 || anchorOption.Lines[1].TypeID != 9002 {
+		t.Fatalf("expected first two preserved anchors to be type 9001/9002, got %d/%d", anchorOption.Lines[0].TypeID, anchorOption.Lines[1].TypeID)
+	}
+}

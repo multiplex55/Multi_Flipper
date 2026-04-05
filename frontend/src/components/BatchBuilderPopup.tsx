@@ -221,6 +221,7 @@ export function BatchBuilderPopup({
   const [routeSortBy, setRouteSortBy] = useState<
     "recommended" | "execution_score" | "isk_per_jump" | "total_profit_isk"
   >("recommended");
+  const [strategyFilter, setStrategyFilter] = useState<string>("all");
   const [executionScoringPreset, setExecutionScoringPreset] =
     useState<ExecutionScoringPreset>("balanced");
   const [routeError, setRouteError] = useState<string | null>(null);
@@ -251,6 +252,7 @@ export function BatchBuilderPopup({
     setRouteState("idle");
     setRouteOptions([]);
     setRouteSortBy("recommended");
+    setStrategyFilter("all");
     setExecutionScoringPreset("balanced");
     lastAppliedPresetRef.current = "balanced";
     setRouteError(null);
@@ -417,6 +419,31 @@ export function BatchBuilderPopup({
     });
     return decorated.map((entry, idx) => ({ ...entry.option, rank: idx + 1 }));
   }, [routeOptions, routeSortBy]);
+
+  const strategyChoices = useMemo(() => {
+    const labels = new Map<string, string>();
+    for (const option of routeOptions) {
+      const id = (option.strategy_id ?? option.option_id ?? "").trim();
+      if (!id) continue;
+      if (!labels.has(id)) {
+        const fallback = id
+          .replace(/[-_]+/g, " ")
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+        labels.set(id, option.strategy_label?.trim() || fallback);
+      }
+    }
+    return Array.from(labels.entries()).map(([id, label]) => ({ id, label }));
+  }, [routeOptions]);
+
+  const visibleRouteOptions = useMemo(
+    () =>
+      strategyFilter === "all"
+        ? sortedRouteOptions
+        : sortedRouteOptions.filter(
+            (option) => (option.strategy_id ?? option.option_id) === strategyFilter,
+          ),
+    [sortedRouteOptions, strategyFilter],
+  );
 
   const candidateSnapshot = useMemo(
     () =>
@@ -1318,8 +1345,37 @@ export function BatchBuilderPopup({
                 </label>
               </div>
             </div>
+            {strategyChoices.length > 1 && routeOptions.length >= 4 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setStrategyFilter("all")}
+                  className={`rounded-sm border px-2 py-0.5 text-[10px] uppercase tracking-wide ${
+                    strategyFilter === "all"
+                      ? "border-blue-400/50 bg-blue-500/15 text-blue-200"
+                      : "border-eve-border bg-eve-panel text-eve-dim"
+                  }`}
+                >
+                  All
+                </button>
+                {strategyChoices.map((choice) => (
+                  <button
+                    type="button"
+                    key={choice.id}
+                    onClick={() => setStrategyFilter(choice.id)}
+                    className={`rounded-sm border px-2 py-0.5 text-[10px] uppercase tracking-wide ${
+                      strategyFilter === choice.id
+                        ? "border-blue-400/50 bg-blue-500/15 text-blue-200"
+                        : "border-eve-border bg-eve-panel text-eve-dim"
+                    }`}
+                  >
+                    {choice.label}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="grid grid-cols-1 gap-2">
-              {sortedRouteOptions.map((option) => {
+              {visibleRouteOptions.map((option) => {
                 const optionMerged = baseBatchManifest
                   ? buildMergedManifest(baseBatchManifest, option)
                   : null;
@@ -1349,6 +1405,14 @@ export function BatchBuilderPopup({
                     {recommended && (
                       <div className="mt-1 inline-flex items-center rounded-sm border border-emerald-400/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-emerald-300">
                         Recommended
+                      </div>
+                    )}
+                    {(option.strategy_label || option.strategy_id) && (
+                      <div className="mt-1 inline-flex items-center rounded-sm border border-indigo-400/40 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-indigo-200">
+                        {(option.strategy_label || option.strategy_id || "").replace(
+                          /[-_]+/g,
+                          " ",
+                        )}
                       </div>
                     )}
                     <div className="mt-1 text-[11px] text-blue-300">
