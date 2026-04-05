@@ -162,6 +162,82 @@ type MergedBatchManifest struct {
 	TotalProfitISK      float64             `json:"total_profit_isk"`
 }
 
+type RouteExecutionManifest struct {
+	Corridor   RouteExecutionCorridorSummary   `json:"corridor"`
+	Stops      []RouteExecutionManifestStop    `json:"stops"`
+	RunTotals  RouteExecutionManifestRunTotals `json:"run_totals"`
+	Validation RouteValidationSnapshotSummary  `json:"validation"`
+}
+
+type RouteExecutionCorridorSummary struct {
+	Origin            RouteExecutionManifestEndpoint  `json:"origin"`
+	StopSequence      []RouteExecutionManifestStopRef `json:"stop_sequence"`
+	TotalJumps        int                             `json:"total_jumps"`
+	DistinctStopCount int                             `json:"distinct_stop_count"`
+}
+
+type RouteExecutionManifestEndpoint struct {
+	SystemID     int32  `json:"system_id"`
+	SystemName   string `json:"system_name"`
+	LocationID   int64  `json:"location_id"`
+	LocationName string `json:"location_name"`
+}
+
+type RouteExecutionManifestStopRef struct {
+	StopKey      string `json:"stop_key"`
+	SystemID     int32  `json:"system_id"`
+	SystemName   string `json:"system_name"`
+	LocationID   int64  `json:"location_id"`
+	LocationName string `json:"location_name"`
+}
+
+type RouteExecutionManifestStop struct {
+	StopKey            string                             `json:"stop_key"`
+	SystemID           int32                              `json:"system_id"`
+	SystemName         string                             `json:"system_name"`
+	LocationID         int64                              `json:"location_id"`
+	LocationName       string                             `json:"location_name"`
+	JumpsFromPrevious  *int                               `json:"jumps_from_previous,omitempty"`
+	BuyActions         []RouteExecutionManifestActionLine `json:"buy_actions"`
+	SellActions        []RouteExecutionManifestActionLine `json:"sell_actions"`
+	StopBuyTotalISK    float64                            `json:"stop_buy_total_isk"`
+	StopSellTotalISK   float64                            `json:"stop_sell_total_isk"`
+	StopNetDeltaISK    float64                            `json:"stop_net_delta_isk"`
+	CargoUsedAfterM3   float64                            `json:"cargo_used_after_m3"`
+	CargoRemainAfterM3 float64                            `json:"cargo_remain_after_m3"`
+	Warnings           []string                           `json:"warnings,omitempty"`
+}
+
+type RouteExecutionManifestActionLine struct {
+	TypeID         int32   `json:"type_id"`
+	TypeName       string  `json:"type_name"`
+	Units          int64   `json:"units"`
+	UnitVolumeM3   float64 `json:"unit_volume_m3"`
+	VolumeM3       float64 `json:"volume_m3"`
+	BuySystemID    int32   `json:"buy_system_id"`
+	BuyLocationID  int64   `json:"buy_location_id"`
+	SellSystemID   int32   `json:"sell_system_id"`
+	SellLocationID int64   `json:"sell_location_id"`
+	BuyTotalISK    float64 `json:"buy_total_isk"`
+	SellTotalISK   float64 `json:"sell_total_isk"`
+	NetDeltaISK    float64 `json:"net_delta_isk"`
+}
+
+type RouteExecutionManifestRunTotals struct {
+	CapitalISK       float64 `json:"capital_isk"`
+	GrossSellISK     float64 `json:"gross_sell_isk"`
+	NetISK           float64 `json:"net_isk"`
+	CargoUsedM3      float64 `json:"cargo_used_m3"`
+	CargoRemainingM3 float64 `json:"cargo_remaining_m3"`
+}
+
+type RouteValidationSnapshotSummary struct {
+	CandidateContextSeen  bool `json:"candidate_context_seen"`
+	CandidateSnapshotRows int  `json:"candidate_snapshot_rows"`
+	IncludedRows          int  `json:"included_rows"`
+	ExcludedZeroRows      int  `json:"excluded_zero_rows"`
+}
+
 type BatchCreateRouteResponse struct {
 	Request                  BatchCreateRouteRequest `json:"request"`
 	MergedManifest           MergedBatchManifest     `json:"merged_manifest"`
@@ -171,6 +247,7 @@ type BatchCreateRouteResponse struct {
 	SelectedRank             int                     `json:"selected_rank"`
 	DeterministicSortApplied bool                    `json:"deterministic_sort_applied"`
 	SortSignature            string                  `json:"sort_signature"`
+	RouteManifest            *RouteExecutionManifest `json:"route_manifest,omitempty"`
 }
 
 func (r *BatchCreateRouteRequest) ApplyDefaults() {
