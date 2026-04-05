@@ -128,4 +128,21 @@ describe("scan-table batch synthetic helpers", () => {
     expect(anchorMeta.batchProfit).toBe(popupBatch.totalProfit);
     expect(anchorMeta.batchTotalCapital).toBe(popupBatch.totalCapital);
   });
+
+  it("exposes route-pack synthetic metrics and formatting", () => {
+    const row = makeRow({
+      TypeID: 301,
+      ProfitPerUnit: 40,
+      UnitsToBuy: 5,
+      SlippageBuyPct: 3,
+      SlippageSellPct: 2,
+    });
+    const metadata = buildRouteBatchMetadataByRow([row], 1_000);
+
+    expect(getBatchSyntheticValue(row, "RoutePackItemCount", metadata)).toBe(1);
+    expect(getBatchSyntheticValue(row, "RoutePackTotalVolume", metadata)).toBeGreaterThan(0);
+    expect(getBatchSyntheticValue(row, "RoutePackWeightedSlippagePct", metadata)).toBe(5);
+    expect(formatBatchSyntheticCell("RoutePackWeightedSlippagePct", 5)).toBe("5.00%");
+    expect(formatBatchSyntheticCell("RoutePackTotalVolume", 20)).toBe("20 m³");
+  });
 });

@@ -18,7 +18,11 @@ import type {
 } from "@/lib/types";
 import { formatISK, formatMargin } from "@/lib/format";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
-import { buildRouteBatchMetadataByRow } from "@/lib/batchMetrics";
+import {
+  buildRouteBatchMetadata,
+  routeGroupKey,
+  type RouteBatchMetadata,
+} from "@/lib/batchMetrics";
 import {
   dailyIskPerJump,
   radiusRouteKey,
@@ -34,6 +38,7 @@ import {
   hasDestinationPriceSpike,
 } from "@/lib/executionQuality";
 import {
+  type BatchSyntheticKey,
   compareBatchSyntheticValues,
   formatBatchSyntheticCell,
   getBatchSyntheticValue,
@@ -79,6 +84,7 @@ const failedIconIds = new Set<number>();
 const CACHE_TTL_FALLBACK_MS = 20 * 60 * 1000;
 const COLUMN_PREFS_STORAGE_PREFIX = "eve-scan-columns:v1:";
 const ITEM_GROUPING_STORAGE_KEY = "eve-radius-group-by-item:v1";
+const ROUTE_GROUPING_STORAGE_KEY = "eve-radius-route-view-mode:v1";
 
 type SyntheticSortKey =
   | "RouteSafety"
@@ -86,6 +92,16 @@ type SyntheticSortKey =
   | "BatchProfit"
   | "BatchTotalCapital"
   | "BatchIskPerJump"
+  | "RoutePackItemCount"
+  | "RoutePackTotalProfit"
+  | "RoutePackTotalCapital"
+  | "RoutePackTotalVolume"
+  | "RoutePackCapacityUsedPercent"
+  | "RoutePackRealIskPerJump"
+  | "RoutePackDailyIskPerJump"
+  | "RoutePackWeightedSlippagePct"
+  | "RoutePackWeakestExecutionQuality"
+  | "RoutePackTurnoverDays"
   | "OpportunityScore"
   | "ExecutionQuality"
   | "ExitOverhangDays"
@@ -348,6 +364,66 @@ const baseColumnDefs: ColumnDef[] = [
   {
     key: "BatchIskPerJump",
     labelKey: "colBatchIskPerJump",
+    width: "min-w-[130px]",
+    numeric: true,
+  },
+  {
+    key: "RoutePackItemCount",
+    labelKey: "colBatchNumber",
+    width: "min-w-[110px]",
+    numeric: true,
+  },
+  {
+    key: "RoutePackTotalProfit",
+    labelKey: "colBatchProfit",
+    width: "min-w-[130px]",
+    numeric: true,
+  },
+  {
+    key: "RoutePackTotalCapital",
+    labelKey: "colBatchTotalCapital",
+    width: "min-w-[145px]",
+    numeric: true,
+  },
+  {
+    key: "RoutePackTotalVolume",
+    labelKey: "colVolume",
+    width: "min-w-[120px]",
+    numeric: true,
+  },
+  {
+    key: "RoutePackCapacityUsedPercent",
+    labelKey: "colCanFill",
+    width: "min-w-[120px]",
+    numeric: true,
+  },
+  {
+    key: "RoutePackRealIskPerJump",
+    labelKey: "colRealIskPerJump",
+    width: "min-w-[140px]",
+    numeric: true,
+  },
+  {
+    key: "RoutePackDailyIskPerJump",
+    labelKey: "colDailyIskPerJump",
+    width: "min-w-[145px]",
+    numeric: true,
+  },
+  {
+    key: "RoutePackWeightedSlippagePct",
+    labelKey: "colSlippageCostIsk",
+    width: "min-w-[145px]",
+    numeric: true,
+  },
+  {
+    key: "RoutePackWeakestExecutionQuality",
+    labelKey: "colExecutionQuality" as TranslationKey,
+    width: "min-w-[150px]",
+    numeric: true,
+  },
+  {
+    key: "RoutePackTurnoverDays",
+    labelKey: "colTurnoverDays",
     width: "min-w-[130px]",
     numeric: true,
   },
@@ -748,6 +824,33 @@ interface ItemGroup {
   rows: IndexedRow[];
 }
 
+interface RouteGroup {
+  key: string;
+  label: string;
+  rows: IndexedRow[];
+}
+
+const BATCH_SYNTHETIC_KEYS: Set<SortKey> = new Set([
+  "BatchNumber",
+  "BatchProfit",
+  "BatchTotalCapital",
+  "BatchIskPerJump",
+  "RoutePackItemCount",
+  "RoutePackTotalProfit",
+  "RoutePackTotalCapital",
+  "RoutePackTotalVolume",
+  "RoutePackCapacityUsedPercent",
+  "RoutePackRealIskPerJump",
+  "RoutePackDailyIskPerJump",
+  "RoutePackWeightedSlippagePct",
+  "RoutePackWeakestExecutionQuality",
+  "RoutePackTurnoverDays",
+]);
+
+function isBatchSyntheticKey(key: SortKey): key is BatchSyntheticKey {
+  return BATCH_SYNTHETIC_KEYS.has(key);
+}
+
 /* ─── Filter helpers ─── */
 
 function passesNumericFilter(num: number, fval: string): boolean {
@@ -846,21 +949,11 @@ function getCellValue(
   key: SortKey,
   batchMetricsByRow: Record<
     string,
-    {
-      batchNumber: number;
-      batchProfit: number;
-      batchTotalCapital: number;
-      batchIskPerJump: number;
-    }
+    RouteBatchMetadata
   >,
   profile?: OpportunityWeightProfile,
 ): unknown {
-  if (
-    key === "BatchNumber" ||
-    key === "BatchProfit" ||
-    key === "BatchTotalCapital" ||
-    key === "BatchIskPerJump"
-  ) {
+  if (isBatchSyntheticKey(key)) {
     return getBatchSyntheticValue(row, key, batchMetricsByRow);
   }
   if (key === "IskPerM3") {
@@ -892,23 +985,13 @@ function passesFilter(
   fval: string,
   batchMetricsByRow: Record<
     string,
-    {
-      batchNumber: number;
-      batchProfit: number;
-      batchTotalCapital: number;
-      batchIskPerJump: number;
-    }
+    RouteBatchMetadata
   >,
   profile?: OpportunityWeightProfile,
 ): boolean {
   if (!fval) return true;
   const cellVal = getCellValue(row, col.key, batchMetricsByRow, profile);
-  if (
-    col.key === "BatchNumber" ||
-    col.key === "BatchProfit" ||
-    col.key === "BatchTotalCapital" ||
-    col.key === "BatchIskPerJump"
-  ) {
+  if (isBatchSyntheticKey(col.key)) {
     return passesBatchNumericFilter(cellVal as number | null, fval);
   }
   return col.numeric
@@ -923,22 +1006,12 @@ function fmtCell(
   row: FlipResult,
   batchMetricsByRow: Record<
     string,
-    {
-      batchNumber: number;
-      batchProfit: number;
-      batchTotalCapital: number;
-      batchIskPerJump: number;
-    }
+    RouteBatchMetadata
   >,
   profile?: OpportunityWeightProfile,
 ): string {
   const val = getCellValue(row, col.key, batchMetricsByRow, profile);
-  if (
-    col.key === "BatchNumber" ||
-    col.key === "BatchProfit" ||
-    col.key === "BatchTotalCapital" ||
-    col.key === "BatchIskPerJump"
-  ) {
+  if (isBatchSyntheticKey(col.key)) {
     return formatBatchSyntheticCell(col.key, val as number | null);
   }
   if (col.key === "OpportunityScore") {
@@ -1049,7 +1122,11 @@ function compareRowsStable(a: IndexedRow, b: IndexedRow): number {
   if (typeDiff !== 0) return typeDiff;
   const routeCmp = radiusRouteKey(a.row).localeCompare(radiusRouteKey(b.row));
   if (routeCmp !== 0) return routeCmp;
-  return String(a.row.TypeName ?? "").localeCompare(String(b.row.TypeName ?? ""));
+  const typeNameCmp = String(a.row.TypeName ?? "").localeCompare(
+    String(b.row.TypeName ?? ""),
+  );
+  if (typeNameCmp !== 0) return typeNameCmp;
+  return a.id - b.id;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -1132,6 +1209,15 @@ export function ScanResultsTable({
       return false;
     }
   });
+  const [routeViewMode, setRouteViewMode] = useState<"rows" | "route">(() => {
+    try {
+      return localStorage.getItem(ROUTE_GROUPING_STORAGE_KEY) === "route"
+        ? "route"
+        : "rows";
+    } catch {
+      return "rows";
+    }
+  });
   const [showHiddenRows, setShowHiddenRows] = useState(false);
   const [hiddenMap, setHiddenMap] = useState<Record<string, HiddenFlipEntry>>(
     {},
@@ -1160,6 +1246,9 @@ export function ScanResultsTable({
   const [expandedItemGroups, setExpandedItemGroups] = useState<Set<string>>(
     new Set(),
   );
+  const [expandedRouteGroups, setExpandedRouteGroups] = useState<Set<string>>(
+    new Set(),
+  );
   const [regionCollapseInitialized, setRegionCollapseInitialized] =
     useState(false);
 
@@ -1175,7 +1264,8 @@ export function ScanResultsTable({
   } | null>(null);
 
   const isRegionGrouped = columnProfile === "region_eveguru";
-  const isItemGrouped = !isRegionGrouped && groupByItem;
+  const isItemGrouped = !isRegionGrouped && groupByItem && routeViewMode === "rows";
+  const isRouteGrouped = !isRegionGrouped && routeViewMode === "route";
   const preferredSortKey: SortKey = isRegionGrouped
     ? "DayPeriodProfit"
     : "RealProfit";
@@ -1221,13 +1311,16 @@ export function ScanResultsTable({
     [orderedColumnDefs, hiddenColumns],
   );
 
-  const batchMetricsByRow = useMemo(
-    () =>
-      columnProfile === "default"
-        ? buildRouteBatchMetadataByRow(results, cargoLimit)
-        : {},
-    [columnProfile, results, cargoLimit],
-  );
+  const { batchMetricsByRow, batchMetricsByRoute } = useMemo(() => {
+    if (columnProfile !== "default") {
+      return { batchMetricsByRow: {}, batchMetricsByRoute: {} };
+    }
+    const metadata = buildRouteBatchMetadata(results, cargoLimit);
+    return {
+      batchMetricsByRow: metadata.byRow,
+      batchMetricsByRoute: metadata.byRoute,
+    };
+  }, [columnProfile, results, cargoLimit]);
 
   useEffect(() => {
     const wasScanning = previousScanningRef.current;
@@ -1471,6 +1564,14 @@ export function ScanResultsTable({
   }, [groupByItem]);
 
   useEffect(() => {
+    try {
+      localStorage.setItem(ROUTE_GROUPING_STORAGE_KEY, routeViewMode);
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [routeViewMode]);
+
+  useEffect(() => {
     if (columnDefs.length === 0) return;
     if (!columnDefs.some((col) => col.key === sortKey)) {
       if (columnDefs.some((col) => col.key === preferredSortKey)) {
@@ -1599,12 +1700,7 @@ export function ScanResultsTable({
         batchMetricsByRow,
         opportunityProfile,
       );
-      if (
-        sortKey === "BatchNumber" ||
-        sortKey === "BatchProfit" ||
-        sortKey === "BatchTotalCapital" ||
-        sortKey === "BatchIskPerJump"
-      ) {
+      if (isBatchSyntheticKey(sortKey)) {
         const syntheticCmp = compareBatchSyntheticValues(
           av as number | null,
           bv as number | null,
@@ -1817,6 +1913,63 @@ export function ScanResultsTable({
     return [...byType.values()];
   }, [displaySorted, isItemGrouped, t]);
 
+  const routeGroups = useMemo<RouteGroup[]>(() => {
+    if (!isRouteGrouped) return [];
+    const byRoute = new Map<string, RouteGroup>();
+    for (const ir of displaySorted) {
+      const key = routeGroupKey(ir.row);
+      const existing = byRoute.get(key);
+      if (existing) {
+        existing.rows.push(ir);
+      } else {
+        byRoute.set(key, {
+          key,
+          label: `${ir.row.BuyStation || ir.row.BuySystemName} → ${
+            ir.row.SellStation || ir.row.SellSystemName
+          }`,
+          rows: [ir],
+        });
+      }
+    }
+    const groups = [...byRoute.values()];
+    groups.sort((a, b) => {
+      if (isBatchSyntheticKey(sortKey)) {
+        const left = getBatchSyntheticValue(
+          a.rows[0].row,
+          sortKey,
+          batchMetricsByRow,
+        );
+        const right = getBatchSyntheticValue(
+          b.rows[0].row,
+          sortKey,
+          batchMetricsByRow,
+        );
+        const cmp = compareBatchSyntheticValues(left, right, sortDir);
+        if (cmp !== 0) return cmp;
+      }
+      const aRow = a.rows[0];
+      const bRow = b.rows[0];
+      return compareRowsStable(aRow, bRow);
+    });
+    return groups;
+  }, [batchMetricsByRow, displaySorted, isRouteGrouped, sortDir, sortKey]);
+
+  useEffect(() => {
+    if (!isRouteGrouped) {
+      setExpandedRouteGroups(new Set());
+      return;
+    }
+    const existing = new Set(routeGroups.map((g) => g.key));
+    setExpandedRouteGroups((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Set<string>();
+      for (const key of prev) {
+        if (existing.has(key)) next.add(key);
+      }
+      return next.size === prev.size ? prev : next;
+    });
+  }, [isRouteGrouped, routeGroups]);
+
   useEffect(() => {
     if (!isItemGrouped) {
       setExpandedItemGroups(new Set());
@@ -1901,6 +2054,16 @@ export function ScanResultsTable({
       }
       return rows;
     }
+    if (isRouteGrouped) {
+      const rows: IndexedRow[] = [];
+      for (const group of routeGroups) {
+        if (group.rows.length === 0) continue;
+        rows.push(group.rows[0]);
+        if (!expandedRouteGroups.has(group.key)) continue;
+        rows.push(...group.rows.slice(1));
+      }
+      return rows;
+    }
     if (!isItemGrouped) return displaySorted;
 
     const rows: IndexedRow[] = [];
@@ -1920,15 +2083,18 @@ export function ScanResultsTable({
     displaySorted,
     effectiveCollapsedRegionGroups,
     expandedItemGroups,
+    expandedRouteGroups,
     groupRowLimit,
     isItemGrouped,
+    isRouteGrouped,
     isRegionGrouped,
     itemGroups,
+    routeGroups,
     regionGroups,
   ]);
 
   const { pageRows, totalPages, safePage } = useMemo(() => {
-    if (isRegionGrouped || isItemGrouped) {
+    if (isRegionGrouped || isItemGrouped || isRouteGrouped) {
       return { pageRows: visibleRows, totalPages: 1, safePage: 0 };
     }
     const totalPages = Math.max(1, Math.ceil(displaySorted.length / PAGE_SIZE));
@@ -1938,7 +2104,7 @@ export function ScanResultsTable({
       (safePage + 1) * PAGE_SIZE,
     );
     return { pageRows, totalPages, safePage };
-  }, [displaySorted, isItemGrouped, isRegionGrouped, page, visibleRows]);
+  }, [displaySorted, isItemGrouped, isRegionGrouped, isRouteGrouped, page, visibleRows]);
 
   // Reset page when data/filters/sort change
   useEffect(() => {
@@ -1951,6 +2117,7 @@ export function ScanResultsTable({
     showHiddenRows,
     hiddenMap,
     groupByItem,
+    routeViewMode,
   ]);
 
   // Reset selection/pins/context menu/group limits when results change
@@ -2727,6 +2894,7 @@ export function ScanResultsTable({
         {/* Pagination */}
         {!isRegionGrouped &&
           !isItemGrouped &&
+          !isRouteGrouped &&
           displaySorted.length > PAGE_SIZE && (
             <div className="flex items-center gap-1 text-eve-dim">
               <button
@@ -2766,15 +2934,41 @@ export function ScanResultsTable({
         {results.length > 0 && !scanning && (
           <>
             {!isRegionGrouped && (
-              <label className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={groupByItem}
-                  onChange={(e) => setGroupByItem(e.target.checked)}
-                  className="accent-eve-accent"
-                />
-                <span>Group by item</span>
-              </label>
+              <>
+                <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
+                  {([
+                    ["rows", "Row view"],
+                    ["route", "Group by route"],
+                  ] as const).map(([mode, label]) => {
+                    const active = routeViewMode === mode;
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setRouteViewMode(mode)}
+                        className={`px-2 py-0.5 border-r last:border-r-0 border-eve-border/40 transition-colors ${
+                          active
+                            ? "bg-eve-accent/15 text-eve-accent border-eve-accent/40"
+                            : "text-eve-dim hover:text-eve-text"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {routeViewMode === "rows" && (
+                  <label className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={groupByItem}
+                      onChange={(e) => setGroupByItem(e.target.checked)}
+                      className="accent-eve-accent"
+                    />
+                    <span>Group by item</span>
+                  </label>
+                )}
+              </>
             )}
             <button
               type="button"
@@ -3576,6 +3770,55 @@ export function ScanResultsTable({
                       );
                     });
                   })()
+                : isRouteGrouped
+                  ? (() => {
+                      let rowIndex = 0;
+                      return routeGroups.map((group) => {
+                        if (group.rows.length === 0) return null;
+                        const expanded = expandedRouteGroups.has(group.key);
+                        const routeSummary = batchMetricsByRoute[group.key];
+                        return (
+                          <Fragment key={`route-group:${group.key}`}>
+                            <tr className="border-b border-eve-border/60 bg-eve-dark/50">
+                              <td colSpan={columnDefs.length + 2} className="px-2 py-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setExpandedRouteGroups((prev) => {
+                                      const next = new Set(prev);
+                                      if (next.has(group.key)) next.delete(group.key);
+                                      else next.add(group.key);
+                                      return next;
+                                    })
+                                  }
+                                  className="inline-flex items-center gap-2 text-xs text-eve-text hover:text-eve-accent transition-colors"
+                                >
+                                  <span className="text-eve-accent">
+                                    {expanded ? "▼" : "▶"}
+                                  </span>
+                                  <span className="font-medium">{group.label}</span>
+                                  <span className="text-eve-dim">
+                                    {routeSummary?.routeItemCount ?? group.rows.length} items
+                                  </span>
+                                  <span className="text-eve-accent font-mono">
+                                    {formatISK(routeSummary?.routeTotalProfit ?? 0)}
+                                  </span>
+                                  <span className="text-eve-dim font-mono">
+                                    EQ min {(routeSummary?.routeWeakestExecutionQuality ?? 0).toFixed(1)}
+                                  </span>
+                                </button>
+                              </td>
+                            </tr>
+                            {expanded &&
+                              group.rows.map((ir) => {
+                                const rendered = renderDataRow(ir, rowIndex);
+                                rowIndex++;
+                                return rendered;
+                              })}
+                          </Fragment>
+                        );
+                      });
+                    })()
                 : pageRows.map((ir, i) =>
                     renderDataRow(ir, safePage * PAGE_SIZE + i),
                   )}
@@ -4160,12 +4403,7 @@ interface DataRowProps {
   onOpenScore: (row: FlipResult) => void;
   batchMetricsByRow: Record<
     string,
-    {
-      batchNumber: number;
-      batchProfit: number;
-      batchTotalCapital: number;
-      batchIskPerJump: number;
-    }
+    RouteBatchMetadata
   >;
   opportunityProfile?: OpportunityWeightProfile;
 }

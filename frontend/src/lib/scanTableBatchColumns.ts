@@ -6,7 +6,17 @@ export type BatchSyntheticKey =
   | "BatchNumber"
   | "BatchProfit"
   | "BatchTotalCapital"
-  | "BatchIskPerJump";
+  | "BatchIskPerJump"
+  | "RoutePackItemCount"
+  | "RoutePackTotalProfit"
+  | "RoutePackTotalCapital"
+  | "RoutePackTotalVolume"
+  | "RoutePackCapacityUsedPercent"
+  | "RoutePackRealIskPerJump"
+  | "RoutePackDailyIskPerJump"
+  | "RoutePackWeightedSlippagePct"
+  | "RoutePackWeakestExecutionQuality"
+  | "RoutePackTurnoverDays";
 
 export type BatchMetadataByRow = Record<string, RouteBatchMetadata>;
 
@@ -24,13 +34,36 @@ export function getBatchSyntheticValue(
     if (!Number.isFinite(jumps) || jumps <= 0) return null;
     return metadata.batchProfit / jumps;
   }
+  if (key === "RoutePackItemCount") return metadata.routeItemCount;
+  if (key === "RoutePackTotalProfit") return metadata.routeTotalProfit;
+  if (key === "RoutePackTotalCapital") return metadata.routeTotalCapital;
+  if (key === "RoutePackTotalVolume") return metadata.routeTotalVolume;
+  if (key === "RoutePackCapacityUsedPercent") return metadata.routeCapacityUsedPercent;
+  if (key === "RoutePackRealIskPerJump") return metadata.routeRealIskPerJump;
+  if (key === "RoutePackDailyIskPerJump") return metadata.routeDailyIskPerJump;
+  if (key === "RoutePackWeightedSlippagePct") return metadata.routeWeightedSlippagePct;
+  if (key === "RoutePackWeakestExecutionQuality")
+    return metadata.routeWeakestExecutionQuality;
+  if (key === "RoutePackTurnoverDays") return metadata.routeTurnoverDays;
   return metadata.batchTotalCapital;
 }
 
 export function formatBatchSyntheticCell(key: BatchSyntheticKey, value: number | null): string {
-  if (key === "BatchNumber") {
+  if (key === "BatchNumber" || key === "RoutePackItemCount") {
     if (value == null || value <= 0) return "\u2014";
     return value.toLocaleString();
+  }
+  if (key === "RoutePackCapacityUsedPercent" || key === "RoutePackWeightedSlippagePct") {
+    if (value == null || value <= 0) return "\u2014";
+    return `${value.toFixed(2)}%`;
+  }
+  if (key === "RoutePackWeakestExecutionQuality" || key === "RoutePackTurnoverDays") {
+    if (value == null || value <= 0) return "\u2014";
+    return value.toFixed(1);
+  }
+  if (key === "RoutePackTotalVolume") {
+    if (value == null || value <= 0) return "\u2014";
+    return `${value.toLocaleString()} m³`;
   }
   if (value == null || value <= 0) return "\u2014";
   return formatISK(value);

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildBatch,
+  buildRouteBatchMetadata,
   buildRouteBatchMetadataByRow,
+  routeGroupKey,
   routeLineKey,
   sameRoute,
   type RouteBatchMetadata,
@@ -175,5 +177,55 @@ describe("batchMetrics", () => {
     expect(anchorMeta.batchIskPerJump).toBe(43.75);
     expect(missingMeta.batchIskPerJump).toBe(anchorMeta.batchIskPerJump);
     expect(zeroMeta.batchIskPerJump).toBe(anchorMeta.batchIskPerJump);
+  });
+
+  it("aggregates route-pack metrics for mixed routes with location->system fallback keys", () => {
+    const routeA1 = makeRow({
+      TypeID: 2001,
+      BuyLocationID: 0,
+      SellLocationID: 0,
+      BuySystemID: 30001001,
+      SellSystemID: 30001002,
+      RealProfit: 120,
+      TotalJumps: 3,
+      SlippageBuyPct: 2,
+      SlippageSellPct: 1,
+      UnitsToBuy: 10,
+    });
+    const routeA2 = makeRow({
+      TypeID: 2002,
+      BuyLocationID: 0,
+      SellLocationID: 0,
+      BuySystemID: routeA1.BuySystemID,
+      SellSystemID: routeA1.SellSystemID,
+      RealProfit: 150,
+      DailyProfit: 90,
+      SlippageBuyPct: 4,
+      SlippageSellPct: 2,
+      UnitsToBuy: 5,
+      HistoryAvailable: false,
+    });
+    const routeB = makeRow({
+      TypeID: 3001,
+      BuyLocationID: 900001,
+      SellLocationID: 900002,
+      BuySystemID: routeA1.BuySystemID,
+      SellSystemID: routeA1.SellSystemID,
+      RealProfit: 999,
+    });
+    const { byRoute } = buildRouteBatchMetadata([routeA1, routeA2, routeB], 1_000);
+
+    const routeAKey = routeGroupKey(routeA1);
+    const routeBKey = routeGroupKey(routeB);
+    expect(routeAKey).toBe("sys:30001001->sys:30001002");
+    expect(routeBKey).toBe("loc:900001->loc:900002");
+    expect(routeAKey).not.toBe(routeBKey);
+
+    expect(byRoute[routeAKey].routeItemCount).toBe(2);
+    expect(byRoute[routeAKey].routeWeightedSlippagePct).toBeCloseTo(4, 6);
+    expect(byRoute[routeAKey].routeRealIskPerJump).toBeCloseTo(115, 6);
+    expect(byRoute[routeAKey].routeDailyIskPerJump).toBeCloseTo(33.3333333, 5);
+    expect(byRoute[routeAKey].routeRiskNoHistoryCount).toBeGreaterThanOrEqual(0);
+    expect(byRoute[routeBKey].routeItemCount).toBe(1);
   });
 });
