@@ -7,6 +7,7 @@ import {
   executionQualityForFlip,
   exitOverhangDays,
   hasDestinationPriceSpike,
+  requestedUnitsForFlip,
 } from "@/lib/executionQuality";
 
 function makeFlip(overrides: Partial<FlipResult> = {}): FlipResult {
@@ -137,6 +138,70 @@ describe("executionQuality", () => {
     expect(exitOverhangDays(sparse.TargetSellSupply, sparse.S2BPerDay)).toBe(0);
     expect(breakevenBufferForFlip(sparse)).toBe(0);
     expect(breakevenBuffer(undefined, undefined)).toBe(0);
+  });
+
+  it("uses pre-execution requested units when scoring execution sufficiency ratios", () => {
+    const result = executionQualityForFlip(
+      makeFlip({
+        PreExecutionUnits: 100,
+        UnitsToBuy: 60,
+        FilledQty: 60,
+        BuyOrderRemain: 60,
+        SellOrderRemain: 60,
+        SlippageBuyPct: 0,
+        SlippageSellPct: 0,
+        DayTargetPeriodPrice: 7,
+      }),
+    );
+
+    expect(requestedUnitsForFlip(makeFlip({ PreExecutionUnits: 100, UnitsToBuy: 60 }))).toBe(100);
+    expect(result.factors.find((factor) => factor.factor === "fillRatio")?.score).toBe(60);
+    expect(result.factors.find((factor) => factor.factor === "depthCoverage")?.score).toBe(60);
+    expect(result.score).toBeLessThan(100);
+  });
+
+  it("falls back to UnitsToBuy when pre-execution units are missing", () => {
+    const withMissingPreExecution = makeFlip({
+      PreExecutionUnits: undefined,
+      UnitsToBuy: 60,
+      FilledQty: 30,
+      BuyOrderRemain: 30,
+      SellOrderRemain: 30,
+    });
+
+    expect(requestedUnitsForFlip(withMissingPreExecution)).toBe(60);
+    const result = executionQualityForFlip(withMissingPreExecution);
+    expect(result.factors.find((factor) => factor.factor === "fillRatio")?.score).toBe(50);
+  });
+
+  it("clamps oversubscribed fill against requested units", () => {
+    const result = executionQualityForFlip(
+      makeFlip({
+        PreExecutionUnits: 50,
+        UnitsToBuy: 10,
+        FilledQty: 120,
+        BuyOrderRemain: 200,
+        SellOrderRemain: 200,
+      }),
+    );
+
+    expect(result.factors.find((factor) => factor.factor === "fillRatio")?.score).toBe(100);
+    expect(result.factors.find((factor) => factor.factor === "depthCoverage")?.score).toBe(100);
+  });
+
+  it("handles zero requested units without divide-by-zero", () => {
+    const row = makeFlip({
+      PreExecutionUnits: 0,
+      UnitsToBuy: 0,
+      FilledQty: 20,
+      BuyOrderRemain: 100,
+      SellOrderRemain: 100,
+      CanFill: false,
+    });
+    const result = executionQualityForFlip(row);
+    expect(requestedUnitsForFlip(row)).toBe(0);
+    expect(result.factors.find((factor) => factor.factor === "fillRatio")?.score).toBe(0);
+    expect(result.factors.find((factor) => factor.factor === "depthCoverage")?.score).toBe(0);
   });
 
   it("computes exit overhang safeguards", () => {

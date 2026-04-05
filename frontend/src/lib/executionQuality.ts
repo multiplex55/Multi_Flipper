@@ -35,6 +35,14 @@ function toRatio(value: number | null | undefined): number {
   return clamp(value, 0, 1);
 }
 
+export function requestedUnitsForFlip(row: Pick<FlipResult, "PreExecutionUnits" | "UnitsToBuy">): number {
+  const preExecutionUnits = Math.max(0, Number(row.PreExecutionUnits ?? 0));
+  if (Number.isFinite(preExecutionUnits) && preExecutionUnits > 0) return preExecutionUnits;
+  const unitsToBuy = Math.max(0, Number(row.UnitsToBuy ?? 0));
+  if (Number.isFinite(unitsToBuy) && unitsToBuy > 0) return unitsToBuy;
+  return 0;
+}
+
 function byContributionDesc(a: ExecutionQualityFactor, b: ExecutionQualityFactor): number {
   return b.contribution - a.contribution;
 }
@@ -101,15 +109,16 @@ export function hasStableDestinationHistory(
 
 export function executionQualityForFlip(row: FlipResult): ExecutionQualityBreakdown {
   const filled = Math.max(0, row.FilledQty ?? 0);
-  const requested = Math.max(0, row.UnitsToBuy ?? 0);
-  const fillRatio = requested > 0 ? filled / requested : row.CanFill ? 1 : 0;
+  const requestedUnits = requestedUnitsForFlip(row);
+  const fillRatio = requestedUnits > 0 ? clamp(filled / requestedUnits, 0, 1) : row.CanFill ? 1 : 0;
 
   const slipPct = Math.max(0, (row.SlippageBuyPct ?? 0) + (row.SlippageSellPct ?? 0));
   const slippageBurden = clamp(slipPct / 25, 0, 1);
 
   const buyDepth = Math.max(0, row.BuyOrderRemain ?? 0);
   const sellDepth = Math.max(0, row.SellOrderRemain ?? 0);
-  const depthCoverage = requested > 0 ? clamp(Math.min(buyDepth, sellDepth) / requested, 0, 1) : 0;
+  const depthCoverage =
+    requestedUnits > 0 ? clamp(Math.min(buyDepth, sellDepth) / requestedUnits, 0, 1) : 0;
 
   const hasHistory = (row.DayTargetPeriodPrice ?? 0) > 0 || (row.DayPriceHistory?.length ?? 0) > 0 || row.HistoryAvailable === true;
 
