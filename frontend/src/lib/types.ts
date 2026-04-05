@@ -186,9 +186,9 @@ export interface ContractItem {
   material_efficiency?: number;
   time_efficiency?: number;
   runs?: number;
-  flag?: number;      // Item location flag (46-53 = fitted rigs, 0/1/5 = cargo/hangar)
+  flag?: number; // Item location flag (46-53 = fitted rigs, 0/1/5 = cargo/hangar)
   singleton?: boolean; // True for fitted items
-  damage?: number;    // Damage level 0.0-1.0 (0.1 = 10% damaged)
+  damage?: number; // Damage level 0.0-1.0 (0.1 = 10% damaged)
 }
 
 export interface ContractDetails {
@@ -198,7 +198,12 @@ export interface ContractDetails {
 
 export type NdjsonContractMessage =
   | { type: "progress"; message: string }
-  | { type: "result"; data: ContractResult[]; count: number; cache_meta?: StationCacheMeta }
+  | {
+      type: "result";
+      data: ContractResult[];
+      count: number;
+      cache_meta?: StationCacheMeta;
+    }
   | { type: "error"; message: string };
 
 export interface RouteHop {
@@ -435,6 +440,76 @@ export interface MergedBatchManifest {
   total_profit_isk: number;
 }
 
+export interface RouteExecutionManifestEndpoint {
+  system_id: number;
+  system_name: string;
+  location_id: number;
+  location_name: string;
+}
+
+export interface RouteExecutionManifestStopRef {
+  stop_key: string;
+  system_id: number;
+  system_name: string;
+  location_id: number;
+  location_name: string;
+}
+
+export interface RouteExecutionManifestActionLine {
+  type_id: number;
+  type_name: string;
+  units: number;
+  unit_volume_m3: number;
+  volume_m3: number;
+  buy_system_id: number;
+  buy_location_id: number;
+  sell_system_id: number;
+  sell_location_id: number;
+  buy_total_isk: number;
+  sell_total_isk: number;
+  net_delta_isk: number;
+}
+
+export interface RouteExecutionManifestStop {
+  stop_key: string;
+  system_id: number;
+  system_name: string;
+  location_id: number;
+  location_name: string;
+  jumps_from_previous?: number;
+  buy_actions: RouteExecutionManifestActionLine[];
+  sell_actions: RouteExecutionManifestActionLine[];
+  stop_buy_total_isk: number;
+  stop_sell_total_isk: number;
+  stop_net_delta_isk: number;
+  cargo_used_after_m3: number;
+  cargo_remain_after_m3: number;
+  warnings?: string[];
+}
+
+export interface RouteExecutionManifest {
+  corridor: {
+    origin: RouteExecutionManifestEndpoint;
+    stop_sequence: RouteExecutionManifestStopRef[];
+    total_jumps: number;
+    distinct_stop_count: number;
+  };
+  stops: RouteExecutionManifestStop[];
+  run_totals: {
+    capital_isk: number;
+    gross_sell_isk: number;
+    net_isk: number;
+    cargo_used_m3: number;
+    cargo_remaining_m3: number;
+  };
+  validation: {
+    candidate_context_seen: boolean;
+    candidate_snapshot_rows: number;
+    included_rows: number;
+    excluded_zero_rows: number;
+  };
+}
+
 export interface BatchCreateRouteResponse {
   request: BatchCreateRouteRequest;
   merged_manifest: MergedBatchManifest;
@@ -444,10 +519,14 @@ export interface BatchCreateRouteResponse {
   selected_rank: number;
   deterministic_sort_applied: boolean;
   sort_signature: string;
+  route_manifest?: RouteExecutionManifest;
 }
 
-
-export type PinnedOpportunitySource = "scan" | "station" | "regional_day" | "contracts";
+export type PinnedOpportunitySource =
+  | "scan"
+  | "station"
+  | "regional_day"
+  | "contracts";
 
 export interface PinnedOpportunityMetrics {
   profit: number;
@@ -502,7 +581,6 @@ export interface PinnedSnapshotPayload {
   metrics: PinnedOpportunityMetrics;
 }
 
-
 export interface PinnedOpportunitySnapshotRecord {
   id: number;
   user_id: string;
@@ -519,7 +597,11 @@ export interface WatchlistItem {
   added_at: string;
   alert_min_margin: number;
   alert_enabled?: boolean;
-  alert_metric?: "margin_percent" | "total_profit" | "profit_per_unit" | "daily_volume";
+  alert_metric?:
+    | "margin_percent"
+    | "total_profit"
+    | "profit_per_unit"
+    | "daily_volume";
   alert_threshold?: number;
 }
 
@@ -626,7 +708,12 @@ export interface StationTrade {
 
 export type NdjsonStationMessage =
   | { type: "progress"; message: string }
-  | { type: "result"; data: StationTrade[]; count: number; cache_meta?: StationCacheMeta }
+  | {
+      type: "result";
+      data: StationTrade[];
+      count: number;
+      cache_meta?: StationCacheMeta;
+    }
   | { type: "error"; message: string };
 
 export interface StationInfo {
@@ -1318,7 +1405,12 @@ export interface IndustrySystem {
   invention: number;
 }
 
-export type IndustryProjectStatus = "draft" | "planned" | "active" | "completed" | "archived";
+export type IndustryProjectStatus =
+  | "draft"
+  | "planned"
+  | "active"
+  | "completed"
+  | "archived";
 
 export type IndustryTaskStatus =
   | "planned"
@@ -2247,5 +2339,16 @@ export interface RouteSafetySummary {
 
 export type RouteState =
   | { status: "loading" }
-  | { status: "summary"; danger: "green" | "yellow" | "red"; kills: number; totalISK: number }
-  | { status: "full"; danger: "green" | "yellow" | "red"; kills: number; totalISK: number; systems: SystemDanger[] };
+  | {
+      status: "summary";
+      danger: "green" | "yellow" | "red";
+      kills: number;
+      totalISK: number;
+    }
+  | {
+      status: "full";
+      danger: "green" | "yellow" | "red";
+      kills: number;
+      totalISK: number;
+      systems: SystemDanger[];
+    };

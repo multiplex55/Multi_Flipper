@@ -3519,6 +3519,57 @@ func (s *Server) handleBatchCreateRoute(w http.ResponseWriter, r *http.Request) 
 		merged.UtilizationPct = (merged.TotalVolumeM3 / req.CargoLimitM3) * 100
 	}
 
+	var selectedRouteSequence []int32
+	selectedTotalJumps := 0
+	selectedLines := make([]engine.BatchCreateRouteLine, 0, len(req.BaseBatch.BaseLines)+len(addedLines))
+	for _, base := range req.BaseBatch.BaseLines {
+		selectedLines = append(selectedLines, engine.BatchCreateRouteLine{
+			TypeID:         base.TypeID,
+			TypeName:       base.TypeName,
+			Units:          base.Units,
+			UnitVolumeM3:   base.UnitVolumeM3,
+			BuySystemID:    base.BuySystemID,
+			BuyLocationID:  base.BuyLocationID,
+			SellSystemID:   base.SellSystemID,
+			SellLocationID: base.SellLocationID,
+			BuyTotalISK:    base.BuyTotalISK,
+			SellTotalISK:   base.SellTotalISK,
+		})
+	}
+	for _, added := range addedLines {
+		selectedLines = append(selectedLines, engine.BatchCreateRouteLine{
+			TypeID:         added.TypeID,
+			TypeName:       added.TypeName,
+			Units:          added.Units,
+			UnitVolumeM3:   added.UnitVolumeM3,
+			BuySystemID:    added.BuySystemID,
+			BuyLocationID:  added.BuyLocationID,
+			SellSystemID:   added.SellSystemID,
+			SellLocationID: added.SellLocationID,
+			BuyTotalISK:    added.BuyTotalISK,
+			SellTotalISK:   added.SellTotalISK,
+		})
+	}
+	if len(ranked) > 0 {
+		selectedRouteSequence = append(selectedRouteSequence, ranked[0].RouteSequence...)
+		selectedTotalJumps = ranked[0].TotalJumps
+	}
+	manifest := engine.BuildRouteExecutionManifest(engine.RouteExecutionManifestBuildInput{
+		Origin: engine.RouteExecutionManifestEndpoint{
+			SystemID:     req.OriginSystemID,
+			SystemName:   req.OriginSystemName,
+			LocationID:   req.OriginLocationID,
+			LocationName: req.OriginLocationName,
+		},
+		CargoLimitM3:          req.CargoLimitM3,
+		Lines:                 selectedLines,
+		RouteSequence:         selectedRouteSequence,
+		TotalJumps:            selectedTotalJumps,
+		CandidateSnapshotRows: len(req.CandidateSnapshot),
+		CandidateContextSeen:  req.CandidateContext != nil,
+	})
+	apiManifest := mapRouteExecutionManifest(manifest)
+
 	resp := BatchCreateRouteResponse{
 		Request:                  req,
 		MergedManifest:           merged,
@@ -3528,8 +3579,102 @@ func (s *Server) handleBatchCreateRoute(w http.ResponseWriter, r *http.Request) 
 		SelectedRank:             planResult.SelectedRank,
 		DeterministicSortApplied: true,
 		SortSignature:            req.SortSignature(),
+		RouteManifest:            &apiManifest,
 	}
 	writeJSON(w, resp)
+}
+
+func mapRouteExecutionManifest(input engine.RouteExecutionManifest) RouteExecutionManifest {
+	stops := make([]RouteExecutionManifestStop, 0, len(input.Stops))
+	for _, stop := range input.Stops {
+		buy := make([]RouteExecutionManifestActionLine, 0, len(stop.BuyActions))
+		for _, action := range stop.BuyActions {
+			buy = append(buy, RouteExecutionManifestActionLine{
+				TypeID:         action.TypeID,
+				TypeName:       action.TypeName,
+				Units:          action.Units,
+				UnitVolumeM3:   action.UnitVolumeM3,
+				VolumeM3:       action.VolumeM3,
+				BuySystemID:    action.BuySystemID,
+				BuyLocationID:  action.BuyLocationID,
+				SellSystemID:   action.SellSystemID,
+				SellLocationID: action.SellLocationID,
+				BuyTotalISK:    action.BuyTotalISK,
+				SellTotalISK:   action.SellTotalISK,
+				NetDeltaISK:    action.NetDeltaISK,
+			})
+		}
+		sell := make([]RouteExecutionManifestActionLine, 0, len(stop.SellActions))
+		for _, action := range stop.SellActions {
+			sell = append(sell, RouteExecutionManifestActionLine{
+				TypeID:         action.TypeID,
+				TypeName:       action.TypeName,
+				Units:          action.Units,
+				UnitVolumeM3:   action.UnitVolumeM3,
+				VolumeM3:       action.VolumeM3,
+				BuySystemID:    action.BuySystemID,
+				BuyLocationID:  action.BuyLocationID,
+				SellSystemID:   action.SellSystemID,
+				SellLocationID: action.SellLocationID,
+				BuyTotalISK:    action.BuyTotalISK,
+				SellTotalISK:   action.SellTotalISK,
+				NetDeltaISK:    action.NetDeltaISK,
+			})
+		}
+		stops = append(stops, RouteExecutionManifestStop{
+			StopKey:            stop.StopKey,
+			SystemID:           stop.SystemID,
+			SystemName:         stop.SystemName,
+			LocationID:         stop.LocationID,
+			LocationName:       stop.LocationName,
+			JumpsFromPrevious:  stop.JumpsFromPrevious,
+			BuyActions:         buy,
+			SellActions:        sell,
+			StopBuyTotalISK:    stop.StopBuyTotalISK,
+			StopSellTotalISK:   stop.StopSellTotalISK,
+			StopNetDeltaISK:    stop.StopNetDeltaISK,
+			CargoUsedAfterM3:   stop.CargoUsedAfterM3,
+			CargoRemainAfterM3: stop.CargoRemainAfterM3,
+			Warnings:           append([]string(nil), stop.Warnings...),
+		})
+	}
+	sequence := make([]RouteExecutionManifestStopRef, 0, len(input.Corridor.StopSequence))
+	for _, stop := range input.Corridor.StopSequence {
+		sequence = append(sequence, RouteExecutionManifestStopRef{
+			StopKey:      stop.StopKey,
+			SystemID:     stop.SystemID,
+			SystemName:   stop.SystemName,
+			LocationID:   stop.LocationID,
+			LocationName: stop.LocationName,
+		})
+	}
+	return RouteExecutionManifest{
+		Corridor: RouteExecutionCorridorSummary{
+			Origin: RouteExecutionManifestEndpoint{
+				SystemID:     input.Corridor.Origin.SystemID,
+				SystemName:   input.Corridor.Origin.SystemName,
+				LocationID:   input.Corridor.Origin.LocationID,
+				LocationName: input.Corridor.Origin.LocationName,
+			},
+			StopSequence:      sequence,
+			TotalJumps:        input.Corridor.TotalJumps,
+			DistinctStopCount: input.Corridor.DistinctStopCount,
+		},
+		Stops: stops,
+		RunTotals: RouteExecutionManifestRunTotals{
+			CapitalISK:       input.RunTotals.CapitalISK,
+			GrossSellISK:     input.RunTotals.GrossSellISK,
+			NetISK:           input.RunTotals.NetISK,
+			CargoUsedM3:      input.RunTotals.CargoUsedM3,
+			CargoRemainingM3: input.RunTotals.CargoRemainingM3,
+		},
+		Validation: RouteValidationSnapshotSummary{
+			CandidateContextSeen:  input.Validation.CandidateContextSeen,
+			CandidateSnapshotRows: input.Validation.CandidateSnapshotRows,
+			IncludedRows:          input.Validation.IncludedRows,
+			ExcludedZeroRows:      input.Validation.ExcludedZeroRows,
+		},
+	}
 }
 
 // --- Watchlist ---
