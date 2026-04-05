@@ -20,6 +20,14 @@ import { formatISK, formatMargin } from "@/lib/format";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { buildRouteBatchMetadataByRow } from "@/lib/batchMetrics";
 import {
+  dailyIskPerJump,
+  radiusRouteKey,
+  realIskPerJump,
+  realIskPerM3PerJump,
+  slippageCostIsk,
+  turnoverDays,
+} from "@/lib/radiusMetrics";
+import {
   compareBatchSyntheticValues,
   formatBatchSyntheticCell,
   getBatchSyntheticValue,
@@ -72,7 +80,12 @@ type SyntheticSortKey =
   | "BatchProfit"
   | "BatchTotalCapital"
   | "BatchIskPerJump"
-  | "OpportunityScore";
+  | "OpportunityScore"
+  | "RealIskPerJump"
+  | "DailyIskPerJump"
+  | "RealIskPerM3PerJump"
+  | "TurnoverDays"
+  | "SlippageCostIsk";
 type SortKey = keyof FlipResult | SyntheticSortKey;
 type SortDir = "asc" | "desc";
 type RegionGroupSortMode = "period_profit" | "now_profit" | "trade_score";
@@ -242,6 +255,41 @@ const baseColumnDefs: ColumnDef[] = [
     labelKey: "colRealProfit",
     width: "min-w-[120px]",
     numeric: true,
+  },
+  {
+    key: "RealIskPerJump",
+    labelKey: "colRealIskPerJump",
+    width: "min-w-[120px]",
+    numeric: true,
+    tooltipKey: "colRealIskPerJumpHint",
+  },
+  {
+    key: "DailyIskPerJump",
+    labelKey: "colDailyIskPerJump",
+    width: "min-w-[120px]",
+    numeric: true,
+    tooltipKey: "colDailyIskPerJumpHint",
+  },
+  {
+    key: "RealIskPerM3PerJump",
+    labelKey: "colRealIskPerM3PerJump",
+    width: "min-w-[135px]",
+    numeric: true,
+    tooltipKey: "colRealIskPerM3PerJumpHint",
+  },
+  {
+    key: "TurnoverDays",
+    labelKey: "colTurnoverDays",
+    width: "min-w-[110px]",
+    numeric: true,
+    tooltipKey: "colTurnoverDaysHint",
+  },
+  {
+    key: "SlippageCostIsk",
+    labelKey: "colSlippageCostIsk",
+    width: "min-w-[120px]",
+    numeric: true,
+    tooltipKey: "colSlippageCostIskHint",
   },
   {
     key: "TotalProfit",
@@ -794,6 +842,11 @@ function getCellValue(
   if (key === "S2BPerDay") return rowS2BPerDay(row);
   if (key === "BfSPerDay") return rowBfSPerDay(row);
   if (key === "S2BBfSRatio") return rowS2BBfSRatio(row);
+  if (key === "RealIskPerJump") return realIskPerJump(row);
+  if (key === "DailyIskPerJump") return dailyIskPerJump(row);
+  if (key === "RealIskPerM3PerJump") return realIskPerM3PerJump(row);
+  if (key === "TurnoverDays") return turnoverDays(row);
+  if (key === "SlippageCostIsk") return slippageCostIsk(row);
   if (key === "RouteSafety") return null;
   if (key === "OpportunityScore")
     return scoreFlipResult(row, profile).finalScore;
@@ -883,9 +936,20 @@ function fmtCell(
     col.key === "TotalProfit" ||
     col.key === "ProfitPerJump" ||
     col.key === "DailyProfit" ||
-    col.key === "IskPerM3"
+    col.key === "IskPerM3" ||
+    col.key === "RealIskPerJump" ||
+    col.key === "DailyIskPerJump" ||
+    col.key === "SlippageCostIsk"
   ) {
-    return formatISK(val as number);
+    return formatISK(Number(val ?? 0));
+  }
+  if (col.key === "RealIskPerM3PerJump") {
+    return `${formatISK(Number(val ?? 0))}/m³j`;
+  }
+  if (col.key === "TurnoverDays") {
+    if (val == null) return "—";
+    const days = Number(val);
+    return Number.isFinite(days) ? `${days.toFixed(2)}d` : "—";
   }
   if (
     col.key === "DaySourceAvgPrice" ||
@@ -930,6 +994,15 @@ function fmtCell(
   }
   if (typeof val === "number") return val.toLocaleString();
   return String(val ?? "");
+}
+
+
+function compareRowsStable(a: IndexedRow, b: IndexedRow): number {
+  const typeDiff = (a.row.TypeID ?? 0) - (b.row.TypeID ?? 0);
+  if (typeDiff !== 0) return typeDiff;
+  const routeCmp = radiusRouteKey(a.row).localeCompare(radiusRouteKey(b.row));
+  if (routeCmp !== 0) return routeCmp;
+  return String(a.row.TypeName ?? "").localeCompare(String(b.row.TypeName ?? ""));
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -990,6 +1063,7 @@ export function ScanResultsTable({
     columnProfile === "region_eveguru" ? "DayPeriodProfit" : "RealProfit",
   );
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [decisionLens, setDecisionLens] = useState<"custom" | "fastest_isk" | "cargo" | "safest" | "capital_efficient">("custom");
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [showFilters, setShowFilters] = useState(
     () => tradeStateTab === "radius",
@@ -1461,7 +1535,9 @@ export function ScanResultsTable({
 
       if (sortKey === ("RouteSafety" as SortKey)) {
         const diff = dangerRank(a.row) - dangerRank(b.row);
-        return sortDir === "asc" ? diff : -diff;
+        const primaryRisk = sortDir === "asc" ? diff : -diff;
+        if (primaryRisk !== 0) return primaryRisk;
+        return compareRowsStable(a, b);
       }
 
       const av = getCellValue(
@@ -1482,23 +1558,27 @@ export function ScanResultsTable({
         sortKey === "BatchTotalCapital" ||
         sortKey === "BatchIskPerJump"
       ) {
-        return compareBatchSyntheticValues(
+        const syntheticCmp = compareBatchSyntheticValues(
           av as number | null,
           bv as number | null,
           sortDir,
         );
+        if (syntheticCmp !== 0) return syntheticCmp;
+        return compareRowsStable(a, b);
       }
       if (typeof av === "number" || typeof bv === "number") {
-        if (av == null && bv == null) return 0;
+        if (av == null && bv == null) return compareRowsStable(a, b);
         if (av == null) return 1;
         if (bv == null) return -1;
         const diff = (av as number) - (bv as number);
-        return sortDir === "asc" ? diff : -diff;
+        const primaryNum = sortDir === "asc" ? diff : -diff;
+        if (primaryNum !== 0) return primaryNum;
+        return compareRowsStable(a, b);
       }
       const cmp = String(av ?? "").localeCompare(String(bv ?? ""));
       const primary = sortDir === "asc" ? cmp : -cmp;
       if (primary !== 0) return primary;
-      return a.id - b.id;
+      return compareRowsStable(a, b);
     });
 
     const totalByType = new Map<number, number>();
@@ -2013,6 +2093,7 @@ export function ScanResultsTable({
         setSortKey(key);
         setSortDir("desc");
       }
+      setDecisionLens("custom");
     },
     [sortKey],
   );
@@ -2024,6 +2105,22 @@ export function ScanResultsTable({
   const clearFilters = useCallback(() => {
     setFilters({});
   }, []);
+  const applyDecisionLens = useCallback(
+    (preset: "fastest_isk" | "cargo" | "safest" | "capital_efficient") => {
+      const mapping: Record<typeof preset, { key: SortKey; dir: SortDir }> = {
+        fastest_isk: { key: "RealIskPerJump", dir: "desc" },
+        cargo: { key: "RealIskPerM3PerJump", dir: "desc" },
+        safest: { key: "RouteSafety", dir: "asc" },
+        capital_efficient: { key: "TurnoverDays", dir: "asc" },
+      };
+      const next = mapping[preset];
+      setSortKey(next.key);
+      setSortDir(next.dir);
+      setDecisionLens(preset);
+    },
+    [],
+  );
+
   const hasActiveFilters = Object.values(filters).some((v) => !!v);
 
   const toggleSelect = useCallback((id: number) => {
@@ -2738,6 +2835,38 @@ export function ScanResultsTable({
                   {lvl === "all"
                     ? "Route: All"
                     : lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+
+        {!isRegionGrouped && results.length > 0 && !scanning && (
+          <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
+            <span className="text-eve-dim px-1">{t("decisionLensTitle")}</span>
+            {(
+              [
+                ["fastest_isk", "decisionLensFastest"],
+                ["cargo", "decisionLensCargo"],
+                ["safest", "decisionLensSafest"],
+                ["capital_efficient", "decisionLensCapital"],
+              ] as const
+            ).map(([preset, labelKey]) => {
+              const active = decisionLens === preset;
+              return (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => applyDecisionLens(preset)}
+                  className={`px-1.5 py-0.5 rounded-sm border transition-colors ${
+                    active
+                      ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent"
+                      : "border-eve-border/50 text-eve-dim hover:text-eve-text"
+                  }`}
+                  title={t(labelKey)}
+                >
+                  {t(labelKey)}
                 </button>
               );
             })}
