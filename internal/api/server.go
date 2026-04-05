@@ -93,6 +93,7 @@ type Server struct {
 	updateSkipByUser map[string]string
 
 	batchCreateRoutePlanner func(context.Context, engine.BatchCreateRouteParams) (engine.BatchCreateRouteResult, error)
+	routeSelectedPlanner    func(context.Context, engine.RouteSelectedPlannerParams) (engine.RouteSelectedPlannerResult, error)
 }
 
 // ssoStateEntry holds metadata for a pending SSO login flow.
@@ -665,6 +666,15 @@ func NewServer(cfg *config.Config, esiClient *esi.Client, database *db.DB, ssoCo
 		}
 		return scanner.CreateBatchRoute(ctx, params)
 	}
+	s.routeSelectedPlanner = func(ctx context.Context, params engine.RouteSelectedPlannerParams) (engine.RouteSelectedPlannerResult, error) {
+		s.mu.RLock()
+		scanner := s.scanner
+		s.mu.RUnlock()
+		if scanner == nil {
+			return engine.RouteSelectedPlannerResult{}, errors.New("scanner unavailable")
+		}
+		return scanner.PlanSelectedRouteExpansions(ctx, params)
+	}
 	return s
 }
 
@@ -731,6 +741,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/scan/regional-day", s.handleScanRegionalDay)
 	mux.HandleFunc("POST /api/scan/contracts", s.handleScanContracts)
 	mux.HandleFunc("POST /api/route/find", s.handleRouteFind)
+	mux.HandleFunc("POST /api/route/planner", s.handleRoutePlanner)
 	mux.HandleFunc("POST /api/batch/create-route", s.handleBatchCreateRoute)
 	mux.HandleFunc("GET /api/watchlist", s.handleGetWatchlist)
 	mux.HandleFunc("POST /api/watchlist", s.handleAddWatchlist)
@@ -3580,6 +3591,165 @@ func (s *Server) handleBatchCreateRoute(w http.ResponseWriter, r *http.Request) 
 		DeterministicSortApplied: true,
 		SortSignature:            req.SortSignature(),
 		RouteManifest:            &apiManifest,
+	}
+	writeJSON(w, resp)
+}
+
+func (s *Server) handleRoutePlanner(w http.ResponseWriter, r *http.Request) {
+	if !s.isReady() {
+		writeError(w, http.StatusServiceUnavailable, "SDE not loaded yet")
+		return
+	}
+
+	var req RoutePlannerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	req.ApplyDefaults()
+	if err := req.Validate(); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	params := engine.RouteSelectedPlannerParams{
+		CargoLimitM3:          req.CargoLimitM3,
+		RemainingCapacityM3:   req.RemainingCapacityM3,
+		OriginSystemID:        req.OriginSystemID,
+		CurrentSystemID:       req.CurrentSystemID,
+		RouteMaxJumps:         req.RouteMaxJumps,
+		MaxDetourJumpsPerNode: req.MaxDetourJumpsPerNode,
+		MinMargin:             req.MinMargin,
+		MinRouteSecurity:      req.MinRouteSecurity,
+		AllowLowsec:           req.AllowLowsec,
+		AllowNullsec:          req.AllowNullsec,
+		AllowWormhole:         req.AllowWormhole,
+		IncludeStructures:     req.IncludeStructures,
+		SnapshotID:            req.CandidateSnapshotID,
+		SplitTradeFees:        true,
+		SalesTaxPercent:       req.SalesTaxPercent,
+		BuyBrokerFeePercent:   req.BuyBrokerFeePercent,
+		SellBrokerFeePercent:  req.SellBrokerFeePercent,
+	}
+	if len(req.SelectedRouteStops) > 0 {
+		params.SelectedRouteStops = make([]engine.RouteSelectedStop, 0, len(req.SelectedRouteStops))
+		for _, stop := range req.SelectedRouteStops {
+			params.SelectedRouteStops = append(params.SelectedRouteStops, engine.RouteSelectedStop{
+				SystemID:   stop.SystemID,
+				LocationID: stop.LocationID,
+			})
+		}
+	}
+	if len(req.SelectedRouteHops) > 0 {
+		params.SelectedRouteHops = make([]engine.RouteSelectedHop, 0, len(req.SelectedRouteHops))
+		for _, hop := range req.SelectedRouteHops {
+			params.SelectedRouteHops = append(params.SelectedRouteHops, engine.RouteSelectedHop{
+				TypeID:         hop.TypeID,
+				TypeName:       hop.TypeName,
+				Units:          hop.Units,
+				UnitVolumeM3:   hop.UnitVolumeM3,
+				BuySystemID:    hop.BuySystemID,
+				BuyLocationID:  hop.BuyLocationID,
+				SellSystemID:   hop.SellSystemID,
+				SellLocationID: hop.SellLocationID,
+				BuyPriceISK:    hop.BuyPriceISK,
+				SellPriceISK:   hop.SellPriceISK,
+			})
+		}
+	}
+	if len(req.CandidateSnapshot) > 0 {
+		params.CandidateLines = make([]engine.BatchRouteCandidateOpportunity, 0, len(req.CandidateSnapshot))
+		for _, candidate := range req.CandidateSnapshot {
+			params.CandidateLines = append(params.CandidateLines, engine.BatchRouteCandidateOpportunity{
+				TypeID:         candidate.TypeID,
+				TypeName:       candidate.TypeName,
+				Units:          candidate.Units,
+				UnitVolumeM3:   candidate.UnitVolumeM3,
+				BuySystemID:    candidate.BuySystemID,
+				BuyLocationID:  candidate.BuyLocationID,
+				SellSystemID:   candidate.SellSystemID,
+				SellLocationID: candidate.SellLocationID,
+				BuyPriceISK:    candidate.BuyPriceISK,
+				SellPriceISK:   candidate.SellPriceISK,
+			})
+		}
+	}
+
+	planner := s.routeSelectedPlanner
+	if planner == nil {
+		writeError(w, http.StatusInternalServerError, "route planner unavailable")
+		return
+	}
+	planned, err := planner(r.Context(), params)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	resp := RoutePlannerResponse{
+		Options:            make([]RoutePlannerOption, 0, len(planned.Options)),
+		Diagnostics:        planned.Diagnostics,
+		ExcludedCandidates: planned.ExcludedCandidates,
+		SnapshotID:         planned.SnapshotID,
+		DeterministicSort:  true,
+	}
+	for idx, opt := range planned.Options {
+		lines := make([]RouteAdditionLine, 0, len(opt.Lines))
+		for _, line := range opt.Lines {
+			lines = append(lines, RouteAdditionLine{
+				TypeID:         line.TypeID,
+				TypeName:       line.TypeName,
+				Units:          line.Units,
+				UnitVolumeM3:   line.UnitVolumeM3,
+				BuySystemID:    line.BuySystemID,
+				BuyLocationID:  line.BuyLocationID,
+				SellSystemID:   line.SellSystemID,
+				SellLocationID: line.SellLocationID,
+				BuyTotalISK:    line.BuyTotalISK,
+				SellTotalISK:   line.SellTotalISK,
+				ProfitTotalISK: line.ProfitTotalISK,
+				RouteJumps:     line.RouteJumps,
+			})
+		}
+		manifest := make([]RoutePlannerStopManifest, 0, len(opt.ManifestByStop))
+		for _, group := range opt.ManifestByStop {
+			groupLines := make([]RouteAdditionLine, 0, len(group.Lines))
+			for _, line := range group.Lines {
+				groupLines = append(groupLines, RouteAdditionLine{
+					TypeID:         line.TypeID,
+					TypeName:       line.TypeName,
+					Units:          line.Units,
+					UnitVolumeM3:   line.UnitVolumeM3,
+					BuySystemID:    line.BuySystemID,
+					BuyLocationID:  line.BuyLocationID,
+					SellSystemID:   line.SellSystemID,
+					SellLocationID: line.SellLocationID,
+					BuyTotalISK:    line.BuyTotalISK,
+					SellTotalISK:   line.SellTotalISK,
+					ProfitTotalISK: line.ProfitTotalISK,
+					RouteJumps:     line.RouteJumps,
+				})
+			}
+			manifest = append(manifest, RoutePlannerStopManifest{
+				StopSystemID:   group.StopSystemID,
+				StopLocationID: group.StopLocationID,
+				Lines:          groupLines,
+				TotalUnits:     group.TotalUnits,
+				TotalVolumeM3:  group.TotalVolumeM3,
+				TotalBuyISK:    group.TotalBuyISK,
+				TotalSellISK:   group.TotalSellISK,
+				TotalProfitISK: group.TotalProfitISK,
+			})
+		}
+		resp.Options = append(resp.Options, RoutePlannerOption{
+			OptionID:        opt.OptionID,
+			Rank:            idx + 1,
+			Lines:           lines,
+			ExpectedTotals:  RouteOptionRankingInputs{TotalProfitISK: opt.TotalProfitISK, TotalJumps: opt.TotalJumps, ISKPerJump: opt.ISKPerJump},
+			ManifestByStop:  manifest,
+			OrderedBuyStops: append([]int32(nil), opt.OrderedBuySystems...),
+			RouteSequence:   append([]int32(nil), opt.RouteSequence...),
+		})
 	}
 	writeJSON(w, resp)
 }
