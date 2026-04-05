@@ -370,4 +370,103 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
     expect(rows[2]).toHaveTextContent("Type 10");
     expect(rows[3]).toHaveTextContent("Type 20");
   });
+
+  it("supports grouped-by-route expand/collapse and grouped sorting", () => {
+    const routeHighA = makeRow({
+      TypeID: 401,
+      TypeName: "High A",
+      BuyStation: "Jita Hub",
+      SellStation: "Amarr Hub",
+      BuySystemID: 30000142,
+      SellSystemID: 30002187,
+      ProfitPerUnit: 50,
+      UnitsToBuy: 10,
+    });
+    const routeHighB = makeRow({
+      TypeID: 402,
+      TypeName: "High B",
+      BuyStation: "Jita Hub",
+      SellStation: "Amarr Hub",
+      BuySystemID: routeHighA.BuySystemID,
+      SellSystemID: routeHighA.SellSystemID,
+      ProfitPerUnit: 40,
+      UnitsToBuy: 10,
+    });
+    const routeLow = makeRow({
+      TypeID: 403,
+      TypeName: "Low Route",
+      BuyStation: "Dodixie Hub",
+      SellStation: "Rens Hub",
+      BuySystemID: 30002659,
+      SellSystemID: 30002510,
+      BuyLocationID: 0,
+      SellLocationID: 0,
+      ProfitPerUnit: 5,
+      UnitsToBuy: 10,
+    });
+
+    renderTable({ scanning: false, results: [routeLow, routeHighA, routeHighB] });
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+    fireEvent.click(screen.getAllByText("Batch Profit")[0]);
+
+    const routeButtons = screen.getAllByRole("button").filter((node) => {
+      const text = node.textContent ?? "";
+      return text.includes("→") && text.includes("items");
+    });
+    expect(routeButtons[0]).toHaveTextContent("Jita Hub → Amarr Hub");
+
+    expect(screen.queryByText("High A")).not.toBeInTheDocument();
+    fireEvent.click(routeButtons[0]);
+    expect(screen.getByText("High A")).toBeInTheDocument();
+    expect(screen.getByText("High B")).toBeInTheDocument();
+    fireEvent.click(routeButtons[0]);
+    expect(screen.queryByText("High A")).not.toBeInTheDocument();
+  });
+
+  it("keeps identical metric rows in deterministic order across rerenders", () => {
+    const tieOne = makeRow({
+      TypeID: 500,
+      TypeName: "Tie Item",
+      BuySystemID: 30000142,
+      SellSystemID: 30002187,
+      RealProfit: 200,
+      TotalJumps: 2,
+    });
+    const tieTwo = makeRow({
+      TypeID: 500,
+      TypeName: "Tie Item",
+      BuySystemID: 30000142,
+      SellSystemID: 30002187,
+      BuyLocationID: 0,
+      SellLocationID: 0,
+      RealProfit: 200,
+      TotalJumps: 2,
+    });
+
+    const { rerender } = renderTable({ scanning: false, results: [tieTwo, tieOne] });
+    fireEvent.click(screen.getAllByText("Real ISK/Jump")[0]);
+    const firstRenderRows = screen
+      .getAllByRole("row")
+      .filter((row) => row.textContent?.includes("Tie Item"));
+    const firstOrder = firstRenderRows.map((row) => row.textContent);
+
+    rerender(
+      <I18nProvider>
+        <ToastProvider>
+          <ScanResultsTable
+            results={[tieTwo, tieOne]}
+            scanning={false}
+            progress=""
+            tradeStateTab="radius"
+          />
+        </ToastProvider>
+      </I18nProvider>,
+    );
+    fireEvent.click(screen.getAllByText("Real ISK/Jump")[0]);
+    const secondRenderRows = screen
+      .getAllByRole("row")
+      .filter((row) => row.textContent?.includes("Tie Item"));
+    const secondOrder = secondRenderRows.map((row) => row.textContent);
+    expect(secondOrder).toEqual(firstOrder);
+  });
 });

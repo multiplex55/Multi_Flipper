@@ -1,4 +1,14 @@
 import type { FlipResult } from "@/lib/types";
+import {
+  dailyIskPerJump,
+  realIskPerJump,
+  turnoverDays,
+} from "@/lib/radiusMetrics";
+import {
+  executionQualityForFlip,
+  hasDestinationPriceSpike,
+  hasStableDestinationHistory,
+} from "@/lib/executionQuality";
 
 export type BatchLine = {
   row: FlipResult;
@@ -33,6 +43,26 @@ export type RouteBatchMetadata = {
   batchProfit: number;
   batchTotalCapital: number;
   batchIskPerJump: number;
+  routeItemCount: number;
+  routeTotalProfit: number;
+  routeTotalCapital: number;
+  routeTotalVolume: number;
+  routeCapacityUsedPercent: number | null;
+  routeRealIskPerJump: number;
+  routeDailyIskPerJump: number;
+  routeWeightedSlippagePct: number;
+  routeWeakestExecutionQuality: number;
+  routeTurnoverDays: number;
+  routeRiskSpikeCount: number;
+  routeRiskNoHistoryCount: number;
+  routeRiskUnstableHistoryCount: number;
+};
+
+export type RouteBatchMetadataByRoute = Record<string, RouteBatchMetadata>;
+
+export type RouteBatchMetadataResult = {
+  byRow: Record<string, RouteBatchMetadata>;
+  byRoute: RouteBatchMetadataByRoute;
 };
 
 export function safeNumber(value: unknown): number {
@@ -107,6 +137,22 @@ export function routeLineKey(row: FlipResult): string {
     safeNumber(row.BuyLocationID) || row.BuyStation || row.BuySystemID,
     safeNumber(row.SellLocationID) || row.SellStation || row.SellSystemID,
   ].join(":");
+}
+
+function routeEndpointKey(locationID: number, systemID: number): string {
+  if (locationID > 0) return `loc:${locationID}`;
+  return `sys:${systemID}`;
+}
+
+export function routeGroupKey(row: FlipResult): string {
+  const buyLocationID = safeNumber(row.BuyLocationID);
+  const sellLocationID = safeNumber(row.SellLocationID);
+  const buySystemID = safeNumber(row.BuySystemID);
+  const sellSystemID = safeNumber(row.SellSystemID);
+  return `${routeEndpointKey(buyLocationID, buySystemID)}->${routeEndpointKey(
+    sellLocationID,
+    sellSystemID,
+  )}`;
 }
 
 export function rowBatchIdentityKey(row: FlipResult): string {
@@ -226,30 +272,125 @@ export function buildRouteBatchMetadataByRow(
   rows: FlipResult[],
   cargoLimitM3: number,
 ): Record<string, RouteBatchMetadata> {
+  return buildRouteBatchMetadata(rows, cargoLimitM3).byRow;
+}
+
+export function buildRouteBatchMetadata(
+  rows: FlipResult[],
+  cargoLimitM3: number,
+): RouteBatchMetadataResult {
   const metadataByRow: Record<string, RouteBatchMetadata> = {};
+  const metadataByRoute: RouteBatchMetadataByRoute = {};
   const seen = new Set<string>();
+  const rowsByRoute = new Map<string, FlipResult[]>();
+
+  for (const row of rows) {
+    const routeKey = routeGroupKey(row);
+    const routeRows = rowsByRoute.get(routeKey);
+    if (routeRows) {
+      routeRows.push(row);
+    } else {
+      rowsByRoute.set(routeKey, [row]);
+    }
+  }
 
   for (const row of rows) {
     const identityKey = rowBatchIdentityKey(row);
     if (seen.has(identityKey)) continue;
     seen.add(identityKey);
 
-    const batch = buildBatch(row, rows, cargoLimitM3);
-    const anchorJumps = safeNumber(row.TotalJumps);
+    const routeKey = routeGroupKey(row);
+    const routeRows = rowsByRoute.get(routeKey) ?? [row];
+    const batch = buildBatch(row, routeRows, cargoLimitM3);
     const routeJumps =
-      anchorJumps > 0
-        ? anchorJumps
-        : rows
-            .filter((candidate) => sameRoute(row, candidate))
-            .map((candidate) => safeNumber(candidate.TotalJumps))
-            .find((jumps) => jumps > 0) ?? 0;
-    metadataByRow[identityKey] = {
+      routeRows
+        .map((candidate) => safeNumber(candidate.TotalJumps))
+        .find((jumps) => jumps > 0) ?? 0;
+    const weightedSlippage = routeRows.reduce(
+      (sum, routeRow) =>
+        sum +
+        Math.max(
+          0,
+          safeNumber(routeRow.SlippageBuyPct) + safeNumber(routeRow.SlippageSellPct),
+        ) *
+          Math.max(0, safeNumber(routeRow.UnitsToBuy)),
+      0,
+    );
+    const weightedSlippageDenominator = routeRows.reduce(
+      (sum, routeRow) => sum + Math.max(0, safeNumber(routeRow.UnitsToBuy)),
+      0,
+    );
+    const weakestExecutionQuality = routeRows.reduce(
+      (minScore, routeRow) =>
+        Math.min(minScore, executionQualityForFlip(routeRow).score),
+      Number.POSITIVE_INFINITY,
+    );
+    const weightedTurnoverNumerator = routeRows.reduce((sum, routeRow) => {
+      const td = turnoverDays(routeRow);
+      const weight = Math.max(1, safeNumber(routeRow.DailyVolume));
+      if (!Number.isFinite(td) || td < 0) return sum;
+      return sum + td * weight;
+    }, 0);
+    const weightedTurnoverDenominator = routeRows.reduce((sum, routeRow) => {
+      const td = turnoverDays(routeRow);
+      if (!Number.isFinite(td) || td < 0) return sum;
+      return sum + Math.max(1, safeNumber(routeRow.DailyVolume));
+    }, 0);
+    const routeDailyProfit = routeRows.reduce(
+      (sum, routeRow) => sum + Math.max(0, safeNumber(routeRow.DailyProfit)),
+      0,
+    );
+    const riskSpikeCount = routeRows.filter((routeRow) =>
+      hasDestinationPriceSpike(routeRow),
+    ).length;
+    const riskNoHistoryCount = routeRows.filter((routeRow) => {
+      const stable = hasStableDestinationHistory(routeRow);
+      const hasHistory =
+        (routeRow.DayPriceHistory?.length ?? 0) > 0 ||
+        (routeRow.DayTargetPeriodPrice ?? 0) > 0 ||
+        routeRow.HistoryAvailable === true;
+      return !hasHistory && stable == null;
+    }).length;
+    const riskUnstableHistoryCount = routeRows.filter(
+      (routeRow) => hasStableDestinationHistory(routeRow) === false,
+    ).length;
+
+    const metadata: RouteBatchMetadata = {
       batchNumber: batch.lines.length,
       batchProfit: batch.totalProfit,
       batchTotalCapital: batch.totalCapital,
       batchIskPerJump: routeJumps > 0 ? batch.totalProfit / routeJumps : 0,
+      routeItemCount: routeRows.length,
+      routeTotalProfit: batch.totalProfit,
+      routeTotalCapital: batch.totalCapital,
+      routeTotalVolume: batch.totalVolume,
+      routeCapacityUsedPercent: batch.usedPercent,
+      routeRealIskPerJump:
+        routeJumps > 0
+          ? routeRows.reduce((sum, routeRow) => sum + realIskPerJump(routeRow), 0)
+          : 0,
+      routeDailyIskPerJump: routeJumps > 0 ? routeDailyProfit / routeJumps : 0,
+      routeWeightedSlippagePct:
+        weightedSlippageDenominator > 0
+          ? weightedSlippage / weightedSlippageDenominator
+          : 0,
+      routeWeakestExecutionQuality:
+        weakestExecutionQuality === Number.POSITIVE_INFINITY
+          ? 0
+          : weakestExecutionQuality,
+      routeTurnoverDays:
+        weightedTurnoverDenominator > 0
+          ? weightedTurnoverNumerator / weightedTurnoverDenominator
+          : 0,
+      routeRiskSpikeCount: riskSpikeCount,
+      routeRiskNoHistoryCount: riskNoHistoryCount,
+      routeRiskUnstableHistoryCount: riskUnstableHistoryCount,
     };
+    metadataByRow[identityKey] = metadata;
+    if (!(routeKey in metadataByRoute)) {
+      metadataByRoute[routeKey] = metadata;
+    }
   }
 
-  return metadataByRow;
+  return { byRow: metadataByRow, byRoute: metadataByRoute };
 }
