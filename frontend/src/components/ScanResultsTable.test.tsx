@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@/lib/i18n";
 import { ToastProvider } from "@/components/Toast";
-import { ScanResultsTable } from "@/components/ScanResultsTable";
+import { ScanResultsTable, calcRouteConfidence } from "@/components/ScanResultsTable";
 import type { FlipResult } from "@/lib/types";
 import {
   addPinnedOpportunity,
@@ -639,6 +639,48 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
     fireEvent.click(screen.getByRole("button", { name: "Fastest Route" }));
     const second = groupedRouteButtons().map((node) => node.textContent);
     expect(second).toEqual(first);
+  });
+
+  it("reduces route confidence score as exit overhang grows (invariant)", () => {
+    const baseline = calcRouteConfidence({
+      routeSafetyRank: 1,
+      dailyIskPerJump: 100,
+      dailyProfit: 1000,
+      iskPerM3PerJump: 5,
+      fastestIskPerJump: 100,
+      weakestExecutionQuality: 90,
+      riskSpikeCount: 0,
+      riskNoHistoryCount: 0,
+      riskUnstableHistoryCount: 0,
+      riskThinFillCount: 0,
+      riskTotalCount: 0,
+      turnoverDays: 5,
+      exitOverhangDays: 5,
+      breakevenBuffer: 10,
+      dailyProfitOverCapital: 10,
+      routeTotalProfit: 10_000,
+      routeTotalCapital: 100_000,
+    });
+    const highOverhang = calcRouteConfidence({
+      routeSafetyRank: 1,
+      dailyIskPerJump: 100,
+      dailyProfit: 1000,
+      iskPerM3PerJump: 5,
+      fastestIskPerJump: 100,
+      weakestExecutionQuality: 90,
+      riskSpikeCount: 0,
+      riskNoHistoryCount: 0,
+      riskUnstableHistoryCount: 0,
+      riskThinFillCount: 0,
+      riskTotalCount: 0,
+      turnoverDays: 5,
+      exitOverhangDays: 60,
+      breakevenBuffer: 10,
+      dailyProfitOverCapital: 10,
+      routeTotalProfit: 10_000,
+      routeTotalCapital: 100_000,
+    });
+    expect(highOverhang.score).toBeLessThan(baseline.score);
   });
 
   it("switching rows ↔ route mode changes comparator source", () => {

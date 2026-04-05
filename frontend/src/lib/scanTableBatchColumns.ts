@@ -14,11 +14,14 @@ export type BatchSyntheticKey =
   | "RoutePackCapacityUsedPercent"
   | "RoutePackRealIskPerJump"
   | "RoutePackDailyIskPerJump"
+  | "RoutePackDailyProfit"
   | "RoutePackRealIskPerM3PerJump"
   | "RoutePackDailyProfitOverCapital"
   | "RoutePackWeightedSlippagePct"
   | "RoutePackWeakestExecutionQuality"
   | "RoutePackTurnoverDays"
+  | "RoutePackExitOverhangDays"
+  | "RoutePackBreakevenBuffer"
   | "RoutePackRiskSpikeCount"
   | "RoutePackRiskNoHistoryCount"
   | "RoutePackRiskUnstableHistoryCount"
@@ -47,12 +50,15 @@ export function getBatchSyntheticValue(
   if (key === "RoutePackCapacityUsedPercent") return metadata.routeCapacityUsedPercent;
   if (key === "RoutePackRealIskPerJump") return metadata.routeRealIskPerJump;
   if (key === "RoutePackDailyIskPerJump") return metadata.routeDailyIskPerJump;
+  if (key === "RoutePackDailyProfit") return metadata.routeDailyProfit;
   if (key === "RoutePackRealIskPerM3PerJump") return metadata.routeRealIskPerM3PerJump;
   if (key === "RoutePackDailyProfitOverCapital") return metadata.routeDailyProfitOverCapital;
   if (key === "RoutePackWeightedSlippagePct") return metadata.routeWeightedSlippagePct;
   if (key === "RoutePackWeakestExecutionQuality")
     return metadata.routeWeakestExecutionQuality;
   if (key === "RoutePackTurnoverDays") return metadata.routeTurnoverDays;
+  if (key === "RoutePackExitOverhangDays") return metadata.routeExitOverhangDays;
+  if (key === "RoutePackBreakevenBuffer") return metadata.routeBreakevenBuffer;
   if (key === "RoutePackRiskSpikeCount") return metadata.routeRiskSpikeCount;
   if (key === "RoutePackRiskNoHistoryCount") return metadata.routeRiskNoHistoryCount;
   if (key === "RoutePackRiskUnstableHistoryCount")
@@ -79,13 +85,22 @@ export function formatBatchSyntheticCell(key: BatchSyntheticKey, value: number |
     if (value == null || value <= 0) return "\u2014";
     return value.toLocaleString();
   }
-  if (key === "RoutePackCapacityUsedPercent" || key === "RoutePackWeightedSlippagePct") {
+  if (
+    key === "RoutePackCapacityUsedPercent" ||
+    key === "RoutePackWeightedSlippagePct" ||
+    key === "RoutePackDailyProfitOverCapital" ||
+    key === "RoutePackBreakevenBuffer"
+  ) {
     if (value == null || value <= 0) return "\u2014";
     return `${value.toFixed(2)}%`;
   }
-  if (key === "RoutePackWeakestExecutionQuality" || key === "RoutePackTurnoverDays") {
+  if (
+    key === "RoutePackWeakestExecutionQuality" ||
+    key === "RoutePackTurnoverDays" ||
+    key === "RoutePackExitOverhangDays"
+  ) {
     if (value == null || value <= 0) return "\u2014";
-    return value.toFixed(1);
+    return key === "RoutePackExitOverhangDays" ? `${value.toFixed(1)}d` : value.toFixed(1);
   }
   if (key === "RoutePackTotalVolume") {
     if (value == null || value <= 0) return "\u2014";

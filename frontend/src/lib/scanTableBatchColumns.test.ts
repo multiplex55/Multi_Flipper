@@ -142,7 +142,11 @@ describe("scan-table batch synthetic helpers", () => {
     expect(getBatchSyntheticValue(row, "RoutePackItemCount", metadata)).toBe(1);
     expect(getBatchSyntheticValue(row, "RoutePackTotalVolume", metadata)).toBeGreaterThan(0);
     expect(getBatchSyntheticValue(row, "RoutePackWeightedSlippagePct", metadata)).toBe(5);
+    expect(getBatchSyntheticValue(row, "RoutePackDailyProfit", metadata)).toBe(10);
     expect(formatBatchSyntheticCell("RoutePackWeightedSlippagePct", 5)).toBe("5.00%");
+    expect(formatBatchSyntheticCell("RoutePackDailyProfitOverCapital", 12.5)).toBe("12.50%");
+    expect(formatBatchSyntheticCell("RoutePackExitOverhangDays", 3.25)).toBe("3.3d");
+    expect(formatBatchSyntheticCell("RoutePackRealIskPerM3PerJump", 1200)).toBe("1.2 K");
     expect(formatBatchSyntheticCell("RoutePackTotalVolume", 20)).toBe("20 m³");
   });
 });

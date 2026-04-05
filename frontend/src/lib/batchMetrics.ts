@@ -9,6 +9,13 @@ import {
   hasStableDestinationHistory,
   requestedUnitsForFlip,
 } from "@/lib/executionQuality";
+import {
+  routeBreakevenBufferPct,
+  routeDailyIskPerJump,
+  routeDailyProfitOverCapitalPct,
+  routeExitOverhangDaysWeighted,
+  routeIskPerM3PerJump,
+} from "@/lib/routeAggregateFormulas";
 
 export type BatchLine = {
   row: FlipResult;
@@ -52,10 +59,12 @@ export type RouteBatchMetadata = {
   routeDailyIskPerJump: number;
   routeRealIskPerM3PerJump: number;
   routeDailyProfit: number;
-  routeDailyProfitOverCapital: number;
+  routeDailyProfitOverCapital: number | null;
   routeWeightedSlippagePct: number;
   routeWeakestExecutionQuality: number;
-  routeTurnoverDays: number;
+  routeTurnoverDays: number | null;
+  routeExitOverhangDays: number | null;
+  routeBreakevenBuffer: number | null;
   routeRiskSpikeCount: number;
   routeRiskNoHistoryCount: number;
   routeRiskUnstableHistoryCount: number;
@@ -170,6 +179,19 @@ export function rowBatchIdentityKey(row: FlipResult): string {
     safeNumber(row.BuySystemID),
     safeNumber(row.SellSystemID),
   ].join(":");
+}
+
+function rowS2BPerDay(row: FlipResult): number {
+  const direct = safeNumber(row.S2BPerDay);
+  if (direct > 0) return direct;
+  const total = safeNumber(row.DailyVolume);
+  if (total <= 0) return 0;
+  const buyDepth = safeNumber(row.BuyOrderRemain);
+  const sellDepth = safeNumber(row.SellOrderRemain);
+  if (buyDepth <= 0 && sellDepth <= 0) return total / 2;
+  if (buyDepth <= 0) return 0;
+  if (sellDepth <= 0) return total;
+  return (total * buyDepth) / (buyDepth + sellDepth);
 }
 
 export function buildBatch(
@@ -356,11 +378,26 @@ export function buildRouteBatchMetadata(
         ? selectedRows.reduce((sum, routeRow) => sum + realIskPerJump(routeRow), 0)
         : 0;
     const routeRealIskPerM3PerJump =
-      batch.totalVolume > 0 && routeJumps > 0
-        ? batch.totalProfit / batch.totalVolume / routeJumps
-        : 0;
-    const routeDailyProfitOverCapital =
-      batch.totalCapital > 0 ? routeDailyProfit / batch.totalCapital : 0;
+      routeIskPerM3PerJump(batch.totalProfit, batch.totalVolume, routeJumps) ?? 0;
+    const routeDailyProfitOverCapital = routeDailyProfitOverCapitalPct(
+      routeDailyProfit,
+      batch.totalCapital,
+    );
+    const routeTurnoverDays =
+      weightedTurnoverDenominator > 0
+        ? weightedTurnoverNumerator / weightedTurnoverDenominator
+        : null;
+    const routeExitOverhangDays = routeExitOverhangDaysWeighted(
+      selectedRows.map((routeRow) => ({
+        targetSellSupply: routeRow.TargetSellSupply,
+        s2bPerDay: rowS2BPerDay(routeRow),
+        weight: Math.max(1, safeNumber(routeRow.DailyVolume)),
+      })),
+    );
+    const routeBreakevenBuffer = routeBreakevenBufferPct(
+      batch.totalProfit,
+      batch.totalGrossSell,
+    );
     const riskSpikeCount = selectedRows.filter((routeRow) =>
       hasDestinationPriceSpike(routeRow),
     ).length;
@@ -406,7 +443,7 @@ export function buildRouteBatchMetadata(
       routeTotalVolume: batch.totalVolume,
       routeCapacityUsedPercent: batch.usedPercent,
       routeRealIskPerJump,
-      routeDailyIskPerJump: routeJumps > 0 ? routeDailyProfit / routeJumps : 0,
+      routeDailyIskPerJump: routeDailyIskPerJump(routeDailyProfit, routeJumps) ?? 0,
       routeRealIskPerM3PerJump,
       routeDailyProfit,
       routeDailyProfitOverCapital,
@@ -418,10 +455,9 @@ export function buildRouteBatchMetadata(
         weakestExecutionQuality === Number.POSITIVE_INFINITY
           ? 0
           : weakestExecutionQuality,
-      routeTurnoverDays:
-        weightedTurnoverDenominator > 0
-          ? weightedTurnoverNumerator / weightedTurnoverDenominator
-          : 0,
+      routeTurnoverDays,
+      routeExitOverhangDays,
+      routeBreakevenBuffer,
       routeRiskSpikeCount: riskSpikeCount,
       routeRiskNoHistoryCount: riskNoHistoryCount,
       routeRiskUnstableHistoryCount: riskUnstableHistoryCount,
