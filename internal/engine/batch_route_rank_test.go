@@ -16,7 +16,7 @@ func TestRankRouteOptions_DeterministicUnderExactTies(t *testing.T) {
 		"route-b": 100,
 	}
 
-	ranked := rankRouteOptions(options, addedProfit, 100)
+	ranked := rankRouteOptions(options, addedProfit, 100, RouteExecutionScoringConfig{})
 	if len(ranked) != 2 {
 		t.Fatalf("len(ranked) = %d, want 2", len(ranked))
 	}
@@ -146,5 +146,49 @@ func TestBuildOrderIndexWithFilters_StructureOnlyCandidatesExcluded(t *testing.T
 	}
 	if got := len(idx.highestBuy[2][100]); got != 0 {
 		t.Fatalf("highestBuy levels = %d, want 0 when structure-only candidates are excluded", got)
+	}
+}
+
+func TestExecutionScore_MonotonicityFixtures(t *testing.T) {
+	options := []BatchCreateRouteOption{
+		{
+			OptionID:       "low",
+			TotalProfitISK: 50_000,
+			TotalBuyISK:    400_000,
+			AddedVolumeM3:  100,
+			TotalJumps:     12,
+			ISKPerJump:     4_166.67,
+			Lines:          []BatchCreateRouteLine{{FillConfidence: 0.45, Concentration: 0.5, StaleRisk: 0.5, BuySystemID: 1, BuyLocationID: 10, SellSystemID: 2, SellLocationID: 20}},
+		},
+		{
+			OptionID:       "high",
+			TotalProfitISK: 120_000,
+			TotalBuyISK:    220_000,
+			AddedVolumeM3:  90,
+			TotalJumps:     7,
+			ISKPerJump:     17_142.85,
+			Lines:          []BatchCreateRouteLine{{FillConfidence: 0.9, Concentration: 0.1, StaleRisk: 0.1, BuySystemID: 1, BuyLocationID: 10, SellSystemID: 2, SellLocationID: 20}},
+		},
+	}
+	ranked := rankRouteOptions(options, map[string]float64{"low": 50_000, "high": 120_000}, 1000, RouteExecutionScoringConfig{})
+	if ranked[0].OptionID != "high" {
+		t.Fatalf("expected high-quality fixture first; got %s", ranked[0].OptionID)
+	}
+	if ranked[0].ExecutionScore <= ranked[1].ExecutionScore {
+		t.Fatalf("expected monotonic scores high > low, got %f <= %f", ranked[0].ExecutionScore, ranked[1].ExecutionScore)
+	}
+	if len(ranked[0].ScoreBreakdown) != 9 {
+		t.Fatalf("score breakdown factors = %d, want 9", len(ranked[0].ScoreBreakdown))
+	}
+}
+
+func TestExecutionScore_DeterministicTieBreakWithEqualScores(t *testing.T) {
+	options := []BatchCreateRouteOption{
+		{OptionID: "z-opt", TotalProfitISK: 1000, AddedVolumeM3: 20, TotalJumps: 5, ISKPerJump: 200, Lines: []BatchCreateRouteLine{{BuySystemID: 1, BuyLocationID: 10, SellSystemID: 2, SellLocationID: 20}}},
+		{OptionID: "a-opt", TotalProfitISK: 1000, AddedVolumeM3: 20, TotalJumps: 5, ISKPerJump: 200, Lines: []BatchCreateRouteLine{{BuySystemID: 1, BuyLocationID: 10, SellSystemID: 2, SellLocationID: 20}}},
+	}
+	ranked := rankRouteOptions(options, map[string]float64{"z-opt": 1000, "a-opt": 1000}, 100, RouteExecutionScoringConfig{})
+	if ranked[0].OptionID != "a-opt" || ranked[1].OptionID != "z-opt" {
+		t.Fatalf("expected deterministic option_id tie-break, got %s then %s", ranked[0].OptionID, ranked[1].OptionID)
 	}
 }

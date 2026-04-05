@@ -318,6 +318,16 @@ export interface RouteAdditionOption {
   total_profit_isk: number;
   total_jumps: number;
   isk_per_jump: number;
+  execution_score: number;
+  score_breakdown?: Array<{
+    key: string;
+    label: string;
+    raw_value: number;
+    normalized: number;
+    weight: number;
+    contribution: number;
+    higher_is_better: boolean;
+  }>;
   ranking_inputs: {
     total_profit_isk: number;
     total_jumps: number;
@@ -397,6 +407,21 @@ export interface BatchCreateRouteRequest {
   sales_tax_percent: number;
   buy_broker_fee_percent: number;
   sell_broker_fee_percent: number;
+  execution_scoring?: {
+    preset?: string;
+    utilization_target?: number;
+    weights?: {
+      net_profit: number;
+      isk_per_jump: number;
+      cargo_utilization: number;
+      stop_penalty: number;
+      capital_required: number;
+      detour_penalty: number;
+      fill_confidence: number;
+      concentration_risk: number;
+      stale_risk: number;
+    };
+  };
   candidate_context?: {
     source_tab?: "radius" | "region" | "contracts";
     cache_revision?: number;

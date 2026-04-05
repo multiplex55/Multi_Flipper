@@ -134,8 +134,8 @@ func TestBuildBatchRouteOptions_MultipleRankedOptionsDeterministic(t *testing.T)
 	for _, opt := range options1 {
 		addedProfit[opt.OptionID] = opt.TotalProfitISK
 	}
-	ranked1 := rankRouteOptions(options1, addedProfit, params.CargoLimitM3)
-	ranked2 := rankRouteOptions(options2, addedProfit, params.CargoLimitM3)
+	ranked1 := rankRouteOptions(options1, addedProfit, params.CargoLimitM3, RouteExecutionScoringConfig{})
+	ranked2 := rankRouteOptions(options2, addedProfit, params.CargoLimitM3, RouteExecutionScoringConfig{})
 	if !reflect.DeepEqual(ranked1, ranked2) {
 		t.Fatalf("ranked options should be deterministic")
 	}

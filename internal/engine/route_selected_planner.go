@@ -53,6 +53,7 @@ type RouteSelectedPlannerParams struct {
 	SellSalesTaxPercent   float64
 	BrokerFeePercent      float64
 	CandidateLines        []BatchRouteCandidateOpportunity
+	ExecutionScoring      RouteExecutionScoringConfig
 }
 
 type RouteSelectedExcludedCandidate struct {
@@ -265,7 +266,7 @@ func (s *Scanner) PlanSelectedRouteExpansions(_ context.Context, params RouteSel
 	for _, opt := range options {
 		addedProfit[opt.OptionID] = opt.TotalProfitISK
 	}
-	ranked := rankRouteOptions(options, addedProfit, params.CargoLimitM3)
+	ranked := rankRouteOptions(options, addedProfit, params.CargoLimitM3, params.ExecutionScoring)
 	result.Options = make([]RouteSelectedExpansionOption, 0, len(ranked))
 	for _, opt := range ranked {
 		result.Options = append(result.Options, RouteSelectedExpansionOption{
