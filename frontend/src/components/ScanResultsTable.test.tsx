@@ -307,3 +307,67 @@ describe("ScanResultsTable pinning", () => {
     );
   });
 });
+
+
+describe("ScanResultsTable radius decision lens and tie sorting", () => {
+  afterEach(() => {
+    cleanup();
+    localStorage.clear();
+  });
+
+  it("applies decision lens preset sorting while keeping custom sorting available", async () => {
+    localStorage.clear();
+    const faster = makeRow({
+      TypeID: 11,
+      TypeName: "Faster",
+      RealProfit: 600,
+      TotalJumps: 2,
+    });
+    const slower = makeRow({
+      TypeID: 12,
+      TypeName: "Slower",
+      RealProfit: 400,
+      TotalJumps: 4,
+    });
+
+    renderTable({ scanning: false, results: [slower, faster] });
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Fastest ISK" })[0]);
+    let rows = screen
+      .getAllByRole("row")
+      .filter((row) => /Faster|Slower/.test(row.textContent ?? ""));
+    expect(rows[0]).toHaveTextContent("Faster");
+
+    fireEvent.click(screen.getAllByText("Item")[0]);
+    rows = screen
+      .getAllByRole("row")
+      .filter((row) => /Faster|Slower/.test(row.textContent ?? ""));
+    expect(rows.length).toBeGreaterThan(0);
+  });
+
+  it("keeps Real ISK/Jump sorting deterministic when values tie", () => {
+    const b = makeRow({
+      TypeID: 20,
+      TypeName: "Type 20",
+      RealProfit: 100,
+      TotalJumps: 2,
+      BuySystemID: 30000144,
+      SellSystemID: 30002188,
+    });
+    const a = makeRow({
+      TypeID: 10,
+      TypeName: "Type 10",
+      RealProfit: 100,
+      TotalJumps: 2,
+      BuySystemID: 30000142,
+      SellSystemID: 30002187,
+    });
+
+    renderTable({ scanning: false, results: [b, a] });
+    fireEvent.click(screen.getAllByText("Real ISK/Jump")[0]);
+
+    const rows = screen.getAllByRole("row");
+    expect(rows[2]).toHaveTextContent("Type 10");
+    expect(rows[3]).toHaveTextContent("Type 20");
+  });
+});
