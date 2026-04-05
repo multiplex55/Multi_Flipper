@@ -856,6 +856,10 @@ export interface ScanParams {
   route_target_system_name?: string;
   route_min_isk_per_jump?: number;
   route_allow_empty_hops?: boolean;
+  route_validation_max_buy_drift_pct?: number;
+  route_validation_max_sell_drift_pct?: number;
+  route_validation_min_profit_retained_pct?: number;
+  route_validation_min_liquidity_retained_pct?: number;
   // Player structures
   include_structures?: boolean;
   /** Category filter for regional day trader. Empty = all. */
@@ -907,6 +911,10 @@ export interface AppConfig {
   target_market_system?: string;
   target_market_location_id?: number;
   category_ids?: number[];
+  route_validation_max_buy_drift_pct?: number;
+  route_validation_max_sell_drift_pct?: number;
+  route_validation_min_profit_retained_pct?: number;
+  route_validation_min_liquidity_retained_pct?: number;
   strategy_score?: StrategyScoreConfig;
   sell_order_mode?: boolean;
   alert_telegram: boolean;

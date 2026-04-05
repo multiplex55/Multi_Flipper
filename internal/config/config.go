@@ -64,19 +64,23 @@ type Config struct {
 	MinRouteSecurity float64 `json:"min_route_security"`
 
 	// Regional day-trader parameters.
-	AvgPricePeriod         int                 `json:"avg_price_period"`
-	MinPeriodROI           float64             `json:"min_period_roi"`
-	MaxDOS                 float64             `json:"max_dos"`
-	MinDemandPerDay        float64             `json:"min_demand_per_day"`
-	PurchaseDemandDays     float64             `json:"purchase_demand_days"`
-	ShippingCostPerM3Jump  float64             `json:"shipping_cost_per_m3_jump"`
-	SourceRegions          []string            `json:"source_regions"`
-	TargetRegion           string              `json:"target_region"`
-	TargetMarketSystem     string              `json:"target_market_system"`
-	TargetMarketLocationID int64               `json:"target_market_location_id"`
-	CategoryIDs            []int32             `json:"category_ids"`
-	SellOrderMode          bool                `json:"sell_order_mode"`
-	StrategyScore          StrategyScoreConfig `json:"strategy_score"`
+	AvgPricePeriod                         int                 `json:"avg_price_period"`
+	MinPeriodROI                           float64             `json:"min_period_roi"`
+	MaxDOS                                 float64             `json:"max_dos"`
+	MinDemandPerDay                        float64             `json:"min_demand_per_day"`
+	PurchaseDemandDays                     float64             `json:"purchase_demand_days"`
+	ShippingCostPerM3Jump                  float64             `json:"shipping_cost_per_m3_jump"`
+	SourceRegions                          []string            `json:"source_regions"`
+	TargetRegion                           string              `json:"target_region"`
+	TargetMarketSystem                     string              `json:"target_market_system"`
+	TargetMarketLocationID                 int64               `json:"target_market_location_id"`
+	CategoryIDs                            []int32             `json:"category_ids"`
+	SellOrderMode                          bool                `json:"sell_order_mode"`
+	RouteValidationMaxBuyDriftPct          float64             `json:"route_validation_max_buy_drift_pct"`
+	RouteValidationMaxSellDriftPct         float64             `json:"route_validation_max_sell_drift_pct"`
+	RouteValidationMinProfitRetainedPct    float64             `json:"route_validation_min_profit_retained_pct"`
+	RouteValidationMinLiquidityRetainedPct float64             `json:"route_validation_min_liquidity_retained_pct"`
+	StrategyScore                          StrategyScoreConfig `json:"strategy_score"`
 
 	AlertTelegram       bool   `json:"alert_telegram"`
 	AlertDiscord        bool   `json:"alert_discord"`
@@ -115,7 +119,11 @@ func Default() *Config {
 			"Metropolis",
 			"Heimatar",
 		},
-		TargetMarketSystem: "Jita",
+		TargetMarketSystem:                     "Jita",
+		RouteValidationMaxBuyDriftPct:          5,
+		RouteValidationMaxSellDriftPct:         5,
+		RouteValidationMinProfitRetainedPct:    80,
+		RouteValidationMinLiquidityRetainedPct: 70,
 		StrategyScore: StrategyScoreConfig{
 			ProfitWeight:   35,
 			RiskWeight:     25,

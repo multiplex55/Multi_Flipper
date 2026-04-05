@@ -368,6 +368,10 @@ function App() {
     route_target_system_name: "",
     route_min_isk_per_jump: 0,
     route_allow_empty_hops: false,
+    route_validation_max_buy_drift_pct: 5,
+    route_validation_max_sell_drift_pct: 5,
+    route_validation_min_profit_retained_pct: 80,
+    route_validation_min_liquidity_retained_pct: 70,
     sell_order_mode: false,
   });
   const [strategyScore, setStrategyScore] = useState<StrategyScoreConfig>(
@@ -867,6 +871,18 @@ function App() {
             cfg.target_market_location_id ?? prev.target_market_location_id,
           category_ids: cfg.category_ids ?? prev.category_ids,
           sell_order_mode: cfg.sell_order_mode ?? prev.sell_order_mode,
+          route_validation_max_buy_drift_pct:
+            cfg.route_validation_max_buy_drift_pct ??
+            prev.route_validation_max_buy_drift_pct,
+          route_validation_max_sell_drift_pct:
+            cfg.route_validation_max_sell_drift_pct ??
+            prev.route_validation_max_sell_drift_pct,
+          route_validation_min_profit_retained_pct:
+            cfg.route_validation_min_profit_retained_pct ??
+            prev.route_validation_min_profit_retained_pct,
+          route_validation_min_liquidity_retained_pct:
+            cfg.route_validation_min_liquidity_retained_pct ??
+            prev.route_validation_min_liquidity_retained_pct,
         }));
         setAlertChannels({
           telegram: cfg.alert_telegram ?? false,
@@ -1130,7 +1146,9 @@ function App() {
             meta = m;
           },
         );
-        setRadiusResults(filterFlipResults(results, bannedTypeIDs, bannedStationIDs));
+        setRadiusResults(
+          filterFlipResults(results, bannedTypeIDs, bannedStationIDs),
+        );
         setRadiusCacheMeta(meta ?? null);
         await triggerDesktopAlerts(results);
       } else if (currentTab === "region") {
@@ -1192,7 +1210,9 @@ function App() {
             meta = m;
           },
         );
-        setRegionResults(filterFlipResults(results, bannedTypeIDs, bannedStationIDs));
+        setRegionResults(
+          filterFlipResults(results, bannedTypeIDs, bannedStationIDs),
+        );
         setRegionCacheMeta(meta ?? null);
         await triggerDesktopAlerts(results);
       }
@@ -1203,7 +1223,16 @@ function App() {
     } finally {
       setScanning(false);
     }
-  }, [scanning, tab, params, t, addToast, alertChannels, bannedStationIDs, bannedTypeIDs]);
+  }, [
+    scanning,
+    tab,
+    params,
+    t,
+    addToast,
+    alertChannels,
+    bannedStationIDs,
+    bannedTypeIDs,
+  ]);
 
   const handleScanAndRefresh = useCallback(async () => {
     if (scanning || scanAndRefreshing) return;
@@ -2386,6 +2415,10 @@ function App() {
                   "route_target_system_name",
                   "route_min_isk_per_jump",
                   "route_allow_empty_hops",
+                  "route_validation_max_buy_drift_pct",
+                  "route_validation_max_sell_drift_pct",
+                  "route_validation_min_profit_retained_pct",
+                  "route_validation_min_liquidity_retained_pct",
                 ];
                 const filtered: Record<string, unknown> = {};
                 for (const k of safeKeys) {
