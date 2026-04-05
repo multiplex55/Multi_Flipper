@@ -38,6 +38,7 @@ import {
   hasDestinationPriceSpike,
 } from "@/lib/executionQuality";
 import {
+  type BatchSyntheticKey,
   compareBatchSyntheticValues,
   formatBatchSyntheticCell,
   getBatchSyntheticValue,
@@ -846,7 +847,7 @@ const BATCH_SYNTHETIC_KEYS: Set<SortKey> = new Set([
   "RoutePackTurnoverDays",
 ]);
 
-function isBatchSyntheticKey(key: SortKey): boolean {
+function isBatchSyntheticKey(key: SortKey): key is BatchSyntheticKey {
   return BATCH_SYNTHETIC_KEYS.has(key);
 }
 
@@ -4402,12 +4403,7 @@ interface DataRowProps {
   onOpenScore: (row: FlipResult) => void;
   batchMetricsByRow: Record<
     string,
-    {
-      batchNumber: number;
-      batchProfit: number;
-      batchTotalCapital: number;
-      batchIskPerJump: number;
-    }
+    RouteBatchMetadata
   >;
   opportunityProfile?: OpportunityWeightProfile;
 }

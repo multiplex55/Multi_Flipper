@@ -1,6 +1,5 @@
 import type { FlipResult } from "@/lib/types";
 import {
-  dailyIskPerJump,
   realIskPerJump,
   turnoverDays,
 } from "@/lib/radiusMetrics";
@@ -328,12 +327,12 @@ export function buildRouteBatchMetadata(
     const weightedTurnoverNumerator = routeRows.reduce((sum, routeRow) => {
       const td = turnoverDays(routeRow);
       const weight = Math.max(1, safeNumber(routeRow.DailyVolume));
-      if (!Number.isFinite(td) || td < 0) return sum;
+      if (typeof td !== "number" || !Number.isFinite(td) || td < 0) return sum;
       return sum + td * weight;
     }, 0);
     const weightedTurnoverDenominator = routeRows.reduce((sum, routeRow) => {
       const td = turnoverDays(routeRow);
-      if (!Number.isFinite(td) || td < 0) return sum;
+      if (typeof td !== "number" || !Number.isFinite(td) || td < 0) return sum;
       return sum + Math.max(1, safeNumber(routeRow.DailyVolume));
     }, 0);
     const routeDailyProfit = routeRows.reduce(
