@@ -4,6 +4,11 @@ import { useI18n } from "@/lib/i18n";
 import type { RouteResult, RouteHop, ScanParams } from "@/lib/types";
 import { filterRouteResults } from "@/lib/banlistFilters";
 import { ExecutionPlannerPopup } from "./ExecutionPlannerPopup";
+import {
+  RouteExecutionPlanner,
+  type RoutePlannerAction,
+  type RoutePlannerSelection,
+} from "./RouteExecutionPlanner";
 import { useGlobalToast } from "./Toast";
 import { handleEveUIError } from "@/lib/handleEveUIError";
 import {
@@ -86,6 +91,9 @@ export function RouteBuilder({ params, onChange, loadedResults, isLoggedIn = fal
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState("");
   const [selectedRoute, setSelectedRoute] = useState<RouteResult | null>(null);
+  const [plannerSelection, setPlannerSelection] = useState<RoutePlannerSelection | null>(null);
+  const [plannerOpen, setPlannerOpen] = useState(false);
+  const [plannerInitialAction, setPlannerInitialAction] = useState<RoutePlannerAction | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("profit");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const abortRef = useRef<AbortController | null>(null);
@@ -222,6 +230,46 @@ export function RouteBuilder({ params, onChange, loadedResults, isLoggedIn = fal
     await navigator.clipboard.writeText(routeSummary(route));
   };
 
+  const buildPlannerSelection = useCallback(
+    (route: RouteResult): RoutePlannerSelection => ({
+      route,
+      activeFilters: {
+        minHops: typeof minHops === "number" ? minHops : 2,
+        maxHops: typeof maxHops === "number" ? maxHops : 5,
+        targetSystemName: targetSystemName.trim(),
+        minISKPerJump: typeof minISKPerJump === "number" ? minISKPerJump : 0,
+        allowEmptyHops,
+      },
+      executionSettings: {
+        cargoCapacityM3: params.cargo_capacity ?? 0,
+        feeModel: {
+          splitTradeFees: params.split_trade_fees ?? false,
+          salesTaxPercent: params.sales_tax_percent ?? 0,
+          brokerFeePercent: params.broker_fee_percent ?? 0,
+          buyBrokerFeePercent: params.buy_broker_fee_percent ?? 0,
+          sellBrokerFeePercent: params.sell_broker_fee_percent ?? 0,
+        },
+        riskConstraints: {
+          minRouteSecurity: params.min_route_security ?? 0,
+          maxDetourJumpsPerNode: params.max_detour_jumps_per_node ?? 0,
+          allowLowsec: params.min_route_security != null && params.min_route_security < 0.45,
+          allowNullsec: params.min_route_security != null && params.min_route_security <= 0,
+          allowWormhole: params.min_route_security != null && params.min_route_security <= 0,
+        },
+      },
+    }),
+    [allowEmptyHops, maxHops, minHops, minISKPerJump, params, targetSystemName],
+  );
+
+  const handleOpenRoutePlanner = useCallback(
+    (route: RouteResult, action: RoutePlannerAction) => {
+      setPlannerSelection(buildPlannerSelection(route));
+      setPlannerInitialAction(action);
+      setPlannerOpen(true);
+    },
+    [buildPlannerSelection],
+  );
+
   return (
     <div className="flex flex-col h-full">
       {/* Settings Panel - unified design */}
@@ -321,6 +369,7 @@ export function RouteBuilder({ params, onChange, loadedResults, isLoggedIn = fal
               {sortedResults.map((route, i) => (
                 <tr
                   key={i}
+                  data-testid={`route-result-row-${i}`}
                   onDoubleClick={() => setSelectedRoute(route)}
                   className="cursor-pointer hover:bg-eve-accent/10 border-b border-eve-border/30 transition-colors"
                 >
@@ -357,8 +406,15 @@ export function RouteBuilder({ params, onChange, loadedResults, isLoggedIn = fal
           buySalesTaxPercent={params.buy_sales_tax_percent}
           sellSalesTaxPercent={params.sell_sales_tax_percent}
           isLoggedIn={isLoggedIn}
+          onOpenRoutePlanner={handleOpenRoutePlanner}
         />
       )}
+      <RouteExecutionPlanner
+        open={plannerOpen}
+        onClose={() => setPlannerOpen(false)}
+        selection={plannerSelection}
+        initialAction={plannerInitialAction}
+      />
     </div>
   );
 }
@@ -406,6 +462,7 @@ function RouteDetailPopup({
   buySalesTaxPercent,
   sellSalesTaxPercent,
   isLoggedIn = false,
+  onOpenRoutePlanner,
 }: {
   route: RouteResult;
   onClose: () => void;
@@ -418,10 +475,12 @@ function RouteDetailPopup({
   buySalesTaxPercent?: number;
   sellSalesTaxPercent?: number;
   isLoggedIn?: boolean;
+  onOpenRoutePlanner: (route: RouteResult, action: RoutePlannerAction) => void;
 }) {
   const { t } = useI18n();
   const { addToast } = useGlobalToast();
   const [execPlanHop, setExecPlanHop] = useState<RouteHop | null>(null);
+  const hasPlannableRoute = Array.isArray(route.Hops) && route.Hops.length > 0;
 
   const handleSetWaypoint = async (systemID: number) => {
     try {
@@ -576,7 +635,35 @@ function RouteDetailPopup({
           </div>
           <div className="flex flex-wrap justify-end gap-2">
             <button
+              type="button"
+              data-testid="route-planner-cta-expand"
+              disabled={!hasPlannableRoute}
+              onClick={() => onOpenRoutePlanner(route, "expand_route")}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-semibold uppercase tracking-wider text-blue-200 border border-blue-400/50 bg-blue-500/10 hover:bg-blue-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <span>Expand Route</span>
+            </button>
+            <button
+              type="button"
+              data-testid="route-planner-cta-cargo"
+              disabled={!hasPlannableRoute}
+              onClick={() => onOpenRoutePlanner(route, "build_cargo_plan")}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-semibold uppercase tracking-wider text-green-200 border border-green-400/50 bg-green-500/10 hover:bg-green-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <span>Build Cargo Plan</span>
+            </button>
+            <button
+              type="button"
+              data-testid="route-planner-cta-validate"
+              disabled={!hasPlannableRoute}
+              onClick={() => onOpenRoutePlanner(route, "validate_route_prices")}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-semibold uppercase tracking-wider text-purple-200 border border-purple-400/50 bg-purple-500/10 hover:bg-purple-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <span>Validate Route Prices</span>
+            </button>
+            <button
               onClick={handleCopySystems}
+              data-testid="route-copy-systems"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-semibold uppercase tracking-wider text-eve-dim border border-eve-border bg-eve-dark/60 hover:text-eve-text hover:border-eve-accent/30 hover:bg-eve-dark transition-all"
             >
               <span className="text-[11px] leading-none">⎘</span>
@@ -584,6 +671,7 @@ function RouteDetailPopup({
             </button>
             <button
               onClick={handleCopyRoute}
+              data-testid="route-copy-manifest"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[11px] font-semibold uppercase tracking-wider text-eve-dark bg-eve-accent border border-eve-accent hover:bg-eve-accent-hover shadow-eve-glow transition-all"
             >
               <span className="text-[11px] leading-none">⎘</span>
