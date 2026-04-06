@@ -192,6 +192,8 @@ export const en = {
     decisionLensSafestRoute: "Safest Route",
     decisionLensBestCargoUse: "Best Cargo Use",
     decisionLensLowestCapitalLockup: "Lowest Capital Lock-up",
+    topPicksToggleLabel: "Top Picks",
+    topPicksToggleTooltip: "Show or hide the Top Picks panel",
     topPicksPanelTitle: "Top Picks",
     bestRecommendedRoutePack: "Best Recommended Route Pack",
     bestQuickSingleRoute: "Best Quick Single Route",

@@ -90,6 +90,7 @@ function groupedRouteButtons() {
     return text.includes("→") && text.includes("items");
   });
 }
+const TOP_PICKS_VISIBLE_STORAGE_KEY = "eve-radius-top-picks-visible:v1";
 
 function focusedRouteFixtures() {
   const safeTrimmed = makeRow({
@@ -1065,6 +1066,10 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
   });
 
   describe("focused fixture regressions", () => {
+    afterEach(() => {
+      localStorage.clear();
+    });
+
     it("execution quality uses original desired quantity when partial-fill trim happened", () => {
       const { safeTrimmed } = focusedRouteFixtures();
       const quality = executionQualityForFlip(safeTrimmed);
@@ -1263,8 +1268,7 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
 
       renderTable({ scanning: false, results: [rowA, rowB] });
 
-      expect(await screen.findByText("Top Picks")).toBeInTheDocument();
-      expect(screen.getByText("Best Recommended Route Pack")).toBeInTheDocument();
+      expect(await screen.findByText("Best Recommended Route Pack")).toBeInTheDocument();
       const jumpButtons = screen.getAllByRole("button", {
         name: "Jump to group",
       });
@@ -1275,6 +1279,97 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
       await waitFor(() => {
         expect(groupedRouteButtons().length).toBeGreaterThan(0);
       });
+    });
+
+    it("shows Top Picks by default when candidates exist", async () => {
+      const rowA = makeRow({
+        TypeID: 8101,
+        BuyStation: "Default TopPick Buy A",
+        SellStation: "Default TopPick Sell A",
+        BuySystemID: 510001,
+        SellSystemID: 510002,
+        DailyProfit: 200,
+        RealProfit: 300,
+      });
+      const rowB = makeRow({
+        TypeID: 8102,
+        BuyStation: "Default TopPick Buy B",
+        SellStation: "Default TopPick Sell B",
+        BuySystemID: 510011,
+        SellSystemID: 510012,
+        DailyProfit: 320,
+        RealProfit: 410,
+      });
+
+      renderTable({ scanning: false, results: [rowA, rowB] });
+
+      expect(await screen.findByText("Best Recommended Route Pack")).toBeInTheDocument();
+    });
+
+    it("hides top picks panel when the toolbar toggle is disabled", async () => {
+      const rowA = makeRow({
+        TypeID: 8201,
+        BuyStation: "Toggle TopPick Buy A",
+        SellStation: "Toggle TopPick Sell A",
+        BuySystemID: 520001,
+        SellSystemID: 520002,
+      });
+      const rowB = makeRow({
+        TypeID: 8202,
+        BuyStation: "Toggle TopPick Buy B",
+        SellStation: "Toggle TopPick Sell B",
+        BuySystemID: 520011,
+        SellSystemID: 520012,
+      });
+
+      renderTable({ scanning: false, results: [rowA, rowB] });
+      expect(await screen.findByText("Best Recommended Route Pack")).toBeInTheDocument();
+
+      const toggle = screen.getByRole("button", { name: "Top Picks" });
+      expect(toggle).toHaveAttribute("aria-pressed", "true");
+      fireEvent.click(toggle);
+
+      expect(toggle).toHaveAttribute("aria-pressed", "false");
+      expect(screen.queryByText("Best Recommended Route Pack")).not.toBeInTheDocument();
+    });
+
+    it("restores persisted top picks visibility on rerender from localStorage", async () => {
+      localStorage.setItem(TOP_PICKS_VISIBLE_STORAGE_KEY, "0");
+      const rowA = makeRow({
+        TypeID: 8301,
+        BuyStation: "Persist TopPick Buy A",
+        SellStation: "Persist TopPick Sell A",
+        BuySystemID: 530001,
+        SellSystemID: 530002,
+      });
+      const rowB = makeRow({
+        TypeID: 8302,
+        BuyStation: "Persist TopPick Buy B",
+        SellStation: "Persist TopPick Sell B",
+        BuySystemID: 530011,
+        SellSystemID: 530012,
+      });
+
+      const { unmount } = renderTable({ scanning: false, results: [rowA, rowB] });
+
+      const hiddenToggle = screen.getByRole("button", { name: "Top Picks" });
+      expect(hiddenToggle).toHaveAttribute("aria-pressed", "false");
+      expect(screen.queryByText("Best Recommended Route Pack")).not.toBeInTheDocument();
+
+      fireEvent.click(hiddenToggle);
+      expect(localStorage.getItem(TOP_PICKS_VISIBLE_STORAGE_KEY)).toBe("1");
+      unmount();
+
+      renderTable({ scanning: false, results: [rowA, rowB] });
+      const shownToggle = await screen.findByRole("button", { name: "Top Picks" });
+      expect(shownToggle).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByText("Best Recommended Route Pack")).toBeInTheDocument();
+    });
+
+    it("keeps top picks panel hidden when there are no route candidates", () => {
+      renderTable({ scanning: false, results: [] });
+
+      expect(screen.queryByText("Best Recommended Route Pack")).not.toBeInTheDocument();
     });
   });
 });

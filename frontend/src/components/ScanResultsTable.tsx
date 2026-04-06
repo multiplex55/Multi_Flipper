@@ -92,6 +92,7 @@ const CACHE_TTL_FALLBACK_MS = 20 * 60 * 1000;
 const COLUMN_PREFS_STORAGE_PREFIX = "eve-scan-columns:v1:";
 const ITEM_GROUPING_STORAGE_KEY = "eve-radius-group-by-item:v1";
 const ROUTE_GROUPING_STORAGE_KEY = "eve-radius-route-view-mode:v1";
+const TOP_PICKS_VISIBLE_STORAGE_KEY = "eve-radius-top-picks-visible:v1";
 
 type SyntheticSortKey =
   | "RouteSafety"
@@ -1383,6 +1384,15 @@ export function ScanResultsTable({
       return "rows";
     }
   });
+  const [showTopPicks, setShowTopPicks] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem(TOP_PICKS_VISIBLE_STORAGE_KEY);
+      if (stored == null) return true;
+      return stored === "1";
+    } catch {
+      return true;
+    }
+  });
   const [showHiddenRows, setShowHiddenRows] = useState(false);
   const [hiddenMap, setHiddenMap] = useState<Record<string, HiddenFlipEntry>>(
     {},
@@ -1736,6 +1746,14 @@ export function ScanResultsTable({
       // ignore storage quota errors
     }
   }, [routeViewMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(TOP_PICKS_VISIBLE_STORAGE_KEY, showTopPicks ? "1" : "0");
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [showTopPicks]);
 
   useEffect(() => {
     if (columnDefs.length === 0) return;
@@ -3420,6 +3438,19 @@ export function ScanResultsTable({
                     <span>Group by item</span>
                   </label>
                 )}
+                <button
+                  type="button"
+                  aria-pressed={showTopPicks}
+                  onClick={() => setShowTopPicks((prev) => !prev)}
+                  title={t("topPicksToggleTooltip")}
+                  className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
+                    showTopPicks
+                      ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10 hover:bg-eve-accent/20"
+                      : "border-eve-border/60 text-eve-dim bg-eve-dark/40 hover:border-eve-accent/40 hover:text-eve-accent/70"
+                  }`}
+                >
+                  {t("topPicksToggleLabel")}
+                </button>
               </>
             )}
             <button
@@ -4010,7 +4041,7 @@ export function ScanResultsTable({
         </div>
       )}
 
-      {!isRegionGrouped && topRoutePickCandidates.length > 0 && (
+      {!isRegionGrouped && showTopPicks && topRoutePickCandidates.length > 0 && (
         <div className="shrink-0 px-2 pb-2">
           <div className="border border-eve-border rounded-sm bg-eve-dark/40 p-2">
             <div className="text-[11px] uppercase tracking-wider text-eve-dim mb-2">
