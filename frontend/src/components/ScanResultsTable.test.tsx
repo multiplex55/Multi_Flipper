@@ -833,6 +833,121 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
     expect(routeButton.textContent).toContain("Slip ");
   });
 
+  it("renders both route aggregate score and best/avg row score in route mode", () => {
+    const routeRowHigh = makeRow({
+      TypeID: 8810,
+      TypeName: "Route score high row",
+      BuyStation: "Perimeter Hub",
+      SellStation: "Amarr Hub",
+      BuySystemID: 30000144,
+      SellSystemID: 30002187,
+      TotalJumps: 1,
+      UnitsToBuy: 200,
+      FilledQty: 190,
+      Volume: 1,
+      RealProfit: 900,
+      DailyProfit: 600,
+      SlippageBuyPct: 0.4,
+      SlippageSellPct: 0.4,
+    });
+    const routeRowWeak = makeRow({
+      TypeID: 8811,
+      TypeName: "Route score weak row",
+      BuyStation: routeRowHigh.BuyStation,
+      SellStation: routeRowHigh.SellStation,
+      BuySystemID: routeRowHigh.BuySystemID,
+      SellSystemID: routeRowHigh.SellSystemID,
+      TotalJumps: 1,
+      UnitsToBuy: 8,
+      FilledQty: 2,
+      Volume: 15,
+      RealProfit: 15,
+      DailyProfit: 5,
+      SlippageBuyPct: 25,
+      SlippageSellPct: 25,
+    });
+    renderTable({ scanning: false, results: [routeRowHigh, routeRowWeak] });
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+    const routeButton = groupedRouteButtons()[0];
+    expect(routeButton).toHaveTextContent(/Route Score \d+\.\d/);
+    expect(routeButton).toHaveTextContent(/Row Score B\/A \d+\.\d\/\d+\.\d/);
+
+    const routeScoreMatch = routeButton.textContent?.match(/Route Score (\d+\.\d)/);
+    const rowScoreMatch = routeButton.textContent?.match(/Row Score B\/A (\d+\.\d)\/(\d+\.\d)/);
+    expect(routeScoreMatch).not.toBeNull();
+    expect(rowScoreMatch).not.toBeNull();
+    expect(routeScoreMatch?.[1]).not.toEqual(rowScoreMatch?.[1]);
+  });
+
+  it("formats route score chips deterministically with one decimal", () => {
+    const row = makeRow({
+      TypeID: 8812,
+      TypeName: "Formatted route score row",
+      BuyStation: "Dodixie Hub",
+      SellStation: "Jita Hub",
+      BuySystemID: 30002659,
+      SellSystemID: 30000142,
+      TotalJumps: 3,
+      UnitsToBuy: 41,
+      FilledQty: 26,
+      Volume: 2,
+      RealProfit: 260,
+      DailyProfit: 95,
+      SlippageBuyPct: 2.3,
+      SlippageSellPct: 1.1,
+    });
+    renderTable({ scanning: false, results: [row] });
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+    const routeButton = groupedRouteButtons()[0];
+    expect(routeButton).toHaveTextContent(/Route Score \d+\.\d/);
+    expect(routeButton).toHaveTextContent(/Row Score B\/A \d+\.\d\/\d+\.\d/);
+  });
+
+  it("keeps route-mode sort behavior based on route aggregates, not displayed row score summary", () => {
+    const highRowScoreLowAggregate = makeRow({
+      TypeID: 8813,
+      TypeName: "High row score low aggregate",
+      BuyStation: "Route Alpha Buy",
+      SellStation: "Route Alpha Sell",
+      BuySystemID: 30003001,
+      SellSystemID: 30003002,
+      TotalJumps: 1,
+      UnitsToBuy: 10,
+      FilledQty: 10,
+      Volume: 1,
+      RealProfit: 80,
+      DailyProfit: 60,
+      SlippageBuyPct: 0.2,
+      SlippageSellPct: 0.2,
+    });
+    const lowRowScoreHighAggregate = makeRow({
+      TypeID: 8814,
+      TypeName: "Low row score high aggregate",
+      BuyStation: "Route Beta Buy",
+      SellStation: "Route Beta Sell",
+      BuySystemID: 30003011,
+      SellSystemID: 30003012,
+      TotalJumps: 1,
+      UnitsToBuy: 900,
+      FilledQty: 300,
+      Volume: 20,
+      RealProfit: 2_000,
+      DailyProfit: 1_000,
+      SlippageBuyPct: 18,
+      SlippageSellPct: 18,
+    });
+    renderTable({
+      scanning: false,
+      results: [highRowScoreLowAggregate, lowRowScoreHighAggregate],
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fastest Route" }));
+    const routeButtons = groupedRouteButtons();
+    expect(routeButtons[0]).toHaveTextContent(
+      `${lowRowScoreHighAggregate.BuyStation} → ${lowRowScoreHighAggregate.SellStation}`,
+    );
+  });
+
   it("shows and hides warning badges on collapsed route header using configured thresholds", () => {
     const risky = makeRow({
       TypeID: 8802,
@@ -936,11 +1051,13 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
       text.includes("Hek Hub → Jita Hub"),
     )?.[1];
     expect(highBadgeRoute).toBeDefined();
-    expect(highBadgeRoute).toHaveTextContent(/High \d+/);
     expect(mediumBadgeRoute).toBeDefined();
-    expect(mediumBadgeRoute).toHaveTextContent(/Medium \d+/);
     expect(lowBadgeRoute).toBeDefined();
-    expect(lowBadgeRoute).toHaveTextContent(/Low \d+/);
+    await waitFor(() => {
+      expect(highBadgeRoute).toHaveTextContent(/High \d+/);
+      expect(mediumBadgeRoute).toHaveTextContent(/Medium \d+/);
+      expect(lowBadgeRoute).toHaveTextContent(/Low \d+/);
+    });
   });
 
   it("switching rows ↔ route mode changes comparator source", () => {
