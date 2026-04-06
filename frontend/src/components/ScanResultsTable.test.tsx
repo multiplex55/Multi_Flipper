@@ -968,7 +968,177 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
     expect(screen.getByText(/SPIKE 1/)).toBeInTheDocument();
     expect(screen.getByText(/UNSTABLE 1/)).toBeInTheDocument();
     expect(screen.getByText(/THIN 1/)).toBeInTheDocument();
-    expect(screen.queryByText(/NO HIST/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/NO HIST 1/)).not.toBeInTheDocument();
+  });
+
+  it("renders route-header badges before route label text in the left segment", () => {
+    const risky = makeRow({
+      TypeID: 8892,
+      TypeName: "Route header ordering row",
+      BuyStation: "Order Buy",
+      SellStation: "Order Sell",
+      BuySystemID: 30112053,
+      SellSystemID: 30112659,
+      UnitsToBuy: 20,
+      FilledQty: 5,
+      DayNowProfit: 5,
+      DayPeriodProfit: -1,
+      DayTargetPeriodPrice: 100,
+      DayTargetNowPrice: 150,
+    });
+    const { container } = renderTable({ scanning: false, results: [risky] });
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+    const leftSegment = container.querySelector(
+      "[data-route-group] [data-testid^='route-header-left:']",
+    ) as HTMLElement | null;
+    expect(leftSegment).not.toBeNull();
+    const leftText = leftSegment?.textContent ?? "";
+    expect(leftText.indexOf("SPIKE")).toBeGreaterThan(-1);
+    const confidenceLabel =
+      leftText.includes("High")
+        ? "High"
+        : leftText.includes("Medium")
+          ? "Medium"
+          : "Low";
+    expect(leftText.indexOf(confidenceLabel)).toBeGreaterThan(-1);
+    expect(leftText.indexOf("Order Buy → Order Sell")).toBeGreaterThan(-1);
+    expect(leftText.indexOf("SPIKE")).toBeLessThan(
+      leftText.indexOf("Order Buy → Order Sell"),
+    );
+    expect(leftText.indexOf(confidenceLabel)).toBeLessThan(
+      leftText.indexOf("Order Buy → Order Sell"),
+    );
+  });
+
+  it("applies route badge filters and reset in route mode", async () => {
+    const high = makeRow({
+      TypeID: 9901,
+      TypeName: "Filter High",
+      BuyStation: "High Buy",
+      SellStation: "High Sell",
+      BuySystemID: 30010142,
+      SellSystemID: 30012187,
+      RealProfit: 300,
+      DailyProfit: 180,
+      UnitsToBuy: 20,
+      FilledQty: 20,
+      SlippageBuyPct: 0.2,
+      SlippageSellPct: 0.2,
+      DayTargetPeriodPrice: 120,
+      DayTargetNowPrice: 121,
+    });
+    const risky = makeRow({
+      TypeID: 9902,
+      TypeName: "Filter Spike/Thin/Unstable",
+      BuyStation: "Risk Buy",
+      SellStation: "Risk Sell",
+      BuySystemID: 30012053,
+      SellSystemID: 30012659,
+      UnitsToBuy: 20,
+      FilledQty: 5,
+      DayNowProfit: 5,
+      DayPeriodProfit: -1,
+      DayTargetPeriodPrice: 100,
+      DayTargetNowPrice: 150,
+    });
+    const noHistory = makeRow({
+      TypeID: 9903,
+      TypeName: "Filter No History",
+      BuyStation: "NoHist Buy",
+      SellStation: "NoHist Sell",
+      BuySystemID: 30013053,
+      SellSystemID: 30013659,
+      UnitsToBuy: 15,
+      FilledQty: 15,
+      DayTargetPeriodPrice: 0,
+      DayTargetNowPrice: 0,
+    });
+
+    renderTable({ scanning: false, results: [high, risky, noHistory] });
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+    await waitFor(() => expect(groupedRouteButtons()).toHaveLength(3));
+    for (const label of [
+      "Clean",
+      "Moderate",
+      "Busy",
+      "SPIKE",
+      "NO HIST",
+      "UNSTABLE",
+      "THIN",
+      "High",
+      "Medium",
+      "Low",
+    ]) {
+      expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
+    }
+
+    fireEvent.click(
+      screen.getByTitle("Show routes that have at least one SPIKE warning badge."),
+    );
+    expect(groupedRouteButtons()).toHaveLength(1);
+    expect(groupedRouteButtons()[0]).toHaveTextContent("Risk Buy → Risk Sell");
+
+    fireEvent.click(
+      screen.getByTitle("Show routes with a High confidence badge."),
+    );
+    const labelsOr = groupedRouteButtons().map((node) => node.textContent ?? "");
+    expect(labelsOr.some((text) => text.includes("Risk Buy → Risk Sell"))).toBe(true);
+    expect(labelsOr.some((text) => text.includes("High Buy → High Sell"))).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    await waitFor(() => expect(groupedRouteButtons()).toHaveLength(3));
+    expect(screen.getByText(/NoHist Buy → NoHist Sell/)).toBeInTheDocument();
+  });
+
+  it("uses OR behavior for multi-select route badge filters", async () => {
+    const high = makeRow({
+      TypeID: 9911,
+      TypeName: "OR High",
+      BuyStation: "OR High Buy",
+      SellStation: "OR High Sell",
+      BuySystemID: 30020142,
+      SellSystemID: 30022187,
+      RealProfit: 300,
+      DailyProfit: 180,
+      UnitsToBuy: 20,
+      FilledQty: 20,
+      SlippageBuyPct: 0.2,
+      SlippageSellPct: 0.2,
+      DayTargetPeriodPrice: 120,
+      DayTargetNowPrice: 121,
+    });
+    const spike = makeRow({
+      TypeID: 9912,
+      TypeName: "OR Spike",
+      BuyStation: "OR Spike Buy",
+      SellStation: "OR Spike Sell",
+      BuySystemID: 30022053,
+      SellSystemID: 30022659,
+      UnitsToBuy: 20,
+      FilledQty: 5,
+      DayNowProfit: 5,
+      DayPeriodProfit: -1,
+      DayTargetPeriodPrice: 100,
+      DayTargetNowPrice: 150,
+    });
+    renderTable({ scanning: false, results: [high, spike] });
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+    await waitFor(() => expect(groupedRouteButtons()).toHaveLength(2));
+
+    fireEvent.click(
+      screen.getByTitle("Show routes that have at least one SPIKE warning badge."),
+    );
+    fireEvent.click(
+      screen.getByTitle("Show routes with a High confidence badge."),
+    );
+    const labels = groupedRouteButtons().map((node) => node.textContent ?? "");
+    expect(labels).toHaveLength(2);
+    expect(labels.some((text) => text.includes("OR Spike Buy → OR Spike Sell"))).toBe(
+      true,
+    );
+    expect(labels.some((text) => text.includes("OR High Buy → OR High Sell"))).toBe(
+      true,
+    );
   });
 
   it("uses the corrected Weighted Slippage % label for route-pack slippage column", () => {

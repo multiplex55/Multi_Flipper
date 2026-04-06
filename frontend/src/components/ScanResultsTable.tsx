@@ -912,6 +912,28 @@ type RouteScoreSummary = {
   avgRowScore: number;
 };
 
+type RouteBadgeFilter =
+  | "clean"
+  | "moderate"
+  | "busy"
+  | "spike"
+  | "no_history"
+  | "unstable"
+  | "thin"
+  | "high"
+  | "medium"
+  | "low";
+
+type RouteBadgeMetadata = {
+  filters: Set<RouteBadgeFilter>;
+  complexity: "Clean" | "Moderate" | "Busy";
+  riskSpikeCount: number;
+  riskNoHistoryCount: number;
+  riskUnstableHistoryCount: number;
+  riskThinFillCount: number;
+  confidence: ReturnType<typeof calcRouteConfidence>;
+};
+
 function routeScoreToneClass(score: number): string {
   if (score >= 70) return "text-green-300 border-green-500/50 bg-green-900/20";
   if (score >= 40)
@@ -1306,6 +1328,34 @@ function complexityBadgeClass(complexity: "Clean" | "Moderate" | "Busy"): string
   return "border-rose-500/60 text-rose-300 bg-rose-950/40";
 }
 
+function deriveRouteBadgeMetadata(
+  routeSummary: RouteBatchMetadata | undefined,
+  routeAggregate: RouteAggregateMetrics | undefined,
+): RouteBadgeMetadata {
+  const complexity = routeSummary?.routeComplexity ?? "Busy";
+  const confidence = calcRouteConfidence(routeAggregate);
+  const riskSpikeCount = routeAggregate?.riskSpikeCount ?? 0;
+  const riskNoHistoryCount = routeAggregate?.riskNoHistoryCount ?? 0;
+  const riskUnstableHistoryCount = routeAggregate?.riskUnstableHistoryCount ?? 0;
+  const riskThinFillCount = routeAggregate?.riskThinFillCount ?? 0;
+  const filters = new Set<RouteBadgeFilter>();
+  filters.add(complexity.toLowerCase() as RouteBadgeFilter);
+  if (riskSpikeCount > 0) filters.add("spike");
+  if (riskNoHistoryCount > 0) filters.add("no_history");
+  if (riskUnstableHistoryCount > 0) filters.add("unstable");
+  if (riskThinFillCount > 0) filters.add("thin");
+  filters.add(confidence.label.toLowerCase() as RouteBadgeFilter);
+  return {
+    filters,
+    complexity,
+    riskSpikeCount,
+    riskNoHistoryCount,
+    riskUnstableHistoryCount,
+    riskThinFillCount,
+    confidence,
+  };
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
  * COMPONENT
  * ═══════════════════════════════════════════════════════════════════════ */
@@ -1407,6 +1457,9 @@ export function ScanResultsTable({
     }
   });
   const [showHiddenRows, setShowHiddenRows] = useState(false);
+  const [selectedBadgeFilters, setSelectedBadgeFilters] = useState<
+    Set<RouteBadgeFilter>
+  >(new Set());
   const [hiddenMap, setHiddenMap] = useState<Record<string, HiddenFlipEntry>>(
     {},
   );
@@ -1455,6 +1508,23 @@ export function ScanResultsTable({
   const isItemGrouped =
     !isRegionGrouped && groupByItem && routeViewMode === "rows";
   const isRouteGrouped = !isRegionGrouped && routeViewMode === "route";
+
+  const routeBadgeFilterOptions: Array<{
+    key: RouteBadgeFilter;
+    labelKey: TranslationKey;
+    tooltipKey: TranslationKey;
+  }> = [
+    { key: "clean", labelKey: "routeBadgeFilterClean", tooltipKey: "routeBadgeFilterCleanTooltip" },
+    { key: "moderate", labelKey: "routeBadgeFilterModerate", tooltipKey: "routeBadgeFilterModerateTooltip" },
+    { key: "busy", labelKey: "routeBadgeFilterBusy", tooltipKey: "routeBadgeFilterBusyTooltip" },
+    { key: "spike", labelKey: "routeBadgeFilterSpike", tooltipKey: "routeBadgeFilterSpikeTooltip" },
+    { key: "no_history", labelKey: "routeBadgeFilterNoHistory", tooltipKey: "routeBadgeFilterNoHistoryTooltip" },
+    { key: "unstable", labelKey: "routeBadgeFilterUnstable", tooltipKey: "routeBadgeFilterUnstableTooltip" },
+    { key: "thin", labelKey: "routeBadgeFilterThin", tooltipKey: "routeBadgeFilterThinTooltip" },
+    { key: "high", labelKey: "routeBadgeFilterHigh", tooltipKey: "routeBadgeFilterHighTooltip" },
+    { key: "medium", labelKey: "routeBadgeFilterMedium", tooltipKey: "routeBadgeFilterMediumTooltip" },
+    { key: "low", labelKey: "routeBadgeFilterLow", tooltipKey: "routeBadgeFilterLowTooltip" },
+  ];
   const preferredSortKey: SortKey = isRegionGrouped
     ? "DayPeriodProfit"
     : "RealProfit";
@@ -1759,6 +1829,12 @@ export function ScanResultsTable({
       // ignore storage quota errors
     }
   }, [routeViewMode]);
+
+  useEffect(() => {
+    if (!isRouteGrouped && selectedBadgeFilters.size > 0) {
+      setSelectedBadgeFilters(new Set());
+    }
+  }, [isRouteGrouped, selectedBadgeFilters]);
 
   useEffect(() => {
     try {
@@ -2302,6 +2378,43 @@ export function ScanResultsTable({
     sortKey,
   ]);
 
+  const routeBadgeMetadataByRoute = useMemo<
+    Record<string, RouteBadgeMetadata>
+  >(() => {
+    if (!isRouteGrouped) return {};
+    const out: Record<string, RouteBadgeMetadata> = {};
+    for (const group of routeGroups) {
+      out[group.key] = deriveRouteBadgeMetadata(
+        batchMetricsByRoute[group.key],
+        routeAggregateMetricsByRoute[group.key],
+      );
+    }
+    return out;
+  }, [
+    batchMetricsByRoute,
+    isRouteGrouped,
+    routeAggregateMetricsByRoute,
+    routeGroups,
+  ]);
+
+  const filteredRouteGroups = useMemo<RouteGroup[]>(() => {
+    if (!isRouteGrouped) return routeGroups;
+    if (selectedBadgeFilters.size === 0) return routeGroups;
+    return routeGroups.filter((group) => {
+      const metadata = routeBadgeMetadataByRoute[group.key];
+      if (!metadata) return false;
+      for (const filter of selectedBadgeFilters) {
+        if (metadata.filters.has(filter)) return true;
+      }
+      return false;
+    });
+  }, [
+    isRouteGrouped,
+    routeBadgeMetadataByRoute,
+    routeGroups,
+    selectedBadgeFilters,
+  ]);
+
   const routeScoreSummaryByRoute = useMemo<Record<string, RouteScoreSummary>>(
     () => {
       if (!isRouteGrouped) return {};
@@ -2408,7 +2521,7 @@ export function ScanResultsTable({
       setExpandedRouteGroups(new Set());
       return;
     }
-    const existing = new Set(routeGroups.map((g) => g.key));
+    const existing = new Set(filteredRouteGroups.map((g) => g.key));
     setExpandedRouteGroups((prev) => {
       if (prev.size === 0) return prev;
       const next = new Set<string>();
@@ -2417,7 +2530,7 @@ export function ScanResultsTable({
       }
       return next.size === prev.size ? prev : next;
     });
-  }, [isRouteGrouped, routeGroups]);
+  }, [filteredRouteGroups, isRouteGrouped]);
 
   useEffect(() => {
     if (!isItemGrouped) {
@@ -2505,7 +2618,7 @@ export function ScanResultsTable({
     }
     if (isRouteGrouped) {
       const rows: IndexedRow[] = [];
-      for (const group of routeGroups) {
+      for (const group of filteredRouteGroups) {
         if (group.rows.length === 0) continue;
         rows.push(group.rows[0]);
         if (!expandedRouteGroups.has(group.key)) continue;
@@ -2538,7 +2651,7 @@ export function ScanResultsTable({
     isRouteGrouped,
     isRegionGrouped,
     itemGroups,
-    routeGroups,
+    filteredRouteGroups,
     regionGroups,
   ]);
 
@@ -2574,6 +2687,7 @@ export function ScanResultsTable({
     hiddenMap,
     groupByItem,
     routeViewMode,
+    selectedBadgeFilters,
   ]);
 
   // Reset selection/pins/context menu/group limits when results change
@@ -3662,6 +3776,52 @@ export function ScanResultsTable({
           </div>
         )}
 
+        {isRouteGrouped && results.length > 0 && !scanning && (
+          <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
+            <span
+              className="text-eve-dim px-1"
+              title={t("routeBadgeFilterModeTooltip")}
+            >
+              {t("routeBadgeFilterTitle")}
+            </span>
+            {routeBadgeFilterOptions.map((filter) => {
+              const active = selectedBadgeFilters.has(filter.key);
+              return (
+                <button
+                  key={filter.key}
+                  type="button"
+                  onClick={() =>
+                    setSelectedBadgeFilters((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(filter.key)) next.delete(filter.key);
+                      else next.add(filter.key);
+                      return next;
+                    })
+                  }
+                  className={`px-1.5 py-0.5 rounded-sm border transition-colors ${
+                    active
+                      ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent"
+                      : "border-eve-border/50 text-eve-dim hover:text-eve-text"
+                  }`}
+                  title={t(filter.tooltipKey)}
+                >
+                  {t(filter.labelKey)}
+                </button>
+              );
+            })}
+            {selectedBadgeFilters.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedBadgeFilters(new Set())}
+                className="px-1.5 py-0.5 rounded-sm border border-red-500/50 text-red-300 hover:bg-red-900/20 transition-colors"
+                title={t("routeBadgeFilterClearTooltip")}
+              >
+                {t("routeBadgeFilterClear")}
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Action buttons */}
         <ToolbarBtn
           label={t("columnsButton")}
@@ -4369,7 +4529,7 @@ export function ScanResultsTable({
                 : isRouteGrouped
                   ? (() => {
                       let rowIndex = 0;
-                      return routeGroups.map((group) => {
+                      return filteredRouteGroups.map((group) => {
                         if (group.rows.length === 0) return null;
                         const expanded = expandedRouteGroups.has(group.key);
                         const routeSummary = batchMetricsByRoute[group.key];
@@ -4377,8 +4537,9 @@ export function ScanResultsTable({
                           routeAggregateMetricsByRoute[group.key];
                         const routeScoreSummary =
                           routeScoreSummaryByRoute[group.key];
-                        const routeConfidence =
-                          calcRouteConfidence(routeAggregate);
+                        const badgeMetadata =
+                          routeBadgeMetadataByRoute[group.key] ??
+                          deriveRouteBadgeMetadata(routeSummary, routeAggregate);
                         return (
                           <Fragment key={`route-group:${group.key}`}>
                             <tr
@@ -4400,19 +4561,73 @@ export function ScanResultsTable({
                                       return next;
                                     })
                                   }
-                                  className="inline-flex items-center gap-2 text-xs text-eve-text hover:text-eve-accent transition-colors"
+                                  className="inline-flex w-full items-center justify-between gap-3 text-xs text-eve-text hover:text-eve-accent transition-colors"
                                 >
-                                  <span className="text-eve-accent">
-                                    {expanded ? "▼" : "▶"}
+                                  <span
+                                    className="inline-flex items-center gap-2 min-w-0"
+                                    data-testid={`route-header-left:${group.key}`}
+                                  >
+                                    <span className="text-eve-accent shrink-0">
+                                      {expanded ? "▼" : "▶"}
+                                    </span>
+                                    <span
+                                      className={`px-1 py-0.5 rounded-sm border text-[10px] font-bold shrink-0 ${complexityBadgeClass(
+                                        badgeMetadata.complexity,
+                                      )}`}
+                                    >
+                                      {badgeMetadata.complexity}
+                                    </span>
+                                    {badgeMetadata.riskSpikeCount > 0 && (
+                                      <span
+                                        className="px-1 py-0.5 rounded-sm border border-red-500/60 text-[10px] font-bold text-red-300 bg-red-900/20 shrink-0"
+                                        title="Price spike warnings"
+                                      >
+                                        SPIKE {badgeMetadata.riskSpikeCount}
+                                      </span>
+                                    )}
+                                    {badgeMetadata.riskNoHistoryCount > 0 && (
+                                      <span
+                                        className="px-1 py-0.5 rounded-sm border border-amber-500/60 text-[10px] font-bold text-amber-300 bg-amber-900/20 shrink-0"
+                                        title="No history warnings"
+                                      >
+                                        NO HIST {badgeMetadata.riskNoHistoryCount}
+                                      </span>
+                                    )}
+                                    {badgeMetadata.riskUnstableHistoryCount > 0 && (
+                                      <span
+                                        className="px-1 py-0.5 rounded-sm border border-yellow-500/60 text-[10px] font-bold text-yellow-300 bg-yellow-900/20 shrink-0"
+                                        title="Unstable history warnings"
+                                      >
+                                        UNSTABLE{" "}
+                                        {badgeMetadata.riskUnstableHistoryCount}
+                                      </span>
+                                    )}
+                                    {badgeMetadata.riskThinFillCount > 0 && (
+                                      <span
+                                        className="px-1 py-0.5 rounded-sm border border-orange-500/60 text-[10px] font-bold text-orange-300 bg-orange-900/20 shrink-0"
+                                        title="Thin fill warnings"
+                                      >
+                                        THIN {badgeMetadata.riskThinFillCount}
+                                      </span>
+                                    )}
+                                    <span
+                                      className={`px-1 py-0.5 rounded-sm border text-[10px] font-bold shrink-0 ${badgeMetadata.confidence.color}`}
+                                      title={badgeMetadata.confidence.hint}
+                                    >
+                                      {badgeMetadata.confidence.label}{" "}
+                                      {badgeMetadata.confidence.score}
+                                    </span>
+                                    <span className="font-medium truncate">
+                                      {group.label}
+                                    </span>
                                   </span>
-                                  <span className="font-medium">
-                                    {group.label}
-                                  </span>
-                                  <span className="text-eve-dim">
-                                    {routeSummary?.routeItemCount ??
-                                      group.rows.length}{" "}
-                                    items
-                                  </span>
+
+                                  <span className="inline-flex items-center gap-2 shrink-0">
+                                    <span className="text-eve-dim">
+                                      {routeSummary?.routeItemCount ??
+                                        group.rows.length}{" "}
+                                      items
+                                    </span>
                                   <span
                                     className="text-eve-accent font-mono"
                                     title="Total route profit"
@@ -4540,11 +4755,6 @@ export function ScanResultsTable({
                                     m³
                                   </span>
                                   <span
-                                    className={`px-1 py-0.5 rounded-sm border text-[10px] font-bold ${complexityBadgeClass(routeSummary?.routeComplexity ?? "Busy")}`}
-                                  >
-                                    {routeSummary?.routeComplexity ?? "Busy"}
-                                  </span>
-                                  <span
                                     className="text-eve-dim font-mono"
                                     title="Weighted slippage percent"
                                   >
@@ -4577,50 +4787,6 @@ export function ScanResultsTable({
                                         ? "🟡"
                                         : "🔴"}
                                   </span>
-                                  {(routeAggregate?.riskSpikeCount ?? 0) >
-                                    0 && (
-                                    <span
-                                      className="px-1 py-0.5 rounded-sm border border-red-500/60 text-[10px] font-bold text-red-300 bg-red-900/20"
-                                      title="Price spike warnings"
-                                    >
-                                      SPIKE {routeAggregate?.riskSpikeCount}
-                                    </span>
-                                  )}
-                                  {(routeAggregate?.riskNoHistoryCount ?? 0) >
-                                    0 && (
-                                    <span
-                                      className="px-1 py-0.5 rounded-sm border border-amber-500/60 text-[10px] font-bold text-amber-300 bg-amber-900/20"
-                                      title="No history warnings"
-                                    >
-                                      NO HIST{" "}
-                                      {routeAggregate?.riskNoHistoryCount}
-                                    </span>
-                                  )}
-                                  {(routeAggregate?.riskUnstableHistoryCount ??
-                                    0) > 0 && (
-                                    <span
-                                      className="px-1 py-0.5 rounded-sm border border-yellow-500/60 text-[10px] font-bold text-yellow-300 bg-yellow-900/20"
-                                      title="Unstable history warnings"
-                                    >
-                                      UNSTABLE{" "}
-                                      {routeAggregate?.riskUnstableHistoryCount}
-                                    </span>
-                                  )}
-                                  {(routeAggregate?.riskThinFillCount ?? 0) >
-                                    0 && (
-                                    <span
-                                      className="px-1 py-0.5 rounded-sm border border-orange-500/60 text-[10px] font-bold text-orange-300 bg-orange-900/20"
-                                      title="Thin fill warnings"
-                                    >
-                                      THIN {routeAggregate?.riskThinFillCount}
-                                    </span>
-                                  )}
-                                  <span
-                                    className={`px-1 py-0.5 rounded-sm border text-[10px] font-bold ${routeConfidence.color}`}
-                                    title={routeConfidence.hint}
-                                  >
-                                    {routeConfidence.label}{" "}
-                                    {routeConfidence.score}
                                   </span>
                                 </button>
                               </td>
@@ -4638,6 +4804,19 @@ export function ScanResultsTable({
                   : pageRows.map((ir, i) =>
                       renderDataRow(ir, safePage * PAGE_SIZE + i),
                     )}
+            {isRouteGrouped &&
+              !scanning &&
+              displaySorted.length > 0 &&
+              filteredRouteGroups.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={columnDefs.length + 2}
+                    className="p-6 text-center text-sm text-eve-dim"
+                  >
+                    {t("routeBadgeFilterEmpty")}
+                  </td>
+                </tr>
+              )}
             {displaySorted.length === 0 && !scanning && (
               <tr>
                 <td colSpan={columnDefs.length + 2} className="p-0">
