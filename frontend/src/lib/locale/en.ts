@@ -207,6 +207,12 @@ export const en = {
     routeBuySellStopsShort: "Buy/Sell stops",
     routeFillConfidenceShort: "Fill min/avg",
     routeRemainingCargoShort: "Remaining cargo",
+    routeScoreLabel: "Route Score",
+    routeScoreTooltip:
+      "Aggregate route recommendation score from route economics (daily ISK/jump, execution quality, slippage, turnover, cargo use, and risk flags).",
+    routeRowScoreLabel: "Row Score B/A",
+    routeRowScoreTooltip:
+      "Best and average row-level opportunity scores on this route. This can differ from Route Score because it reflects individual trade attractiveness, not route-level aggregate economics.",
 
     // Contract table
     colTitle: "Title",

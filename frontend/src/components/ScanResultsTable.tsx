@@ -906,6 +906,19 @@ type RouteAggregateMetrics = {
   weightedSlippagePct: number;
 };
 
+type RouteScoreSummary = {
+  routeRecommendationScore: number;
+  bestRowScore: number;
+  avgRowScore: number;
+};
+
+function routeScoreToneClass(score: number): string {
+  if (score >= 70) return "text-green-300 border-green-500/50 bg-green-900/20";
+  if (score >= 40)
+    return "text-yellow-300 border-yellow-500/50 bg-yellow-900/20";
+  return "text-red-300 border-red-500/50 bg-red-900/20";
+}
+
 const BATCH_SYNTHETIC_KEYS: Set<SortKey> = new Set([
   "BatchNumber",
   "BatchProfit",
@@ -2289,6 +2302,59 @@ export function ScanResultsTable({
     sortKey,
   ]);
 
+  const routeScoreSummaryByRoute = useMemo<Record<string, RouteScoreSummary>>(
+    () => {
+      if (!isRouteGrouped) return {};
+      const out: Record<string, RouteScoreSummary> = {};
+      for (const group of routeGroups) {
+        const routeSummary = batchMetricsByRoute[group.key];
+        const routeRecommendationScore =
+          routeRecommendationScoreFromMetrics({
+            routeDailyIskPerJump: routeSummary?.routeDailyIskPerJump ?? 0,
+            routeWeakestExecutionQuality:
+              routeSummary?.routeWeakestExecutionQuality ?? 0,
+            routeWeightedSlippagePct:
+              routeSummary?.routeWeightedSlippagePct ?? 0,
+            routeTotalRiskCount:
+              (routeSummary?.routeRiskSpikeCount ?? 0) +
+              (routeSummary?.routeRiskNoHistoryCount ?? 0) +
+              (routeSummary?.routeRiskUnstableHistoryCount ?? 0) +
+              (routeSummary?.routeRiskThinFillCount ?? 0),
+            routeTurnoverDays: routeSummary?.routeTurnoverDays ?? null,
+            routeCapacityUsedPercent:
+              routeSummary?.routeCapacityUsedPercent ?? null,
+          }) ?? 0;
+        const rowScores = group.rows.map((item) =>
+          scoreFlipResult(
+            item.row,
+            opportunityProfile,
+            displayScoreContext,
+          ).finalScore,
+        );
+        const bestRowScore =
+          rowScores.length > 0 ? Math.max(...rowScores) : 0;
+        const avgRowScore =
+          rowScores.length > 0
+            ? rowScores.reduce((sum, value) => sum + value, 0) /
+              rowScores.length
+            : 0;
+        out[group.key] = {
+          routeRecommendationScore,
+          bestRowScore,
+          avgRowScore,
+        };
+      }
+      return out;
+    },
+    [
+      batchMetricsByRoute,
+      displayScoreContext,
+      isRouteGrouped,
+      opportunityProfile,
+      routeGroups,
+    ],
+  );
+
   const topRoutePickCandidates = useMemo(() => {
     const labelByRoute = new Map<string, string>();
     for (const ir of displaySorted) {
@@ -2307,6 +2373,7 @@ export function ScanResultsTable({
       const routeSummary = batchMetricsByRoute[routeKey];
       const routeAggregate = routeAggregateMetricsByRoute[routeKey];
       const confidence = calcRouteConfidence(routeAggregate);
+      const routeScoreSummary = routeScoreSummaryByRoute[routeKey];
       candidates.push({
         routeKey,
         routeLabel,
@@ -2314,22 +2381,7 @@ export function ScanResultsTable({
         dailyIskPerJump: routeSummary?.routeDailyIskPerJump ?? 0,
         confidenceScore: confidence.score,
         cargoUsePercent: routeSummary?.routeCapacityUsedPercent ?? 0,
-        recommendationScore:
-          routeRecommendationScoreFromMetrics({
-            routeDailyIskPerJump: routeSummary?.routeDailyIskPerJump ?? 0,
-            routeWeakestExecutionQuality:
-              routeSummary?.routeWeakestExecutionQuality ?? 0,
-            routeWeightedSlippagePct:
-              routeSummary?.routeWeightedSlippagePct ?? 0,
-            routeTotalRiskCount:
-              (routeSummary?.routeRiskSpikeCount ?? 0) +
-              (routeSummary?.routeRiskNoHistoryCount ?? 0) +
-              (routeSummary?.routeRiskUnstableHistoryCount ?? 0) +
-              (routeSummary?.routeRiskThinFillCount ?? 0),
-            routeTurnoverDays: routeSummary?.routeTurnoverDays ?? null,
-            routeCapacityUsedPercent:
-              routeSummary?.routeCapacityUsedPercent ?? null,
-          }) ?? 0,
+        recommendationScore: routeScoreSummary?.routeRecommendationScore ?? 0,
         stopCount: routeSummary?.routeStopCount ?? 0,
         riskCount:
           (routeSummary?.routeRiskSpikeCount ?? 0) +
@@ -2339,7 +2391,12 @@ export function ScanResultsTable({
       });
     }
     return candidates;
-  }, [batchMetricsByRoute, displaySorted, routeAggregateMetricsByRoute]);
+  }, [
+    batchMetricsByRoute,
+    displaySorted,
+    routeAggregateMetricsByRoute,
+    routeScoreSummaryByRoute,
+  ]);
 
   const topRoutePicks = useMemo(
     () => selectTopRoutePicks(topRoutePickCandidates),
@@ -4318,6 +4375,8 @@ export function ScanResultsTable({
                         const routeSummary = batchMetricsByRoute[group.key];
                         const routeAggregate =
                           routeAggregateMetricsByRoute[group.key];
+                        const routeScoreSummary =
+                          routeScoreSummaryByRoute[group.key];
                         const routeConfidence =
                           calcRouteConfidence(routeAggregate);
                         return (
@@ -4414,6 +4473,34 @@ export function ScanResultsTable({
                                       routeSummary?.routeRealIskPerM3PerJump ??
                                         null,
                                     )}
+                                  </span>
+                                  <span
+                                    className={`px-1 py-0.5 rounded-sm border text-[10px] font-bold font-mono ${routeScoreToneClass(
+                                      routeScoreSummary?.routeRecommendationScore ??
+                                        0,
+                                    )}`}
+                                    title={t("routeScoreTooltip")}
+                                  >
+                                    {t("routeScoreLabel")}{" "}
+                                    {(
+                                      routeScoreSummary?.routeRecommendationScore ??
+                                      0
+                                    ).toFixed(1)}
+                                  </span>
+                                  <span
+                                    className={`px-1 py-0.5 rounded-sm border text-[10px] font-bold font-mono ${routeScoreToneClass(
+                                      routeScoreSummary?.avgRowScore ?? 0,
+                                    )}`}
+                                    title={t("routeRowScoreTooltip")}
+                                  >
+                                    {t("routeRowScoreLabel")}{" "}
+                                    {(
+                                      routeScoreSummary?.bestRowScore ?? 0
+                                    ).toFixed(1)}
+                                    /
+                                    {(
+                                      routeScoreSummary?.avgRowScore ?? 0
+                                    ).toFixed(1)}
                                   </span>
                                   <span className="text-eve-dim font-mono">
                                     EQ min{" "}
