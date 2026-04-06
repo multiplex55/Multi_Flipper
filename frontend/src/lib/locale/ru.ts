@@ -192,6 +192,8 @@ export const ru = {
     decisionLensSafestRoute: "Самый безопасный маршрут",
     decisionLensBestCargoUse: "Лучшее карго-исп.",
     decisionLensLowestCapitalLockup: "Минимум капитала",
+    topPicksToggleLabel: "Топ-пики",
+    topPicksToggleTooltip: "Показать или скрыть панель топ-пиков",
     topPicksPanelTitle: "Топ-пики",
     bestRecommendedRoutePack: "Лучший рекомендованный пакет маршрутов",
     bestQuickSingleRoute: "Лучший быстрый одиночный маршрут",
