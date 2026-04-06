@@ -4,6 +4,7 @@ import {
   dailyIskPerJump,
   realIskPerJump,
   realIskPerM3PerJump,
+  selectTopRoutePicks,
   slippageCostIsk,
   turnoverDays,
 } from "@/lib/radiusMetrics";
@@ -140,5 +141,47 @@ describe("radiusMetrics formulas", () => {
     expect(realIskPerJump(row)).toBe(-100);
     expect(realIskPerM3PerJump(row)).toBe(-2);
     expect(slippageCostIsk(row)).toBe(450);
+  });
+
+  it("selects top picks using route pick selectors", () => {
+    const picks = selectTopRoutePicks([
+      {
+        routeKey: "route-a",
+        routeLabel: "A -> B",
+        totalProfit: 1_000_000,
+        dailyIskPerJump: 520_000,
+        confidenceScore: 82,
+        cargoUsePercent: 78,
+        recommendationScore: 99,
+        stopCount: 3,
+        riskCount: 1,
+      },
+      {
+        routeKey: "route-b",
+        routeLabel: "C -> D",
+        totalProfit: 700_000,
+        dailyIskPerJump: 460_000,
+        confidenceScore: 74,
+        cargoUsePercent: 88,
+        recommendationScore: 78,
+        stopCount: 2,
+        riskCount: 3,
+      },
+      {
+        routeKey: "route-c",
+        routeLabel: "E -> F",
+        totalProfit: 600_000,
+        dailyIskPerJump: 250_000,
+        confidenceScore: 95,
+        cargoUsePercent: 52,
+        recommendationScore: 80,
+        stopCount: 2,
+        riskCount: 0,
+      },
+    ]);
+
+    expect(picks.bestRecommendedRoutePack?.routeKey).toBe("route-a");
+    expect(picks.bestQuickSingleRoute?.routeKey).toBe("route-b");
+    expect(picks.bestSafeFillerRoute?.routeKey).toBe("route-c");
   });
 });

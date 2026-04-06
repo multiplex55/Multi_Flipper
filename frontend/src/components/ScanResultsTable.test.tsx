@@ -1234,5 +1234,47 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
         expect(routeButtons[0]).toHaveTextContent("Slip ");
       });
     });
+
+    it("renders top picks panel and supports one-click jump-to-group", async () => {
+      const rowA = makeRow({
+        TypeID: 8001,
+        BuyStation: "TopPick A Buy",
+        SellStation: "TopPick A Sell",
+        BuySystemID: 500001,
+        SellSystemID: 500002,
+        DailyProfit: 400,
+        RealProfit: 700,
+        TotalJumps: 2,
+        UnitsToBuy: 120,
+        FilledQty: 100,
+      });
+      const rowB = makeRow({
+        TypeID: 8002,
+        BuyStation: "TopPick B Buy",
+        SellStation: "TopPick B Sell",
+        BuySystemID: 500011,
+        SellSystemID: 500012,
+        DailyProfit: 900,
+        RealProfit: 1000,
+        TotalJumps: 1,
+        UnitsToBuy: 150,
+        FilledQty: 110,
+      });
+
+      renderTable({ scanning: false, results: [rowA, rowB] });
+
+      expect(await screen.findByText("Top Picks")).toBeInTheDocument();
+      expect(screen.getByText("Best Recommended Route Pack")).toBeInTheDocument();
+      const jumpButtons = screen.getAllByRole("button", {
+        name: "Jump to group",
+      });
+      expect(jumpButtons.length).toBeGreaterThan(0);
+
+      fireEvent.click(jumpButtons[0]);
+
+      await waitFor(() => {
+        expect(groupedRouteButtons().length).toBeGreaterThan(0);
+      });
+    });
   });
 });
