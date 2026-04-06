@@ -115,3 +115,78 @@ export function routeRecommendationScoreFromMetrics(input: {
     0.08 * riskPenalty;
   return Math.max(0, Math.min(100, score * 100));
 }
+
+export type TopRoutePickCandidate = {
+  routeKey: string;
+  routeLabel: string;
+  totalProfit: number;
+  dailyIskPerJump: number;
+  confidenceScore: number;
+  cargoUsePercent: number;
+  recommendationScore: number;
+  stopCount: number;
+  riskCount: number;
+};
+
+export type TopRoutePicks = {
+  bestRecommendedRoutePack: TopRoutePickCandidate | null;
+  bestQuickSingleRoute: TopRoutePickCandidate | null;
+  bestSafeFillerRoute: TopRoutePickCandidate | null;
+};
+
+function scoreQuickRoute(candidate: TopRoutePickCandidate): number {
+  return (
+    safeNumber(candidate.dailyIskPerJump) * 1.25 +
+    safeNumber(candidate.confidenceScore) * 12 -
+    safeNumber(candidate.stopCount) * 100_000
+  );
+}
+
+function scoreSafeFillerRoute(candidate: TopRoutePickCandidate): number {
+  return (
+    safeNumber(candidate.confidenceScore) * 22 +
+    Math.max(0, 100 - safeNumber(candidate.riskCount) * 15) * 8 +
+    Math.max(0, 100 - Math.abs(safeNumber(candidate.cargoUsePercent) - 50)) * 4 +
+    safeNumber(candidate.totalProfit) / 250_000
+  );
+}
+
+function pickTopCandidate(
+  candidates: TopRoutePickCandidate[],
+  score: (candidate: TopRoutePickCandidate) => number,
+): TopRoutePickCandidate | null {
+  if (candidates.length === 0) return null;
+  return [...candidates].sort((left, right) => {
+    const diff = score(right) - score(left);
+    if (diff !== 0) return diff;
+    if (right.confidenceScore !== left.confidenceScore) {
+      return right.confidenceScore - left.confidenceScore;
+    }
+    if (right.totalProfit !== left.totalProfit) {
+      return right.totalProfit - left.totalProfit;
+    }
+    return left.routeLabel.localeCompare(right.routeLabel);
+  })[0];
+}
+
+export function selectTopRoutePicks(
+  candidates: TopRoutePickCandidate[],
+): TopRoutePicks {
+  const normalized = candidates.filter(
+    (candidate) =>
+      candidate.routeKey.trim().length > 0 &&
+      candidate.routeLabel.trim().length > 0,
+  );
+  return {
+    bestRecommendedRoutePack: pickTopCandidate(
+      normalized,
+      (candidate) =>
+        safeNumber(candidate.recommendationScore) * 20 +
+        safeNumber(candidate.confidenceScore) * 8 +
+        safeNumber(candidate.dailyIskPerJump) +
+        safeNumber(candidate.totalProfit) / 200_000,
+    ),
+    bestQuickSingleRoute: pickTopCandidate(normalized, scoreQuickRoute),
+    bestSafeFillerRoute: pickTopCandidate(normalized, scoreSafeFillerRoute),
+  };
+}

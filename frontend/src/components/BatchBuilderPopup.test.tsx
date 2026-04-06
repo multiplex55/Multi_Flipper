@@ -722,6 +722,11 @@ describe("BatchBuilderPopup route creation", () => {
     expect(second).toHaveTextContent("Jump segments: 10");
     expect(first).toHaveTextContent("Core: 1 items / 40 K");
     expect(second).toHaveTextContent("Safe filler: 1 / 90 K");
+    expect(first).toHaveTextContent("Stops: 2");
+    expect(first).toHaveTextContent("Buy/Sell stops: 1/1");
+    expect(first).toHaveTextContent("Fill min/avg: 80% / 80%");
+    expect(first).toHaveTextContent("Remaining cargo: 4,400");
+    expect(first).toHaveTextContent("Clean");
   });
 
   it("shows empty options UX when API returns no ranked options", async () => {

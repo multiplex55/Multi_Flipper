@@ -183,6 +183,22 @@ function mergeAdditionLines(
   return Array.from(byKey.values());
 }
 
+function classifyComplexity(stopCount: number): "Clean" | "Moderate" | "Busy" {
+  if (stopCount <= 2) return "Clean";
+  if (stopCount <= 4) return "Moderate";
+  return "Busy";
+}
+
+function complexityBadgeClass(complexity: "Clean" | "Moderate" | "Busy"): string {
+  if (complexity === "Clean") {
+    return "border-emerald-500/60 text-emerald-300 bg-emerald-950/40";
+  }
+  if (complexity === "Moderate") {
+    return "border-amber-500/60 text-amber-300 bg-amber-950/40";
+  }
+  return "border-rose-500/60 text-rose-300 bg-rose-950/40";
+}
+
 export function BatchBuilderPopup({
   open,
   onClose,
@@ -1381,6 +1397,37 @@ export function BatchBuilderPopup({
                   : null;
                 const selected = option.option_id === selectedOptionId;
                 const recommended = !!option.recommended;
+                const buyStops = new Set(
+                  option.lines.map((line) =>
+                    line.buy_location_id > 0
+                      ? `buy:loc:${line.buy_location_id}`
+                      : `buy:sys:${line.buy_system_id}`,
+                  ),
+                );
+                const sellStops = new Set(
+                  option.lines.map((line) =>
+                    line.sell_location_id > 0
+                      ? `sell:loc:${line.sell_location_id}`
+                      : `sell:sys:${line.sell_system_id}`,
+                  ),
+                );
+                const stopCount = new Set([...buyStops, ...sellStops]).size;
+                const avgFillConfidence =
+                  option.lines.length > 0
+                    ? option.lines.reduce(
+                        (sum, line) => sum + Math.max(0, line.fill_confidence),
+                        0,
+                      ) / option.lines.length
+                    : 0;
+                const worstFillConfidence =
+                  option.lines.length > 0
+                    ? Math.min(
+                        ...option.lines.map((line) =>
+                          Math.max(0, line.fill_confidence),
+                        ),
+                      )
+                    : 0;
+                const complexity = classifyComplexity(stopCount);
                 return (
                   <button
                     type="button"
@@ -1489,6 +1536,37 @@ export function BatchBuilderPopup({
                       {t("batchBuilderRouteIskPerJump")}:{" "}
                       {formatISK(option.isk_per_jump)} |{" "}
                       {t("batchBuilderRouteJumpSegments")}: {option.total_jumps}
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-1 text-[11px]">
+                      <div className="text-eve-dim">
+                        {t("routeStopCountShort")}: {stopCount}
+                      </div>
+                      <div className="text-eve-dim">
+                        {t("routeBuySellStopsShort")}: {buyStops.size}/{sellStops.size}
+                      </div>
+                      <div className="text-eve-dim">
+                        {t("routeFillConfidenceShort")}:{" "}
+                        {(worstFillConfidence * 100).toFixed(0)}% /{" "}
+                        {(avgFillConfidence * 100).toFixed(0)}%
+                      </div>
+                      <div className="text-eve-dim">
+                        {t("batchBuilderRouteAddedCapital")}:{" "}
+                        {formatISK(option.total_buy_isk)}
+                      </div>
+                      <div className="text-eve-dim">
+                        {t("routeRemainingCargoShort")}:{" "}
+                        {optionMerged?.remaining_capacity_m3.toLocaleString(undefined, {
+                          maximumFractionDigits: 1,
+                        }) ?? "0"}{" "}
+                        m³
+                      </div>
+                      <div>
+                        <span
+                          className={`px-1 py-0.5 rounded-sm border text-[10px] font-bold ${complexityBadgeClass(complexity)}`}
+                        >
+                          {complexity}
+                        </span>
+                      </div>
                     </div>
                     <div className="mt-2 text-[11px] text-eve-dim grid grid-cols-1 md:grid-cols-3 gap-1">
                       <div>

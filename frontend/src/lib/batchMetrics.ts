@@ -72,6 +72,13 @@ export type RouteBatchMetadata = {
   routeUniverseCandidateItemCount: number;
   routeUniverseExcludedItemCount: number;
   routeUniverseWarningCount: number;
+  routeStopCount: number;
+  routeBuyStopCount: number;
+  routeSellStopCount: number;
+  routeWorstFillConfidencePct: number;
+  routeAverageFillConfidencePct: number;
+  routeRemainingCargoM3: number | null;
+  routeComplexity: "Clean" | "Moderate" | "Busy";
 };
 
 export type RouteBatchMetadataByRoute = Record<string, RouteBatchMetadata>;
@@ -80,6 +87,20 @@ export type RouteBatchMetadataResult = {
   byRow: Record<string, RouteBatchMetadata>;
   byRoute: RouteBatchMetadataByRoute;
 };
+
+function fillConfidencePct(row: FlipResult): number {
+  const requested = requestedUnitsForFlip(row);
+  if (!(requested > 0)) return 0;
+  const filled = Math.max(0, safeNumber(row.FilledQty));
+  const ratio = filled / requested;
+  return Math.max(0, Math.min(100, ratio * 100));
+}
+
+function classifyRouteComplexity(stopCount: number): "Clean" | "Moderate" | "Busy" {
+  if (stopCount <= 2) return "Clean";
+  if (stopCount <= 4) return "Moderate";
+  return "Busy";
+}
 
 export function safeNumber(value: unknown): number {
   const n = Number(value);
@@ -431,6 +452,30 @@ export function buildRouteBatchMetadata(
       routeUniverseLines.filter(
         (routeRow) => hasStableDestinationHistory(routeRow) === false,
       ).length;
+    const buyStops = new Set(
+      selectedRows.map((routeRow) =>
+        safeNumber(routeRow.BuyLocationID) > 0
+          ? `buy:loc:${safeNumber(routeRow.BuyLocationID)}`
+          : `buy:sys:${safeNumber(routeRow.BuySystemID)}`,
+      ),
+    );
+    const sellStops = new Set(
+      selectedRows.map((routeRow) =>
+        safeNumber(routeRow.SellLocationID) > 0
+          ? `sell:loc:${safeNumber(routeRow.SellLocationID)}`
+          : `sell:sys:${safeNumber(routeRow.SellSystemID)}`,
+      ),
+    );
+    const stopCount = new Set([...buyStops, ...sellStops]).size;
+    const fillConfidences = selectedRows.map(fillConfidencePct);
+    const weightedFillNumerator = selectedRows.reduce((sum, routeRow) => {
+      const requested = Math.max(1, requestedUnitsForFlip(routeRow));
+      return sum + fillConfidencePct(routeRow) * requested;
+    }, 0);
+    const weightedFillDenominator = selectedRows.reduce(
+      (sum, routeRow) => sum + Math.max(1, requestedUnitsForFlip(routeRow)),
+      0,
+    );
 
     const metadata: RouteBatchMetadata = {
       batchNumber: batch.lines.length,
@@ -468,6 +513,17 @@ export function buildRouteBatchMetadata(
         routeUniverseLines.length - selectedRows.length,
       ),
       routeUniverseWarningCount,
+      routeStopCount: stopCount,
+      routeBuyStopCount: buyStops.size,
+      routeSellStopCount: sellStops.size,
+      routeWorstFillConfidencePct:
+        fillConfidences.length > 0 ? Math.min(...fillConfidences) : 0,
+      routeAverageFillConfidencePct:
+        weightedFillDenominator > 0
+          ? weightedFillNumerator / weightedFillDenominator
+          : 0,
+      routeRemainingCargoM3: batch.remainingM3,
+      routeComplexity: classifyRouteComplexity(stopCount),
     };
     metadataByRow[identityKey] = metadata;
     if (!(routeKey in metadataByRoute)) {

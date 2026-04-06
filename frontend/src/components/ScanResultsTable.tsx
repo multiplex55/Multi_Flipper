@@ -30,7 +30,10 @@ import {
   radiusRouteKey,
   realIskPerJump,
   realIskPerM3PerJump,
+  routeRecommendationScoreFromMetrics,
+  selectTopRoutePicks,
   slippageCostIsk,
+  type TopRoutePickCandidate,
   turnoverDays,
 } from "@/lib/radiusMetrics";
 import {
@@ -1279,6 +1282,16 @@ export function calcRouteConfidence(
   });
 }
 
+function complexityBadgeClass(complexity: "Clean" | "Moderate" | "Busy"): string {
+  if (complexity === "Clean") {
+    return "border-emerald-500/60 text-emerald-300 bg-emerald-950/40";
+  }
+  if (complexity === "Moderate") {
+    return "border-amber-500/60 text-amber-300 bg-amber-950/40";
+  }
+  return "border-rose-500/60 text-rose-300 bg-rose-950/40";
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
  * COMPONENT
  * ═══════════════════════════════════════════════════════════════════════ */
@@ -2258,6 +2271,63 @@ export function ScanResultsTable({
     sortKey,
   ]);
 
+  const topRoutePickCandidates = useMemo(() => {
+    const labelByRoute = new Map<string, string>();
+    for (const ir of displaySorted) {
+      const key = routeGroupKey(ir.row);
+      if (!labelByRoute.has(key)) {
+        labelByRoute.set(
+          key,
+          `${ir.row.BuyStation || ir.row.BuySystemName} → ${
+            ir.row.SellStation || ir.row.SellSystemName
+          }`,
+        );
+      }
+    }
+    const candidates: TopRoutePickCandidate[] = [];
+    for (const [routeKey, routeLabel] of labelByRoute.entries()) {
+      const routeSummary = batchMetricsByRoute[routeKey];
+      const routeAggregate = routeAggregateMetricsByRoute[routeKey];
+      const confidence = calcRouteConfidence(routeAggregate);
+      candidates.push({
+        routeKey,
+        routeLabel,
+        totalProfit: routeSummary?.routeTotalProfit ?? 0,
+        dailyIskPerJump: routeSummary?.routeDailyIskPerJump ?? 0,
+        confidenceScore: confidence.score,
+        cargoUsePercent: routeSummary?.routeCapacityUsedPercent ?? 0,
+        recommendationScore:
+          routeRecommendationScoreFromMetrics({
+            routeDailyIskPerJump: routeSummary?.routeDailyIskPerJump ?? 0,
+            routeWeakestExecutionQuality:
+              routeSummary?.routeWeakestExecutionQuality ?? 0,
+            routeWeightedSlippagePct:
+              routeSummary?.routeWeightedSlippagePct ?? 0,
+            routeTotalRiskCount:
+              (routeSummary?.routeRiskSpikeCount ?? 0) +
+              (routeSummary?.routeRiskNoHistoryCount ?? 0) +
+              (routeSummary?.routeRiskUnstableHistoryCount ?? 0) +
+              (routeSummary?.routeRiskThinFillCount ?? 0),
+            routeTurnoverDays: routeSummary?.routeTurnoverDays ?? null,
+            routeCapacityUsedPercent:
+              routeSummary?.routeCapacityUsedPercent ?? null,
+          }) ?? 0,
+        stopCount: routeSummary?.routeStopCount ?? 0,
+        riskCount:
+          (routeSummary?.routeRiskSpikeCount ?? 0) +
+          (routeSummary?.routeRiskNoHistoryCount ?? 0) +
+          (routeSummary?.routeRiskUnstableHistoryCount ?? 0) +
+          (routeSummary?.routeRiskThinFillCount ?? 0),
+      });
+    }
+    return candidates;
+  }, [batchMetricsByRoute, displaySorted, routeAggregateMetricsByRoute]);
+
+  const topRoutePicks = useMemo(
+    () => selectTopRoutePicks(topRoutePickCandidates),
+    [topRoutePickCandidates],
+  );
+
   useEffect(() => {
     if (!isRouteGrouped) {
       setExpandedRouteGroups(new Set());
@@ -3114,6 +3184,23 @@ export function ScanResultsTable({
       ?.scrollIntoView({ block: "nearest" });
   }, [focusedRowId]);
 
+  const jumpToRouteGroup = useCallback((routeKey: string) => {
+    setRouteViewMode("route");
+    setExpandedRouteGroups((prev) => {
+      const next = new Set(prev);
+      next.add(routeKey);
+      return next;
+    });
+    setTimeout(() => {
+      const node = document.querySelector(
+        `[data-route-group="${routeKey}"]`,
+      ) as { scrollIntoView?: (args?: unknown) => void } | null;
+      if (typeof node?.scrollIntoView === "function") {
+        node.scrollIntoView({ block: "nearest" });
+      }
+    }, 0);
+  }, []);
+
   // renderDataRow: renders a DataRow memo component — only the changed row re-renders
   const handleRouteSafetyClick = useCallback(
     (from: number, to: number, e: import("react").MouseEvent) => {
@@ -3923,6 +4010,54 @@ export function ScanResultsTable({
         </div>
       )}
 
+      {!isRegionGrouped && topRoutePickCandidates.length > 0 && (
+        <div className="shrink-0 px-2 pb-2">
+          <div className="border border-eve-border rounded-sm bg-eve-dark/40 p-2">
+            <div className="text-[11px] uppercase tracking-wider text-eve-dim mb-2">
+              {t("topPicksPanelTitle")}
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
+              {([
+                ["bestRecommendedRoutePack", topRoutePicks.bestRecommendedRoutePack],
+                ["bestQuickSingleRoute", topRoutePicks.bestQuickSingleRoute],
+                ["bestSafeFillerRoute", topRoutePicks.bestSafeFillerRoute],
+              ] as const).map(([titleKey, pick]) => (
+                <div
+                  key={titleKey}
+                  className="rounded-sm border border-eve-border/60 bg-eve-panel/50 p-2 text-xs"
+                >
+                  <div className="text-eve-dim">{t(titleKey)}</div>
+                  {pick ? (
+                    <>
+                      <div className="mt-1 text-eve-text font-medium">{pick.routeLabel}</div>
+                      <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11px]">
+                        <span className="text-eve-dim">{t("topPickTotalProfit")}:</span>
+                        <span className="text-green-300 text-right">{formatISK(pick.totalProfit)}</span>
+                        <span className="text-eve-dim">{t("topPickDailyIskPerJump")}:</span>
+                        <span className="text-eve-accent text-right">{formatISK(pick.dailyIskPerJump)}</span>
+                        <span className="text-eve-dim">{t("topPickConfidence")}:</span>
+                        <span className="text-right">{pick.confidenceScore.toFixed(0)}</span>
+                        <span className="text-eve-dim">{t("topPickCargoUse")}:</span>
+                        <span className="text-right">{pick.cargoUsePercent.toFixed(1)}%</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => jumpToRouteGroup(pick.routeKey)}
+                        className="mt-2 px-2 py-0.5 rounded-sm border border-eve-accent/60 text-eve-accent hover:bg-eve-accent/10 transition-colors text-[11px]"
+                      >
+                        {t("topPickJumpToGroup")}
+                      </button>
+                    </>
+                  ) : (
+                    <div className="mt-1 text-[11px] text-eve-dim">—</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="flex-1 min-h-0 flex flex-col border border-eve-border rounded-sm overflow-auto table-scroll-container">
         <table className="w-full text-sm">
@@ -4156,7 +4291,10 @@ export function ScanResultsTable({
                           calcRouteConfidence(routeAggregate);
                         return (
                           <Fragment key={`route-group:${group.key}`}>
-                            <tr className="border-b border-eve-border/60 bg-eve-dark/50">
+                            <tr
+                              className="border-b border-eve-border/60 bg-eve-dark/50"
+                              data-route-group={group.key}
+                            >
                               <td
                                 colSpan={columnDefs.length + 2}
                                 className="px-2 py-1.5"
@@ -4252,6 +4390,41 @@ export function ScanResultsTable({
                                       routeSummary?.routeWeakestExecutionQuality ??
                                       0
                                     ).toFixed(1)}
+                                  </span>
+                                  <span className="text-eve-dim font-mono">
+                                    {t("routeStopCountShort")}{" "}
+                                    {routeSummary?.routeStopCount ?? 0}
+                                  </span>
+                                  <span className="text-eve-dim font-mono">
+                                    B{routeSummary?.routeBuyStopCount ?? 0}/S
+                                    {routeSummary?.routeSellStopCount ?? 0}
+                                  </span>
+                                  <span className="text-eve-dim font-mono">
+                                    Fill min/avg{" "}
+                                    {(
+                                      routeSummary?.routeWorstFillConfidencePct ??
+                                      0
+                                    ).toFixed(0)}
+                                    %/
+                                    {(
+                                      routeSummary?.routeAverageFillConfidencePct ??
+                                      0
+                                    ).toFixed(0)}
+                                    %
+                                  </span>
+                                  <span className="text-eve-dim font-mono">
+                                    Rem{" "}
+                                    {(
+                                      routeSummary?.routeRemainingCargoM3 ?? 0
+                                    ).toLocaleString(undefined, {
+                                      maximumFractionDigits: 1,
+                                    })}{" "}
+                                    m³
+                                  </span>
+                                  <span
+                                    className={`px-1 py-0.5 rounded-sm border text-[10px] font-bold ${complexityBadgeClass(routeSummary?.routeComplexity ?? "Busy")}`}
+                                  >
+                                    {routeSummary?.routeComplexity ?? "Busy"}
                                   </span>
                                   <span
                                     className="text-eve-dim font-mono"
