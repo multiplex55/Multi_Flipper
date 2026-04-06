@@ -23,6 +23,7 @@ import { useGlobalToast } from "./components/Toast";
 import { Modal } from "./components/Modal";
 import { CharacterPopup } from "./components/CharacterPopup";
 import { TopActionButtons } from "./components/TopActionButtons";
+import { RadiusColumnGuideModal } from "./components/RadiusColumnGuideModal";
 import {
   applyAppUpdate,
   getUpdateCheckStatus,
@@ -692,6 +693,7 @@ function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [showPatrons, setShowPatrons] = useState(false);
   const [showCharacter, setShowCharacter] = useState(false);
+  const [showRadiusColumnGuide, setShowRadiusColumnGuide] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -1729,6 +1731,20 @@ function App() {
                   {t("discordCta")}
                 </span>
               </a>
+              {tab === "radius" && (
+                <button
+                  type="button"
+                  onClick={() => setShowRadiusColumnGuide(true)}
+                  className="group inline-flex items-center gap-1.5 h-7 px-2 rounded-sm border border-eve-accent/45 bg-eve-accent/10 text-eve-accent hover:bg-eve-accent/20 transition-colors"
+                  aria-label={t("radiusGuideButtonLabel")}
+                  title={t("radiusGuideButtonHint")}
+                >
+                  <span className="text-[11px]" aria-hidden="true">ℹ</span>
+                  <span className="text-[10px] uppercase tracking-[0.14em]">
+                    {t("radiusGuideButtonLabel")}
+                  </span>
+                </button>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
@@ -2049,6 +2065,17 @@ function App() {
             >
               {t("discordCta")}
             </a>
+            {tab === "radius" && (
+              <button
+                type="button"
+                onClick={() => setShowRadiusColumnGuide(true)}
+                className="inline-flex items-center h-9 px-3 rounded-sm border border-eve-accent/45 bg-eve-accent/10 text-eve-accent text-[11px] uppercase tracking-[0.12em]"
+                aria-label={t("radiusGuideButtonLabel")}
+                title={t("radiusGuideButtonHint")}
+              >
+                {t("radiusGuideButtonLabel")}
+              </button>
+            )}
             <StatusBar />
           </div>
         )}
@@ -2782,6 +2809,12 @@ function App() {
             </div>
           </div>
         </Modal>
+
+
+        <RadiusColumnGuideModal
+          open={showRadiusColumnGuide}
+          onClose={() => setShowRadiusColumnGuide(false)}
+        />
 
         {/* Character Info Modal */}
         {authStatus.logged_in && (
