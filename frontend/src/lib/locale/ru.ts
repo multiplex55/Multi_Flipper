@@ -1241,6 +1241,14 @@ export const ru = {
     headerTagline: "Движок Regional Trade",
     discordCta: "Залетай в Discord",
     discordPitch: "Сборки, апдейты, ранний доступ",
+    radiusGuideButtonLabel: "Гайд по колонкам RADIUS",
+    radiusGuideButtonHint: "Открыть справку по метрикам FLIPPER (RADIUS)",
+    radiusGuideModalTitle: "Гайд по колонкам FLIPPER (RADIUS)",
+    radiusGuideModalIntro: "Короткая шпаргалка, чтобы понимать метрики, оценивать риск и выбирать лучшие маршруты.",
+    radiusGuideSectionWhatItIs: "Что это",
+    radiusGuideSectionWhyImportant: "Почему важно",
+    radiusGuideSectionGoodValue: "Хорошо vs риск",
+    radiusGuideSectionHeuristic: "Практическая эвристика",
     supportPatreon: "Поддержать на Patreon",
 
     // Portfolio P&L

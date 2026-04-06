@@ -1490,3 +1490,19 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
     });
   });
 });
+
+describe("ScanResultsTable column hint tooltips", () => {
+  it("uses expanded descriptive tooltip text for representative RADIUS columns", async () => {
+    renderTable({ scanning: false, results: [makeRow()] });
+
+    const realIskHeader = (await screen.findAllByText("Real ISK/Jump"))[0];
+    const realIskTitle = realIskHeader.closest("th")?.getAttribute("title") ?? "";
+    expect(realIskTitle).toContain("Why it matters:");
+    expect(realIskTitle).toContain("Good vs risky:");
+
+    const slippageHeader = screen.getAllByText("Slippage Cost")[0];
+    const slippageTitle = slippageHeader.closest("th")?.getAttribute("title") ?? "";
+    expect(slippageTitle).toContain("Why it matters:");
+    expect(slippageTitle).toContain("Good vs risky:");
+  });
+});
