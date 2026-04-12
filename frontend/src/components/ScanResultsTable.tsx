@@ -87,6 +87,16 @@ import {
   isFlipResultDeprioritized,
   type SessionStationFilters,
 } from "@/lib/banlistFilters";
+import {
+  DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
+  DEFAULT_MAJOR_HUB_SYSTEMS,
+  ENDPOINT_PREFERENCE_PRESETS,
+  EndpointPreferenceApplicationMode,
+  evaluateEndpointPreferences,
+  normalizeMajorHubSystems,
+  type EndpointPreferenceEvaluation,
+  type EndpointPreferenceProfile,
+} from "@/lib/endpointPreferences";
 
 const PAGE_SIZE = 100;
 const GROUP_PAGE_SIZE = 50; // rows shown per group before "Show all" button
@@ -98,6 +108,7 @@ const COLUMN_PREFS_STORAGE_PREFIX = "eve-scan-columns:v1:";
 const ITEM_GROUPING_STORAGE_KEY = "eve-radius-group-by-item:v1";
 const ROUTE_GROUPING_STORAGE_KEY = "eve-radius-route-view-mode:v1";
 const TOP_PICKS_VISIBLE_STORAGE_KEY = "eve-radius-top-picks-visible:v1";
+const ENDPOINT_PREFS_STORAGE_KEY = "eve-radius-endpoint-preferences:v1";
 
 type SyntheticSortKey =
   | "RouteSafety"
@@ -880,6 +891,7 @@ function getRowId(row: FlipResult): number {
 interface IndexedRow {
   id: number; // stable id from WeakMap
   row: FlipResult;
+  endpointPreferences?: EndpointPreferenceEvaluation;
 }
 
 interface RegionGroup {
@@ -1475,6 +1487,50 @@ export function ScanResultsTable({
       return true;
     }
   });
+  const [endpointPreferenceProfile, setEndpointPreferenceProfile] =
+    useState<EndpointPreferenceProfile>(() => {
+      try {
+        const raw = localStorage.getItem(ENDPOINT_PREFS_STORAGE_KEY);
+        if (!raw) return DEFAULT_ENDPOINT_PREFERENCE_PROFILE;
+        const parsed = JSON.parse(raw) as {
+          profile?: Partial<EndpointPreferenceProfile>;
+        };
+        return {
+          ...DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
+          ...(parsed.profile ?? {}),
+        };
+      } catch {
+        return DEFAULT_ENDPOINT_PREFERENCE_PROFILE;
+      }
+    });
+  const [endpointPreferenceMode, setEndpointPreferenceMode] =
+    useState<EndpointPreferenceApplicationMode>(() => {
+      try {
+        const raw = localStorage.getItem(ENDPOINT_PREFS_STORAGE_KEY);
+        if (!raw) return EndpointPreferenceApplicationMode.Deprioritize;
+        const parsed = JSON.parse(raw) as { mode?: string };
+        return parsed.mode === EndpointPreferenceApplicationMode.Hide
+          ? EndpointPreferenceApplicationMode.Hide
+          : EndpointPreferenceApplicationMode.Deprioritize;
+      } catch {
+        return EndpointPreferenceApplicationMode.Deprioritize;
+      }
+    });
+  const [majorHubInput, setMajorHubInput] = useState<string>(() => {
+    try {
+      const raw = localStorage.getItem(ENDPOINT_PREFS_STORAGE_KEY);
+      if (!raw) return DEFAULT_MAJOR_HUB_SYSTEMS.join(", ");
+      const parsed = JSON.parse(raw) as { majorHubs?: string[] };
+      const hubs = normalizeMajorHubSystems(
+        Array.isArray(parsed.majorHubs) ? parsed.majorHubs : [],
+      );
+      return (hubs.length > 0 ? hubs : [...DEFAULT_MAJOR_HUB_SYSTEMS]).join(
+        ", ",
+      );
+    } catch {
+      return DEFAULT_MAJOR_HUB_SYSTEMS.join(", ");
+    }
+  });
   const [showHiddenRows, setShowHiddenRows] = useState(false);
   const [selectedBadgeFilters, setSelectedBadgeFilters] = useState<
     Set<RouteBadgeFilter>
@@ -1863,6 +1919,29 @@ export function ScanResultsTable({
     }
   }, [showTopPicks]);
 
+  const majorHubSystems = useMemo(
+    () =>
+      normalizeMajorHubSystems(
+        majorHubInput.split(",").map((entry) => entry.trim()),
+      ),
+    [majorHubInput],
+  );
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        ENDPOINT_PREFS_STORAGE_KEY,
+        JSON.stringify({
+          mode: endpointPreferenceMode,
+          profile: endpointPreferenceProfile,
+          majorHubs: majorHubSystems,
+        }),
+      );
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [endpointPreferenceMode, endpointPreferenceProfile, majorHubSystems]);
+
   useEffect(() => {
     if (columnDefs.length === 0) return;
     if (!columnDefs.some((col) => col.key === sortKey)) {
@@ -1927,20 +2006,38 @@ export function ScanResultsTable({
   );
 
   // ── Data pipeline: index → filter → sort ──
-  const { indexed, filtered, sorted, variantByRowId } = useMemo(() => {
+  const {
+    indexed,
+    filtered,
+    sorted,
+    variantByRowId,
+    endpointPreferenceMetaByRowId,
+  } = useMemo(() => {
     const sessionVisibleRows = filterRowsBySessionStationIgnores(
       results,
       sessionStationFilters,
     );
 
-    const indexed: IndexedRow[] = sessionVisibleRows.map((row) => ({
-      id: getRowId(row),
-      row,
-    }));
+    const indexed: IndexedRow[] = sessionVisibleRows.map((row) => {
+      const endpointPreferences = evaluateEndpointPreferences(
+        row,
+        endpointPreferenceProfile,
+        majorHubSystems,
+        endpointPreferenceMode,
+      );
+      return {
+        id: getRowId(row),
+        row,
+        endpointPreferences,
+      };
+    });
 
     const hasFilters = Object.values(filters).some((v) => !!v);
+    const endpointEligible = indexed.filter(
+      (ir) => !ir.endpointPreferences?.excluded,
+    );
     const filtered = hasFilters
-      ? indexed.filter((ir) => {
+      ? endpointEligible.filter((ir) => {
           for (const col of columnDefs) {
             const fval = filters[col.key];
             if (!fval) continue;
@@ -1957,7 +2054,7 @@ export function ScanResultsTable({
           }
           return true;
         })
-      : indexed;
+      : endpointEligible;
 
     const filteredScoreContext = buildFlipScoreContext(
       filtered.map((item) => item.row),
@@ -2014,6 +2111,12 @@ export function ScanResultsTable({
         sessionStationFilters,
       );
       if (aDeprioritized !== bDeprioritized) return aDeprioritized ? 1 : -1;
+
+      const aEndpointDelta = a.endpointPreferences?.scoreDelta ?? 0;
+      const bEndpointDelta = b.endpointPreferences?.scoreDelta ?? 0;
+      if (aEndpointDelta !== bEndpointDelta) {
+        return bEndpointDelta - aEndpointDelta;
+      }
 
       if (sortKey === ("RouteSafety" as SortKey)) {
         const diff =
@@ -2076,7 +2179,19 @@ export function ScanResultsTable({
       }
     }
 
-    return { indexed, filtered, sorted, variantByRowId };
+    const endpointPreferenceMetaByRowId = new Map<
+      number,
+      { appliedRules: string[]; scoreDelta: number; excluded: boolean }
+    >();
+    for (const ir of indexed) {
+      endpointPreferenceMetaByRowId.set(ir.id, {
+        appliedRules: ir.endpointPreferences?.appliedRules ?? [],
+        scoreDelta: ir.endpointPreferences?.scoreDelta ?? 0,
+        excluded: !!ir.endpointPreferences?.excluded,
+      });
+    }
+
+    return { indexed, filtered, sorted, variantByRowId, endpointPreferenceMetaByRowId };
   }, [
     results,
     filters,
@@ -2089,6 +2204,9 @@ export function ScanResultsTable({
     batchMetricsByRow,
     opportunityProfile,
     sessionStationFilters,
+    endpointPreferenceMode,
+    endpointPreferenceProfile,
+    majorHubSystems,
   ]);
 
   // Available market groups derived from current results (region mode only)
@@ -2450,6 +2568,15 @@ export function ScanResultsTable({
     selectedBadgeFilters,
   ]);
 
+  const endpointPreferenceDeltaByRoute = useMemo<Record<string, number>>(() => {
+    const out: Record<string, number> = {};
+    for (const ir of displaySorted) {
+      const routeKey = routeGroupKey(ir.row);
+      out[routeKey] = (out[routeKey] ?? 0) + (ir.endpointPreferences?.scoreDelta ?? 0);
+    }
+    return out;
+  }, [displaySorted]);
+
   const routeScoreSummaryByRoute = useMemo<Record<string, RouteScoreSummary>>(
     () => {
       if (!isRouteGrouped) return {};
@@ -2487,7 +2614,10 @@ export function ScanResultsTable({
               rowScores.length
             : 0;
         out[group.key] = {
-          routeRecommendationScore,
+          routeRecommendationScore: Math.max(
+            0,
+            routeRecommendationScore + (endpointPreferenceDeltaByRoute[group.key] ?? 0),
+          ),
           bestRowScore,
           avgRowScore,
         };
@@ -2497,6 +2627,7 @@ export function ScanResultsTable({
     [
       batchMetricsByRoute,
       displayScoreContext,
+      endpointPreferenceDeltaByRoute,
       isRouteGrouped,
       opportunityProfile,
       routeGroups,
@@ -3588,6 +3719,7 @@ export function ScanResultsTable({
         batchMetricsByRow={batchMetricsByRow}
         opportunityProfile={opportunityProfile}
         scoreContext={displayScoreContext}
+        endpointPreferenceMeta={endpointPreferenceMetaByRowId.get(ir.id)}
       />
     ),
     [
@@ -3611,6 +3743,7 @@ export function ScanResultsTable({
       batchMetricsByRow,
       opportunityProfile,
       displayScoreContext,
+      endpointPreferenceMetaByRowId,
     ],
   );
 
@@ -3778,6 +3911,50 @@ export function ScanResultsTable({
                 >
                   {t("topPicksToggleLabel")}
                 </button>
+                <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
+                  <span className="text-eve-dim px-1">Endpoint prefs</span>
+                  <select
+                    value={endpointPreferenceMode}
+                    onChange={(e) =>
+                      setEndpointPreferenceMode(
+                        e.target.value === EndpointPreferenceApplicationMode.Hide
+                          ? EndpointPreferenceApplicationMode.Hide
+                          : EndpointPreferenceApplicationMode.Deprioritize,
+                      )
+                    }
+                    className="bg-eve-input border border-eve-border rounded-sm px-1 py-0.5 text-[11px]"
+                  >
+                    <option value={EndpointPreferenceApplicationMode.Deprioritize}>
+                      Deprioritize
+                    </option>
+                    <option value={EndpointPreferenceApplicationMode.Hide}>
+                      Hide
+                    </option>
+                  </select>
+                  <select
+                    defaultValue=""
+                    onChange={(e) => {
+                      const key = e.target.value as keyof typeof ENDPOINT_PREFERENCE_PRESETS;
+                      if (!key || !ENDPOINT_PREFERENCE_PRESETS[key]) return;
+                      setEndpointPreferenceProfile(ENDPOINT_PREFERENCE_PRESETS[key]);
+                      e.currentTarget.value = "";
+                    }}
+                    className="bg-eve-input border border-eve-border rounded-sm px-1 py-0.5 text-[11px]"
+                    title="Quick profile preset"
+                  >
+                    <option value="">Preset…</option>
+                    <option value="safe_arbitrage">Safe Arbitrage</option>
+                    <option value="structure_exit">Structure Exit</option>
+                    <option value="low_attention">Low Attention</option>
+                  </select>
+                  <input
+                    value={majorHubInput}
+                    onChange={(e) => setMajorHubInput(e.target.value)}
+                    className="w-44 bg-eve-input border border-eve-border rounded-sm px-1 py-0.5 text-[11px]"
+                    placeholder="Major hubs (comma-separated)"
+                    title="Editable major hub systems"
+                  />
+                </div>
               </>
             )}
             <button
@@ -5591,6 +5768,11 @@ interface DataRowProps {
   batchMetricsByRow: Record<string, RouteBatchMetadata>;
   opportunityProfile?: OpportunityWeightProfile;
   scoreContext?: OpportunityScanContext;
+  endpointPreferenceMeta?: {
+    appliedRules: string[];
+    scoreDelta: number;
+    excluded: boolean;
+  };
 }
 
 /* ─── Trade Score Badge ─── */
@@ -5693,10 +5875,13 @@ const DataRow = memo(
     batchMetricsByRow,
     opportunityProfile,
     scoreContext,
+    endpointPreferenceMeta,
   }: DataRowProps) {
     return (
       <tr
         data-row-id={ir.id}
+        data-applied-rules={endpointPreferenceMeta?.appliedRules.join(",") ?? ""}
+        data-endpoint-score-delta={endpointPreferenceMeta?.scoreDelta ?? 0}
         onContextMenu={(e) => onContextMenu(e, ir.id, ir.row)}
         onClick={(e) => {
           if (!isRegionGrouped) return;
