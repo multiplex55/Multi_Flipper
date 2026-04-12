@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FlipResult } from "@/lib/types";
 import {
+  deriveActionQueue,
   dailyIskPerJump,
   realIskPerJump,
   realIskPerM3PerJump,
@@ -214,5 +215,50 @@ describe("radiusMetrics formulas", () => {
     ]);
 
     expect(picks.bestRecommendedRoutePack?.routeKey).toBe("strong-untracked");
+  });
+
+  it("derives action queue with machine-readable reasons", () => {
+    const queue = deriveActionQueue({
+      candidates: [
+        {
+          routeKey: "hub-heavy",
+          routeLabel: "Hub Heavy",
+          totalProfit: 900_000,
+          dailyIskPerJump: 450_000,
+          confidenceScore: 76,
+          cargoUsePercent: 68,
+          recommendationScore: 80,
+          stopCount: 2,
+          riskCount: 2,
+          endpointScoreDelta: -12,
+          endpointRuleHits: 2,
+        },
+        {
+          routeKey: "loop-out",
+          routeLabel: "Loop Out",
+          totalProfit: 800_000,
+          dailyIskPerJump: 410_000,
+          confidenceScore: 90,
+          cargoUsePercent: 60,
+          recommendationScore: 82,
+          stopCount: 2,
+          riskCount: 1,
+          hasLoopCandidate: true,
+          trackedShare: 0.5,
+        },
+      ],
+      suppression: {
+        hardBanFiltered: 4,
+        softSessionFiltered: 2,
+      },
+    });
+
+    expect(queue).toHaveLength(2);
+    expect(queue[0].routeKey).toBe("loop-out");
+    expect(queue[0].reasons).toContain("watchlist_signal");
+    expect(queue[0].reasons).toContain("loop_candidate_outbound");
+    expect(queue[1].action).toBe("avoid_hub_race");
+    expect(queue[1].reasons).toContain("endpoint_hub_penalty");
+    expect(queue[1].reasons).toContain("endpoint_rules_applied");
   });
 });
