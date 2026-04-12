@@ -24,6 +24,7 @@ import { Modal } from "./components/Modal";
 import { CharacterPopup } from "./components/CharacterPopup";
 import { TopActionButtons } from "./components/TopActionButtons";
 import { RadiusColumnGuideModal } from "./components/RadiusColumnGuideModal";
+import { LoopOpportunitiesPanel } from "./components/LoopOpportunitiesPanel";
 import {
   applyAppUpdate,
   getUpdateCheckStatus,
@@ -72,6 +73,7 @@ import {
   filterStationTrades,
   type SessionStationFilters,
 } from "@/lib/banlistFilters";
+import { computeLoopOpportunities } from "@/lib/loopPlanner";
 
 type Tab =
   | "radius"
@@ -698,6 +700,24 @@ function App() {
   const [showPatrons, setShowPatrons] = useState(false);
   const [showCharacter, setShowCharacter] = useState(false);
   const [showRadiusColumnGuide, setShowRadiusColumnGuide] = useState(false);
+  const loopOpportunities = useMemo(
+    () =>
+      computeLoopOpportunities(radiusResults, {
+        homeSystemName: params.system_name,
+        maxDetourJumps: params.max_detour_jumps_per_node ?? 0,
+        cargoCapacityM3: params.cargo_capacity,
+        minLegProfit: params.min_item_profit ?? 0,
+        minTotalLoopProfit: Math.max(0, (params.min_item_profit ?? 0) * 2),
+        maxResults: 24,
+      }),
+    [
+      radiusResults,
+      params.system_name,
+      params.max_detour_jumps_per_node,
+      params.cargo_capacity,
+      params.min_item_profit,
+    ],
+  );
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -2244,6 +2264,7 @@ function App() {
                   )}
                 </div>
               )}
+              {tab === "radius" && <LoopOpportunitiesPanel loops={loopOpportunities} />}
               <ScanResultsTable
                 results={radiusResults}
                 scanning={scanning && tab === "radius"}
