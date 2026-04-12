@@ -192,13 +192,16 @@ export function CharacterPopup({
     return d.toLocaleDateString() + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
-  const buyOrders = data?.orders.filter((o) => o.is_buy_order) ?? [];
-  const sellOrders = data?.orders.filter((o) => !o.is_buy_order) ?? [];
+  const orders = data?.orders ?? [];
+  const orderHistory = data?.order_history ?? [];
+  const recentTxns = data?.transactions ?? [];
+
+  const buyOrders = orders.filter((o) => o.is_buy_order);
+  const sellOrders = orders.filter((o) => !o.is_buy_order);
   const totalBuyValue = buyOrders.reduce((sum, o) => sum + o.price * o.volume_remain, 0);
   const totalSellValue = sellOrders.reduce((sum, o) => sum + o.price * o.volume_remain, 0);
 
   // Calculate profit from recent transactions
-  const recentTxns = data?.transactions ?? [];
   const buyTxns = recentTxns.filter((t) => t.is_buy);
   const sellTxns = recentTxns.filter((t) => !t.is_buy);
   const totalBought = buyTxns.reduce((sum, t) => sum + t.unit_price * t.quantity, 0);
@@ -302,7 +305,7 @@ export function CharacterPopup({
         <div className="flex items-center border-b border-eve-border bg-eve-panel">
           <div className="flex flex-1 overflow-x-auto scrollbar-thin">
             <TabBtn active={tab === "overview"} onClick={() => setTab("overview")} label={t("charOverview")} />
-            <TabBtn active={tab === "orders"} onClick={() => setTab("orders")} label={`${t("charOrders")} (${data?.orders.length ?? 0})`} />
+            <TabBtn active={tab === "orders"} onClick={() => setTab("orders")} label={`${t("charOrders")} (${orders.length})`} />
             <TabBtn active={tab === "transactions"} onClick={() => setTab("transactions")} label={`${t("charTransactions")} (${data?.transactions?.length ?? 0})`} />
             <TabBtn active={tab === "pnl"} onClick={() => setTab("pnl")} label={t("charPnlTab")} />
             <TabBtn active={tab === "risk"} onClick={() => setTab("risk")} label={t("charRiskTab")} />
@@ -352,15 +355,15 @@ export function CharacterPopup({
               {tab === "orders" && (
                 <CombinedOrdersTab
                   characterScope={selectedScope}
-                  orders={data.orders}
-                  history={data.order_history ?? []}
+                  orders={orders}
+                  history={orderHistory}
                   formatIsk={formatIsk}
                   formatDate={formatDate}
                   t={t}
                 />
               )}
               {tab === "transactions" && (
-                <TransactionsTab transactions={data.transactions ?? []} formatIsk={formatIsk} formatDate={formatDate} t={t} />
+                <TransactionsTab transactions={recentTxns} formatIsk={formatIsk} formatDate={formatDate} t={t} />
               )}
               {tab === "pnl" && (
                 <PnLTab

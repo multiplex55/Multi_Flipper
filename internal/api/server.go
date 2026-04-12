@@ -5447,6 +5447,9 @@ func (s *Server) handleAuthCharacter(w http.ResponseWriter, r *http.Request) {
 		result := &charInfo{
 			CharacterID:   sess.CharacterID,
 			CharacterName: sess.CharacterName,
+			Orders:        []esi.CharacterOrder{},
+			OrderHistory:  []esi.HistoricalOrder{},
+			Transactions:  []esi.WalletTransaction{},
 		}
 
 		// Fetch all character data in parallel for faster popup loading.
@@ -5537,6 +5540,9 @@ func (s *Server) handleAuthCharacter(w http.ResponseWriter, r *http.Request) {
 		result = charInfo{
 			CharacterID:   0,
 			CharacterName: "All Characters",
+			Orders:        []esi.CharacterOrder{},
+			OrderHistory:  []esi.HistoricalOrder{},
+			Transactions:  []esi.WalletTransaction{},
 		}
 		for _, part := range collected {
 			result.Wallet += part.Wallet
@@ -5546,6 +5552,16 @@ func (s *Server) handleAuthCharacter(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		result = *collected[0]
+	}
+
+	if result.Orders == nil {
+		result.Orders = []esi.CharacterOrder{}
+	}
+	if result.OrderHistory == nil {
+		result.OrderHistory = []esi.HistoricalOrder{}
+	}
+	if result.Transactions == nil {
+		result.Transactions = []esi.WalletTransaction{}
 	}
 
 	// Enrich orders with type/location names

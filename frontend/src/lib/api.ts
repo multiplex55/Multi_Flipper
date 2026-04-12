@@ -1416,12 +1416,21 @@ export async function deleteAuthCharacter(characterId: number): Promise<AuthStat
   return handleResponse<AuthStatus>(res);
 }
 
+function normalizeCharacterInfo(data: CharacterInfo): CharacterInfo {
+  return {
+    ...data,
+    orders: Array.isArray(data.orders) ? data.orders : [],
+    order_history: Array.isArray(data.order_history) ? data.order_history : [],
+    transactions: Array.isArray(data.transactions) ? data.transactions : [],
+  };
+}
+
 export async function getCharacterInfo(characterId?: CharacterScope): Promise<CharacterInfo> {
   const params = new URLSearchParams();
   appendCharacterScope(params, characterId);
   const query = params.toString();
   const res = await apiFetch(`${BASE}/api/auth/character${query ? `?${query}` : ""}`);
-  return handleResponse<CharacterInfo>(res);
+  return normalizeCharacterInfo(await handleResponse<CharacterInfo>(res));
 }
 
 export interface CharacterLocation {
