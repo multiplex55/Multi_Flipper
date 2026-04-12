@@ -65,10 +65,12 @@ import type {
 import logo from "./assets/logo.svg";
 import { DEFAULT_STRATEGY_SCORE } from "@/lib/scoringPresets";
 import {
+  createSessionStationFilters,
   filterContractResults,
   filterFlipResults,
   filterRouteResults,
   filterStationTrades,
+  type SessionStationFilters,
 } from "@/lib/banlistFilters";
 
 type Tab =
@@ -677,6 +679,8 @@ function App() {
   >(null);
   const [bannedTypeIDs, setBannedTypeIDs] = useState<number[]>([]);
   const [bannedStationIDs, setBannedStationIDs] = useState<number[]>([]);
+  const [sessionStationFilters, setSessionStationFilters] =
+    useState<SessionStationFilters>(() => createSessionStationFilters());
 
   const [scanning, setScanning] = useState(false);
   const [scanAndRefreshing, setScanAndRefreshing] = useState(false);
@@ -715,6 +719,14 @@ function App() {
   const [alertTelegramChatID, setAlertTelegramChatID] = useState("");
   const [alertDiscordWebhook, setAlertDiscordWebhook] = useState("");
   const [alertTestLoading, setAlertTestLoading] = useState(false);
+  const updateSessionStationFilters = useCallback(
+    (
+      updater: (prev: SessionStationFilters) => SessionStationFilters,
+    ) => {
+      setSessionStationFilters((prev) => updater(prev));
+    },
+    [],
+  );
 
   const abortRef = useRef<AbortController | null>(null);
   const desktopAlertCooldownRef = useRef<Map<string, number>>(new Map());
@@ -2260,6 +2272,8 @@ function App() {
                   setShowVerifierModal(true);
                 }}
                 strategyScore={strategyScore}
+                sessionStationFilters={sessionStationFilters}
+                onUpdateSessionStationFilters={updateSessionStationFilters}
               />
             </div>
             <div

@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { filterContractResults, filterFlipResults, filterRouteResults, filterRowsByBannedStationIDs, filterRowsByBannedTypeIDs, filterStationTrades } from "@/lib/banlistFilters";
+import {
+  createSessionStationFilters,
+  filterContractResults,
+  filterFlipResults,
+  filterRouteResults,
+  filterRowsByBannedStationIDs,
+  filterRowsByBannedTypeIDs,
+  filterStationTrades,
+  isFlipResultDeprioritized,
+} from "@/lib/banlistFilters";
 import type { ContractResult, FlipResult, RouteResult, StationTrade } from "@/lib/types";
 
 describe("banlistFilters", () => {
@@ -57,5 +66,30 @@ describe("banlistFilters", () => {
     const rows = [{ type_id: 10, buy_location_id: 20 }, { type_id: 11, buy_location_id: 21 }];
     expect(filterRowsByBannedTypeIDs(rows, [10])).toEqual([{ type_id: 11, buy_location_id: 21 }]);
     expect(filterRowsByBannedStationIDs(rows, [21])).toEqual([{ type_id: 10, buy_location_id: 20 }]);
+  });
+
+  it("applies session buy/sell station ignores by role", () => {
+    const rows: FlipResult[] = [
+      { TypeID: 1, TypeName: "A", Volume: 1, BuyPrice: 1, BuyStation: "B", BuySystemName: "S", BuySystemID: 1, BuyLocationID: 500, SellPrice: 2, SellStation: "C", SellSystemName: "S2", SellSystemID: 2, SellLocationID: 900, ProfitPerUnit: 1, MarginPercent: 1, UnitsToBuy: 1, BuyOrderRemain: 1, SellOrderRemain: 1, TotalProfit: 1, ProfitPerJump: 1, BuyJumps: 1, SellJumps: 1, TotalJumps: 1, DailyVolume: 1, Velocity: 1, PriceTrend: 1, BuyCompetitors: 1, SellCompetitors: 1, DailyProfit: 1 },
+      { TypeID: 2, TypeName: "B", Volume: 1, BuyPrice: 1, BuyStation: "D", BuySystemName: "S", BuySystemID: 1, BuyLocationID: 900, SellPrice: 2, SellStation: "E", SellSystemName: "S2", SellSystemID: 2, SellLocationID: 500, ProfitPerUnit: 1, MarginPercent: 1, UnitsToBuy: 1, BuyOrderRemain: 1, SellOrderRemain: 1, TotalProfit: 1, ProfitPerJump: 1, BuyJumps: 1, SellJumps: 1, TotalJumps: 1, DailyVolume: 1, Velocity: 1, PriceTrend: 1, BuyCompetitors: 1, SellCompetitors: 1, DailyProfit: 1 },
+    ];
+
+    const session = createSessionStationFilters();
+    session.ignoredBuyStationIds.add(500);
+    expect(filterFlipResults(rows, [], [], session).map((r) => r.TypeID)).toEqual([2]);
+
+    session.ignoredBuyStationIds.clear();
+    session.ignoredSellStationIds.add(500);
+    expect(filterFlipResults(rows, [], [], session).map((r) => r.TypeID)).toEqual([1]);
+  });
+
+  it("marks deprioritized rows without hiding them", () => {
+    const row = {
+      TypeID: 1, TypeName: "A", Volume: 1, BuyPrice: 1, BuyStation: "B", BuySystemName: "S", BuySystemID: 1, BuyLocationID: 700, SellPrice: 2, SellStation: "C", SellSystemName: "S2", SellSystemID: 2, SellLocationID: 800, ProfitPerUnit: 1, MarginPercent: 1, UnitsToBuy: 1, BuyOrderRemain: 1, SellOrderRemain: 1, TotalProfit: 1, ProfitPerJump: 1, BuyJumps: 1, SellJumps: 1, TotalJumps: 1, DailyVolume: 1, Velocity: 1, PriceTrend: 1, BuyCompetitors: 1, SellCompetitors: 1, DailyProfit: 1,
+    } as FlipResult;
+    const session = createSessionStationFilters();
+    session.deprioritizedStationIds.add(800);
+    expect(filterFlipResults([row], [], [], session)).toHaveLength(1);
+    expect(isFlipResultDeprioritized(row, session)).toBe(true);
   });
 });
