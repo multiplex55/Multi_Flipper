@@ -112,6 +112,8 @@ const COLUMN_PREFS_STORAGE_PREFIX = "eve-scan-columns:v1:";
 const ITEM_GROUPING_STORAGE_KEY = "eve-radius-group-by-item:v1";
 const ROUTE_GROUPING_STORAGE_KEY = "eve-radius-route-view-mode:v1";
 const ENDPOINT_PREFS_STORAGE_KEY = "eve-radius-endpoint-preferences:v1";
+const ADVANCED_TOOLBAR_VISIBLE_STORAGE_KEY =
+  "eve-radius-advanced-toolbar-visible:v1";
 
 type SyntheticSortKey =
   | "RouteSafety"
@@ -1509,6 +1511,13 @@ export function ScanResultsTable({
     useState<TrackedVisibilityMode>("all");
   const [trackedFirst, setTrackedFirst] = useState(false);
   const [showTrackedChip, setShowTrackedChip] = useState(false);
+  const [showAdvancedToolbar, setShowAdvancedToolbar] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(ADVANCED_TOOLBAR_VISIBLE_STORAGE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
   const [endpointPreferenceProfile, setEndpointPreferenceProfile] =
     useState<EndpointPreferenceProfile>(() => {
       try {
@@ -1926,6 +1935,17 @@ export function ScanResultsTable({
       // ignore storage quota errors
     }
   }, [routeViewMode]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        ADVANCED_TOOLBAR_VISIBLE_STORAGE_KEY,
+        showAdvancedToolbar ? "1" : "0",
+      );
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [showAdvancedToolbar]);
 
   useEffect(() => {
     if (!isRouteGrouped && selectedBadgeFilters.size > 0) {
@@ -3898,176 +3918,152 @@ export function ScanResultsTable({
         </div>
       )}
       {/* Toolbar */}
-      <div className="shrink-0 flex items-center gap-2 px-2 py-1.5 text-xs">
-        <div className="flex items-center gap-2 text-eve-dim">
-          {scanning ? (
-            <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-eve-accent animate-pulse" />
-              {progress}
-            </span>
-          ) : results.length > 0 ? (
-            filtered.length !== indexed.length ? (
-              t("showing", { shown: filtered.length, total: indexed.length })
-            ) : (
-              t("foundDeals", { count: indexed.length })
-            )
-          ) : null}
-          {!scanning && results.length > 0 && hiddenCounts.total > 0 && (
-            <span className="text-eve-dim">
-              |{" "}
-              {t("hiddenVisibleSummary", {
-                visible: displaySorted.length,
-                hidden: hiddenCounts.total,
-              })}
-            </span>
-          )}
-          {pinnedKeys.size > 0 && (
-            <span className="text-eve-accent">
-              📌 {t("pinned", { count: pinnedKeys.size })}
-            </span>
-          )}
-          {watchlistIds.size > 0 && (
-            <span className="text-emerald-300">★ Tracked: {watchlistIds.size}</span>
-          )}
-          {selectedIds.size > 0 && (
-            <span className="text-eve-accent">
-              {t("selected", { count: selectedIds.size })}
-            </span>
-          )}
-          {!scanning && results.length > 0 && isCacheStale && (
-            <span
-              title={t("cacheStaleHint")}
-              className="text-red-400 text-[13px] cursor-default"
-              aria-label={t("cacheStaleHint")}
-            >
-              ⚠
-            </span>
-          )}
-        </div>
-
-        <div className="flex-1" />
-
-        {/* Pagination */}
-        {!isRegionGrouped &&
-          !isItemGrouped &&
-          !isRouteGrouped &&
-          displaySorted.length > PAGE_SIZE && (
-            <div className="flex items-center gap-1 text-eve-dim">
-              <button
-                onClick={() => setPage(0)}
-                disabled={safePage === 0}
-                className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                «
-              </button>
-              <button
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                disabled={safePage === 0}
-                className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                ‹
-              </button>
-              <span className="px-2 text-eve-text font-mono tabular-nums">
-                {safePage + 1} / {totalPages}
+      <div className="shrink-0 px-2 py-1.5">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <div className="flex items-center gap-2 text-eve-dim">
+            {scanning ? (
+              <span className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-eve-accent animate-pulse" />
+                {progress}
               </span>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                disabled={safePage >= totalPages - 1}
-                className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                ›
-              </button>
-              <button
-                onClick={() => setPage(totalPages - 1)}
-                disabled={safePage >= totalPages - 1}
-                className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              >
-                »
-              </button>
+            ) : results.length > 0 ? (
+              filtered.length !== indexed.length ? (
+                t("showing", { shown: filtered.length, total: indexed.length })
+              ) : (
+                t("foundDeals", { count: indexed.length })
+              )
+            ) : null}
+            {!scanning && results.length > 0 && hiddenCounts.total > 0 && (
+              <span className="text-eve-dim">
+                | {" "}
+                {t("hiddenVisibleSummary", {
+                  visible: displaySorted.length,
+                  hidden: hiddenCounts.total,
+                })}
+              </span>
+            )}
+            {pinnedKeys.size > 0 && (
+              <span className="text-eve-accent">📌 {t("pinned", { count: pinnedKeys.size })}</span>
+            )}
+            {watchlistIds.size > 0 && (
+              <span className="text-emerald-300">★ Tracked: {watchlistIds.size}</span>
+            )}
+            {selectedIds.size > 0 && (
+              <span className="text-eve-accent">{t("selected", { count: selectedIds.size })}</span>
+            )}
+          </div>
+
+          <div className="flex-1" />
+
+          {!isRegionGrouped && !isItemGrouped && !isRouteGrouped && displaySorted.length > PAGE_SIZE && (
+            <div className="flex items-center gap-1 text-eve-dim">
+              <button onClick={() => setPage(0)} disabled={safePage === 0} className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors">«</button>
+              <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={safePage === 0} className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors">‹</button>
+              <span className="px-2 text-eve-text font-mono tabular-nums">{safePage + 1} / {totalPages}</span>
+              <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={safePage >= totalPages - 1} className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors">›</button>
+              <button onClick={() => setPage(totalPages - 1)} disabled={safePage >= totalPages - 1} className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors">»</button>
             </div>
           )}
 
-        {results.length > 0 && !scanning && (
-          <>
+          {results.length > 0 && !scanning && (
+            <>
+              {!isRegionGrouped && (
+                <>
+                  <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
+                    {([
+                      ["rows", "Row view"],
+                      ["route", "Group by route"],
+                    ] as const).map(([mode, label]) => {
+                      const active = routeViewMode === mode;
+                      return (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => setRouteViewMode(mode)}
+                          className={`px-2 py-0.5 border-r last:border-r-0 border-eve-border/40 transition-colors ${
+                            active
+                              ? "bg-eve-accent/15 text-eve-accent border-eve-accent/40"
+                              : "text-eve-dim hover:text-eve-text"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {routeViewMode === "rows" && (
+                    <label className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] cursor-pointer">
+                      <input type="checkbox" checked={groupByItem} onChange={(e) => setGroupByItem(e.target.checked)} className="accent-eve-accent" />
+                      <span>Group by item</span>
+                    </label>
+                  )}
+                </>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setShowAdvancedToolbar((v) => !v)}
+                className="px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] hover:border-eve-accent/50 hover:text-eve-accent transition-colors"
+                aria-expanded={showAdvancedToolbar}
+                aria-controls="scan-results-advanced-toolbar"
+                title="Toggle advanced controls"
+              >
+                Advanced {showAdvancedToolbar ? "▾" : "▸"}
+              </button>
+            </>
+          )}
+
+          <ToolbarBtn
+            label={t("columnsButton")}
+            title={t("columnsPanelTitle")}
+            active={showColumnPanel}
+            onClick={() => setShowColumnPanel((v) => !v)}
+          />
+          <ToolbarBtn
+            label="⊞"
+            title={showFilters ? t("clearFilters") : t("filterPlaceholder")}
+            active={showFilters}
+            onClick={() => setShowFilters((v) => !v)}
+          />
+          {hasActiveFilters && <ToolbarBtn label="✕" title={t("clearFilters")} onClick={clearFilters} />}
+          {results.length > 0 && (
+            <>
+              <ToolbarBtn
+                label={compactMode ? "⊞" : "⊟"}
+                title={compactMode ? t("comfyRows") : t("compactRows")}
+                active={compactMode}
+                onClick={() => setCompactMode((v) => !v)}
+              />
+              <ToolbarBtn label="CSV" title={t("exportCSV")} onClick={exportCSV} />
+              <ToolbarBtn label="⎘" title={t("copyTable")} onClick={copyTable} />
+            </>
+          )}
+        </div>
+
+        {showAdvancedToolbar && results.length > 0 && !scanning && (
+          <div id="scan-results-advanced-toolbar" className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
             {!isRegionGrouped && (
               <>
                 <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
-                  {(
-                    [
-                      ["rows", "Row view"],
-                      ["route", "Group by route"],
-                    ] as const
-                  ).map(([mode, label]) => {
-                    const active = routeViewMode === mode;
-                    return (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => setRouteViewMode(mode)}
-                        className={`px-2 py-0.5 border-r last:border-r-0 border-eve-border/40 transition-colors ${
-                          active
-                            ? "bg-eve-accent/15 text-eve-accent border-eve-accent/40"
-                            : "text-eve-dim hover:text-eve-text"
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-                {routeViewMode === "rows" && (
-                  <label className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={groupByItem}
-                      onChange={(e) => setGroupByItem(e.target.checked)}
-                      className="accent-eve-accent"
-                    />
-                    <span>Group by item</span>
-                  </label>
-                )}
-                <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
-                  {(
-                    [
-                      ["all", "Tracked: All"],
-                      ["tracked_only", "Tracked only"],
-                      ["hide_non_tracked", "Hide non-tracked"],
-                    ] as const
-                  ).map(([mode, label]) => {
+                  {([
+                    ["all", "Tracked: All"],
+                    ["tracked_only", "Tracked only"],
+                    ["hide_non_tracked", "Hide non-tracked"],
+                  ] as const).map(([mode, label]) => {
                     const active = trackedVisibilityMode === mode;
                     return (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => setTrackedVisibilityMode(mode)}
-                        className={`px-2 py-0.5 border-r last:border-r-0 border-eve-border/40 transition-colors ${
-                          active
-                            ? "bg-eve-accent/15 text-eve-accent border-eve-accent/40"
-                            : "text-eve-dim hover:text-eve-text"
-                        }`}
-                        title={label}
-                      >
+                      <button key={mode} type="button" onClick={() => setTrackedVisibilityMode(mode)} className={`px-2 py-0.5 border-r last:border-r-0 border-eve-border/40 transition-colors ${active ? "bg-eve-accent/15 text-eve-accent border-eve-accent/40" : "text-eve-dim hover:text-eve-text"}`} title={label}>
                         {label}
                       </button>
                     );
                   })}
                 </div>
                 <label className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={trackedFirst}
-                    onChange={(e) => setTrackedFirst(e.target.checked)}
-                    className="accent-eve-accent"
-                  />
+                  <input type="checkbox" checked={trackedFirst} onChange={(e) => setTrackedFirst(e.target.checked)} className="accent-eve-accent" />
                   <span>Tracked first</span>
                 </label>
                 <label className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={showTrackedChip}
-                    onChange={(e) => setShowTrackedChip(e.target.checked)}
-                    className="accent-eve-accent"
-                  />
+                  <input type="checkbox" checked={showTrackedChip} onChange={(e) => setShowTrackedChip(e.target.checked)} className="accent-eve-accent" />
                   <span>Tracked chip</span>
                 </label>
                 <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
@@ -4083,12 +4079,8 @@ export function ScanResultsTable({
                     }
                     className="bg-eve-input border border-eve-border rounded-sm px-1 py-0.5 text-[11px]"
                   >
-                    <option value={EndpointPreferenceApplicationMode.Deprioritize}>
-                      Deprioritize
-                    </option>
-                    <option value={EndpointPreferenceApplicationMode.Hide}>
-                      Hide
-                    </option>
+                    <option value={EndpointPreferenceApplicationMode.Deprioritize}>Deprioritize</option>
+                    <option value={EndpointPreferenceApplicationMode.Hide}>Hide</option>
                   </select>
                   <select
                     defaultValue=""
@@ -4106,311 +4098,130 @@ export function ScanResultsTable({
                     <option value="structure_exit">Structure Exit</option>
                     <option value="low_attention">Low Attention</option>
                   </select>
-                  <input
-                    value={majorHubInput}
-                    onChange={(e) => setMajorHubInput(e.target.value)}
-                    className="w-44 bg-eve-input border border-eve-border rounded-sm px-1 py-0.5 text-[11px]"
-                    placeholder="Major hubs (comma-separated)"
-                    title="Editable major hub systems"
-                  />
+                  <input value={majorHubInput} onChange={(e) => setMajorHubInput(e.target.value)} className="w-44 bg-eve-input border border-eve-border rounded-sm px-1 py-0.5 text-[11px]" placeholder="Major hubs (comma-separated)" title="Editable major hub systems" />
                 </div>
               </>
             )}
-            <button
-              type="button"
-              onClick={() => setShowHiddenRows((v) => !v)}
-              title={t("showHidden")}
-              className={`px-2 py-0.5 rounded-sm border text-[13px] transition-colors ${showHiddenRows ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10" : "border-eve-border/60 text-eve-text/50 bg-eve-dark/40 hover:border-eve-accent/40 hover:text-eve-accent/70"}`}
-            >
-              {showHiddenRows ? (
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  className="w-3.5 h-3.5"
-                >
-                  <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" />
-                  <path
-                    fillRule="evenodd"
-                    d="M.664 10.59a1.651 1.651 0 0 1 0-1.186A10.004 10.004 0 0 1 10 3c4.257 0 7.893 2.66 9.336 6.41.147.381.146.804 0 1.186A10.004 10.004 0 0 1 10 17c-4.257 0-7.893-2.66-9.336-6.41ZM14 10a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              ) : (
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  className="w-3.5 h-3.5"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M3.28 2.22a.75.75 0 0 0-1.06 1.06l14.5 14.5a.75.75 0 1 0 1.06-1.06l-1.745-1.745a10.029 10.029 0 0 0 3.3-4.38 1.651 1.651 0 0 0 0-1.185A10.004 10.004 0 0 0 9.999 3a9.956 9.956 0 0 0-4.744 1.194L3.28 2.22ZM7.752 6.69l1.092 1.092a2.5 2.5 0 0 1 3.374 3.373l1.091 1.092a4 4 0 0 0-5.557-5.557Z"
-                    clipRule="evenodd"
-                  />
-                  <path d="M10.748 13.93l2.523 2.523a10.285 10.285 0 0 1-3.27.547c-4.258 0-7.894-2.66-9.337-6.41a1.651 1.651 0 0 1 0-1.186A10.007 10.007 0 0 1 2.839 6.02L6.07 9.252a4 4 0 0 0 4.678 4.678Z" />
-                </svg>
-              )}
+
+            <button type="button" onClick={() => setShowHiddenRows((v) => !v)} title={t("showHidden")} className={`px-2 py-0.5 rounded-sm border text-[13px] transition-colors ${showHiddenRows ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10" : "border-eve-border/60 text-eve-text/50 bg-eve-dark/40 hover:border-eve-accent/40 hover:text-eve-accent/70"}`}>
+              {showHiddenRows ? "Hide hidden" : "Show hidden"}
             </button>
-            <button
-              type="button"
-              onClick={() => setIgnoredModalOpen(true)}
-              className="px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] hover:border-eve-accent/50 hover:text-eve-accent transition-colors"
-              title={t("hiddenOpenManagerTitle")}
-            >
+            <button type="button" onClick={() => setIgnoredModalOpen(true)} className="px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] hover:border-eve-accent/50 hover:text-eve-accent transition-colors" title={t("hiddenOpenManagerTitle")}>
               {t("hiddenButton", { count: hiddenCounts.total })}
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                void handleRebootCache();
-              }}
-              disabled={cacheRebooting}
-              className={`px-2 py-0.5 rounded-sm border bg-eve-dark/40 text-[11px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                isCacheStale
-                  ? "border-red-500/60 text-red-300 hover:bg-red-900/20"
-                  : "border-eve-border/60 text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent"
-              }`}
-              title={t("cacheHardResetTitle")}
-            >
+            <button type="button" onClick={() => { void handleRebootCache(); }} disabled={cacheRebooting} className={`px-2 py-0.5 rounded-sm border bg-eve-dark/40 text-[11px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${isCacheStale ? "border-red-500/60 text-red-300 hover:bg-red-900/20" : "border-eve-border/60 text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent"}`} title={t("cacheHardResetTitle")}>
               {cacheRebooting ? t("cacheRebooting") : t("cacheReboot")}
             </button>
-            <button
-              type="button"
-              className={`px-2 py-0.5 rounded-sm border text-[11px] font-mono transition-colors ${
-                isCacheStale
-                  ? "border-red-500/50 text-red-300 bg-red-950/30"
-                  : "border-eve-border/60 text-eve-accent bg-eve-dark/40 hover:border-eve-accent/50"
-              }`}
-              title={`${t("cacheTooltipScope")}: ${cacheView.scopeLabel}\n${t("cacheTooltipRegions")}: ${cacheView.regionCount}\n${t("cacheTooltipLastRefresh")}: ${new Date(cacheView.lastRefreshAt).toLocaleTimeString()}\n${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeString()}`}
-            >
+            <button type="button" className={`px-2 py-0.5 rounded-sm border text-[11px] font-mono transition-colors ${isCacheStale ? "border-red-500/50 text-red-300 bg-red-950/30" : "border-eve-border/60 text-eve-accent bg-eve-dark/40 hover:border-eve-accent/50"}`} title={`${t("cacheTooltipScope")}: ${cacheView.scopeLabel}
+${t("cacheTooltipRegions")}: ${cacheView.regionCount}
+${t("cacheTooltipLastRefresh")}: ${new Date(cacheView.lastRefreshAt).toLocaleTimeString()}
+${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeString()}`}>
               {cacheBadgeText}
             </button>
-          </>
-        )}
 
-        {/* Route Safety filter */}
-        {results.length > 0 && !scanning && (
-          <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
-            {(["all", "green", "yellow", "red"] as const).map((lvl) => {
-              const active = routeSafetyFilter === lvl;
-              const dot =
-                lvl === "all" ? null : (
-                  <span
-                    className={`inline-block w-1.5 h-1.5 rounded-full mr-0.5 ${
-                      lvl === "green"
-                        ? "bg-green-400"
-                        : lvl === "yellow"
-                          ? "bg-yellow-400"
-                          : "bg-red-400"
-                    }`}
-                  />
+            <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
+              {(["all", "green", "yellow", "red"] as const).map((lvl) => {
+                const active = routeSafetyFilter === lvl;
+                return (
+                  <button key={lvl} type="button" onClick={() => setRouteSafetyFilter(lvl)} className={`px-1.5 py-0.5 border-r last:border-r-0 border-eve-border/40 flex items-center transition-colors ${active ? "bg-eve-accent/15 text-eve-accent border-eve-accent/40" : "text-eve-dim hover:text-eve-text"}`} title={`Route safety: ${lvl}`}>
+                    {lvl === "all" ? "Route: All" : lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+                  </button>
                 );
-              return (
-                <button
-                  key={lvl}
-                  type="button"
-                  onClick={() => setRouteSafetyFilter(lvl)}
-                  className={`px-1.5 py-0.5 border-r last:border-r-0 border-eve-border/40 flex items-center transition-colors ${
-                    active
-                      ? "bg-eve-accent/15 text-eve-accent border-eve-accent/40"
-                      : "text-eve-dim hover:text-eve-text"
-                  }`}
-                  title={`Route safety: ${lvl}`}
-                >
-                  {dot}
-                  {lvl === "all"
-                    ? "Route: All"
-                    : lvl.charAt(0).toUpperCase() + lvl.slice(1)}
-                </button>
-              );
-            })}
-          </div>
-        )}
+              })}
+            </div>
 
-        {!isRegionGrouped && results.length > 0 && !scanning && (
-          <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
-            <span className="text-eve-dim px-1">{t("decisionLensTitle")}</span>
-            {(routeViewMode === "route"
-              ? ([
-                  ["recommended", "decisionLensTitle"],
-                  ["best_route_pack", "decisionLensBestRoutePack"],
-                  ["fastest_isk", "decisionLensFastestRoute"],
-                  ["safest", "decisionLensSafestRoute"],
-                  ["cargo", "decisionLensBestCargoUse"],
-                  ["capital_efficient", "decisionLensLowestCapitalLockup"],
-                ] as const)
-              : ([
-                  ["recommended", "decisionLensTitle"],
-                  ["fastest_isk", "decisionLensFastest"],
-                  ["cargo", "decisionLensCargo"],
-                  ["safest", "decisionLensSafest"],
-                  ["capital_efficient", "decisionLensCapital"],
-                ] as const)
-            ).map(([preset, labelKey]) => {
-              const active = decisionLens === preset;
-              return (
-                <button
-                  key={preset}
-                  type="button"
-                  onClick={() => applyDecisionLens(preset)}
-                  className={`px-1.5 py-0.5 rounded-sm border transition-colors ${
-                    active
-                      ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent"
-                      : "border-eve-border/50 text-eve-dim hover:text-eve-text"
-                  }`}
-                  title={t(labelKey)}
-                >
-                  {t(labelKey)}
-                </button>
-              );
-            })}
-          </div>
-        )}
+            {!isRegionGrouped && (
+              <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
+                <span className="text-eve-dim px-1">{t("decisionLensTitle")}</span>
+                {(routeViewMode === "route"
+                  ? ([
+                      ["recommended", "decisionLensTitle"],
+                      ["best_route_pack", "decisionLensBestRoutePack"],
+                      ["fastest_isk", "decisionLensFastestRoute"],
+                      ["safest", "decisionLensSafestRoute"],
+                      ["cargo", "decisionLensBestCargoUse"],
+                      ["capital_efficient", "decisionLensLowestCapitalLockup"],
+                    ] as const)
+                  : ([
+                      ["recommended", "decisionLensTitle"],
+                      ["fastest_isk", "decisionLensFastest"],
+                      ["cargo", "decisionLensCargo"],
+                      ["safest", "decisionLensSafest"],
+                      ["capital_efficient", "decisionLensCapital"],
+                    ] as const)
+                ).map(([preset, labelKey]) => {
+                  const active = decisionLens === preset;
+                  return (
+                    <button key={preset} type="button" onClick={() => applyDecisionLens(preset)} className={`px-1.5 py-0.5 rounded-sm border transition-colors ${active ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent" : "border-eve-border/50 text-eve-dim hover:text-eve-text"}`} title={t(labelKey)}>
+                      {t(labelKey)}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
-        {isRouteGrouped && results.length > 0 && !scanning && (
-          <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
-            <span
-              className="text-eve-dim px-1"
-              title={t("routeBadgeFilterModeTooltip")}
-            >
-              {t("routeBadgeFilterTitle")}
-            </span>
-            {routeBadgeFilterOptions.map((filter) => {
-              const active = selectedBadgeFilters.has(filter.key);
-              return (
-                <button
-                  key={filter.key}
-                  type="button"
-                  onClick={() =>
-                    setSelectedBadgeFilters((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(filter.key)) next.delete(filter.key);
-                      else next.add(filter.key);
-                      return next;
-                    })
-                  }
-                  className={`px-1.5 py-0.5 rounded-sm border transition-colors ${
-                    active
-                      ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent"
-                      : "border-eve-border/50 text-eve-dim hover:text-eve-text"
-                  }`}
-                  title={t(filter.tooltipKey)}
-                >
-                  {t(filter.labelKey)}
-                </button>
-              );
-            })}
-            {selectedBadgeFilters.size > 0 && (
-              <button
-                type="button"
-                onClick={() => setSelectedBadgeFilters(new Set())}
-                className="px-1.5 py-0.5 rounded-sm border border-red-500/50 text-red-300 hover:bg-red-900/20 transition-colors"
-                title={t("routeBadgeFilterClearTooltip")}
-              >
-                {t("routeBadgeFilterClear")}
-              </button>
+            {isRouteGrouped && (
+              <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
+                <span className="text-eve-dim px-1" title={t("routeBadgeFilterModeTooltip")}>{t("routeBadgeFilterTitle")}</span>
+                {routeBadgeFilterOptions.map((filter) => {
+                  const active = selectedBadgeFilters.has(filter.key);
+                  return (
+                    <button key={filter.key} type="button" onClick={() => setSelectedBadgeFilters((prev) => { const next = new Set(prev); if (next.has(filter.key)) next.delete(filter.key); else next.add(filter.key); return next; })} className={`px-1.5 py-0.5 rounded-sm border transition-colors ${active ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent" : "border-eve-border/50 text-eve-dim hover:text-eve-text"}`} title={t(filter.tooltipKey)}>
+                      {t(filter.labelKey)}
+                    </button>
+                  );
+                })}
+                {selectedBadgeFilters.size > 0 && (
+                  <button type="button" onClick={() => setSelectedBadgeFilters(new Set())} className="px-1.5 py-0.5 rounded-sm border border-red-500/50 text-red-300 hover:bg-red-900/20 transition-colors" title={t("routeBadgeFilterClearTooltip")}>
+                    {t("routeBadgeFilterClear")}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {isRegionGrouped && (
+              <>
+                <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
+                  <span className="text-eve-dim px-1">Sort:</span>
+                  {([
+                    ["period_profit", "Period"],
+                    ["now_profit", "Now"],
+                    ["trade_score", "Score"],
+                  ] as const).map(([mode, label]) => {
+                    const active = regionGroupSortMode === mode;
+                    return (
+                      <button key={mode} type="button" onClick={() => setRegionGroupSortMode(mode)} className={`px-1.5 py-0.5 rounded-sm border transition-colors ${active ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent" : "border-eve-border/50 text-eve-dim hover:text-eve-text"}`}>
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {(() => {
+                  const activeCount = categoryFilter.size + groupFilter.size + (securityFilter !== "all" ? 1 : 0);
+                  return (
+                    <button
+                      ref={filterBtnRef}
+                      type="button"
+                      onClick={() => {
+                        setFilterPanelOpen((v) => !v);
+                        setFilterSearch("");
+                      }}
+                      className={`relative px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
+                        filterPanelOpen || activeCount > 0
+                          ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent"
+                          : "border-eve-border/60 bg-eve-dark/40 text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent"
+                      }`}
+                      title="Open item filter (category · group · security)"
+                    >
+                      ⚙ Filters
+                      {activeCount > 0 && <span className="ml-1 px-1 rounded-full bg-eve-accent text-eve-dark text-[9px] font-bold">{activeCount}</span>}
+                    </button>
+                  );
+                })()}
+              </>
             )}
           </div>
         )}
-
-        {/* Action buttons */}
-        <ToolbarBtn
-          label={t("columnsButton")}
-          title={t("columnsPanelTitle")}
-          active={showColumnPanel}
-          onClick={() => setShowColumnPanel((v) => !v)}
-        />
-        <ToolbarBtn
-          label="⊞"
-          title={showFilters ? t("clearFilters") : t("filterPlaceholder")}
-          active={showFilters}
-          onClick={() => setShowFilters((v) => !v)}
-        />
-        {hasActiveFilters && (
-          <ToolbarBtn
-            label="✕"
-            title={t("clearFilters")}
-            onClick={clearFilters}
-          />
-        )}
-        {results.length > 0 && (
-          <>
-            <ToolbarBtn
-              label={compactMode ? "⊞" : "⊟"}
-              title={compactMode ? t("comfyRows") : t("compactRows")}
-              active={compactMode}
-              onClick={() => setCompactMode((v) => !v)}
-            />
-            <ToolbarBtn
-              label="CSV"
-              title={t("exportCSV")}
-              onClick={exportCSV}
-            />
-            <ToolbarBtn label="⎘" title={t("copyTable")} onClick={copyTable} />
-          </>
-        )}
-        {isRegionGrouped && results.length > 0 && !scanning && (
-          <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
-            <span className="text-eve-dim px-1">Sort:</span>
-            {(
-              [
-                ["period_profit", "Period"],
-                ["now_profit", "Now"],
-                ["trade_score", "Score"],
-              ] as const
-            ).map(([mode, label]) => {
-              const active = regionGroupSortMode === mode;
-              return (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setRegionGroupSortMode(mode)}
-                  className={`px-1.5 py-0.5 rounded-sm border transition-colors ${
-                    active
-                      ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent"
-                      : "border-eve-border/50 text-eve-dim hover:text-eve-text"
-                  }`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        )}
-        {/* Item filter button — region mode only */}
-        {isRegionGrouped &&
-          results.length > 0 &&
-          !scanning &&
-          (() => {
-            const activeCount =
-              categoryFilter.size +
-              groupFilter.size +
-              (securityFilter !== "all" ? 1 : 0);
-            return (
-              <button
-                ref={filterBtnRef}
-                type="button"
-                onClick={() => {
-                  setFilterPanelOpen((v) => !v);
-                  setFilterSearch("");
-                }}
-                className={`relative px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
-                  filterPanelOpen || activeCount > 0
-                    ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent"
-                    : "border-eve-border/60 bg-eve-dark/40 text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent"
-                }`}
-                title="Open item filter (category · group · security)"
-              >
-                ⚙ Filters
-                {activeCount > 0 && (
-                  <span className="ml-1 px-1 rounded-full bg-eve-accent text-eve-dark text-[9px] font-bold">
-                    {activeCount}
-                  </span>
-                )}
-              </button>
-            );
-          })()}
       </div>
 
       {/* ── Region item filter popup ── */}
