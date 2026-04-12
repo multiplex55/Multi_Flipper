@@ -150,6 +150,7 @@ type SortDir = "asc" | "desc";
 type RegionGroupSortMode = "period_profit" | "now_profit" | "trade_score";
 type HiddenMode = "done" | "ignored";
 type HiddenFilterTab = "all" | "done" | "ignored";
+type TrackedVisibilityMode = "all" | "tracked_only" | "hide_non_tracked";
 type DecisionLensPreset =
   | "recommended"
   | "best_route_pack"
@@ -177,6 +178,26 @@ type CacheMetaView = {
   scopeLabel: string;
   regionCount: number;
 };
+
+function trackedRecommendationBonus(params: {
+  trackedShare: number;
+  baselineRecommendationScore: number;
+  bestTrackedRowScore: number;
+}): number {
+  const trackedShare = Math.max(0, Math.min(1, params.trackedShare));
+  if (trackedShare <= 0) return 0;
+  const baselineGate = Math.max(
+    0,
+    Math.min(1, (params.baselineRecommendationScore - 35) / 45),
+  );
+  if (baselineGate <= 0) return 0;
+  const trackedRowQualityGate = Math.max(
+    0,
+    Math.min(1, (params.bestTrackedRowScore - 50) / 35),
+  );
+  const rawBonus = trackedShare * 7 + trackedRowQualityGate * 5;
+  return Math.min(9, rawBonus * baselineGate);
+}
 
 function getBuyLocationID(row: FlipResult): number {
   return Math.trunc(row.BuyLocationID ?? 0);
@@ -939,6 +960,7 @@ type RouteScoreSummary = {
   routeRecommendationScore: number;
   bestRowScore: number;
   avgRowScore: number;
+  trackedShare: number;
 };
 
 type RouteBadgeFilter =
@@ -1487,6 +1509,10 @@ export function ScanResultsTable({
       return true;
     }
   });
+  const [trackedVisibilityMode, setTrackedVisibilityMode] =
+    useState<TrackedVisibilityMode>("all");
+  const [trackedFirst, setTrackedFirst] = useState(false);
+  const [showTrackedChip, setShowTrackedChip] = useState(false);
   const [endpointPreferenceProfile, setEndpointPreferenceProfile] =
     useState<EndpointPreferenceProfile>(() => {
       try {
@@ -2036,7 +2062,7 @@ export function ScanResultsTable({
     const endpointEligible = indexed.filter(
       (ir) => !ir.endpointPreferences?.excluded,
     );
-    const filtered = hasFilters
+    const baseFiltered = hasFilters
       ? endpointEligible.filter((ir) => {
           for (const col of columnDefs) {
             const fval = filters[col.key];
@@ -2055,6 +2081,10 @@ export function ScanResultsTable({
           return true;
         })
       : endpointEligible;
+    const filtered =
+      trackedVisibilityMode === "tracked_only"
+        ? baseFiltered.filter((ir) => watchlistIds.has(ir.row.TypeID))
+        : baseFiltered;
 
     const filteredScoreContext = buildFlipScoreContext(
       filtered.map((item) => item.row),
@@ -2101,6 +2131,12 @@ export function ScanResultsTable({
         mapScanRowToPinnedOpportunity(b.row).opportunity_key,
       );
       if (aPin !== bPin) return aPin ? -1 : 1;
+
+      if (trackedFirst) {
+        const aTracked = watchlistIds.has(a.row.TypeID);
+        const bTracked = watchlistIds.has(b.row.TypeID);
+        if (aTracked !== bTracked) return aTracked ? -1 : 1;
+      }
 
       const aDeprioritized = isFlipResultDeprioritized(
         a.row,
@@ -2207,6 +2243,9 @@ export function ScanResultsTable({
     endpointPreferenceMode,
     endpointPreferenceProfile,
     majorHubSystems,
+    trackedFirst,
+    trackedVisibilityMode,
+    watchlistIds,
   ]);
 
   // Available market groups derived from current results (region mode only)
@@ -2280,6 +2319,9 @@ export function ScanResultsTable({
         return routeSafetyRankFromState(rs) === 2;
       });
     }
+    if (trackedVisibilityMode === "hide_non_tracked") {
+      rows = rows.filter((ir) => watchlistIds.has(ir.row.TypeID));
+    }
     return rows;
   }, [
     sorted,
@@ -2291,6 +2333,8 @@ export function ScanResultsTable({
     groupFilter,
     routeSafetyFilter,
     routeSafetyMap,
+    trackedVisibilityMode,
+    watchlistIds,
   ]);
 
   const displayScoreContext = useMemo(
@@ -2599,27 +2643,42 @@ export function ScanResultsTable({
             routeCapacityUsedPercent:
               routeSummary?.routeCapacityUsedPercent ?? null,
           }) ?? 0;
-        const rowScores = group.rows.map((item) =>
-          scoreFlipResult(
+        const rowScores = group.rows.map((item) => ({
+          score: scoreFlipResult(
             item.row,
             opportunityProfile,
             displayScoreContext,
           ).finalScore,
-        );
+          tracked: watchlistIds.has(item.row.TypeID),
+        }));
         const bestRowScore =
-          rowScores.length > 0 ? Math.max(...rowScores) : 0;
+          rowScores.length > 0 ? Math.max(...rowScores.map((item) => item.score)) : 0;
         const avgRowScore =
           rowScores.length > 0
-            ? rowScores.reduce((sum, value) => sum + value, 0) /
+            ? rowScores.reduce((sum, value) => sum + value.score, 0) /
               rowScores.length
             : 0;
+        const trackedCount = rowScores.filter((item) => item.tracked).length;
+        const trackedShare =
+          rowScores.length > 0 ? trackedCount / rowScores.length : 0;
+        const bestTrackedRowScore = rowScores
+          .filter((item) => item.tracked)
+          .reduce((best, item) => Math.max(best, item.score), 0);
+        const trackedBonus = trackedRecommendationBonus({
+          trackedShare,
+          baselineRecommendationScore: routeRecommendationScore,
+          bestTrackedRowScore,
+        });
         out[group.key] = {
           routeRecommendationScore: Math.max(
             0,
-            routeRecommendationScore + (endpointPreferenceDeltaByRoute[group.key] ?? 0),
+            routeRecommendationScore +
+              (endpointPreferenceDeltaByRoute[group.key] ?? 0) +
+              trackedBonus,
           ),
           bestRowScore,
           avgRowScore,
+          trackedShare,
         };
       }
       return out;
@@ -2631,6 +2690,7 @@ export function ScanResultsTable({
       isRouteGrouped,
       opportunityProfile,
       routeGroups,
+      watchlistIds,
     ],
   );
 
@@ -2661,6 +2721,7 @@ export function ScanResultsTable({
         confidenceScore: confidence.score,
         cargoUsePercent: routeSummary?.routeCapacityUsedPercent ?? 0,
         recommendationScore: routeScoreSummary?.routeRecommendationScore ?? 0,
+        trackedShare: routeScoreSummary?.trackedShare ?? 0,
         stopCount: routeSummary?.routeStopCount ?? 0,
         riskCount:
           (routeSummary?.routeRiskSpikeCount ?? 0) +
@@ -3699,6 +3760,8 @@ export function ScanResultsTable({
         )}
         isSelected={selectedIds.has(ir.id)}
         isFocused={focusedRowId === ir.id}
+        isTracked={watchlistIds.has(ir.row.TypeID)}
+        showTrackedChip={showTrackedChip}
         variant={variantByRowId.get(ir.id)}
         rowHidden={hiddenMap[flipStateKey(ir.row)]}
         isItemGrouped={isItemGrouped}
@@ -3738,6 +3801,8 @@ export function ScanResultsTable({
       togglePin,
       toggleSelect,
       variantByRowId,
+      watchlistIds,
+      showTrackedChip,
       routeSafetyMap,
       handleRouteSafetyClick,
       batchMetricsByRow,
@@ -3800,6 +3865,9 @@ export function ScanResultsTable({
             <span className="text-eve-accent">
               📌 {t("pinned", { count: pinnedKeys.size })}
             </span>
+          )}
+          {watchlistIds.size > 0 && (
+            <span className="text-emerald-300">★ Tracked: {watchlistIds.size}</span>
           )}
           {selectedIds.size > 0 && (
             <span className="text-eve-accent">
@@ -3911,6 +3979,50 @@ export function ScanResultsTable({
                 >
                   {t("topPicksToggleLabel")}
                 </button>
+                <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
+                  {(
+                    [
+                      ["all", "Tracked: All"],
+                      ["tracked_only", "Tracked only"],
+                      ["hide_non_tracked", "Hide non-tracked"],
+                    ] as const
+                  ).map(([mode, label]) => {
+                    const active = trackedVisibilityMode === mode;
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setTrackedVisibilityMode(mode)}
+                        className={`px-2 py-0.5 border-r last:border-r-0 border-eve-border/40 transition-colors ${
+                          active
+                            ? "bg-eve-accent/15 text-eve-accent border-eve-accent/40"
+                            : "text-eve-dim hover:text-eve-text"
+                        }`}
+                        title={label}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <label className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={trackedFirst}
+                    onChange={(e) => setTrackedFirst(e.target.checked)}
+                    className="accent-eve-accent"
+                  />
+                  <span>Tracked first</span>
+                </label>
+                <label className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showTrackedChip}
+                    onChange={(e) => setShowTrackedChip(e.target.checked)}
+                    className="accent-eve-accent"
+                  />
+                  <span>Tracked chip</span>
+                </label>
                 <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
                   <span className="text-eve-dim px-1">Endpoint prefs</span>
                   <select
@@ -5742,6 +5854,8 @@ interface DataRowProps {
   isPinned: boolean;
   isSelected: boolean;
   isFocused: boolean;
+  isTracked: boolean;
+  showTrackedChip: boolean;
   variant: { index: number; total: number } | undefined;
   rowHidden: HiddenFlipEntry | undefined;
   isItemGrouped: boolean;
@@ -5857,6 +5971,8 @@ const DataRow = memo(
     isPinned,
     isSelected,
     isFocused,
+    isTracked,
+    showTrackedChip,
     variant,
     rowHidden,
     isItemGrouped,
@@ -5894,6 +6010,8 @@ const DataRow = memo(
             ? "ring-1 ring-inset ring-eve-accent/60 bg-eve-accent/10"
             : isPinned
               ? "bg-eve-accent/10 border-l-2 border-l-eve-accent"
+              : isTracked
+                ? "border-l border-l-emerald-400/45"
               : isSelected
                 ? "bg-eve-accent/5"
                 : globalIdx % 2 === 0
@@ -5940,6 +6058,18 @@ const DataRow = memo(
                   />
                 )}
                 <span className="truncate">{ir.row.TypeName}</span>
+                <span
+                  title={isTracked ? "Tracked watchlist item" : "Not tracked"}
+                  className={`shrink-0 ${isTracked ? "text-yellow-300" : "text-eve-dim/40"}`}
+                  aria-hidden
+                >
+                  ★
+                </span>
+                {showTrackedChip && isTracked && (
+                  <span className="shrink-0 inline-flex items-center px-1 py-px rounded-[2px] border border-emerald-300/35 bg-emerald-400/10 text-emerald-200 text-[9px] leading-none font-medium uppercase tracking-normal">
+                    Tracked
+                  </span>
+                )}
                 {/* Price-spike warning: now-profit > 0 but period-profit < 0 means temp spike */}
                 {hasDestinationPriceSpike(ir.row) && (
                   <span
@@ -6036,6 +6166,8 @@ const DataRow = memo(
     prev.isPinned === next.isPinned &&
     prev.isSelected === next.isSelected &&
     prev.isFocused === next.isFocused &&
+    prev.isTracked === next.isTracked &&
+    prev.showTrackedChip === next.showTrackedChip &&
     prev.rowHidden === next.rowHidden &&
     prev.globalIdx === next.globalIdx &&
     prev.compactMode === next.compactMode &&

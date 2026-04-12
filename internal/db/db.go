@@ -1332,6 +1332,22 @@ func (d *DB) migrate() error {
 		logger.Info("DB", "Applied migration v31 (flip pre-execution units)")
 	}
 
+	if version < 32 {
+		watchlistExists, err := d.tableExists("watchlist")
+		if err != nil {
+			return fmt.Errorf("migration v32 check watchlist exists: %w", err)
+		}
+		if watchlistExists {
+			if err := d.ensureTableColumn("watchlist", "priority_tier", "TEXT NOT NULL DEFAULT 'normal'"); err != nil {
+				return fmt.Errorf("migration v32 add watchlist.priority_tier: %w", err)
+			}
+		}
+		if _, err := d.sql.Exec(`INSERT OR IGNORE INTO schema_version (version) VALUES (32);`); err != nil {
+			return fmt.Errorf("migration v32: %w", err)
+		}
+		logger.Info("DB", "Applied migration v32 (watchlist priority tiers)")
+	}
+
 	return nil
 }
 

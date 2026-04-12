@@ -14,7 +14,7 @@ func (d *DB) GetWatchlistForUser(userID string) []config.WatchlistItem {
 	userID = normalizeUserID(userID)
 
 	rows, err := d.sql.Query(`
-		SELECT type_id, type_name, added_at, alert_min_margin, alert_enabled, alert_metric, alert_threshold
+		SELECT type_id, type_name, added_at, priority_tier, alert_min_margin, alert_enabled, alert_metric, alert_threshold
 		  FROM watchlist
 		 WHERE user_id = ?
 		 ORDER BY added_at DESC
@@ -31,11 +31,15 @@ func (d *DB) GetWatchlistForUser(userID string) []config.WatchlistItem {
 			&item.TypeID,
 			&item.TypeName,
 			&item.AddedAt,
+			&item.PriorityTier,
 			&item.AlertMinMargin,
 			&item.AlertEnabled,
 			&item.AlertMetric,
 			&item.AlertThreshold,
 		)
+		if item.PriorityTier == "" {
+			item.PriorityTier = "normal"
+		}
 		if item.AlertMetric == "" {
 			item.AlertMetric = "margin_percent"
 		}
@@ -90,12 +94,13 @@ func (d *DB) AddWatchlistItemForUser(userID string, item config.WatchlistItem) b
 	}
 	res, err := d.sql.Exec(
 		`INSERT OR IGNORE INTO watchlist
-		   (user_id, type_id, type_name, added_at, alert_min_margin, alert_enabled, alert_metric, alert_threshold)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		   (user_id, type_id, type_name, added_at, priority_tier, alert_min_margin, alert_enabled, alert_metric, alert_threshold)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		userID,
 		item.TypeID,
 		item.TypeName,
 		item.AddedAt,
+		coalesceWatchlistPriority(item.PriorityTier),
 		item.AlertMinMargin,
 		item.AlertEnabled,
 		item.AlertMetric,
@@ -106,6 +111,15 @@ func (d *DB) AddWatchlistItemForUser(userID string, item config.WatchlistItem) b
 	}
 	n, _ := res.RowsAffected()
 	return n > 0
+}
+
+func coalesceWatchlistPriority(priority string) string {
+	switch priority {
+	case "high", "normal", "speculative":
+		return priority
+	default:
+		return "normal"
+	}
 }
 
 // DeleteWatchlistItem removes a watchlist item by type ID.

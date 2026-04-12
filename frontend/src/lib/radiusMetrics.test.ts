@@ -184,4 +184,35 @@ describe("radiusMetrics formulas", () => {
     expect(picks.bestQuickSingleRoute?.routeKey).toBe("route-b");
     expect(picks.bestSafeFillerRoute?.routeKey).toBe("route-c");
   });
+
+  it("uses tracked share as a bounded tie-breaker signal for recommended picks", () => {
+    const picks = selectTopRoutePicks([
+      {
+        routeKey: "strong-untracked",
+        routeLabel: "Strong",
+        totalProfit: 1_400_000,
+        dailyIskPerJump: 700_000,
+        confidenceScore: 88,
+        cargoUsePercent: 75,
+        recommendationScore: 93,
+        stopCount: 2,
+        riskCount: 1,
+        trackedShare: 0,
+      },
+      {
+        routeKey: "weaker-tracked",
+        routeLabel: "Tracked",
+        totalProfit: 900_000,
+        dailyIskPerJump: 420_000,
+        confidenceScore: 72,
+        cargoUsePercent: 80,
+        recommendationScore: 74,
+        stopCount: 2,
+        riskCount: 2,
+        trackedShare: 1,
+      },
+    ]);
+
+    expect(picks.bestRecommendedRoutePack?.routeKey).toBe("strong-untracked");
+  });
 });
