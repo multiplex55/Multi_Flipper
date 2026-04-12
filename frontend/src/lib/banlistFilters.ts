@@ -12,6 +12,22 @@ const stationIdKeys = [
   "DestLocationID",
 ] as const;
 
+export type SessionStationFilters = {
+  ignoredBuyStationIds: Set<number>;
+  ignoredSellStationIds: Set<number>;
+  deprioritizedStationIds: Set<number>;
+  ignoredSystemIds?: Set<number>;
+};
+
+export function createSessionStationFilters(): SessionStationFilters {
+  return {
+    ignoredBuyStationIds: new Set<number>(),
+    ignoredSellStationIds: new Set<number>(),
+    deprioritizedStationIds: new Set<number>(),
+    ignoredSystemIds: undefined,
+  };
+}
+
 function toInt(value: unknown): number {
   if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
   if (typeof value === "string" && value.trim() !== "") {
@@ -38,6 +54,18 @@ function hasBannedStationID(value: unknown, bannedStationIDs: Set<number>): bool
   return false;
 }
 
+function getBuyStationID(value: unknown): number {
+  const rec = asRecord(value);
+  if (!rec) return 0;
+  return toInt(rec.BuyLocationID ?? rec.buy_location_id ?? rec.LocationID ?? rec.location_id);
+}
+
+function getSellStationID(value: unknown): number {
+  const rec = asRecord(value);
+  if (!rec) return 0;
+  return toInt(rec.SellLocationID ?? rec.sell_location_id ?? rec.DestLocationID);
+}
+
 export function filterRowsByBannedTypeIDs<T>(rows: readonly T[], bannedTypeIDs: readonly number[]): T[] {
   if (rows.length === 0 || bannedTypeIDs.length === 0) return [...rows];
   const blocked = new Set(bannedTypeIDs.filter((id) => id > 0));
@@ -59,6 +87,53 @@ export function filterRowsByBannedStationIDs<T>(rows: readonly T[], bannedStatio
   const blocked = new Set(bannedStationIDs.filter((id) => id > 0));
   if (blocked.size === 0) return [...rows];
   return rows.filter((row) => !hasBannedStationID(row, blocked));
+}
+
+export function filterRowsBySessionStationIgnores(
+  rows: readonly FlipResult[],
+  sessionFilters?: SessionStationFilters,
+): FlipResult[] {
+  if (!sessionFilters || rows.length === 0) return [...rows];
+  const { ignoredBuyStationIds, ignoredSellStationIds } = sessionFilters;
+  if (ignoredBuyStationIds.size === 0 && ignoredSellStationIds.size === 0) {
+    return [...rows];
+  }
+  return rows.filter((row) => {
+    const buyStationID = getBuyStationID(row);
+    if (buyStationID > 0 && ignoredBuyStationIds.has(buyStationID)) return false;
+    const sellStationID = getSellStationID(row);
+    if (sellStationID > 0 && ignoredSellStationIds.has(sellStationID)) return false;
+    return true;
+  });
+}
+
+export function isFlipResultDeprioritized(
+  row: FlipResult,
+  sessionFilters?: SessionStationFilters,
+): boolean {
+  if (!sessionFilters || sessionFilters.deprioritizedStationIds.size === 0) return false;
+  const buyStationID = getBuyStationID(row);
+  if (buyStationID > 0 && sessionFilters.deprioritizedStationIds.has(buyStationID)) return true;
+  const sellStationID = getSellStationID(row);
+  if (sellStationID > 0 && sessionFilters.deprioritizedStationIds.has(sellStationID)) return true;
+  return false;
+}
+
+export function filterFlipResultsByPhases(
+  rows: readonly FlipResult[],
+  bannedTypeIDs: readonly number[],
+  bannedStationIDs: readonly number[],
+  sessionFilters?: SessionStationFilters,
+): FlipResult[] {
+  // Phase 1: hard bans (persistent banlist).
+  const hardBanned = filterRowsByBannedStationIDs(
+    filterRowsByBannedTypeIDs(rows, bannedTypeIDs),
+    bannedStationIDs,
+  );
+  // Phase 2: soft session hide rules (buy/sell-role-specific station ignores).
+  const softHidden = filterRowsBySessionStationIgnores(hardBanned, sessionFilters);
+  // Phase 3 (deprioritized scoring penalties) is intentionally applied by ranking logic.
+  return softHidden;
 }
 
 export function filterRouteResults(
@@ -83,8 +158,13 @@ export function filterRouteResults(
   });
 }
 
-export function filterFlipResults(rows: readonly FlipResult[], bannedTypeIDs: readonly number[], bannedStationIDs: readonly number[]): FlipResult[] {
-  return filterRowsByBannedStationIDs(filterRowsByBannedTypeIDs(rows, bannedTypeIDs), bannedStationIDs);
+export function filterFlipResults(
+  rows: readonly FlipResult[],
+  bannedTypeIDs: readonly number[],
+  bannedStationIDs: readonly number[],
+  sessionFilters?: SessionStationFilters,
+): FlipResult[] {
+  return filterFlipResultsByPhases(rows, bannedTypeIDs, bannedStationIDs, sessionFilters);
 }
 
 export function filterStationTrades(rows: readonly StationTrade[], bannedTypeIDs: readonly number[], bannedStationIDs: readonly number[]): StationTrade[] {

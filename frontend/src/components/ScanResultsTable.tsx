@@ -82,6 +82,11 @@ import {
 } from "@/lib/opportunityScore";
 import { OpportunityScoreDetails } from "./OpportunityScorePopover";
 import { mapScanRowToPinnedOpportunity } from "@/lib/pinnedOpportunityMapper";
+import {
+  filterRowsBySessionStationIgnores,
+  isFlipResultDeprioritized,
+  type SessionStationFilters,
+} from "@/lib/banlistFilters";
 
 const PAGE_SIZE = 100;
 const GROUP_PAGE_SIZE = 50; // rows shown per group before "Show all" button
@@ -162,6 +167,14 @@ type CacheMetaView = {
   regionCount: number;
 };
 
+function getBuyLocationID(row: FlipResult): number {
+  return Math.trunc(row.BuyLocationID ?? 0);
+}
+
+function getSellLocationID(row: FlipResult): number {
+  return Math.trunc(row.SellLocationID ?? 0);
+}
+
 interface Props {
   results: FlipResult[];
   scanning: boolean;
@@ -190,6 +203,10 @@ interface Props {
   allowWormhole?: boolean;
   onOpenPriceValidation?: (manifestText: string) => void;
   strategyScore?: StrategyScoreConfig;
+  sessionStationFilters?: SessionStationFilters;
+  onUpdateSessionStationFilters?: (
+    updater: (prev: SessionStationFilters) => SessionStationFilters,
+  ) => void;
 }
 
 type ColumnDef = {
@@ -1388,6 +1405,8 @@ export function ScanResultsTable({
   allowWormhole,
   onOpenPriceValidation,
   strategyScore,
+  sessionStationFilters,
+  onUpdateSessionStationFilters,
 }: Props) {
   const { t } = useI18n();
   const emptyReason: EmptyReason = scanCompletedWithZero
@@ -1909,7 +1928,12 @@ export function ScanResultsTable({
 
   // ── Data pipeline: index → filter → sort ──
   const { indexed, filtered, sorted, variantByRowId } = useMemo(() => {
-    const indexed: IndexedRow[] = results.map((row) => ({
+    const sessionVisibleRows = filterRowsBySessionStationIgnores(
+      results,
+      sessionStationFilters,
+    );
+
+    const indexed: IndexedRow[] = sessionVisibleRows.map((row) => ({
       id: getRowId(row),
       row,
     }));
@@ -1980,6 +2004,16 @@ export function ScanResultsTable({
         mapScanRowToPinnedOpportunity(b.row).opportunity_key,
       );
       if (aPin !== bPin) return aPin ? -1 : 1;
+
+      const aDeprioritized = isFlipResultDeprioritized(
+        a.row,
+        sessionStationFilters,
+      );
+      const bDeprioritized = isFlipResultDeprioritized(
+        b.row,
+        sessionStationFilters,
+      );
+      if (aDeprioritized !== bDeprioritized) return aDeprioritized ? 1 : -1;
 
       if (sortKey === ("RouteSafety" as SortKey)) {
         const diff =
@@ -2054,6 +2088,7 @@ export function ScanResultsTable({
     batchMetricsByRoute,
     batchMetricsByRow,
     opportunityProfile,
+    sessionStationFilters,
   ]);
 
   // Available market groups derived from current results (region mode only)
@@ -3005,6 +3040,54 @@ export function ScanResultsTable({
     [addToast, t],
   );
 
+  const addBuyStationIgnore = useCallback(
+    (stationID: number) => {
+      if (stationID <= 0) return;
+      onUpdateSessionStationFilters?.((prev) => ({
+        ...prev,
+        ignoredBuyStationIds: new Set(prev.ignoredBuyStationIds).add(stationID),
+      }));
+      setContextMenu(null);
+    },
+    [onUpdateSessionStationFilters],
+  );
+
+  const addSellStationIgnore = useCallback(
+    (stationID: number) => {
+      if (stationID <= 0) return;
+      onUpdateSessionStationFilters?.((prev) => ({
+        ...prev,
+        ignoredSellStationIds: new Set(prev.ignoredSellStationIds).add(stationID),
+      }));
+      setContextMenu(null);
+    },
+    [onUpdateSessionStationFilters],
+  );
+
+  const addDeprioritizedStation = useCallback(
+    (stationID: number) => {
+      if (stationID <= 0) return;
+      onUpdateSessionStationFilters?.((prev) => ({
+        ...prev,
+        deprioritizedStationIds: new Set(prev.deprioritizedStationIds).add(
+          stationID,
+        ),
+      }));
+      setContextMenu(null);
+    },
+    [onUpdateSessionStationFilters],
+  );
+
+  const clearTemporaryStationFilters = useCallback(() => {
+    onUpdateSessionStationFilters?.((prev) => ({
+      ...prev,
+      ignoredBuyStationIds: new Set<number>(),
+      ignoredSellStationIds: new Set<number>(),
+      deprioritizedStationIds: new Set<number>(),
+    }));
+    setContextMenu(null);
+  }, [onUpdateSessionStationFilters]);
+
   const setRowHiddenState = useCallback(
     async (row: FlipResult, mode: HiddenMode) => {
       const key = flipStateKey(row);
@@ -3291,6 +3374,57 @@ export function ScanResultsTable({
     ? hiddenMap[flipStateKey(contextMenu.row)]
     : undefined;
 
+  const activeSessionFilterChips = useMemo(() => {
+    if (!sessionStationFilters) return [] as Array<{ key: string; label: string; onRemove: () => void }>;
+    const chips: Array<{ key: string; label: string; onRemove: () => void }> = [];
+    for (const stationID of sessionStationFilters.ignoredBuyStationIds) {
+      chips.push({
+        key: `buy:${stationID}`,
+        label: `Ignore buy: ${stationID}`,
+        onRemove: () =>
+          onUpdateSessionStationFilters?.((prev) => {
+            const next = {
+              ...prev,
+              ignoredBuyStationIds: new Set(prev.ignoredBuyStationIds),
+            };
+            next.ignoredBuyStationIds.delete(stationID);
+            return next;
+          }),
+      });
+    }
+    for (const stationID of sessionStationFilters.ignoredSellStationIds) {
+      chips.push({
+        key: `sell:${stationID}`,
+        label: `Ignore sell: ${stationID}`,
+        onRemove: () =>
+          onUpdateSessionStationFilters?.((prev) => {
+            const next = {
+              ...prev,
+              ignoredSellStationIds: new Set(prev.ignoredSellStationIds),
+            };
+            next.ignoredSellStationIds.delete(stationID);
+            return next;
+          }),
+      });
+    }
+    for (const stationID of sessionStationFilters.deprioritizedStationIds) {
+      chips.push({
+        key: `deprio:${stationID}`,
+        label: `Deprioritized: ${stationID}`,
+        onRemove: () =>
+          onUpdateSessionStationFilters?.((prev) => {
+            const next = {
+              ...prev,
+              deprioritizedStationIds: new Set(prev.deprioritizedStationIds),
+            };
+            next.deprioritizedStationIds.delete(stationID);
+            return next;
+          }),
+      });
+    }
+    return chips;
+  }, [onUpdateSessionStationFilters, sessionStationFilters]);
+
   // Stable LMB handler for region detail panel
   const onLmbClick = useCallback((row: FlipResult) => {
     setDayDetailRow(row);
@@ -3483,6 +3617,28 @@ export function ScanResultsTable({
   // ── Render ──
   return (
     <div ref={keyNavRootRef} className="relative flex-1 flex flex-col min-h-0">
+      {activeSessionFilterChips.length > 0 && (
+        <div className="shrink-0 px-2 pt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+          {activeSessionFilterChips.map((chip) => (
+            <button
+              key={chip.key}
+              type="button"
+              onClick={chip.onRemove}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-eve-accent/40 bg-eve-accent/10 text-eve-accent hover:bg-eve-accent/20"
+              title="Remove temporary filter"
+            >
+              {chip.label} <span aria-hidden>✕</span>
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={clearTemporaryStationFilters}
+            className="px-2 py-0.5 rounded-sm border border-eve-border text-eve-dim hover:text-eve-text"
+          >
+            Clear all
+          </button>
+        </div>
+      )}
       {/* Toolbar */}
       <div className="shrink-0 flex items-center gap-2 px-2 py-1.5 text-xs">
         <div className="flex items-center gap-2 text-eve-dim">
@@ -4943,6 +5099,38 @@ export function ScanResultsTable({
             <ContextItem
               label={t("copySystemAutopilot")}
               onClick={() => copyText(contextMenu.row.BuySystemName)}
+            />
+            {(contextMenu.row.BuyLocationID ?? 0) > 0 && (
+              <ContextItem
+                label="Ignore this buy station (session)"
+                onClick={() =>
+                  addBuyStationIgnore(getBuyLocationID(contextMenu.row))
+                }
+              />
+            )}
+            {(contextMenu.row.SellLocationID ?? 0) > 0 && (
+              <ContextItem
+                label="Ignore this sell station (session)"
+                onClick={() =>
+                  addSellStationIgnore(getSellLocationID(contextMenu.row))
+                }
+              />
+            )}
+            {((contextMenu.row.BuyLocationID ?? 0) > 0 ||
+              (contextMenu.row.SellLocationID ?? 0) > 0) && (
+              <ContextItem
+                label="Deprioritize this station"
+                onClick={() =>
+                  addDeprioritizedStation(
+                    getBuyLocationID(contextMenu.row) ||
+                      getSellLocationID(contextMenu.row),
+                  )
+                }
+              />
+            )}
+            <ContextItem
+              label="Clear all temporary station filters"
+              onClick={clearTemporaryStationFilters}
             />
             <div className="h-px bg-eve-border my-1" />
             <ContextItem
