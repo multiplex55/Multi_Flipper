@@ -32,7 +32,10 @@ import {
   realIskPerM3PerJump,
   routeRecommendationScoreFromMetrics,
   selectTopRoutePicks,
+  deriveActionQueue,
   slippageCostIsk,
+  type ActionQueueActionType,
+  type ActionQueueItem,
   type TopRoutePickCandidate,
   turnoverDays,
 } from "@/lib/radiusMetrics";
@@ -197,6 +200,25 @@ function trackedRecommendationBonus(params: {
   );
   const rawBonus = trackedShare * 7 + trackedRowQualityGate * 5;
   return Math.min(9, rawBonus * baselineGate);
+}
+
+function actionLabel(action: ActionQueueActionType): string {
+  switch (action) {
+    case "buy_now":
+      return "Buy now";
+    case "filler":
+      return "Filler";
+    case "tracked":
+      return "Tracked";
+    case "loop_outbound":
+      return "Loop outbound";
+    case "loop_return":
+      return "Loop return";
+    case "avoid_hub_race":
+      return "Avoid hub race";
+    default:
+      return action;
+  }
 }
 
 function getBuyLocationID(row: FlipResult): number {
@@ -2696,6 +2718,12 @@ export function ScanResultsTable({
 
   const topRoutePickCandidates = useMemo(() => {
     const labelByRoute = new Map<string, string>();
+    const endpointDeltaByRoute = new Map<string, number>();
+    const endpointRuleHitsByRoute = new Map<string, number>();
+    const trackedCountByRoute = new Map<string, number>();
+    const deprioritizedByRoute = new Map<string, boolean>();
+    const loopOutboundByRoute = new Map<string, boolean>();
+    const loopReturnByRoute = new Map<string, boolean>();
     for (const ir of displaySorted) {
       const key = routeGroupKey(ir.row);
       if (!labelByRoute.has(key)) {
@@ -2706,6 +2734,26 @@ export function ScanResultsTable({
           }`,
         );
       }
+      endpointDeltaByRoute.set(
+        key,
+        (endpointDeltaByRoute.get(key) ?? 0) +
+          (ir.endpointPreferences?.scoreDelta ?? 0),
+      );
+      endpointRuleHitsByRoute.set(
+        key,
+        (endpointRuleHitsByRoute.get(key) ?? 0) +
+          (ir.endpointPreferences?.appliedRules.length ?? 0),
+      );
+      if (watchlistIds.has(ir.row.TypeID)) {
+        trackedCountByRoute.set(key, (trackedCountByRoute.get(key) ?? 0) + 1);
+      }
+      if (isFlipResultDeprioritized(ir.row, sessionStationFilters)) {
+        deprioritizedByRoute.set(key, true);
+      }
+      const outboundKey = `${ir.row.BuySystemID}:${ir.row.SellSystemID}`;
+      const returnKey = `${ir.row.SellSystemID}:${ir.row.BuySystemID}`;
+      loopOutboundByRoute.set(key, routeSafetyMap[outboundKey] !== undefined);
+      loopReturnByRoute.set(key, routeSafetyMap[returnKey] !== undefined);
     }
     const candidates: TopRoutePickCandidate[] = [];
     for (const [routeKey, routeLabel] of labelByRoute.entries()) {
@@ -2728,6 +2776,12 @@ export function ScanResultsTable({
           (routeSummary?.routeRiskNoHistoryCount ?? 0) +
           (routeSummary?.routeRiskUnstableHistoryCount ?? 0) +
           (routeSummary?.routeRiskThinFillCount ?? 0),
+        endpointScoreDelta: endpointDeltaByRoute.get(routeKey) ?? 0,
+        endpointRuleHits: endpointRuleHitsByRoute.get(routeKey) ?? 0,
+        hasWatchlistSignal: (trackedCountByRoute.get(routeKey) ?? 0) > 0,
+        hasLoopCandidate: loopOutboundByRoute.get(routeKey) ?? false,
+        hasBackhaulCandidate: loopReturnByRoute.get(routeKey) ?? false,
+        hasDeprioritizedRows: deprioritizedByRoute.get(routeKey) ?? false,
       });
     }
     return candidates;
@@ -2736,12 +2790,52 @@ export function ScanResultsTable({
     displaySorted,
     routeAggregateMetricsByRoute,
     routeScoreSummaryByRoute,
+    routeSafetyMap,
+    sessionStationFilters,
+    watchlistIds,
   ]);
 
   const topRoutePicks = useMemo(
     () => selectTopRoutePicks(topRoutePickCandidates),
     [topRoutePickCandidates],
   );
+
+  const suppressionTelemetry = useMemo(
+    () => ({
+      hardBanFiltered: Math.max(0, results.length - indexed.length),
+      softSessionFiltered: Math.max(0, indexed.length - filtered.length),
+      endpointExcluded: Math.max(0, indexed.length - filtered.length),
+      deprioritizedRows: sorted.filter((item) =>
+        isFlipResultDeprioritized(item.row, sessionStationFilters),
+      ).length,
+    }),
+    [filtered.length, indexed.length, results.length, sessionStationFilters, sorted],
+  );
+
+  const actionQueue = useMemo<ActionQueueItem[]>(
+    () =>
+      deriveActionQueue({
+        candidates: topRoutePickCandidates,
+        suppression: suppressionTelemetry,
+      }).slice(0, 6),
+    [suppressionTelemetry, topRoutePickCandidates],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(
+      new CustomEvent("eve:scan-queue-telemetry", {
+        detail: {
+          ...suppressionTelemetry,
+          queueSize: actionQueue.length,
+          actionCounts: actionQueue.reduce<Record<string, number>>((acc, item) => {
+            acc[item.action] = (acc[item.action] ?? 0) + 1;
+            return acc;
+          }, {}),
+        },
+      }),
+    );
+  }, [actionQueue, suppressionTelemetry]);
 
   useEffect(() => {
     if (!isRouteGrouped) {
@@ -4746,6 +4840,49 @@ export function ScanResultsTable({
                   )}
                 </div>
               ))}
+            </div>
+            <div className="mt-3 border-t border-eve-border/50 pt-2">
+              <div className="text-[11px] uppercase tracking-wider text-eve-dim mb-2">
+                Action Queue
+              </div>
+              <div className="space-y-1.5">
+                {actionQueue.length === 0 ? (
+                  <div className="text-[11px] text-eve-dim">No queue actions available.</div>
+                ) : (
+                  actionQueue.map((item) => (
+                    <div
+                      key={`queue-${item.routeKey}`}
+                      className="rounded-sm border border-eve-border/60 bg-eve-panel/30 px-2 py-1.5 text-xs"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-medium text-eve-text truncate">{item.routeLabel}</div>
+                        <span className="rounded-sm border border-eve-accent/40 bg-eve-accent/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-eve-accent">
+                          {actionLabel(item.action)}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {item.reasons.map((reason) => (
+                          <span
+                            key={`${item.routeKey}-reason-${reason}`}
+                            title={reason}
+                            className="rounded-sm border border-eve-border/60 bg-eve-dark/50 px-1.5 py-0.5 text-[10px] text-eve-dim"
+                          >
+                            {reason}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              {(suppressionTelemetry.softSessionFiltered > 0 ||
+                suppressionTelemetry.deprioritizedRows > 0 ||
+                hiddenCounts.total > 0) && (
+                <div className="mt-2 text-[11px] text-eve-dim">
+                  Hidden/deprioritized: {suppressionTelemetry.softSessionFiltered} session-filtered,{" "}
+                  {suppressionTelemetry.deprioritizedRows} deprioritized, {hiddenCounts.total} manually hidden.
+                </div>
+              )}
             </div>
           </div>
         </div>

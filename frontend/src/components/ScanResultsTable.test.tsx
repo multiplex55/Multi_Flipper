@@ -1087,7 +1087,7 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
     await waitFor(() => expect(groupedRouteButtons()).toHaveLength(3));
-    expect(screen.getByText(/NoHist Buy → NoHist Sell/)).toBeInTheDocument();
+    expect(screen.getAllByText(/NoHist Buy → NoHist Sell/).length).toBeGreaterThan(0);
   });
 
   it("uses OR behavior for multi-select route badge filters", async () => {
@@ -1556,10 +1556,16 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
       renderTable({ scanning: false, results: [rowA, rowB] });
 
       expect(await screen.findByText("Best Recommended Route Pack")).toBeInTheDocument();
+      expect(screen.getByText("Action Queue")).toBeInTheDocument();
       const jumpButtons = screen.getAllByRole("button", {
         name: "Jump to group",
       });
       expect(jumpButtons.length).toBeGreaterThan(0);
+      expect(
+        screen.getAllByText(
+          /baseline_rank|high_confidence|risk_or_confidence_guard|endpoint_rules_applied|endpoint_hub_penalty/i,
+        ).length,
+      ).toBeGreaterThan(0);
 
       fireEvent.click(jumpButtons[0]);
 

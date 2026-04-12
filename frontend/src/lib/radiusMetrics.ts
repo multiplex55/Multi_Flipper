@@ -127,12 +127,45 @@ export type TopRoutePickCandidate = {
   stopCount: number;
   riskCount: number;
   trackedShare?: number;
+  endpointScoreDelta?: number;
+  endpointRuleHits?: number;
+  hasWatchlistSignal?: boolean;
+  hasLoopCandidate?: boolean;
+  hasBackhaulCandidate?: boolean;
+  hasDeprioritizedRows?: boolean;
 };
 
 export type TopRoutePicks = {
   bestRecommendedRoutePack: TopRoutePickCandidate | null;
   bestQuickSingleRoute: TopRoutePickCandidate | null;
   bestSafeFillerRoute: TopRoutePickCandidate | null;
+};
+
+export type ActionQueueActionType =
+  | "buy_now"
+  | "filler"
+  | "tracked"
+  | "loop_outbound"
+  | "loop_return"
+  | "avoid_hub_race";
+
+export type ActionQueueItem = {
+  routeKey: string;
+  routeLabel: string;
+  action: ActionQueueActionType;
+  score: number;
+  reasons: string[];
+  candidate: TopRoutePickCandidate;
+};
+
+export type QueueDerivationInputs = {
+  candidates: TopRoutePickCandidate[];
+  suppression?: {
+    hardBanFiltered?: number;
+    softSessionFiltered?: number;
+    endpointExcluded?: number;
+    deprioritizedRows?: number;
+  };
 };
 
 function scoreQuickRoute(candidate: TopRoutePickCandidate): number {
@@ -191,4 +224,92 @@ export function selectTopRoutePicks(
     bestQuickSingleRoute: pickTopCandidate(normalized, scoreQuickRoute),
     bestSafeFillerRoute: pickTopCandidate(normalized, scoreSafeFillerRoute),
   };
+}
+
+function queueScoreBase(candidate: TopRoutePickCandidate): number {
+  return (
+    safeNumber(candidate.recommendationScore) * 8 +
+    safeNumber(candidate.confidenceScore) * 4 +
+    safeNumber(candidate.dailyIskPerJump) / 150_000 +
+    safeNumber(candidate.totalProfit) / 250_000
+  );
+}
+
+function deriveActionForCandidate(
+  candidate: TopRoutePickCandidate,
+): { action: ActionQueueActionType; reasons: string[]; scoreBoost: number } {
+  const reasons: string[] = [];
+  let action: ActionQueueActionType = "buy_now";
+  let scoreBoost = 0;
+
+  if (safeNumber(candidate.trackedShare) >= 0.34 || candidate.hasWatchlistSignal) {
+    action = "tracked";
+    reasons.push("watchlist_signal");
+    scoreBoost += 11;
+  }
+  if (candidate.hasLoopCandidate && !candidate.hasBackhaulCandidate) {
+    action = "loop_outbound";
+    reasons.push("loop_candidate_outbound");
+    scoreBoost += 9;
+  } else if (candidate.hasBackhaulCandidate) {
+    action = "loop_return";
+    reasons.push("loop_candidate_return");
+    scoreBoost += 8;
+  }
+  if (safeNumber(candidate.confidenceScore) >= 88 && safeNumber(candidate.riskCount) <= 1) {
+    action = "buy_now";
+    reasons.push("high_confidence");
+    scoreBoost += 10;
+  } else if (safeNumber(candidate.confidenceScore) <= 65 || safeNumber(candidate.riskCount) >= 4) {
+    action = "filler";
+    reasons.push("risk_or_confidence_guard");
+    scoreBoost -= 10;
+  }
+  if (safeNumber(candidate.endpointScoreDelta) <= -8) {
+    action = "avoid_hub_race";
+    reasons.push("endpoint_hub_penalty");
+    scoreBoost -= 12;
+  }
+  if (candidate.hasDeprioritizedRows) {
+    reasons.push("session_deprioritized");
+    scoreBoost -= 6;
+  }
+  if (safeNumber(candidate.endpointRuleHits) > 0) {
+    reasons.push("endpoint_rules_applied");
+  }
+  if (reasons.length === 0) {
+    reasons.push("baseline_rank");
+  }
+  return { action, reasons, scoreBoost };
+}
+
+export function deriveActionQueue(inputs: QueueDerivationInputs): ActionQueueItem[] {
+  const normalized = inputs.candidates.filter(
+    (candidate) =>
+      candidate.routeKey.trim().length > 0 &&
+      candidate.routeLabel.trim().length > 0,
+  );
+  const queue = normalized.map((candidate) => {
+    const { action, reasons, scoreBoost } = deriveActionForCandidate(candidate);
+    const suppressionPenalty =
+      (inputs.suppression?.hardBanFiltered ?? 0) * 0.05 +
+      (inputs.suppression?.softSessionFiltered ?? 0) * 0.04 +
+      (inputs.suppression?.endpointExcluded ?? 0) * 0.03 +
+      (inputs.suppression?.deprioritizedRows ?? 0) * 0.02;
+    return {
+      routeKey: candidate.routeKey,
+      routeLabel: candidate.routeLabel,
+      action,
+      reasons,
+      candidate,
+      score: queueScoreBase(candidate) + scoreBoost - suppressionPenalty,
+    };
+  });
+  return queue.sort((left, right) => {
+    if (right.score !== left.score) return right.score - left.score;
+    if (right.candidate.confidenceScore !== left.candidate.confidenceScore) {
+      return right.candidate.confidenceScore - left.candidate.confidenceScore;
+    }
+    return left.routeLabel.localeCompare(right.routeLabel);
+  });
 }
