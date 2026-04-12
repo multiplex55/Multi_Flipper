@@ -91,7 +91,7 @@ function groupedRouteButtons() {
     return text.includes("→") && text.includes("items");
   });
 }
-const TOP_PICKS_VISIBLE_STORAGE_KEY = "eve-radius-top-picks-visible:v1";
+const INSIGHTS_VISIBLE_STORAGE_KEY = "eve-radius-insights-visible:v1";
 
 function focusedRouteFixtures() {
   const safeTrimmed = makeRow({
@@ -1528,7 +1528,7 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
       });
     });
 
-    it("renders top picks panel and supports one-click jump-to-group", async () => {
+    it("renders insights panel top picks and supports one-click jump-to-group", async () => {
       const rowA = makeRow({
         TypeID: 8001,
         BuyStation: "TopPick A Buy",
@@ -1556,7 +1556,9 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
 
       renderTable({ scanning: false, results: [rowA, rowB] });
 
+      fireEvent.click(screen.getByRole("button", { name: "Expand" }));
       expect(await screen.findByText("Best Recommended Route Pack")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Queue" }));
       expect(screen.getByText("Action Queue")).toBeInTheDocument();
       const jumpButtons = screen.getAllByRole("button", {
         name: "Jump to group",
@@ -1575,7 +1577,7 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
       });
     });
 
-    it("shows Top Picks by default when candidates exist", async () => {
+    it("shows insights collapsed by default and reveals top picks on expand", async () => {
       const rowA = makeRow({
         TypeID: 8101,
         BuyStation: "Default TopPick Buy A",
@@ -1597,10 +1599,12 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
 
       renderTable({ scanning: false, results: [rowA, rowB] });
 
+      expect(screen.queryByText("Best Recommended Route Pack")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Expand" }));
       expect(await screen.findByText("Best Recommended Route Pack")).toBeInTheDocument();
     });
 
-    it("hides top picks panel when the toolbar toggle is disabled", async () => {
+    it("collapses expanded insights panel when toggled", async () => {
       const rowA = makeRow({
         TypeID: 8201,
         BuyStation: "Toggle TopPick Buy A",
@@ -1617,18 +1621,14 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
       });
 
       renderTable({ scanning: false, results: [rowA, rowB] });
+      fireEvent.click(screen.getByRole("button", { name: "Expand" }));
       expect(await screen.findByText("Best Recommended Route Pack")).toBeInTheDocument();
-
-      const toggle = screen.getByRole("button", { name: "Top Picks" });
-      expect(toggle).toHaveAttribute("aria-pressed", "true");
-      fireEvent.click(toggle);
-
-      expect(toggle).toHaveAttribute("aria-pressed", "false");
+      fireEvent.click(screen.getByRole("button", { name: "Collapse" }));
       expect(screen.queryByText("Best Recommended Route Pack")).not.toBeInTheDocument();
     });
 
-    it("restores persisted top picks visibility on rerender from localStorage", async () => {
-      localStorage.setItem(TOP_PICKS_VISIBLE_STORAGE_KEY, "0");
+    it("restores persisted insights visibility on rerender from localStorage", async () => {
+      localStorage.setItem(INSIGHTS_VISIBLE_STORAGE_KEY, "1");
       const rowA = makeRow({
         TypeID: 8301,
         BuyStation: "Persist TopPick Buy A",
@@ -1646,18 +1646,15 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
 
       const { unmount } = renderTable({ scanning: false, results: [rowA, rowB] });
 
-      const hiddenToggle = screen.getByRole("button", { name: "Top Picks" });
-      expect(hiddenToggle).toHaveAttribute("aria-pressed", "false");
-      expect(screen.queryByText("Best Recommended Route Pack")).not.toBeInTheDocument();
-
-      fireEvent.click(hiddenToggle);
-      expect(localStorage.getItem(TOP_PICKS_VISIBLE_STORAGE_KEY)).toBe("1");
+      expect(await screen.findByText("Best Recommended Route Pack")).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Collapse" }));
+      expect(localStorage.getItem(INSIGHTS_VISIBLE_STORAGE_KEY)).toBe("0");
       unmount();
 
       renderTable({ scanning: false, results: [rowA, rowB] });
-      const shownToggle = await screen.findByRole("button", { name: "Top Picks" });
-      expect(shownToggle).toHaveAttribute("aria-pressed", "true");
-      expect(screen.getByText("Best Recommended Route Pack")).toBeInTheDocument();
+      expect(screen.queryByText("Best Recommended Route Pack")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Expand" }));
+      expect(await screen.findByText("Best Recommended Route Pack")).toBeInTheDocument();
     });
 
     it("keeps top picks panel hidden when there are no route candidates", () => {
@@ -1748,14 +1745,15 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
       ] as never);
       renderTable({ scanning: false, results: [trackedWeak, untrackedStrong] });
 
+      fireEvent.click(screen.getByRole("button", { name: "Expand" }));
       expect(screen.getByText("Best Recommended Route Pack")).toBeInTheDocument();
-      expect(screen.getByText("Untracked Strong Buy → Untracked Strong Sell")).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: "Jump to group" }).length).toBeGreaterThan(0);
 
       fireEvent.click(screen.getByLabelText("Tracked first"));
       const itemNames = screen.getAllByText(/Tracked Weak|Untracked Strong/).map((n) => n.textContent);
       expect(itemNames[0]).toContain("Tracked Weak");
 
-      expect(screen.getByText("Untracked Strong Buy → Untracked Strong Sell")).toBeInTheDocument();
+      expect(screen.getByText("Best Recommended Route Pack")).toBeInTheDocument();
     });
   });
 });

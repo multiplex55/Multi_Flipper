@@ -34,11 +34,11 @@ import {
   selectTopRoutePicks,
   deriveActionQueue,
   slippageCostIsk,
-  type ActionQueueActionType,
   type ActionQueueItem,
   type TopRoutePickCandidate,
   turnoverDays,
 } from "@/lib/radiusMetrics";
+import type { LoopOpportunity } from "@/lib/loopPlanner";
 import {
   breakevenBufferForFlip,
   executionQualityForFlip,
@@ -100,6 +100,7 @@ import {
   type EndpointPreferenceEvaluation,
   type EndpointPreferenceProfile,
 } from "@/lib/endpointPreferences";
+import { RadiusInsightsPanel } from "./RadiusInsightsPanel";
 
 const PAGE_SIZE = 100;
 const GROUP_PAGE_SIZE = 50; // rows shown per group before "Show all" button
@@ -110,7 +111,6 @@ const CACHE_TTL_FALLBACK_MS = 20 * 60 * 1000;
 const COLUMN_PREFS_STORAGE_PREFIX = "eve-scan-columns:v1:";
 const ITEM_GROUPING_STORAGE_KEY = "eve-radius-group-by-item:v1";
 const ROUTE_GROUPING_STORAGE_KEY = "eve-radius-route-view-mode:v1";
-const TOP_PICKS_VISIBLE_STORAGE_KEY = "eve-radius-top-picks-visible:v1";
 const ENDPOINT_PREFS_STORAGE_KEY = "eve-radius-endpoint-preferences:v1";
 
 type SyntheticSortKey =
@@ -202,25 +202,6 @@ function trackedRecommendationBonus(params: {
   return Math.min(9, rawBonus * baselineGate);
 }
 
-function actionLabel(action: ActionQueueActionType): string {
-  switch (action) {
-    case "buy_now":
-      return "Buy now";
-    case "filler":
-      return "Filler";
-    case "tracked":
-      return "Tracked";
-    case "loop_outbound":
-      return "Loop outbound";
-    case "loop_return":
-      return "Loop return";
-    case "avoid_hub_race":
-      return "Avoid hub race";
-    default:
-      return action;
-  }
-}
-
 function getBuyLocationID(row: FlipResult): number {
   return Math.trunc(row.BuyLocationID ?? 0);
 }
@@ -257,6 +238,7 @@ interface Props {
   allowWormhole?: boolean;
   onOpenPriceValidation?: (manifestText: string) => void;
   strategyScore?: StrategyScoreConfig;
+  loopOpportunities?: LoopOpportunity[];
   sessionStationFilters?: SessionStationFilters;
   onUpdateSessionStationFilters?: (
     updater: (prev: SessionStationFilters) => SessionStationFilters,
@@ -1461,6 +1443,7 @@ export function ScanResultsTable({
   allowWormhole,
   onOpenPriceValidation,
   strategyScore,
+  loopOpportunities,
   sessionStationFilters,
   onUpdateSessionStationFilters,
 }: Props) {
@@ -1520,15 +1503,6 @@ export function ScanResultsTable({
         : "rows";
     } catch {
       return "rows";
-    }
-  });
-  const [showTopPicks, setShowTopPicks] = useState<boolean>(() => {
-    try {
-      const stored = localStorage.getItem(TOP_PICKS_VISIBLE_STORAGE_KEY);
-      if (stored == null) return true;
-      return stored === "1";
-    } catch {
-      return true;
     }
   });
   const [trackedVisibilityMode, setTrackedVisibilityMode] =
@@ -1958,14 +1932,6 @@ export function ScanResultsTable({
       setSelectedBadgeFilters(new Set());
     }
   }, [isRouteGrouped, selectedBadgeFilters]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(TOP_PICKS_VISIBLE_STORAGE_KEY, showTopPicks ? "1" : "0");
-    } catch {
-      // ignore storage quota errors
-    }
-  }, [showTopPicks]);
 
   const majorHubSystems = useMemo(
     () =>
@@ -4060,19 +4026,6 @@ export function ScanResultsTable({
                     <span>Group by item</span>
                   </label>
                 )}
-                <button
-                  type="button"
-                  aria-pressed={showTopPicks}
-                  onClick={() => setShowTopPicks((prev) => !prev)}
-                  title={t("topPicksToggleTooltip")}
-                  className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
-                    showTopPicks
-                      ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10 hover:bg-eve-accent/20"
-                      : "border-eve-border/60 text-eve-dim bg-eve-dark/40 hover:border-eve-accent/40 hover:text-eve-accent/70"
-                  }`}
-                >
-                  {t("topPicksToggleLabel")}
-                </button>
                 <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
                   {(
                     [
@@ -4797,96 +4750,22 @@ export function ScanResultsTable({
         </div>
       )}
 
-      {!isRegionGrouped && showTopPicks && topRoutePickCandidates.length > 0 && (
-        <div className="shrink-0 px-2 pb-2">
-          <div className="border border-eve-border rounded-sm bg-eve-dark/40 p-2">
-            <div className="text-[11px] uppercase tracking-wider text-eve-dim mb-2">
-              {t("topPicksPanelTitle")}
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
-              {([
-                ["bestRecommendedRoutePack", topRoutePicks.bestRecommendedRoutePack],
-                ["bestQuickSingleRoute", topRoutePicks.bestQuickSingleRoute],
-                ["bestSafeFillerRoute", topRoutePicks.bestSafeFillerRoute],
-              ] as const).map(([titleKey, pick]) => (
-                <div
-                  key={titleKey}
-                  className="rounded-sm border border-eve-border/60 bg-eve-panel/50 p-2 text-xs"
-                >
-                  <div className="text-eve-dim">{t(titleKey)}</div>
-                  {pick ? (
-                    <>
-                      <div className="mt-1 text-eve-text font-medium">{pick.routeLabel}</div>
-                      <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11px]">
-                        <span className="text-eve-dim">{t("topPickTotalProfit")}:</span>
-                        <span className="text-green-300 text-right">{formatISK(pick.totalProfit)}</span>
-                        <span className="text-eve-dim">{t("topPickDailyIskPerJump")}:</span>
-                        <span className="text-eve-accent text-right">{formatISK(pick.dailyIskPerJump)}</span>
-                        <span className="text-eve-dim">{t("topPickConfidence")}:</span>
-                        <span className="text-right">{pick.confidenceScore.toFixed(0)}</span>
-                        <span className="text-eve-dim">{t("topPickCargoUse")}:</span>
-                        <span className="text-right">{pick.cargoUsePercent.toFixed(1)}%</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => jumpToRouteGroup(pick.routeKey)}
-                        className="mt-2 px-2 py-0.5 rounded-sm border border-eve-accent/60 text-eve-accent hover:bg-eve-accent/10 transition-colors text-[11px]"
-                      >
-                        {t("topPickJumpToGroup")}
-                      </button>
-                    </>
-                  ) : (
-                    <div className="mt-1 text-[11px] text-eve-dim">—</div>
-                  )}
-                </div>
-              ))}
-            </div>
-            <div className="mt-3 border-t border-eve-border/50 pt-2">
-              <div className="text-[11px] uppercase tracking-wider text-eve-dim mb-2">
-                Action Queue
-              </div>
-              <div className="space-y-1.5">
-                {actionQueue.length === 0 ? (
-                  <div className="text-[11px] text-eve-dim">No queue actions available.</div>
-                ) : (
-                  actionQueue.map((item) => (
-                    <div
-                      key={`queue-${item.routeKey}`}
-                      className="rounded-sm border border-eve-border/60 bg-eve-panel/30 px-2 py-1.5 text-xs"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="font-medium text-eve-text truncate">{item.routeLabel}</div>
-                        <span className="rounded-sm border border-eve-accent/40 bg-eve-accent/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-eve-accent">
-                          {actionLabel(item.action)}
-                        </span>
-                      </div>
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {item.reasons.map((reason) => (
-                          <span
-                            key={`${item.routeKey}-reason-${reason}`}
-                            title={reason}
-                            className="rounded-sm border border-eve-border/60 bg-eve-dark/50 px-1.5 py-0.5 text-[10px] text-eve-dim"
-                          >
-                            {reason}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-              {(suppressionTelemetry.softSessionFiltered > 0 ||
-                suppressionTelemetry.deprioritizedRows > 0 ||
-                hiddenCounts.total > 0) && (
-                <div className="mt-2 text-[11px] text-eve-dim">
-                  Hidden/deprioritized: {suppressionTelemetry.softSessionFiltered} session-filtered,{" "}
-                  {suppressionTelemetry.deprioritizedRows} deprioritized, {hiddenCounts.total} manually hidden.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+      {!isRegionGrouped && (
+        <RadiusInsightsPanel
+          topRoutePicks={topRoutePicks}
+          actionQueue={actionQueue}
+          loopOpportunities={loopOpportunities ?? []}
+          suppressionSummary={
+            suppressionTelemetry.softSessionFiltered > 0 ||
+            suppressionTelemetry.deprioritizedRows > 0 ||
+            hiddenCounts.total > 0
+              ? `Hidden/deprioritized: ${suppressionTelemetry.softSessionFiltered} session-filtered, ${suppressionTelemetry.deprioritizedRows} deprioritized, ${hiddenCounts.total} manually hidden.`
+              : undefined
+          }
+          jumpToRouteGroup={jumpToRouteGroup}
+        />
       )}
+
 
       {/* Table */}
       <div className="flex-1 min-h-0 flex flex-col border border-eve-border rounded-sm overflow-auto table-scroll-container">
