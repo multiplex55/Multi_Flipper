@@ -79,4 +79,81 @@ describe("endpointPreferences", () => {
     expect(evaluated.scoreDelta).not.toBe(0);
     expect(evaluated.appliedRules).toContain("route_direction_bonus");
   });
+
+  it("applies hub penalty in deprioritize mode without forced exclusion and lowers relative rank", () => {
+    const majorHubs = ["Jita", "Amarr"];
+    const hubBuy = evaluateEndpointPreferences(
+      { ...baseRow, BuySystemName: "Jita", SellSystemName: "Perimeter" },
+      DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
+      majorHubs,
+      EndpointPreferenceApplicationMode.Deprioritize,
+    );
+    const nonHubBuy = evaluateEndpointPreferences(
+      { ...baseRow, BuySystemName: "Perimeter", SellSystemName: "Jita" },
+      DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
+      majorHubs,
+      EndpointPreferenceApplicationMode.Deprioritize,
+    );
+
+    expect(hubBuy.excluded).toBe(false);
+    expect(hubBuy.scoreDelta).toBeLessThan(nonHubBuy.scoreDelta);
+  });
+
+  it("structure sell bonus improves ordering versus non-structure sell endpoints", () => {
+    const majorHubs = ["Jita", "Amarr"];
+    const structureSell = evaluateEndpointPreferences(
+      { ...baseRow, BuySystemName: "Perimeter", SellSystemName: "Amarr", SellStation: "Perimeter Keepstar Freeport" },
+      DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
+      majorHubs,
+      EndpointPreferenceApplicationMode.Deprioritize,
+    );
+    const normalSell = evaluateEndpointPreferences(
+      { ...baseRow, BuySystemName: "Perimeter", SellSystemName: "Amarr", SellStation: "Amarr VIII (Oris) - Emperor Family Academy" },
+      DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
+      majorHubs,
+      EndpointPreferenceApplicationMode.Deprioritize,
+    );
+
+    expect(structureSell.appliedRules).toContain("sell_structure_bonus");
+    expect(structureSell.scoreDelta).toBeGreaterThan(normalSell.scoreDelta);
+  });
+
+  it("hide mode excludes rows that deprioritize mode keeps", () => {
+    const row = { ...baseRow, BuySystemName: "Jita", SellSystemName: "Amarr" };
+    const hideEval = evaluateEndpointPreferences(
+      row,
+      DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
+      ["Jita", "Amarr"],
+      EndpointPreferenceApplicationMode.Hide,
+    );
+    const deprioritizeEval = evaluateEndpointPreferences(
+      row,
+      DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
+      ["Jita", "Amarr"],
+      EndpointPreferenceApplicationMode.Deprioritize,
+    );
+
+    expect(hideEval.excluded).toBe(true);
+    expect(deprioritizeEval.excluded).toBe(false);
+  });
+
+  it("uses user-defined major hub lists over defaults", () => {
+    const row = { ...baseRow, BuySystemName: "Jita", SellSystemName: "Amarr" };
+    const defaultLikeEval = evaluateEndpointPreferences(
+      row,
+      DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
+      ["Jita", "Amarr", "Dodixie", "Rens", "Hek"],
+      EndpointPreferenceApplicationMode.Deprioritize,
+    );
+    const customEval = evaluateEndpointPreferences(
+      row,
+      DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
+      ["Perimeter"],
+      EndpointPreferenceApplicationMode.Deprioritize,
+    );
+
+    expect(defaultLikeEval.appliedRules).toContain("buy_hub_penalty");
+    expect(customEval.appliedRules).not.toContain("buy_hub_penalty");
+    expect(customEval.appliedRules).toContain("non_hub_buy_bonus");
+  });
 });

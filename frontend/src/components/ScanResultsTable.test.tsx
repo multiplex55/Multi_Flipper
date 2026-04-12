@@ -8,6 +8,7 @@ import { executionQualityForFlip, requestedUnitsForFlip } from "@/lib/executionQ
 import {
   addPinnedOpportunity,
   getGankCheckBatch,
+  getWatchlist,
   removePinnedOpportunity,
 } from "@/lib/api";
 
@@ -1663,6 +1664,98 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
       renderTable({ scanning: false, results: [] });
 
       expect(screen.queryByText("Best Recommended Route Pack")).not.toBeInTheDocument();
+    });
+
+    it("marks tracked rows with tracked watchlist indicator", async () => {
+      vi.mocked(getWatchlist).mockResolvedValueOnce([
+        {
+          type_id: 9010,
+          threshold_percent: 0,
+          enabled: true,
+          added_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
+        },
+      ] as never);
+
+      renderTable({
+        scanning: false,
+        results: [makeRow({ TypeID: 9010, TypeName: "Tracked Item" })],
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTitle("Tracked watchlist item")).toBeInTheDocument();
+      });
+    });
+
+    it("tracked-only filter hides non-tracked rows", async () => {
+      vi.mocked(getWatchlist).mockResolvedValueOnce([
+        {
+          type_id: 9011,
+          threshold_percent: 0,
+          enabled: true,
+          added_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
+        },
+      ] as never);
+      renderTable({
+        scanning: false,
+        results: [
+          makeRow({ TypeID: 9011, TypeName: "Tracked Item" }),
+          makeRow({ TypeID: 9012, TypeName: "Untracked Item" }),
+        ],
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText("Tracked Item")).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "Tracked only" }));
+
+      expect(screen.getByText("Tracked Item")).toBeInTheDocument();
+      expect(screen.queryByText("Untracked Item")).not.toBeInTheDocument();
+    });
+
+    it("tracked-first promotes tracked rows but bounded scoring keeps strong untracked top pick", () => {
+      const trackedWeak = makeRow({
+        TypeID: 9021,
+        TypeName: "Tracked Weak",
+        BuyStation: "Tracked Weak Buy",
+        SellStation: "Tracked Weak Sell",
+        BuySystemID: 590001,
+        SellSystemID: 590002,
+        DailyProfit: 80,
+        RealProfit: 120,
+      });
+      const untrackedStrong = makeRow({
+        TypeID: 9022,
+        TypeName: "Untracked Strong",
+        BuyStation: "Untracked Strong Buy",
+        SellStation: "Untracked Strong Sell",
+        BuySystemID: 590011,
+        SellSystemID: 590012,
+        DailyProfit: 1200,
+        RealProfit: 1800,
+      });
+
+      vi.mocked(getWatchlist).mockResolvedValue([
+        {
+          type_id: 9021,
+          threshold_percent: 0,
+          enabled: true,
+          added_at: "2026-01-01T00:00:00Z",
+          updated_at: "2026-01-01T00:00:00Z",
+        },
+      ] as never);
+      renderTable({ scanning: false, results: [trackedWeak, untrackedStrong] });
+
+      expect(screen.getByText("Best Recommended Route Pack")).toBeInTheDocument();
+      expect(screen.getByText("Untracked Strong Buy → Untracked Strong Sell")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByLabelText("Tracked first"));
+      const itemNames = screen.getAllByText(/Tracked Weak|Untracked Strong/).map((n) => n.textContent);
+      expect(itemNames[0]).toContain("Tracked Weak");
+
+      expect(screen.getByText("Untracked Strong Buy → Untracked Strong Sell")).toBeInTheDocument();
     });
   });
 });
