@@ -5,6 +5,7 @@ type WatchlistItem struct {
 	TypeID         int32   `json:"type_id"`
 	TypeName       string  `json:"type_name"`
 	AddedAt        string  `json:"added_at"`
+	PriorityTier   string  `json:"priority_tier,omitempty"` // high | normal | speculative
 	AlertMinMargin float64 `json:"alert_min_margin"` // 0 = no alert
 	AlertEnabled   bool    `json:"alert_enabled"`
 	AlertMetric    string  `json:"alert_metric"`    // margin_percent | total_profit | profit_per_unit | daily_volume

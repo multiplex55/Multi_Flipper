@@ -126,6 +126,7 @@ export type TopRoutePickCandidate = {
   recommendationScore: number;
   stopCount: number;
   riskCount: number;
+  trackedShare?: number;
 };
 
 export type TopRoutePicks = {
@@ -184,7 +185,8 @@ export function selectTopRoutePicks(
         safeNumber(candidate.recommendationScore) * 20 +
         safeNumber(candidate.confidenceScore) * 8 +
         safeNumber(candidate.dailyIskPerJump) +
-        safeNumber(candidate.totalProfit) / 200_000,
+        safeNumber(candidate.totalProfit) / 200_000 +
+        Math.min(90, Math.max(0, safeNumber(candidate.trackedShare) * 90)),
     ),
     bestQuickSingleRoute: pickTopCandidate(normalized, scoreQuickRoute),
     bestSafeFillerRoute: pickTopCandidate(normalized, scoreSafeFillerRoute),

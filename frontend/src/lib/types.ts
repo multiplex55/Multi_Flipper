@@ -678,6 +678,7 @@ export interface WatchlistItem {
   type_id: number;
   type_name: string;
   added_at: string;
+  priority_tier?: "high" | "normal" | "speculative";
   alert_min_margin: number;
   alert_enabled?: boolean;
   alert_metric?:
