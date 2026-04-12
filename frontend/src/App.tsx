@@ -24,7 +24,6 @@ import { Modal } from "./components/Modal";
 import { CharacterPopup } from "./components/CharacterPopup";
 import { TopActionButtons } from "./components/TopActionButtons";
 import { RadiusColumnGuideModal } from "./components/RadiusColumnGuideModal";
-import { LoopOpportunitiesPanel } from "./components/LoopOpportunitiesPanel";
 import {
   applyAppUpdate,
   getUpdateCheckStatus,
@@ -2264,7 +2263,6 @@ function App() {
                   )}
                 </div>
               )}
-              {tab === "radius" && <LoopOpportunitiesPanel loops={loopOpportunities} />}
               <ScanResultsTable
                 results={radiusResults}
                 scanning={scanning && tab === "radius"}
@@ -2293,6 +2291,7 @@ function App() {
                   setShowVerifierModal(true);
                 }}
                 strategyScore={strategyScore}
+                loopOpportunities={loopOpportunities}
                 sessionStationFilters={sessionStationFilters}
                 onUpdateSessionStationFilters={updateSessionStationFilters}
               />
