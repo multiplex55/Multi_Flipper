@@ -92,4 +92,34 @@ describe("banlistFilters", () => {
     expect(filterFlipResults([row], [], [], session)).toHaveLength(1);
     expect(isFlipResultDeprioritized(row, session)).toBe(true);
   });
+
+  it("restores rows after session soft filters are cleared", () => {
+    const rows: FlipResult[] = [
+      { TypeID: 10, TypeName: "Buy-hit", Volume: 1, BuyPrice: 1, BuyStation: "Buy Hit", BuySystemName: "S", BuySystemID: 1, BuyLocationID: 5001, SellPrice: 2, SellStation: "Sell Keep", SellSystemName: "S2", SellSystemID: 2, SellLocationID: 9001, ProfitPerUnit: 1, MarginPercent: 1, UnitsToBuy: 1, BuyOrderRemain: 1, SellOrderRemain: 1, TotalProfit: 1, ProfitPerJump: 1, BuyJumps: 1, SellJumps: 1, TotalJumps: 1, DailyVolume: 1, Velocity: 1, PriceTrend: 1, BuyCompetitors: 1, SellCompetitors: 1, DailyProfit: 1 },
+      { TypeID: 11, TypeName: "Sell-hit", Volume: 1, BuyPrice: 1, BuyStation: "Buy Keep", BuySystemName: "S", BuySystemID: 1, BuyLocationID: 5002, SellPrice: 2, SellStation: "Sell Hit", SellSystemName: "S2", SellSystemID: 2, SellLocationID: 9002, ProfitPerUnit: 1, MarginPercent: 1, UnitsToBuy: 1, BuyOrderRemain: 1, SellOrderRemain: 1, TotalProfit: 1, ProfitPerJump: 1, BuyJumps: 1, SellJumps: 1, TotalJumps: 1, DailyVolume: 1, Velocity: 1, PriceTrend: 1, BuyCompetitors: 1, SellCompetitors: 1, DailyProfit: 1 },
+    ];
+    const session = createSessionStationFilters();
+    session.ignoredBuyStationIds.add(5001);
+    session.ignoredSellStationIds.add(9002);
+
+    expect(filterFlipResults(rows, [], [], session)).toEqual([]);
+
+    session.ignoredBuyStationIds.clear();
+    session.ignoredSellStationIds.clear();
+    expect(filterFlipResults(rows, [], [], session).map((row) => row.TypeID)).toEqual([10, 11]);
+  });
+
+  it("applies permanent bans before soft session filters", () => {
+    const rows: FlipResult[] = [
+      { TypeID: 21, TypeName: "Hard-banned type", Volume: 1, BuyPrice: 1, BuyStation: "A", BuySystemName: "S", BuySystemID: 1, BuyLocationID: 7001, SellPrice: 2, SellStation: "B", SellSystemName: "S2", SellSystemID: 2, SellLocationID: 7101, ProfitPerUnit: 1, MarginPercent: 1, UnitsToBuy: 1, BuyOrderRemain: 1, SellOrderRemain: 1, TotalProfit: 1, ProfitPerJump: 1, BuyJumps: 1, SellJumps: 1, TotalJumps: 1, DailyVolume: 1, Velocity: 1, PriceTrend: 1, BuyCompetitors: 1, SellCompetitors: 1, DailyProfit: 1 },
+      { TypeID: 22, TypeName: "Soft-filtered buy", Volume: 1, BuyPrice: 1, BuyStation: "A", BuySystemName: "S", BuySystemID: 1, BuyLocationID: 7002, SellPrice: 2, SellStation: "B", SellSystemName: "S2", SellSystemID: 2, SellLocationID: 7102, ProfitPerUnit: 1, MarginPercent: 1, UnitsToBuy: 1, BuyOrderRemain: 1, SellOrderRemain: 1, TotalProfit: 1, ProfitPerJump: 1, BuyJumps: 1, SellJumps: 1, TotalJumps: 1, DailyVolume: 1, Velocity: 1, PriceTrend: 1, BuyCompetitors: 1, SellCompetitors: 1, DailyProfit: 1 },
+      { TypeID: 23, TypeName: "Survivor", Volume: 1, BuyPrice: 1, BuyStation: "A", BuySystemName: "S", BuySystemID: 1, BuyLocationID: 7003, SellPrice: 2, SellStation: "B", SellSystemName: "S2", SellSystemID: 2, SellLocationID: 7103, ProfitPerUnit: 1, MarginPercent: 1, UnitsToBuy: 1, BuyOrderRemain: 1, SellOrderRemain: 1, TotalProfit: 1, ProfitPerJump: 1, BuyJumps: 1, SellJumps: 1, TotalJumps: 1, DailyVolume: 1, Velocity: 1, PriceTrend: 1, BuyCompetitors: 1, SellCompetitors: 1, DailyProfit: 1 },
+    ];
+    const session = createSessionStationFilters();
+    session.ignoredBuyStationIds.add(7002);
+    session.ignoredSellStationIds.add(7103);
+
+    const filtered = filterFlipResults(rows, [21], [], session);
+    expect(filtered).toEqual([]);
+  });
 });

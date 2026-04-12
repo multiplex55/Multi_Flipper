@@ -261,4 +261,130 @@ describe("radiusMetrics formulas", () => {
     expect(queue[1].reasons).toContain("endpoint_hub_penalty");
     expect(queue[1].reasons).toContain("endpoint_rules_applied");
   });
+
+  it("assigns queue item action types from combined route signals", () => {
+    const queue = deriveActionQueue({
+      candidates: [
+        {
+          routeKey: "tracked-candidate",
+          routeLabel: "Tracked Candidate",
+          totalProfit: 500_000,
+          dailyIskPerJump: 300_000,
+          confidenceScore: 75,
+          cargoUsePercent: 60,
+          recommendationScore: 70,
+          stopCount: 3,
+          riskCount: 2,
+          trackedShare: 0.6,
+        },
+        {
+          routeKey: "return-candidate",
+          routeLabel: "Return Candidate",
+          totalProfit: 650_000,
+          dailyIskPerJump: 330_000,
+          confidenceScore: 74,
+          cargoUsePercent: 55,
+          recommendationScore: 72,
+          stopCount: 3,
+          riskCount: 2,
+          hasBackhaulCandidate: true,
+        },
+        {
+          routeKey: "safe-buy-now",
+          routeLabel: "Safe Buy",
+          totalProfit: 800_000,
+          dailyIskPerJump: 380_000,
+          confidenceScore: 92,
+          cargoUsePercent: 70,
+          recommendationScore: 88,
+          stopCount: 2,
+          riskCount: 1,
+        },
+        {
+          routeKey: "risky-filler",
+          routeLabel: "Risky Filler",
+          totalProfit: 400_000,
+          dailyIskPerJump: 150_000,
+          confidenceScore: 61,
+          cargoUsePercent: 85,
+          recommendationScore: 54,
+          stopCount: 4,
+          riskCount: 5,
+        },
+      ],
+    });
+
+    const byKey = new Map(queue.map((item) => [item.routeKey, item.action]));
+    expect(byKey.get("tracked-candidate")).toBe("tracked");
+    expect(byKey.get("return-candidate")).toBe("loop_return");
+    expect(byKey.get("safe-buy-now")).toBe("buy_now");
+    expect(byKey.get("risky-filler")).toBe("filler");
+  });
+
+  it("keeps reason metadata stable and includes endpoint/session markers", () => {
+    const queue = deriveActionQueue({
+      candidates: [
+        {
+          routeKey: "meta-check",
+          routeLabel: "Metadata Check",
+          totalProfit: 650_000,
+          dailyIskPerJump: 310_000,
+          confidenceScore: 72,
+          cargoUsePercent: 63,
+          recommendationScore: 75,
+          stopCount: 2,
+          riskCount: 2,
+          endpointScoreDelta: -9,
+          endpointRuleHits: 3,
+          hasDeprioritizedRows: true,
+        },
+      ],
+    });
+
+    expect(queue).toHaveLength(1);
+    expect(queue[0].reasons).toEqual(
+      expect.arrayContaining([
+        "endpoint_hub_penalty",
+        "endpoint_rules_applied",
+        "session_deprioritized",
+      ]),
+    );
+  });
+
+  it("uses the same candidate dataset for Top Picks and Action Queue without contradictions", () => {
+    const candidates = [
+      {
+        routeKey: "primary",
+        routeLabel: "Primary Route",
+        totalProfit: 1_500_000,
+        dailyIskPerJump: 650_000,
+        confidenceScore: 90,
+        cargoUsePercent: 72,
+        recommendationScore: 95,
+        stopCount: 2,
+        riskCount: 1,
+        trackedShare: 0.2,
+      },
+      {
+        routeKey: "secondary",
+        routeLabel: "Secondary Route",
+        totalProfit: 900_000,
+        dailyIskPerJump: 390_000,
+        confidenceScore: 78,
+        cargoUsePercent: 66,
+        recommendationScore: 80,
+        stopCount: 3,
+        riskCount: 2,
+      },
+    ];
+
+    const picks = selectTopRoutePicks(candidates);
+    const queue = deriveActionQueue({ candidates });
+
+    expect(picks.bestRecommendedRoutePack?.routeKey).toBe("primary");
+    expect(queue[0].routeKey).toBe("primary");
+    expect(queue.map((item) => item.routeKey)).toContain(
+      picks.bestRecommendedRoutePack?.routeKey,
+    );
+  });
 });
