@@ -39,6 +39,7 @@ import {
   getBanlistItems,
   getBannedStations,
   rebootStationCache,
+  getCharacterLocation,
 } from "./lib/api";
 import { useI18n } from "./lib/i18n";
 import { formatISK } from "./lib/format";
@@ -1254,14 +1255,49 @@ function App() {
     alertTelegramChatID,
     alertDiscordWebhook,
   ]);
+const refreshCurrentLocationIntoScanParams = useCallback(
+  async (): Promise<ScanParams> => {
+    if (!authStatus.logged_in || !activeCharacterId) {
+      return params;
+    }
 
-  const handleScan = useCallback(async () => {
+    try {
+      const loc = await getCharacterLocation(activeCharacterId);
+      const nextSystemName = loc?.solar_system_name?.trim();
+      if (!nextSystemName) {
+        return params;
+      }
+
+      const nextParams: ScanParams = {
+        ...params,
+        system_name: nextSystemName,
+      };
+
+      // Update visible UI state
+      setParams((prev) => {
+        if (prev.system_name === nextSystemName) return prev;
+        return {
+          ...prev,
+          system_name: nextSystemName,
+        };
+      });
+
+      return nextParams;
+    } catch (err) {
+      console.error("Failed to refresh current location before scan:", err);
+      return params;
+    }
+  },
+  [authStatus.logged_in, activeCharacterId, params],
+);
+const handleScan = useCallback(async (overrideParams?: ScanParams) => {
     if (scanning) {
       abortRef.current?.abort();
       return;
     }
 
     const currentTab = tab;
+const scanParams = overrideParams ?? params;
     const controller = new AbortController();
     abortRef.current = controller;
     setScanning(true);
@@ -1374,23 +1410,23 @@ function App() {
 
       if (currentTab === "contracts") {
         let meta: StationCacheMeta | undefined;
-        const results = await scanContracts(
-          params,
-          setProgress,
-          controller.signal,
-          (m) => {
-            meta = m;
-          },
-        );
+const results = await scanContracts(
+  scanParams,
+  setProgress,
+  controller.signal,
+  (m) => {
+    meta = m;
+  },
+);
         setContractResults(filterContractResults(results, bannedStationIDs));
         setContractCacheMeta(meta ?? null);
         setContractScanCompleted(true);
       } else if (currentTab === "radius") {
         let meta: StationCacheMeta | undefined;
-        const radiusParams =
-          (params.restrict_to_target_market ?? true)
-            ? params
-            : { ...params, target_market_system: "" };
+const radiusParams =
+  (scanParams.restrict_to_target_market ?? true)
+    ? scanParams
+    : { ...scanParams, target_market_system: "" };
         const results = await scan(
           radiusParams,
           setProgress,
@@ -1406,14 +1442,14 @@ function App() {
         await triggerDesktopAlerts(results);
       } else if (currentTab === "region") {
         let meta: StationCacheMeta | undefined;
-        const rows = await scanRegionalDayTrader(
-          params,
-          setProgress,
-          controller.signal,
-          (m) => {
-            meta = m;
-          },
-        );
+const rows = await scanRegionalDayTrader(
+  scanParams,
+  setProgress,
+  controller.signal,
+  (m) => {
+    meta = m;
+  },
+);
         const normalizedRows = filterFlipResults(
           normalizeRegionalResults(rows as unknown[]),
           bannedTypeIDs,
@@ -1455,14 +1491,14 @@ function App() {
       } else {
         // Keep old behavior for any legacy tab alias.
         let meta: StationCacheMeta | undefined;
-        const results = await scanMultiRegion(
-          params,
-          setProgress,
-          controller.signal,
-          (m) => {
-            meta = m;
-          },
-        );
+const results = await scanMultiRegion(
+  scanParams,
+  setProgress,
+  controller.signal,
+  (m) => {
+    meta = m;
+  },
+);
         setRegionResults(
           filterFlipResults(results, bannedTypeIDs, bannedStationIDs),
         );
@@ -1487,16 +1523,22 @@ function App() {
     bannedTypeIDs,
   ]);
 
-  const handleScanAndRefresh = useCallback(async () => {
-    if (scanning || scanAndRefreshing) return;
-    setScanAndRefreshing(true);
-    try {
-      await rebootStationCache();
-      await handleScan();
-    } finally {
-      setScanAndRefreshing(false);
-    }
-  }, [handleScan, scanning, scanAndRefreshing]);
+const handleScanAndRefresh = useCallback(async () => {
+  if (scanning || scanAndRefreshing) return;
+  setScanAndRefreshing(true);
+  try {
+    await rebootStationCache();
+    const nextParams = await refreshCurrentLocationIntoScanParams();
+    await handleScan(nextParams);
+  } finally {
+    setScanAndRefreshing(false);
+  }
+}, [
+  handleScan,
+  refreshCurrentLocationIntoScanParams,
+  scanning,
+  scanAndRefreshing,
+]);
 
   // Auto-refresh: when enabled and radius cache expires, re-trigger scan automatically
   useEffect(() => {
@@ -2201,7 +2243,7 @@ function App() {
                   <div className="inline-flex items-center gap-1.5">
                     <button
                       data-scan-button
-                      onClick={handleScan}
+                      onClick={() => void handleScan()}
                       disabled={
                         (tab === "region"
                           ? !params.target_market_system?.trim()
