@@ -2048,6 +2048,20 @@ export function ScanResultsTable({
     }
   }, [endpointPreferenceMode, endpointPreferenceProfile, majorHubSystems]);
 
+  const endpointPrefsSummary = useMemo(() => {
+    const active: string[] = [];
+    if (endpointPreferenceProfile.requireNonHubBuy) active.push("buy: non-hub");
+    if (endpointPreferenceProfile.requireHubSell) active.push("sell: hub");
+    if (endpointPreferenceProfile.requireSellStructure) active.push("sell: structure");
+    if (endpointPreferenceProfile.requireSellNpc) active.push("sell: NPC");
+    if (active.length === 0) return "Hard rules: none (soft ranking only)";
+    const modeLabel =
+      endpointPreferenceMode === EndpointPreferenceApplicationMode.Hide
+        ? "Hide non-matching"
+        : "Rank-only";
+    return `Hard rules (${modeLabel}): ${active.join(", ")}`;
+  }, [endpointPreferenceMode, endpointPreferenceProfile]);
+
   useEffect(() => {
     if (columnDefs.length === 0) return;
     if (!columnDefs.some((col) => col.key === sortKey)) {
@@ -2297,13 +2311,19 @@ export function ScanResultsTable({
 
     const endpointPreferenceMetaByRowId = new Map<
       number,
-      { appliedRules: string[]; scoreDelta: number; excluded: boolean }
+      {
+        appliedRules: string[];
+        scoreDelta: number;
+        excluded: boolean;
+        excludedReasons: string[];
+      }
     >();
     for (const ir of indexed) {
       endpointPreferenceMetaByRowId.set(ir.id, {
         appliedRules: ir.endpointPreferences?.appliedRules ?? [],
         scoreDelta: ir.endpointPreferences?.scoreDelta ?? 0,
         excluded: !!ir.endpointPreferences?.excluded,
+        excludedReasons: ir.endpointPreferences?.excludedReasons ?? [],
       });
     }
 
@@ -4399,8 +4419,8 @@ export function ScanResultsTable({
                         }
                         className="mb-2 w-full bg-eve-input border border-eve-border rounded-sm px-1 py-0.5 text-[11px]"
                       >
-                        <option value={EndpointPreferenceApplicationMode.Deprioritize}>Deprioritize</option>
-                        <option value={EndpointPreferenceApplicationMode.Hide}>Hide</option>
+                        <option value={EndpointPreferenceApplicationMode.Deprioritize}>Rank-only</option>
+                        <option value={EndpointPreferenceApplicationMode.Hide}>Hide non-matching</option>
                       </select>
                       <div className="mb-1 text-eve-dim">Preset</div>
                       <select
@@ -4425,6 +4445,52 @@ export function ScanResultsTable({
                         <option value="structure_exit">Structure Exit</option>
                         <option value="low_attention">Low Attention</option>
                       </select>
+                      <div className="mb-1 text-eve-dim">Buy endpoint type</div>
+                      <select
+                        value={endpointPreferenceProfile.requireNonHubBuy ? "non_hub" : "any"}
+                        onChange={(e) => {
+                          setEndpointPreferenceProfile((prev) => ({
+                            ...prev,
+                            requireNonHubBuy: e.target.value === "non_hub",
+                          }));
+                        }}
+                        className="mb-2 w-full bg-eve-input border border-eve-border rounded-sm px-1 py-0.5 text-[11px]"
+                        title="Buy endpoint type selector"
+                      >
+                        <option value="any">Any buy endpoint</option>
+                        <option value="non_hub">Require non-hub buy</option>
+                      </select>
+                      <div className="mb-1 text-eve-dim">Sell endpoint type</div>
+                      <select
+                        value={
+                          endpointPreferenceProfile.requireSellStructure
+                            ? "structure"
+                            : endpointPreferenceProfile.requireSellNpc
+                              ? "npc"
+                              : endpointPreferenceProfile.requireHubSell
+                                ? "hub"
+                                : "any"
+                        }
+                        onChange={(e) => {
+                          const choice = e.target.value;
+                          setEndpointPreferenceProfile((prev) => ({
+                            ...prev,
+                            requireSellStructure: choice === "structure",
+                            requireSellNpc: choice === "npc",
+                            requireHubSell: choice === "hub",
+                          }));
+                        }}
+                        className="mb-2 w-full bg-eve-input border border-eve-border rounded-sm px-1 py-0.5 text-[11px]"
+                        title="Sell endpoint type selector"
+                      >
+                        <option value="any">Any sell endpoint</option>
+                        <option value="structure">Require structure sell</option>
+                        <option value="npc">Require NPC sell</option>
+                        <option value="hub">Require hub-system sell</option>
+                      </select>
+                      <div className="mb-2 rounded-sm border border-eve-border/60 bg-eve-dark/40 px-2 py-1 text-[10px] text-eve-dim">
+                        {endpointPrefsSummary}
+                      </div>
                       <div className="mb-1 text-eve-dim">Major hub input</div>
                       <input value={majorHubInput} onChange={(e) => setMajorHubInput(e.target.value)} className="w-full bg-eve-input border border-eve-border rounded-sm px-1 py-0.5 text-[11px]" placeholder="Major hubs (comma-separated)" title="Editable major hub systems" />
                     </div>
@@ -6125,6 +6191,7 @@ interface DataRowProps {
     appliedRules: string[];
     scoreDelta: number;
     excluded: boolean;
+    excludedReasons: string[];
   };
 }
 
@@ -6237,6 +6304,9 @@ const DataRow = memo(
         data-row-id={ir.id}
         data-applied-rules={endpointPreferenceMeta?.appliedRules.join(",") ?? ""}
         data-endpoint-score-delta={endpointPreferenceMeta?.scoreDelta ?? 0}
+        data-endpoint-excluded-reasons={
+          endpointPreferenceMeta?.excludedReasons.join(",") ?? ""
+        }
         onContextMenu={(e) => onContextMenu(e, ir.id, ir.row)}
         onClick={(e) => {
           if (!isRegionGrouped) return;

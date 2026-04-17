@@ -37,10 +37,12 @@ function makeRow(overrides: Partial<FlipResult> = {}): FlipResult {
     BuyStation: "Jita IV - Moon 4",
     BuySystemName: "Jita",
     BuySystemID: 30000142,
+    BuyLocationID: 60003760,
     SellPrice: 125,
     SellStation: "Amarr VIII (Oris) - Emperor Family Academy",
     SellSystemName: "Amarr",
     SellSystemID: 30002187,
+    SellLocationID: 60008494,
     ProfitPerUnit: 25,
     MarginPercent: 25,
     UnitsToBuy: 10,
@@ -95,8 +97,10 @@ describe("ScanResultsTable toolbar popovers", () => {
       name: /endpoint preferences/i,
     });
     expect(endpointPanel).toBeInTheDocument();
-    expect(within(endpointPanel).getByDisplayValue("Deprioritize")).toBeInTheDocument();
+    expect(within(endpointPanel).getByDisplayValue("Rank-only")).toBeInTheDocument();
     expect(within(endpointPanel).getByTitle("Quick profile preset")).toBeInTheDocument();
+    expect(within(endpointPanel).getByTitle("Buy endpoint type selector")).toBeInTheDocument();
+    expect(within(endpointPanel).getByTitle("Sell endpoint type selector")).toBeInTheDocument();
     expect(within(endpointPanel).getByPlaceholderText(/major hubs/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /tracked ▸/i }));
@@ -132,7 +136,7 @@ describe("ScanResultsTable toolbar popovers", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("mutates scan table state from popover controls", () => {
+  it("preset UI updates both soft and hard settings", () => {
     renderTable([makeRow()]);
 
     expect(screen.getByText("Item 101")).toBeInTheDocument();
@@ -145,9 +149,9 @@ describe("ScanResultsTable toolbar popovers", () => {
     const endpointPanel = screen.getByRole("dialog", {
       name: /endpoint preferences/i,
     });
-    const modeSelect = within(endpointPanel).getByDisplayValue("Deprioritize");
+    const modeSelect = within(endpointPanel).getByDisplayValue("Rank-only");
     fireEvent.change(modeSelect, { target: { value: "hide" } });
-    expect(within(endpointPanel).getByDisplayValue("Hide")).toBeInTheDocument();
+    expect(within(endpointPanel).getByDisplayValue("Hide non-matching")).toBeInTheDocument();
 
     const presetSelect = within(endpointPanel).getByTitle("Quick profile preset");
     fireEvent.change(presetSelect, { target: { value: "structure_exit" } });
@@ -155,8 +159,44 @@ describe("ScanResultsTable toolbar popovers", () => {
 
     const storedPrefs = JSON.parse(
       localStorage.getItem("eve-radius-endpoint-preferences:v1") ?? "{}",
-    ) as { profile?: { sellStructureBonus?: number } };
+    ) as { profile?: { sellStructureBonus?: number; requireSellStructure?: boolean } };
     expect(storedPrefs.profile?.sellStructureBonus).toBe(16);
+    expect(storedPrefs.profile?.requireSellStructure).toBe(true);
+  });
+
+  it("structure-only setting removes NPC sell results when hide mode is active", () => {
+    renderTable([
+      makeRow({
+        TypeID: 201,
+        TypeName: "NPC Sell Result",
+        SellStation: "Amarr VIII (Oris) - Emperor Family Academy",
+        SellLocationID: 60008494,
+      }),
+      makeRow({
+        TypeID: 202,
+        TypeName: "Structure Sell Result",
+        SellStation: "Perimeter Keepstar Freeport",
+        SellLocationID: 1_000_000_000_005,
+        SellSystemName: "Perimeter",
+      }),
+    ]);
+
+    expect(screen.getByText("NPC Sell Result")).toBeInTheDocument();
+    expect(screen.getByText("Structure Sell Result")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /endpoint prefs ▸/i }));
+    const endpointPanel = screen.getByRole("dialog", {
+      name: /endpoint preferences/i,
+    });
+    fireEvent.change(within(endpointPanel).getByDisplayValue("Rank-only"), {
+      target: { value: "hide" },
+    });
+    fireEvent.change(within(endpointPanel).getByTitle("Sell endpoint type selector"), {
+      target: { value: "structure" },
+    });
+
+    expect(screen.queryByText("NPC Sell Result")).not.toBeInTheDocument();
+    expect(screen.getByText("Structure Sell Result")).toBeInTheDocument();
   });
 
   it("keeps cache actions callable from compact cache entry point", () => {

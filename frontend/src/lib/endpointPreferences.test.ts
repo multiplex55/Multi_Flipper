@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
+  ENDPOINT_PREFERENCE_PRESETS,
   EndpointPreferenceApplicationMode,
   evaluateEndpointPreferences,
   isLikelyStructureStation,
   isMajorHubSystem,
+  isStructureLocationID,
   normalizeMajorHubSystems,
 } from "@/lib/endpointPreferences";
 import type { FlipResult } from "@/lib/types";
@@ -17,10 +19,12 @@ const baseRow: FlipResult = {
   BuyStation: "Jita IV - Moon 4",
   BuySystemName: "Jita",
   BuySystemID: 30000142,
+  BuyLocationID: 60003760,
   SellPrice: 12,
   SellStation: "Amarr VIII (Oris) - Emperor Family Academy",
   SellSystemName: "Amarr",
   SellSystemID: 30002187,
+  SellLocationID: 60008494,
   ProfitPerUnit: 2,
   MarginPercent: 20,
   UnitsToBuy: 100,
@@ -57,103 +61,78 @@ describe("endpointPreferences", () => {
     expect(isLikelyStructureStation("Jita IV - Moon 4")).toBe(false);
   });
 
-  it("hides rows with negative violations in hide mode", () => {
+  it("detects structure location IDs using numeric threshold", () => {
+    expect(isStructureLocationID(1_000_000_000_001)).toBe(true);
+    expect(isStructureLocationID(60_003_760)).toBe(false);
+  });
+
+  it("structure-only hard rule excludes NPC sell row in hide mode", () => {
+    const profile = {
+      ...DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
+      requireSellStructure: true,
+    };
+
     const evaluated = evaluateEndpointPreferences(
       baseRow,
-      DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
+      profile,
       ["Jita", "Amarr", "Dodixie", "Rens", "Hek"],
       EndpointPreferenceApplicationMode.Hide,
     );
+
     expect(evaluated.excluded).toBe(true);
-    expect(evaluated.appliedRules).toContain("buy_hub_penalty");
+    expect(evaluated.excludedReasons).toContain("hard_require_sell_structure");
   });
 
-  it("keeps row visible in deprioritize mode while applying score deltas", () => {
-    const evaluated = evaluateEndpointPreferences(
-      { ...baseRow, BuySystemName: "Perimeter", SellSystemName: "Jita" },
-      DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
-      ["Jita", "Amarr"],
-      EndpointPreferenceApplicationMode.Deprioritize,
-    );
-    expect(evaluated.excluded).toBe(false);
-    expect(evaluated.scoreDelta).not.toBe(0);
-    expect(evaluated.appliedRules).toContain("route_direction_bonus");
+  it("preset semantics: structure_exit activates hard sell-structure rule", () => {
+    expect(ENDPOINT_PREFERENCE_PRESETS.structure_exit.requireSellStructure).toBe(true);
+    expect(ENDPOINT_PREFERENCE_PRESETS.safe_arbitrage.requireSellStructure).toBe(false);
+    expect(ENDPOINT_PREFERENCE_PRESETS.low_attention.requireSellStructure).toBe(false);
   });
 
-  it("applies hub penalty in deprioritize mode without forced exclusion and lowers relative rank", () => {
-    const majorHubs = ["Jita", "Amarr"];
-    const hubBuy = evaluateEndpointPreferences(
-      { ...baseRow, BuySystemName: "Jita", SellSystemName: "Perimeter" },
-      DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
-      majorHubs,
-      EndpointPreferenceApplicationMode.Deprioritize,
-    );
-    const nonHubBuy = evaluateEndpointPreferences(
-      { ...baseRow, BuySystemName: "Perimeter", SellSystemName: "Jita" },
-      DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
-      majorHubs,
-      EndpointPreferenceApplicationMode.Deprioritize,
-    );
+  it("rank-only vs hide mode separation for hard-constraint outcomes", () => {
+    const profile = {
+      ...DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
+      requireSellStructure: true,
+    };
 
-    expect(hubBuy.excluded).toBe(false);
-    expect(hubBuy.scoreDelta).toBeLessThan(nonHubBuy.scoreDelta);
-  });
-
-  it("structure sell bonus improves ordering versus non-structure sell endpoints", () => {
-    const majorHubs = ["Jita", "Amarr"];
-    const structureSell = evaluateEndpointPreferences(
-      { ...baseRow, BuySystemName: "Perimeter", SellSystemName: "Amarr", SellStation: "Perimeter Keepstar Freeport" },
-      DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
-      majorHubs,
-      EndpointPreferenceApplicationMode.Deprioritize,
-    );
-    const normalSell = evaluateEndpointPreferences(
-      { ...baseRow, BuySystemName: "Perimeter", SellSystemName: "Amarr", SellStation: "Amarr VIII (Oris) - Emperor Family Academy" },
-      DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
-      majorHubs,
-      EndpointPreferenceApplicationMode.Deprioritize,
-    );
-
-    expect(structureSell.appliedRules).toContain("sell_structure_bonus");
-    expect(structureSell.scoreDelta).toBeGreaterThan(normalSell.scoreDelta);
-  });
-
-  it("hide mode excludes rows that deprioritize mode keeps", () => {
-    const row = { ...baseRow, BuySystemName: "Jita", SellSystemName: "Amarr" };
     const hideEval = evaluateEndpointPreferences(
-      row,
-      DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
+      baseRow,
+      profile,
       ["Jita", "Amarr"],
       EndpointPreferenceApplicationMode.Hide,
     );
-    const deprioritizeEval = evaluateEndpointPreferences(
-      row,
-      DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
+    const rankOnlyEval = evaluateEndpointPreferences(
+      baseRow,
+      profile,
       ["Jita", "Amarr"],
       EndpointPreferenceApplicationMode.Deprioritize,
     );
 
     expect(hideEval.excluded).toBe(true);
-    expect(deprioritizeEval.excluded).toBe(false);
+    expect(rankOnlyEval.excluded).toBe(false);
+    expect(rankOnlyEval.excludedReasons).toContain("hard_require_sell_structure");
+    expect(rankOnlyEval.scoreDelta).toBe(hideEval.scoreDelta);
   });
 
-  it("uses user-defined major hub lists over defaults", () => {
-    const row = { ...baseRow, BuySystemName: "Jita", SellSystemName: "Amarr" };
-    const defaultLikeEval = evaluateEndpointPreferences(
-      row,
-      DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
-      ["Jita", "Amarr", "Dodixie", "Rens", "Hek"],
-      EndpointPreferenceApplicationMode.Deprioritize,
-    );
-    const customEval = evaluateEndpointPreferences(
-      row,
-      DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
-      ["Perimeter"],
-      EndpointPreferenceApplicationMode.Deprioritize,
+  it("ID-first structure detection beats name fallback", () => {
+    const profile = {
+      ...DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
+      requireSellStructure: true,
+    };
+    const rowWithNpcNameButStructureId = {
+      ...baseRow,
+      SellLocationID: 1_000_000_000_777,
+      SellStation: "Amarr VIII (Oris) - Emperor Family Academy",
+    };
+
+    const evaluated = evaluateEndpointPreferences(
+      rowWithNpcNameButStructureId,
+      profile,
+      ["Jita", "Amarr"],
+      EndpointPreferenceApplicationMode.Hide,
     );
 
-    expect(defaultLikeEval.appliedRules).toContain("buy_hub_penalty");
-    expect(customEval.appliedRules).not.toContain("buy_hub_penalty");
-    expect(customEval.appliedRules).toContain("non_hub_buy_bonus");
+    expect(evaluated.excluded).toBe(false);
+    expect(evaluated.appliedRules).toContain("sell_structure_bonus");
   });
 });
