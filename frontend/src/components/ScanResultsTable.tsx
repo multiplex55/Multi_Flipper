@@ -103,7 +103,10 @@ import {
 import { RadiusInsightsPanel } from "./RadiusInsightsPanel";
 
 const PAGE_SIZE = 100;
-const GROUP_PAGE_SIZE = 50; // rows shown per group before "Show all" button
+const GROUP_CONTAINER_PAGE_SIZE = 50;
+const ITEM_GROUP_ROW_LIMIT_DEFAULT = 50;
+const ROUTE_GROUP_ROW_LIMIT_DEFAULT = 50;
+const ROUTE_GROUP_ROW_LIMIT_INCREMENT = 50;
 
 // Module-level cache: type IDs whose icon failed to load (avoid repeated 404s)
 const failedIconIds = new Set<number>();
@@ -1490,6 +1493,8 @@ export function ScanResultsTable({
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
+  const [routeGroupPage, setRouteGroupPage] = useState(0);
+  const [regionGroupPage, setRegionGroupPage] = useState(0);
   const [compactRows, setCompactRows] = useState(false);
   const [compactDashboard, setCompactDashboard] = useState<boolean>(() => {
     try {
@@ -1845,6 +1850,9 @@ export function ScanResultsTable({
   const [groupRowLimit, setGroupRowLimit] = useState<Map<string, number>>(
     new Map(),
   );
+  const [routeGroupRowLimit, setRouteGroupRowLimit] = useState<
+    Map<string, number>
+  >(new Map());
 
   useEffect(() => {
     if (contextMenu && contextMenuRef.current) {
@@ -2355,7 +2363,7 @@ export function ScanResultsTable({
       .sort((a, b) => b.count - a.count);
   }, [isRegionGrouped, sorted]);
 
-  const displaySorted = useMemo(() => {
+  const datasetRows = useMemo(() => {
     let rows = showHiddenRows
       ? sorted
       : sorted.filter((ir) => !hiddenMap[flipStateKey(ir.row)]);
@@ -2410,8 +2418,8 @@ export function ScanResultsTable({
   ]);
 
   const displayScoreContext = useMemo(
-    () => buildFlipScoreContext(displaySorted.map((item) => item.row)),
-    [displaySorted],
+    () => buildFlipScoreContext(datasetRows.map((item) => item.row)),
+    [datasetRows],
   );
 
   const regionGroups = useMemo<RegionGroup[]>(() => {
@@ -2438,7 +2446,7 @@ export function ScanResultsTable({
       );
     };
     const byKey = new Map<string, RegionGroup>();
-    for (const ir of displaySorted) {
+    for (const ir of datasetRows) {
       const key = `${ir.row.BuySystemID}:${ir.row.BuySystemName}`;
       const itemMetric = metricForRow(ir.row);
       const metric = Number.isFinite(itemMetric) ? itemMetric : 0;
@@ -2472,12 +2480,12 @@ export function ScanResultsTable({
       return b.sortValue - a.sortValue;
     });
     return groups;
-  }, [displaySorted, isRegionGrouped, regionGroupSortMode, t]);
+  }, [datasetRows, isRegionGrouped, regionGroupSortMode, t]);
 
   const itemGroups = useMemo<ItemGroup[]>(() => {
     if (!isItemGrouped) return [];
     const byType = new Map<number, ItemGroup>();
-    for (const ir of displaySorted) {
+    for (const ir of datasetRows) {
       const typeID = ir.row.TypeID ?? 0;
       const existing = byType.get(typeID);
       if (existing) {
@@ -2491,13 +2499,13 @@ export function ScanResultsTable({
       }
     }
     return [...byType.values()];
-  }, [displaySorted, isItemGrouped, t]);
+  }, [datasetRows, isItemGrouped, t]);
 
   const routeAggregateMetricsByRoute = useMemo<
     Record<string, RouteAggregateMetrics>
   >(() => {
     const routeKeyToSystemPair: Record<string, string> = {};
-    for (const ir of displaySorted) {
+    for (const ir of datasetRows) {
       const key = routeGroupKey(ir.row);
       if (!(key in routeKeyToSystemPair)) {
         routeKeyToSystemPair[key] =
@@ -2537,12 +2545,12 @@ export function ScanResultsTable({
       };
     }
     return aggregates;
-  }, [batchMetricsByRoute, displaySorted, routeSafetyMap]);
+  }, [batchMetricsByRoute, datasetRows, routeSafetyMap]);
 
   const routeGroups = useMemo<RouteGroup[]>(() => {
     if (!isRouteGrouped) return [];
     const byRoute = new Map<string, RouteGroup>();
-    for (const ir of displaySorted) {
+    for (const ir of datasetRows) {
       const key = routeGroupKey(ir.row);
       const existing = byRoute.get(key);
       if (existing) {
@@ -2640,7 +2648,7 @@ export function ScanResultsTable({
   }, [
     batchMetricsByRow,
     batchMetricsByRoute,
-    displaySorted,
+    datasetRows,
     isRouteGrouped,
     routeAggregateMetricsByRoute,
     sortDir,
@@ -2686,12 +2694,12 @@ export function ScanResultsTable({
 
   const endpointPreferenceDeltaByRoute = useMemo<Record<string, number>>(() => {
     const out: Record<string, number> = {};
-    for (const ir of displaySorted) {
+    for (const ir of datasetRows) {
       const routeKey = routeGroupKey(ir.row);
       out[routeKey] = (out[routeKey] ?? 0) + (ir.endpointPreferences?.scoreDelta ?? 0);
     }
     return out;
-  }, [displaySorted]);
+  }, [datasetRows]);
 
   const routeScoreSummaryByRoute = useMemo<Record<string, RouteScoreSummary>>(
     () => {
@@ -2774,7 +2782,7 @@ export function ScanResultsTable({
     const deprioritizedByRoute = new Map<string, boolean>();
     const loopOutboundByRoute = new Map<string, boolean>();
     const loopReturnByRoute = new Map<string, boolean>();
-    for (const ir of displaySorted) {
+    for (const ir of datasetRows) {
       const key = routeGroupKey(ir.row);
       if (!labelByRoute.has(key)) {
         labelByRoute.set(
@@ -2837,7 +2845,7 @@ export function ScanResultsTable({
     return candidates;
   }, [
     batchMetricsByRoute,
-    displaySorted,
+    datasetRows,
     routeAggregateMetricsByRoute,
     routeScoreSummaryByRoute,
     routeSafetyMap,
@@ -2919,6 +2927,38 @@ export function ScanResultsTable({
     });
   }, [isItemGrouped, itemGroups]);
 
+  useEffect(() => {
+    if (!isItemGrouped) {
+      setGroupRowLimit(new Map());
+      return;
+    }
+    const existing = new Set(itemGroups.map((g) => g.key));
+    setGroupRowLimit((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Map<string, number>();
+      for (const [key, value] of prev.entries()) {
+        if (existing.has(key)) next.set(key, value);
+      }
+      return next.size === prev.size ? prev : next;
+    });
+  }, [isItemGrouped, itemGroups]);
+
+  useEffect(() => {
+    if (!isRouteGrouped) {
+      setRouteGroupRowLimit(new Map());
+      return;
+    }
+    const existing = new Set(filteredRouteGroups.map((g) => g.key));
+    setRouteGroupRowLimit((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Map<string, number>();
+      for (const [key, value] of prev.entries()) {
+        if (existing.has(key)) next.set(key, value);
+      }
+      return next.size === prev.size ? prev : next;
+    });
+  }, [filteredRouteGroups, isRouteGrouped]);
+
   const defaultCollapsedRegionGroups = useMemo(() => {
     if (!isRegionGrouped || regionGroups.length <= 1) {
       return new Set<string>();
@@ -2978,10 +3018,78 @@ export function ScanResultsTable({
     regionCollapseInitialized,
   ]);
 
-  const visibleRows = useMemo(() => {
+  const groupedData = useMemo(
+    () => ({
+      regionGroups,
+      itemGroups,
+      routeGroups: filteredRouteGroups,
+    }),
+    [filteredRouteGroups, itemGroups, regionGroups],
+  );
+
+  const regionGroupTotalPages = useMemo(
+    () =>
+      Math.max(
+        1,
+        Math.ceil(groupedData.regionGroups.length / GROUP_CONTAINER_PAGE_SIZE),
+      ),
+    [groupedData.regionGroups.length],
+  );
+  const safeRegionGroupPage = useMemo(
+    () => Math.min(regionGroupPage, regionGroupTotalPages - 1),
+    [regionGroupPage, regionGroupTotalPages],
+  );
+  const pagedRegionGroups = useMemo(
+    () =>
+      groupedData.regionGroups.slice(
+        safeRegionGroupPage * GROUP_CONTAINER_PAGE_SIZE,
+        (safeRegionGroupPage + 1) * GROUP_CONTAINER_PAGE_SIZE,
+      ),
+    [groupedData.regionGroups, safeRegionGroupPage],
+  );
+
+  const routeGroupTotalPages = useMemo(
+    () =>
+      Math.max(
+        1,
+        Math.ceil(groupedData.routeGroups.length / GROUP_CONTAINER_PAGE_SIZE),
+      ),
+    [groupedData.routeGroups.length],
+  );
+  const safeRouteGroupPage = useMemo(
+    () => Math.min(routeGroupPage, routeGroupTotalPages - 1),
+    [routeGroupPage, routeGroupTotalPages],
+  );
+  const pagedRouteGroups = useMemo(
+    () =>
+      groupedData.routeGroups.slice(
+        safeRouteGroupPage * GROUP_CONTAINER_PAGE_SIZE,
+        (safeRouteGroupPage + 1) * GROUP_CONTAINER_PAGE_SIZE,
+      ),
+    [groupedData.routeGroups, safeRouteGroupPage],
+  );
+
+  const flatTotalPages = useMemo(
+    () => Math.max(1, Math.ceil(datasetRows.length / PAGE_SIZE)),
+    [datasetRows.length],
+  );
+  const safeFlatPage = useMemo(
+    () => Math.min(page, flatTotalPages - 1),
+    [flatTotalPages, page],
+  );
+  const pageRows = useMemo(
+    () =>
+      datasetRows.slice(
+        safeFlatPage * PAGE_SIZE,
+        (safeFlatPage + 1) * PAGE_SIZE,
+      ),
+    [datasetRows, safeFlatPage],
+  );
+
+  const renderRows = useMemo(() => {
     if (isRegionGrouped) {
       const rows: IndexedRow[] = [];
-      for (const group of regionGroups) {
+      for (const group of pagedRegionGroups) {
         if (effectiveCollapsedRegionGroups.has(group.key)) continue;
         rows.push(...group.rows);
       }
@@ -2989,76 +3097,110 @@ export function ScanResultsTable({
     }
     if (isRouteGrouped) {
       const rows: IndexedRow[] = [];
-      for (const group of filteredRouteGroups) {
+      for (const group of pagedRouteGroups) {
         if (group.rows.length === 0) continue;
-        rows.push(group.rows[0]);
         if (!expandedRouteGroups.has(group.key)) continue;
-        rows.push(...group.rows.slice(1));
+        const limit = Math.max(
+          1,
+          routeGroupRowLimit.get(group.key) ?? ROUTE_GROUP_ROW_LIMIT_DEFAULT,
+        );
+        rows.push(...group.rows.slice(0, limit));
       }
       return rows;
     }
-    if (!isItemGrouped) return displaySorted;
+    if (!isItemGrouped) return pageRows;
 
     const rows: IndexedRow[] = [];
-    for (const group of itemGroups) {
+    for (const group of groupedData.itemGroups) {
       if (group.rows.length === 0) continue;
       rows.push(group.rows[0]);
       if (group.rows.length <= 1 || !expandedItemGroups.has(group.key))
         continue;
       const limit = Math.max(
         1,
-        groupRowLimit.get(group.key) ?? GROUP_PAGE_SIZE,
+        groupRowLimit.get(group.key) ?? ITEM_GROUP_ROW_LIMIT_DEFAULT,
       );
       rows.push(...group.rows.slice(1, limit));
     }
     return rows;
   }, [
-    displaySorted,
     effectiveCollapsedRegionGroups,
     expandedItemGroups,
     expandedRouteGroups,
     groupRowLimit,
+    groupedData.itemGroups,
     isItemGrouped,
     isRouteGrouped,
     isRegionGrouped,
-    itemGroups,
-    filteredRouteGroups,
-    regionGroups,
+    pageRows,
+    pagedRegionGroups,
+    pagedRouteGroups,
+    routeGroupRowLimit,
   ]);
 
-  const { pageRows, totalPages, safePage } = useMemo(() => {
+  const selectionScopeRows = useMemo(() => {
     if (isRegionGrouped || isItemGrouped || isRouteGrouped) {
-      return { pageRows: visibleRows, totalPages: 1, safePage: 0 };
+      return renderRows;
     }
-    const totalPages = Math.max(1, Math.ceil(displaySorted.length / PAGE_SIZE));
-    const safePage = Math.min(page, totalPages - 1);
-    const pageRows = displaySorted.slice(
-      safePage * PAGE_SIZE,
-      (safePage + 1) * PAGE_SIZE,
-    );
-    return { pageRows, totalPages, safePage };
+    return pageRows;
+  }, [isItemGrouped, isRegionGrouped, isRouteGrouped, pageRows, renderRows]);
+
+  const summaryScopeRows = useMemo(() => {
+    if (selectedIds.size > 0) {
+      return selectionScopeRows.filter((ir) => selectedIds.has(ir.id));
+    }
+    if (isItemGrouped) {
+      return datasetRows;
+    }
+    return renderRows;
   }, [
-    displaySorted,
+    datasetRows,
+    isItemGrouped,
+    renderRows,
+    selectedIds,
+    selectionScopeRows,
+  ]);
+
+  const { totalPages, safePage } = useMemo(() => {
+    if (isRegionGrouped) {
+      return { totalPages: regionGroupTotalPages, safePage: safeRegionGroupPage };
+    }
+    if (isRouteGrouped) {
+      return { totalPages: routeGroupTotalPages, safePage: safeRouteGroupPage };
+    }
+    if (isItemGrouped) {
+      return { totalPages: 1, safePage: 0 };
+    }
+    return { totalPages: flatTotalPages, safePage: safeFlatPage };
+  }, [
+    flatTotalPages,
     isItemGrouped,
     isRegionGrouped,
     isRouteGrouped,
-    page,
-    visibleRows,
+    regionGroupTotalPages,
+    routeGroupTotalPages,
+    safeFlatPage,
+    safeRegionGroupPage,
+    safeRouteGroupPage,
   ]);
 
-  // Reset page when data/filters/sort change
+  // Reset flat and grouped pages when data/view state changes
   useEffect(() => {
     setPage(0);
+    setRouteGroupPage(0);
+    setRegionGroupPage(0);
   }, [
     results,
     filters,
     sortKey,
     sortDir,
     showHiddenRows,
-    hiddenMap,
-    groupByItem,
-    routeViewMode,
     selectedBadgeFilters,
+    routeSafetyFilter,
+    trackedVisibilityMode,
+    endpointPreferenceMode,
+    endpointPreferenceProfile,
+    routeViewMode,
   ]);
 
   // Reset selection/pins/context menu/group limits when results change
@@ -3067,6 +3209,7 @@ export function ScanResultsTable({
     setPinnedKeys(new Set());
     setContextMenu(null);
     setGroupRowLimit(new Map());
+    setRouteGroupRowLimit(new Map());
     if (!scanning && results.length > 0) {
       setLastScanTs(Date.now());
     }
@@ -3092,13 +3235,13 @@ export function ScanResultsTable({
   // Prune selected rows that are hidden by filters
   useEffect(() => {
     if (selectedIds.size === 0) return;
-    const visibleIds = new Set(visibleRows.map((ir) => ir.id));
+    const scopedIds = new Set(selectionScopeRows.map((ir) => ir.id));
     setSelectedIds((prev) => {
       if (prev.size === 0) return prev;
-      const next = new Set([...prev].filter((id) => visibleIds.has(id)));
+      const next = new Set([...prev].filter((id) => scopedIds.has(id)));
       return next.size === prev.size ? prev : next;
     });
-  }, [selectedIds.size, visibleRows]);
+  }, [selectedIds.size, selectionScopeRows]);
 
   useEffect(() => {
     if (!ignoredModalOpen) {
@@ -3222,12 +3365,7 @@ export function ScanResultsTable({
 
   // ── Summary stats ──
   const summary = useMemo(() => {
-    const baseRows =
-      isItemGrouped && selectedIds.size === 0 ? displaySorted : visibleRows;
-    const rows =
-      selectedIds.size > 0
-        ? visibleRows.filter((ir) => selectedIds.has(ir.id))
-        : baseRows;
+    const rows = summaryScopeRows;
     if (rows.length === 0) return null;
     const totalProfit = rows.reduce(
       (s, ir) =>
@@ -3237,7 +3375,7 @@ export function ScanResultsTable({
     const avgMargin =
       rows.reduce((s, ir) => s + ir.row.MarginPercent, 0) / rows.length;
     return { totalProfit, avgMargin, count: rows.length };
-  }, [displaySorted, isItemGrouped, selectedIds, visibleRows]);
+  }, [summaryScopeRows]);
 
   // ── Callbacks ──
   const toggleSort = useCallback(
@@ -3315,10 +3453,10 @@ export function ScanResultsTable({
 
   const toggleSelectAll = useCallback(() => {
     setSelectedIds((prev) => {
-      if (prev.size === visibleRows.length) return new Set();
-      return new Set(visibleRows.map((ir) => ir.id));
+      if (prev.size === selectionScopeRows.length) return new Set();
+      return new Set(selectionScopeRows.map((ir) => ir.id));
     });
-  }, [visibleRows]);
+  }, [selectionScopeRows]);
 
   const togglePin = useCallback(
     (row: FlipResult) => {
@@ -3607,8 +3745,8 @@ export function ScanResultsTable({
   const exportCSV = useCallback(() => {
     const rows =
       selectedIds.size > 0
-        ? visibleRows.filter((ir) => selectedIds.has(ir.id))
-        : visibleRows;
+        ? selectionScopeRows.filter((ir) => selectedIds.has(ir.id))
+        : selectionScopeRows;
     const header = columnDefs.map((c) => t(c.labelKey)).join(",");
     const csvRows = rows.map((ir) =>
       columnDefs
@@ -3635,7 +3773,7 @@ export function ScanResultsTable({
     URL.revokeObjectURL(url);
     addToast(`${t("exportCSV")}: ${rows.length} rows`, "success", 2000);
   }, [
-    visibleRows,
+    selectionScopeRows,
     selectedIds,
     columnDefs,
     batchMetricsByRow,
@@ -3648,8 +3786,8 @@ export function ScanResultsTable({
   const copyTable = useCallback(() => {
     const rows =
       selectedIds.size > 0
-        ? visibleRows.filter((ir) => selectedIds.has(ir.id))
-        : visibleRows;
+        ? selectionScopeRows.filter((ir) => selectedIds.has(ir.id))
+        : selectionScopeRows;
     const header = columnDefs.map((c) => t(c.labelKey)).join("\t");
     const tsv = rows.map((ir) =>
       columnDefs
@@ -3667,7 +3805,7 @@ export function ScanResultsTable({
     navigator.clipboard.writeText([header, ...tsv].join("\n"));
     addToast(t("copied"), "success", 2000);
   }, [
-    visibleRows,
+    selectionScopeRows,
     selectedIds,
     columnDefs,
     batchMetricsByRow,
@@ -3769,7 +3907,7 @@ export function ScanResultsTable({
   // ── Keyboard navigation (E feature) ──
   // Update ref on every render so the one-time effect can always read fresh state
   keyNavRef.current = {
-    pageRows,
+    pageRows: isRegionGrouped || isItemGrouped || isRouteGrouped ? renderRows : pageRows,
     focusedRowId,
     setFocusedRowId,
     setExecPlanRow,
@@ -4001,7 +4139,7 @@ export function ScanResultsTable({
               <span className="text-eve-dim">
                 | {" "}
                 {t("hiddenVisibleSummary", {
-                  visible: displaySorted.length,
+                  visible: datasetRows.length,
                   hidden: hiddenCounts.total,
                 })}
               </span>
@@ -4019,13 +4157,57 @@ export function ScanResultsTable({
 
           <div className="flex-1" />
 
-          {!isRegionGrouped && !isItemGrouped && !isRouteGrouped && displaySorted.length > PAGE_SIZE && (
+          {totalPages > 1 && (
             <div className="flex items-center gap-1 text-eve-dim">
-              <button onClick={() => setPage(0)} disabled={safePage === 0} className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors">«</button>
-              <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={safePage === 0} className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors">‹</button>
+              <button
+                onClick={() => {
+                  if (isRegionGrouped) setRegionGroupPage(0);
+                  else if (isRouteGrouped) setRouteGroupPage(0);
+                  else setPage(0);
+                }}
+                disabled={safePage === 0}
+                className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                «
+              </button>
+              <button
+                onClick={() => {
+                  if (isRegionGrouped)
+                    setRegionGroupPage((p) => Math.max(0, p - 1));
+                  else if (isRouteGrouped)
+                    setRouteGroupPage((p) => Math.max(0, p - 1));
+                  else setPage((p) => Math.max(0, p - 1));
+                }}
+                disabled={safePage === 0}
+                className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                ‹
+              </button>
               <span className="px-2 text-eve-text font-mono tabular-nums">{safePage + 1} / {totalPages}</span>
-              <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={safePage >= totalPages - 1} className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors">›</button>
-              <button onClick={() => setPage(totalPages - 1)} disabled={safePage >= totalPages - 1} className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors">»</button>
+              <button
+                onClick={() => {
+                  if (isRegionGrouped)
+                    setRegionGroupPage((p) => Math.min(totalPages - 1, p + 1));
+                  else if (isRouteGrouped)
+                    setRouteGroupPage((p) => Math.min(totalPages - 1, p + 1));
+                  else setPage((p) => Math.min(totalPages - 1, p + 1));
+                }}
+                disabled={safePage >= totalPages - 1}
+                className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                ›
+              </button>
+              <button
+                onClick={() => {
+                  if (isRegionGrouped) setRegionGroupPage(totalPages - 1);
+                  else if (isRouteGrouped) setRouteGroupPage(totalPages - 1);
+                  else setPage(totalPages - 1);
+                }}
+                disabled={safePage >= totalPages - 1}
+                className="px-1.5 py-0.5 rounded-sm hover:text-eve-text disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                »
+              </button>
             </div>
           )}
 
@@ -4763,8 +4945,8 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                 <input
                   type="checkbox"
                   checked={
-                    visibleRows.length > 0 &&
-                    selectedIds.size === visibleRows.length
+                    selectionScopeRows.length > 0 &&
+                    selectedIds.size === selectionScopeRows.length
                   }
                   onChange={toggleSelectAll}
                   className="accent-eve-accent cursor-pointer"
@@ -4827,7 +5009,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
             {isRegionGrouped
               ? (() => {
                   let rowIndex = 0;
-                  return regionGroups.map((group) => {
+                  return pagedRegionGroups.map((group) => {
                     const collapsed = effectiveCollapsedRegionGroups.has(
                       group.key,
                     );
@@ -4874,7 +5056,8 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                         {!collapsed &&
                           (() => {
                             const limit =
-                              groupRowLimit.get(group.key) ?? GROUP_PAGE_SIZE;
+                              groupRowLimit.get(group.key) ??
+                              ITEM_GROUP_ROW_LIMIT_DEFAULT;
                             const sliced = group.rows.slice(0, limit);
                             const hasMore = group.rows.length > limit;
                             return (
@@ -4920,7 +5103,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               : isItemGrouped
                 ? (() => {
                     let rowIndex = 0;
-                    return itemGroups.map((group) => {
+                    return groupedData.itemGroups.map((group) => {
                       if (group.rows.length === 0) return null;
                       const topRow = group.rows[0];
                       const expanded =
@@ -4928,7 +5111,8 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                         expandedItemGroups.has(group.key);
                       const limit = Math.max(
                         1,
-                        groupRowLimit.get(group.key) ?? GROUP_PAGE_SIZE,
+                        groupRowLimit.get(group.key) ??
+                          ITEM_GROUP_ROW_LIMIT_DEFAULT,
                       );
                       const childRows = expanded
                         ? group.rows.slice(1, limit)
@@ -4977,7 +5161,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                 : isRouteGrouped
                   ? (() => {
                       let rowIndex = 0;
-                      return filteredRouteGroups.map((group) => {
+                      return pagedRouteGroups.map((group) => {
                         if (group.rows.length === 0) return null;
                         const expanded = expandedRouteGroups.has(group.key);
                         const routeSummary = batchMetricsByRoute[group.key];
@@ -4988,6 +5172,15 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                         const badgeMetadata =
                           routeBadgeMetadataByRoute[group.key] ??
                           deriveRouteBadgeMetadata(routeSummary, routeAggregate);
+                        const routeLimit = Math.max(
+                          1,
+                          routeGroupRowLimit.get(group.key) ??
+                            ROUTE_GROUP_ROW_LIMIT_DEFAULT,
+                        );
+                        const routeRows = expanded
+                          ? group.rows.slice(0, routeLimit)
+                          : [];
+                        const routeHasMore = expanded && group.rows.length > routeLimit;
                         return (
                           <Fragment key={`route-group:${group.key}`}>
                             <tr
@@ -5239,23 +5432,66 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                                 </button>
                               </td>
                             </tr>
-                            {expanded &&
-                              group.rows.map((ir) => {
+                            {routeRows.map((ir) => {
                                 const rendered = renderDataRow(ir, rowIndex);
                                 rowIndex++;
                                 return rendered;
                               })}
+                            {routeHasMore && (
+                              <tr className="bg-eve-dark/30">
+                                <td
+                                  colSpan={columnDefs.length + 2}
+                                  className="px-4 py-1.5 text-center"
+                                >
+                                  <div className="inline-flex items-center gap-3 text-[11px]">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setRouteGroupRowLimit((prev) => {
+                                          const next = new Map(prev);
+                                          next.set(
+                                            group.key,
+                                            Math.min(
+                                              group.rows.length,
+                                              routeLimit +
+                                                ROUTE_GROUP_ROW_LIMIT_INCREMENT,
+                                            ),
+                                          );
+                                          return next;
+                                        })
+                                      }
+                                      className="text-eve-dim hover:text-eve-accent transition-colors"
+                                    >
+                                      Show more ({group.rows.length - routeLimit} remaining)
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setRouteGroupRowLimit((prev) => {
+                                          const next = new Map(prev);
+                                          next.set(group.key, group.rows.length);
+                                          return next;
+                                        })
+                                      }
+                                      className="text-eve-dim hover:text-eve-accent transition-colors"
+                                    >
+                                      Show all in this route
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
                           </Fragment>
                         );
                       });
                     })()
-                  : pageRows.map((ir, i) =>
-                      renderDataRow(ir, safePage * PAGE_SIZE + i),
+                : pageRows.map((ir, i) =>
+                      renderDataRow(ir, safeFlatPage * PAGE_SIZE + i),
                     )}
             {isRouteGrouped &&
               !scanning &&
-              displaySorted.length > 0 &&
-              filteredRouteGroups.length === 0 && (
+              datasetRows.length > 0 &&
+              groupedData.routeGroups.length === 0 && (
                 <tr>
                   <td
                     colSpan={columnDefs.length + 2}
@@ -5265,7 +5501,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                   </td>
                 </tr>
               )}
-            {displaySorted.length === 0 && !scanning && (
+            {datasetRows.length === 0 && !scanning && (
               <tr>
                 <td colSpan={columnDefs.length + 2} className="p-0">
                   {results.length > 0 &&
@@ -5294,7 +5530,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
       </div>
 
       {/* Summary footer */}
-      {summary && displaySorted.length > 0 && (
+      {summary && datasetRows.length > 0 && (
         <div className="shrink-0 flex items-center gap-6 px-3 py-1.5 border-t border-eve-border text-xs">
           <span className="text-eve-dim">
             {t("colRealProfit")}:{" "}
