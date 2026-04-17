@@ -96,7 +96,7 @@ describe("ScanResultsTable advanced toolbar", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
     expect(screen.getByRole("button", { name: /advanced ▾/i })).toBeInTheDocument();
-    expect(screen.getByTitle("Quick profile preset")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /endpoint prefs ▸/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /advanced ▾/i }));
     expect(screen.getByRole("button", { name: /advanced ▸/i })).toBeInTheDocument();
@@ -109,6 +109,6 @@ describe("ScanResultsTable advanced toolbar", () => {
     renderTable([makeRow()]);
 
     expect(screen.getByRole("button", { name: /advanced ▾/i })).toBeInTheDocument();
-    expect(screen.getByTitle("Quick profile preset")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /endpoint prefs ▸/i })).toBeInTheDocument();
   });
 });

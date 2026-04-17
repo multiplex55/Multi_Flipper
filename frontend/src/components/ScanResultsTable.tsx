@@ -1587,6 +1587,9 @@ export function ScanResultsTable({
   const [cacheStaleSuppressedUntilTs, setCacheStaleSuppressedUntilTs] =
     useState<number>(0);
   const [cacheRebooting, setCacheRebooting] = useState(false);
+  const [showEndpointPrefsPanel, setShowEndpointPrefsPanel] = useState(false);
+  const [showTrackedPanel, setShowTrackedPanel] = useState(false);
+  const [showCachePanel, setShowCachePanel] = useState(false);
   const [collapsedRegionGroups, setCollapsedRegionGroups] = useState<
     Set<string>
   >(new Set());
@@ -1815,6 +1818,9 @@ export function ScanResultsTable({
   const [filterSearch, setFilterSearch] = useState("");
   const filterPanelRef = useRef<HTMLDivElement>(null);
   const filterBtnRef = useRef<HTMLButtonElement>(null);
+  const endpointPrefsPanelRootRef = useRef<HTMLDivElement>(null);
+  const trackedPanelRootRef = useRef<HTMLDivElement>(null);
+  const cachePanelRootRef = useRef<HTMLDivElement>(null);
   const keyNavRef = useRef({
     pageRows: [] as IndexedRow[],
     focusedRowId: null as number | null,
@@ -1859,6 +1865,41 @@ export function ScanResultsTable({
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [filterPanelOpen]);
+
+  useEffect(() => {
+    if (!showAdvancedToolbar) {
+      setShowEndpointPrefsPanel(false);
+      setShowTrackedPanel(false);
+      setShowCachePanel(false);
+    }
+  }, [showAdvancedToolbar]);
+
+  useEffect(() => {
+    if (!showEndpointPrefsPanel && !showTrackedPanel && !showCachePanel) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Node;
+      const clickedEndpointPrefs = endpointPrefsPanelRootRef.current?.contains(target);
+      const clickedTracked = trackedPanelRootRef.current?.contains(target);
+      const clickedCache = cachePanelRootRef.current?.contains(target);
+      if (!clickedEndpointPrefs) setShowEndpointPrefsPanel(false);
+      if (!clickedTracked) setShowTrackedPanel(false);
+      if (!clickedCache) setShowCachePanel(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showCachePanel, showEndpointPrefsPanel, showTrackedPanel]);
+
+  useEffect(() => {
+    if (!showEndpointPrefsPanel && !showTrackedPanel && !showCachePanel) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setShowEndpointPrefsPanel(false);
+      setShowTrackedPanel(false);
+      setShowCachePanel(false);
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [showCachePanel, showEndpointPrefsPanel, showTrackedPanel]);
 
   useEffect(() => {
     const defaultOrder = allColumnDefs.map((col) => col.key);
@@ -4044,61 +4085,121 @@ export function ScanResultsTable({
           <div id="scan-results-advanced-toolbar" className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
             {!isRegionGrouped && (
               <>
-                <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
-                  {([
-                    ["all", "Tracked: All"],
-                    ["tracked_only", "Tracked only"],
-                    ["hide_non_tracked", "Hide non-tracked"],
-                  ] as const).map(([mode, label]) => {
-                    const active = trackedVisibilityMode === mode;
-                    return (
-                      <button key={mode} type="button" onClick={() => setTrackedVisibilityMode(mode)} className={`px-2 py-0.5 border-r last:border-r-0 border-eve-border/40 transition-colors ${active ? "bg-eve-accent/15 text-eve-accent border-eve-accent/40" : "text-eve-dim hover:text-eve-text"}`} title={label}>
-                        {label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <label className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] cursor-pointer">
-                  <input type="checkbox" checked={trackedFirst} onChange={(e) => setTrackedFirst(e.target.checked)} className="accent-eve-accent" />
-                  <span>Tracked first</span>
-                </label>
-                <label className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] cursor-pointer">
-                  <input type="checkbox" checked={showTrackedChip} onChange={(e) => setShowTrackedChip(e.target.checked)} className="accent-eve-accent" />
-                  <span>Tracked chip</span>
-                </label>
-                <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
-                  <span className="text-eve-dim px-1">Endpoint prefs</span>
-                  <select
-                    value={endpointPreferenceMode}
-                    onChange={(e) =>
-                      setEndpointPreferenceMode(
-                        e.target.value === EndpointPreferenceApplicationMode.Hide
-                          ? EndpointPreferenceApplicationMode.Hide
-                          : EndpointPreferenceApplicationMode.Deprioritize,
-                      )
-                    }
-                    className="bg-eve-input border border-eve-border rounded-sm px-1 py-0.5 text-[11px]"
-                  >
-                    <option value={EndpointPreferenceApplicationMode.Deprioritize}>Deprioritize</option>
-                    <option value={EndpointPreferenceApplicationMode.Hide}>Hide</option>
-                  </select>
-                  <select
-                    defaultValue=""
-                    onChange={(e) => {
-                      const key = e.target.value as keyof typeof ENDPOINT_PREFERENCE_PRESETS;
-                      if (!key || !ENDPOINT_PREFERENCE_PRESETS[key]) return;
-                      setEndpointPreferenceProfile(ENDPOINT_PREFERENCE_PRESETS[key]);
-                      e.currentTarget.value = "";
+                <div ref={trackedPanelRootRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTrackedPanel((prev) => !prev);
+                      setShowEndpointPrefsPanel(false);
+                      setShowCachePanel(false);
                     }}
-                    className="bg-eve-input border border-eve-border rounded-sm px-1 py-0.5 text-[11px]"
-                    title="Quick profile preset"
+                    className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
+                      showTrackedPanel
+                        ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10"
+                        : "border-eve-border/60 text-eve-dim bg-eve-dark/40 hover:border-eve-accent/50 hover:text-eve-accent"
+                    }`}
+                    aria-expanded={showTrackedPanel}
+                    aria-controls="scan-results-tracked-panel"
+                    title="Tracked visibility preferences"
                   >
-                    <option value="">Preset…</option>
-                    <option value="safe_arbitrage">Safe Arbitrage</option>
-                    <option value="structure_exit">Structure Exit</option>
-                    <option value="low_attention">Low Attention</option>
-                  </select>
-                  <input value={majorHubInput} onChange={(e) => setMajorHubInput(e.target.value)} className="w-44 bg-eve-input border border-eve-border rounded-sm px-1 py-0.5 text-[11px]" placeholder="Major hubs (comma-separated)" title="Editable major hub systems" />
+                    Tracked {showTrackedPanel ? "▾" : "▸"}
+                  </button>
+                  {showTrackedPanel && (
+                    <div
+                      id="scan-results-tracked-panel"
+                      role="dialog"
+                      aria-label="Tracked preferences"
+                      className="absolute z-40 mt-1 min-w-[250px] rounded-sm border border-eve-border bg-eve-panel p-2 shadow-2xl"
+                    >
+                      <div className="mb-1 text-eve-dim">Visibility mode</div>
+                      <div className="mb-2 inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
+                        {([
+                          ["all", "All"],
+                          ["tracked_only", "Tracked only"],
+                          ["hide_non_tracked", "Hide non-tracked"],
+                        ] as const).map(([mode, label]) => {
+                          const active = trackedVisibilityMode === mode;
+                          return (
+                            <button key={mode} type="button" onClick={() => setTrackedVisibilityMode(mode)} className={`px-2 py-0.5 border-r last:border-r-0 border-eve-border/40 transition-colors ${active ? "bg-eve-accent/15 text-eve-accent border-eve-accent/40" : "text-eve-dim hover:text-eve-text"}`} title={label}>
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <label className="mb-1 inline-flex w-full items-center gap-1 rounded-sm border border-eve-border/60 bg-eve-dark/40 px-2 py-0.5 text-[11px] cursor-pointer">
+                        <input type="checkbox" checked={trackedFirst} onChange={(e) => setTrackedFirst(e.target.checked)} className="accent-eve-accent" />
+                        <span>Tracked first</span>
+                      </label>
+                      <label className="inline-flex w-full items-center gap-1 rounded-sm border border-eve-border/60 bg-eve-dark/40 px-2 py-0.5 text-[11px] cursor-pointer">
+                        <input type="checkbox" checked={showTrackedChip} onChange={(e) => setShowTrackedChip(e.target.checked)} className="accent-eve-accent" />
+                        <span>Tracked chip</span>
+                      </label>
+                    </div>
+                  )}
+                </div>
+
+                <div ref={endpointPrefsPanelRootRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEndpointPrefsPanel((prev) => !prev);
+                      setShowTrackedPanel(false);
+                      setShowCachePanel(false);
+                    }}
+                    className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
+                      showEndpointPrefsPanel
+                        ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10"
+                        : "border-eve-border/60 text-eve-dim bg-eve-dark/40 hover:border-eve-accent/50 hover:text-eve-accent"
+                    }`}
+                    aria-expanded={showEndpointPrefsPanel}
+                    aria-controls="scan-results-endpoint-prefs-panel"
+                    title="Endpoint preference controls"
+                  >
+                    Endpoint Prefs {showEndpointPrefsPanel ? "▾" : "▸"}
+                  </button>
+                  {showEndpointPrefsPanel && (
+                    <div
+                      id="scan-results-endpoint-prefs-panel"
+                      role="dialog"
+                      aria-label="Endpoint preferences"
+                      className="absolute z-40 mt-1 min-w-[320px] rounded-sm border border-eve-border bg-eve-panel p-2 shadow-2xl"
+                    >
+                      <div className="mb-1 text-eve-dim">Endpoint mode</div>
+                      <select
+                        value={endpointPreferenceMode}
+                        onChange={(e) =>
+                          setEndpointPreferenceMode(
+                            e.target.value === EndpointPreferenceApplicationMode.Hide
+                              ? EndpointPreferenceApplicationMode.Hide
+                              : EndpointPreferenceApplicationMode.Deprioritize,
+                          )
+                        }
+                        className="mb-2 w-full bg-eve-input border border-eve-border rounded-sm px-1 py-0.5 text-[11px]"
+                      >
+                        <option value={EndpointPreferenceApplicationMode.Deprioritize}>Deprioritize</option>
+                        <option value={EndpointPreferenceApplicationMode.Hide}>Hide</option>
+                      </select>
+                      <div className="mb-1 text-eve-dim">Preset</div>
+                      <select
+                        defaultValue=""
+                        onChange={(e) => {
+                          const key = e.target.value as keyof typeof ENDPOINT_PREFERENCE_PRESETS;
+                          if (!key || !ENDPOINT_PREFERENCE_PRESETS[key]) return;
+                          setEndpointPreferenceProfile(ENDPOINT_PREFERENCE_PRESETS[key]);
+                          e.currentTarget.value = "";
+                        }}
+                        className="mb-2 w-full bg-eve-input border border-eve-border rounded-sm px-1 py-0.5 text-[11px]"
+                        title="Quick profile preset"
+                      >
+                        <option value="">Preset…</option>
+                        <option value="safe_arbitrage">Safe Arbitrage</option>
+                        <option value="structure_exit">Structure Exit</option>
+                        <option value="low_attention">Low Attention</option>
+                      </select>
+                      <div className="mb-1 text-eve-dim">Major hub input</div>
+                      <input value={majorHubInput} onChange={(e) => setMajorHubInput(e.target.value)} className="w-full bg-eve-input border border-eve-border rounded-sm px-1 py-0.5 text-[11px]" placeholder="Major hubs (comma-separated)" title="Editable major hub systems" />
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -4106,18 +4207,44 @@ export function ScanResultsTable({
             <button type="button" onClick={() => setShowHiddenRows((v) => !v)} title={t("showHidden")} className={`px-2 py-0.5 rounded-sm border text-[13px] transition-colors ${showHiddenRows ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10" : "border-eve-border/60 text-eve-text/50 bg-eve-dark/40 hover:border-eve-accent/40 hover:text-eve-accent/70"}`}>
               {showHiddenRows ? "Hide hidden" : "Show hidden"}
             </button>
-            <button type="button" onClick={() => setIgnoredModalOpen(true)} className="px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] hover:border-eve-accent/50 hover:text-eve-accent transition-colors" title={t("hiddenOpenManagerTitle")}>
-              {t("hiddenButton", { count: hiddenCounts.total })}
-            </button>
-            <button type="button" onClick={() => { void handleRebootCache(); }} disabled={cacheRebooting} className={`px-2 py-0.5 rounded-sm border bg-eve-dark/40 text-[11px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${isCacheStale ? "border-red-500/60 text-red-300 hover:bg-red-900/20" : "border-eve-border/60 text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent"}`} title={t("cacheHardResetTitle")}>
-              {cacheRebooting ? t("cacheRebooting") : t("cacheReboot")}
-            </button>
-            <button type="button" className={`px-2 py-0.5 rounded-sm border text-[11px] font-mono transition-colors ${isCacheStale ? "border-red-500/50 text-red-300 bg-red-950/30" : "border-eve-border/60 text-eve-accent bg-eve-dark/40 hover:border-eve-accent/50"}`} title={`${t("cacheTooltipScope")}: ${cacheView.scopeLabel}
+            <div ref={cachePanelRootRef} className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCachePanel((prev) => !prev);
+                  setShowEndpointPrefsPanel(false);
+                  setShowTrackedPanel(false);
+                }}
+                className={`px-2 py-0.5 rounded-sm border text-[11px] font-mono transition-colors ${isCacheStale ? "border-red-500/50 text-red-300 bg-red-950/30" : "border-eve-border/60 text-eve-accent bg-eve-dark/40 hover:border-eve-accent/50"}`}
+                aria-expanded={showCachePanel}
+                aria-controls="scan-results-cache-panel"
+                title={`${t("cacheTooltipScope")}: ${cacheView.scopeLabel}
 ${t("cacheTooltipRegions")}: ${cacheView.regionCount}
 ${t("cacheTooltipLastRefresh")}: ${new Date(cacheView.lastRefreshAt).toLocaleTimeString()}
 ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeString()}`}>
-              {cacheBadgeText}
-            </button>
+                {cacheBadgeText} {showCachePanel ? "▾" : "▸"}
+              </button>
+              {showCachePanel && (
+                <div
+                  id="scan-results-cache-panel"
+                  role="dialog"
+                  aria-label="Cache controls"
+                  className="absolute z-40 right-0 mt-1 min-w-[220px] rounded-sm border border-eve-border bg-eve-panel p-2 shadow-2xl"
+                >
+                  <button type="button" onClick={() => { void handleRebootCache(); }} disabled={cacheRebooting} className={`mb-1 w-full px-2 py-0.5 rounded-sm border bg-eve-dark/40 text-[11px] text-left transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${isCacheStale ? "border-red-500/60 text-red-300 hover:bg-red-900/20" : "border-eve-border/60 text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent"}`} title={t("cacheHardResetTitle")}>
+                    {cacheRebooting ? t("cacheRebooting") : t("cacheReboot")}
+                  </button>
+                  <button type="button" onClick={() => setIgnoredModalOpen(true)} className="mb-1 w-full px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] text-left hover:border-eve-accent/50 hover:text-eve-accent transition-colors" title={t("hiddenOpenManagerTitle")}>
+                    {t("hiddenButton", { count: hiddenCounts.total })}
+                  </button>
+                  {isCacheStale && (
+                    <p className="text-[10px] text-red-300/90">
+                      Cache appears stale. Reboot cache and rescan to refresh.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
 
             <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
               {(["all", "green", "yellow", "red"] as const).map((lvl) => {
