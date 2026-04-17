@@ -104,18 +104,18 @@ function renderPanel(overrides: {
   actionQueue?: ActionQueueItem[];
   loopOpportunities?: LoopOpportunity[];
 } = {}) {
-  const jumpToRouteGroup = vi.fn();
+  const openRouteWorkbench = vi.fn();
   render(
     <I18nProvider>
       <RadiusInsightsPanel
         topRoutePicks={overrides.topRoutePicks ?? makePicks()}
         actionQueue={overrides.actionQueue ?? makeQueue()}
         loopOpportunities={overrides.loopOpportunities ?? makeLoops()}
-        jumpToRouteGroup={jumpToRouteGroup}
+        openRouteWorkbench={openRouteWorkbench}
       />
     </I18nProvider>,
   );
-  return { jumpToRouteGroup };
+  return { openRouteWorkbench };
 }
 
 describe("RadiusInsightsPanel", () => {
@@ -171,15 +171,24 @@ describe("RadiusInsightsPanel", () => {
     expect(screen.queryByText("Top Picks")).not.toBeInTheDocument();
   });
 
-  it("invokes jumpToRouteGroup from pick and queue interactions", () => {
-    const { jumpToRouteGroup } = renderPanel();
+  it("invokes openRouteWorkbench from pick and queue interactions", () => {
+    const { openRouteWorkbench } = renderPanel();
     fireEvent.click(screen.getByRole("button", { name: "Expand" }));
 
     fireEvent.click(screen.getAllByRole("button", { name: /jump to group/i })[0]);
-    expect(jumpToRouteGroup).toHaveBeenCalledWith("30000142:30002187");
+    expect(openRouteWorkbench).toHaveBeenCalledWith("30000142:30002187", "summary");
 
     fireEvent.click(screen.getByRole("button", { name: "Queue" }));
     fireEvent.click(screen.getByRole("button", { name: /jump to group/i }));
-    expect(jumpToRouteGroup).toHaveBeenCalledTimes(2);
+    expect(openRouteWorkbench).toHaveBeenCalledTimes(2);
+  });
+
+  it("opens loop entries against the expected route key", () => {
+    const { openRouteWorkbench } = renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: "Expand" }));
+    fireEvent.click(screen.getByRole("button", { name: "Loops" }));
+    fireEvent.click(screen.getByRole("button", { name: "Outbound" }));
+
+    expect(openRouteWorkbench).toHaveBeenCalledWith("sys:0->sys:0", "summary");
   });
 });

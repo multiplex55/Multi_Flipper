@@ -1717,7 +1717,7 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
       });
     });
 
-    it("renders insights panel top picks and supports one-click jump-to-group", async () => {
+    it("renders insights panel top picks and opens workbench batch flow for the selected route", async () => {
       const rowA = makeRow({
         TypeID: 8001,
         BuyStation: "TopPick A Buy",
@@ -1745,7 +1745,8 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
 
       renderTable({ scanning: false, results: [rowA, rowB] });
 
-      fireEvent.click(screen.getByRole("button", { name: "Expand" }));
+      const expandButton = screen.queryByRole("button", { name: "Expand" });
+      if (expandButton) fireEvent.click(expandButton);
       expect(await screen.findByText("Best Recommended Route Pack")).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "Queue" }));
       expect(screen.getByText("Action Queue")).toBeInTheDocument();
@@ -1764,6 +1765,66 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
       await waitFor(() => {
         expect(groupedRouteButtons().length).toBeGreaterThan(0);
       });
+
+      expect(screen.getByText(/Route workbench:/i)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Open Batch Builder" }));
+      expect(screen.getByRole("heading", { name: /Batch Builder:/i })).toBeInTheDocument();
+    });
+
+    it("route header Batch action opens batch builder using the route anchor row", async () => {
+      const routeAnchor = makeRow({
+        TypeID: 8401,
+        TypeName: "Anchor Item",
+        BuyStation: "Anchor Buy",
+        SellStation: "Anchor Sell",
+        BuySystemID: 540001,
+        SellSystemID: 540002,
+      });
+      const routeCompanion = makeRow({
+        TypeID: 8402,
+        TypeName: "Companion Item",
+        BuyStation: routeAnchor.BuyStation,
+        SellStation: routeAnchor.SellStation,
+        BuySystemID: routeAnchor.BuySystemID,
+        SellSystemID: routeAnchor.SellSystemID,
+      });
+
+      renderTable({ scanning: false, results: [routeAnchor, routeCompanion] });
+      fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Batch" }));
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("heading", { name: /Batch Builder:/i }),
+        ).toBeInTheDocument();
+      });
+      expect(screen.getByText(/Anchor Buy -> Anchor Sell/i)).toBeInTheDocument();
+    });
+
+    it("workbench Scroll to table targets the selected route group", async () => {
+      const scrollSpy = vi.fn();
+      const originalScroll = Element.prototype.scrollIntoView;
+      Element.prototype.scrollIntoView = scrollSpy;
+      try {
+        const rowA = makeRow({
+          TypeID: 8501,
+          BuyStation: "Scroll Buy",
+          SellStation: "Scroll Sell",
+          BuySystemID: 550001,
+          SellSystemID: 550002,
+        });
+        renderTable({ scanning: false, results: [rowA] });
+        const expandButton = screen.queryByRole("button", { name: "Expand" });
+        if (expandButton) fireEvent.click(expandButton);
+        fireEvent.click(screen.getAllByRole("button", { name: /jump to group/i })[0]);
+        fireEvent.click(screen.getByRole("button", { name: "Scroll to table" }));
+
+        await waitFor(() => {
+          expect(scrollSpy).toHaveBeenCalled();
+        });
+      } finally {
+        Element.prototype.scrollIntoView = originalScroll;
+      }
     });
 
     it("shows insights collapsed by default and reveals top picks on expand", async () => {
