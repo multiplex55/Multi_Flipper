@@ -15,7 +15,10 @@ type RadiusInsightsPanelProps = {
   actionQueue: ActionQueueItem[];
   suppressionSummary?: string;
   loopOpportunities?: LoopOpportunity[];
-  jumpToRouteGroup: (routeKey: string) => void;
+  openRouteWorkbench: (routeKey: string, mode?: "summary" | "batch_builder") => void;
+  activeRouteGroupKey?: string | null;
+  routeWorkbenchMode?: "summary" | "batch_builder";
+  activeRouteLabel?: string | null;
   defaultExpanded?: boolean;
   compactDashboard?: boolean;
 };
@@ -65,7 +68,10 @@ export function RadiusInsightsPanel({
   actionQueue,
   suppressionSummary,
   loopOpportunities = [],
-  jumpToRouteGroup,
+  openRouteWorkbench,
+  activeRouteGroupKey = null,
+  routeWorkbenchMode = "summary",
+  activeRouteLabel = null,
   defaultExpanded = false,
   compactDashboard = false,
 }: RadiusInsightsPanelProps) {
@@ -194,7 +200,7 @@ export function RadiusInsightsPanel({
                             </div>
                             <button
                               type="button"
-                              onClick={() => jumpToRouteGroup(pick.routeKey)}
+                              onClick={() => openRouteWorkbench(pick.routeKey, "summary")}
                               className="mt-2 px-2 py-0.5 rounded-sm border border-eve-accent/60 text-eve-accent hover:bg-eve-accent/10 transition-colors text-[11px]"
                             >
                               {t("topPickJumpToGroup")}
@@ -249,7 +255,7 @@ export function RadiusInsightsPanel({
                             </div>
                             <button
                               type="button"
-                              onClick={() => jumpToRouteGroup(item.routeKey)}
+                              onClick={() => openRouteWorkbench(item.routeKey, "summary")}
                               className="mt-2 rounded-sm border border-eve-accent/60 px-2 py-0.5 text-[11px] text-eve-accent transition-colors hover:bg-eve-accent/10"
                             >
                               {t("topPickJumpToGroup")}
@@ -265,7 +271,7 @@ export function RadiusInsightsPanel({
                             </span>
                             <button
                               type="button"
-                              onClick={() => jumpToRouteGroup(item.routeKey)}
+                              onClick={() => openRouteWorkbench(item.routeKey, "summary")}
                               className="rounded-sm border border-eve-accent/50 px-1.5 py-0.5 text-[10px] text-eve-accent hover:bg-eve-accent/10"
                             >
                               {t("topPickJumpToGroup")}
@@ -301,7 +307,42 @@ export function RadiusInsightsPanel({
 
             {activeTab === "loops" && (
               <div className="mt-2">
-                <LoopOpportunitiesPanel loops={loopOpportunities} collapsed defaultExpanded={false} />
+                <LoopOpportunitiesPanel
+                  loops={loopOpportunities}
+                  collapsed
+                  defaultExpanded={false}
+                  onOpenRouteWorkbench={openRouteWorkbench}
+                />
+              </div>
+            )}
+
+            {activeRouteGroupKey && (
+              <div className="mt-2 rounded-sm border border-eve-accent/40 bg-eve-accent/5 p-2 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-eve-text">
+                    <span className="font-semibold">Route workbench:</span>{" "}
+                    {activeRouteLabel ?? activeRouteGroupKey}
+                  </div>
+                  <span className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-eve-dim">
+                    {routeWorkbenchMode === "batch_builder" ? "Batch builder" : "Summary"}
+                  </span>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => openRouteWorkbench(activeRouteGroupKey, "batch_builder")}
+                    className="rounded-sm border border-eve-accent/60 px-2 py-0.5 text-[11px] text-eve-accent hover:bg-eve-accent/10"
+                  >
+                    Open Batch Builder
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openRouteWorkbench(activeRouteGroupKey, "summary")}
+                    className="rounded-sm border border-eve-border/60 px-2 py-0.5 text-[11px] text-eve-dim hover:text-eve-text"
+                  >
+                    Scroll to table
+                  </button>
+                </div>
               </div>
             )}
           </>

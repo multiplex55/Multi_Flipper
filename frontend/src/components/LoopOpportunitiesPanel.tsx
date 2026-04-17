@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
 import type { LoopOpportunity } from "@/lib/loopPlanner";
+import { routeGroupKey } from "@/lib/batchMetrics";
 
 type LoopOpportunitiesPanelProps = {
   loops: LoopOpportunity[];
   collapsed?: boolean;
   defaultExpanded?: boolean;
+  onOpenRouteWorkbench?: (routeKey: string, mode?: "summary" | "batch_builder") => void;
 };
 
 function formatIsk(value: number): string {
@@ -19,6 +21,7 @@ export function LoopOpportunitiesPanel({
   loops,
   collapsed = true,
   defaultExpanded,
+  onOpenRouteWorkbench,
 }: LoopOpportunitiesPanelProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showExpanded, setShowExpanded] = useState<boolean>(
@@ -100,6 +103,32 @@ export function LoopOpportunitiesPanel({
                       <span className="text-eve-dim"> → </span>
                       <span className="font-semibold">{loop.returnLeg.row.SellSystemName}</span>
                     </div>
+                  </div>
+                  <div className="inline-flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onOpenRouteWorkbench?.(
+                          routeGroupKey(loop.outbound.row),
+                          "summary",
+                        )
+                      }
+                      className="rounded border border-eve-accent/50 px-2 py-0.5 text-[11px] text-eve-accent hover:bg-eve-accent/10"
+                    >
+                      Outbound
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onOpenRouteWorkbench?.(
+                          routeGroupKey(loop.returnLeg.row),
+                          "summary",
+                        )
+                      }
+                      className="rounded border border-eve-border/60 px-2 py-0.5 text-[11px] text-eve-dim hover:text-eve-text"
+                    >
+                      Return
+                    </button>
                   </div>
                   {!compactMode && (
                     <button

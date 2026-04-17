@@ -118,7 +118,7 @@ describe("LoopOpportunitiesPanel", () => {
           topRoutePicks={picks}
           actionQueue={makeQueue()}
           loopOpportunities={[]}
-          jumpToRouteGroup={() => {}}
+          openRouteWorkbench={() => {}}
         />
       </I18nProvider>,
     );

@@ -1827,10 +1827,17 @@ export function ScanResultsTable({
   const keyNavRootRef = useRef<HTMLDivElement>(null);
   const [execPlanRow, setExecPlanRow] = useState<FlipResult | null>(null);
   const [batchPlanRow, setBatchPlanRow] = useState<FlipResult | null>(null);
+  const [batchPlanRows, setBatchPlanRows] = useState<FlipResult[]>(results);
   const [scoreExplainRow, setScoreExplainRow] = useState<FlipResult | null>(
     null,
   );
   const [dayDetailRow, setDayDetailRow] = useState<FlipResult | null>(null);
+  const [activeRouteGroupKey, setActiveRouteGroupKey] = useState<string | null>(
+    null,
+  );
+  const [routeWorkbenchMode, setRouteWorkbenchMode] = useState<
+    "summary" | "batch_builder"
+  >("summary");
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [filterSearch, setFilterSearch] = useState("");
   const filterPanelRef = useRef<HTMLDivElement>(null);
@@ -1853,6 +1860,12 @@ export function ScanResultsTable({
   const [routeGroupRowLimit, setRouteGroupRowLimit] = useState<
     Map<string, number>
   >(new Map());
+
+  useEffect(() => {
+    if (batchPlanRow == null) {
+      setBatchPlanRows(results);
+    }
+  }, [batchPlanRow, results]);
 
   useEffect(() => {
     if (contextMenu && contextMenuRef.current) {
@@ -2711,6 +2724,35 @@ export function ScanResultsTable({
     routeGroups,
     selectedBadgeFilters,
   ]);
+
+  const routeGroupByKey = useMemo<Record<string, RouteGroup>>(() => {
+    const out: Record<string, RouteGroup> = {};
+    for (const ir of datasetRows) {
+      const key = routeGroupKey(ir.row);
+      const existing = out[key];
+      if (existing) {
+        existing.rows.push(ir);
+        continue;
+      }
+      out[key] = {
+        key,
+        label: `${ir.row.BuyStation || ir.row.BuySystemName} → ${
+          ir.row.SellStation || ir.row.SellSystemName
+        }`,
+        rows: [ir],
+      };
+    }
+    return out;
+  }, [datasetRows]);
+
+  const routeAnchorRowByKey = useMemo<Record<string, FlipResult>>(() => {
+    const out: Record<string, FlipResult> = {};
+    for (const group of Object.values(routeGroupByKey)) {
+      const anchor = group.rows[0]?.row;
+      if (anchor) out[group.key] = anchor;
+    }
+    return out;
+  }, [routeGroupByKey]);
 
   const endpointPreferenceDeltaByRoute = useMemo<Record<string, number>>(() => {
     const out: Record<string, number> = {};
@@ -4001,7 +4043,7 @@ export function ScanResultsTable({
       ?.scrollIntoView({ block: "nearest" });
   }, [focusedRowId]);
 
-  const jumpToRouteGroup = useCallback((routeKey: string) => {
+  const scrollToRouteGroup = useCallback((routeKey: string) => {
     setRouteViewMode("route");
     setExpandedRouteGroups((prev) => {
       const next = new Set(prev);
@@ -4017,6 +4059,32 @@ export function ScanResultsTable({
       }
     }, 0);
   }, []);
+
+  const openBatchBuilderForRoute = useCallback(
+    (routeKey: string) => {
+      const routeGroup = routeGroupByKey[routeKey];
+      const anchor = routeAnchorRowByKey[routeKey];
+      if (!routeGroup || !anchor) return;
+      setBatchPlanRow(anchor);
+      setBatchPlanRows(routeGroup.rows.map((item) => item.row));
+      setActiveRouteGroupKey(routeKey);
+      setRouteWorkbenchMode("batch_builder");
+    },
+    [routeAnchorRowByKey, routeGroupByKey],
+  );
+
+  const openRouteWorkbench = useCallback(
+    (routeKey: string, mode: "summary" | "batch_builder" = "summary") => {
+      setActiveRouteGroupKey(routeKey);
+      setRouteWorkbenchMode(mode);
+      if (mode === "batch_builder") {
+        openBatchBuilderForRoute(routeKey);
+        return;
+      }
+      scrollToRouteGroup(routeKey);
+    },
+    [openBatchBuilderForRoute, scrollToRouteGroup],
+  );
 
   // renderDataRow: renders a DataRow memo component — only the changed row re-renders
   const handleRouteSafetyClick = useCallback(
@@ -4995,7 +5063,10 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               ? `Hidden/deprioritized: ${suppressionTelemetry.softSessionFiltered} session-filtered, ${suppressionTelemetry.deprioritizedRows} deprioritized, ${hiddenCounts.total} manually hidden.`
               : undefined
           }
-          jumpToRouteGroup={jumpToRouteGroup}
+          openRouteWorkbench={openRouteWorkbench}
+          activeRouteGroupKey={activeRouteGroupKey}
+          routeWorkbenchMode={routeWorkbenchMode}
+          activeRouteLabel={activeRouteGroupKey ? routeGroupByKey[activeRouteGroupKey]?.label ?? null : null}
           defaultExpanded={!compactDashboard}
           compactDashboard={compactDashboard}
         />
@@ -5257,19 +5328,20 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                                 colSpan={columnDefs.length + 2}
                                 className="px-2 py-1.5"
                               >
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setExpandedRouteGroups((prev) => {
-                                      const next = new Set(prev);
-                                      if (next.has(group.key))
-                                        next.delete(group.key);
-                                      else next.add(group.key);
-                                      return next;
-                                    })
-                                  }
-                                  className="inline-flex w-full items-center justify-between gap-3 text-xs text-eve-text hover:text-eve-accent transition-colors"
-                                >
+                                <div className="flex w-full items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setExpandedRouteGroups((prev) => {
+                                        const next = new Set(prev);
+                                        if (next.has(group.key))
+                                          next.delete(group.key);
+                                        else next.add(group.key);
+                                        return next;
+                                      })
+                                    }
+                                    className="inline-flex min-w-0 flex-1 items-center justify-between gap-3 text-xs text-eve-text hover:text-eve-accent transition-colors"
+                                  >
                                   <span
                                     className="inline-flex items-center gap-2 min-w-0"
                                     data-testid={`route-header-left:${group.key}`}
@@ -5495,7 +5567,48 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                                         : "🔴"}
                                   </span>
                                   </span>
-                                </button>
+                                  </button>
+                                  <div className="inline-flex items-center gap-1 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => openBatchBuilderForRoute(group.key)}
+                                      className="rounded-sm border border-eve-accent/60 px-1.5 py-0.5 text-[10px] text-eve-accent hover:bg-eve-accent/10"
+                                    >
+                                      Batch
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => openRouteWorkbench(group.key, "summary")}
+                                      className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
+                                    >
+                                      Scroll
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled
+                                      className="rounded-sm border border-eve-border/40 px-1.5 py-0.5 text-[10px] text-eve-dim/50"
+                                      title="Coming soon"
+                                    >
+                                      Verify
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled
+                                      className="rounded-sm border border-eve-border/40 px-1.5 py-0.5 text-[10px] text-eve-dim/50"
+                                      title="Coming soon"
+                                    >
+                                      Copy
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled
+                                      className="rounded-sm border border-eve-border/40 px-1.5 py-0.5 text-[10px] text-eve-dim/50"
+                                      title="Coming soon"
+                                    >
+                                      Pin
+                                    </button>
+                                  </div>
+                                </div>
                               </td>
                             </tr>
                             {routeRows.map((ir) => {
@@ -5687,6 +5800,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               label={t("buildBatch")}
               onClick={() => {
                 setBatchPlanRow(contextMenu.row);
+                setBatchPlanRows(results);
                 setContextMenu(null);
               }}
             />
@@ -6121,7 +6235,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
         open={batchPlanRow !== null}
         onClose={() => setBatchPlanRow(null)}
         anchorRow={batchPlanRow}
-        rows={results}
+        rows={batchPlanRows}
         defaultCargoM3={cargoLimit}
         originSystemName={originSystemName}
         minRouteSecurity={minRouteSecurity}
