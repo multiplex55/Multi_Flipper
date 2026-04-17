@@ -52,6 +52,7 @@ describe("routePackBuilder", () => {
     const verification: RouteVerificationResult = {
       status: "Good",
       current_profit_isk: 55,
+      expected_profit_isk: 50,
       min_acceptable_profit_isk: 30,
       offenders: [],
     };

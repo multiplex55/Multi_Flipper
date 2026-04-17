@@ -75,7 +75,7 @@ function renderTable(results: FlipResult[]) {
 }
 
 describe("ScanResultsTable saved route packs", () => {
-  const writeText = vi.fn(async () => undefined);
+  const writeText = vi.fn<(text: string) => Promise<void>>(async () => undefined);
 
   beforeEach(() => {
     localStorage.clear();
@@ -110,7 +110,7 @@ describe("ScanResultsTable saved route packs", () => {
     fireEvent.click(copyButton);
 
     await waitFor(() => expect(writeText).toHaveBeenCalled());
-    const copied = String(writeText.mock.calls[0][0]);
+    const copied = String(writeText.mock.calls[0]?.[0] ?? "");
     expect(copied).toContain("Route: Jita → Amarr");
     expect(copied).toContain("Verification:");
   });
