@@ -2068,11 +2068,6 @@ describe("ScanResultsTable filter audit chips and stage counts", () => {
     localStorage.removeItem(ENDPOINT_PREFS_STORAGE_KEY);
   });
 
-  function clickLastButtonByName(name: RegExp | string) {
-    const buttons = screen.getAllByRole("button", { name });
-    fireEvent.click(buttons[buttons.length - 1]);
-  }
-
   function readStageCounts() {
     const roots = document.querySelectorAll("[data-filter-stage-counts]");
     const root = roots.item(roots.length - 1);
