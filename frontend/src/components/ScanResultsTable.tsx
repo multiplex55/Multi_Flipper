@@ -1547,6 +1547,9 @@ export function ScanResultsTable({
         return EndpointPreferenceApplicationMode.Deprioritize;
       }
     });
+  const [endpointPresetSelection, setEndpointPresetSelection] = useState<
+    "" | keyof typeof ENDPOINT_PREFERENCE_PRESETS
+  >("");
   const [majorHubInput, setMajorHubInput] = useState<string>(() => {
     try {
       const raw = localStorage.getItem(ENDPOINT_PREFS_STORAGE_KEY);
@@ -4181,12 +4184,18 @@ export function ScanResultsTable({
                       </select>
                       <div className="mb-1 text-eve-dim">Preset</div>
                       <select
-                        defaultValue=""
+                        value={endpointPresetSelection}
                         onChange={(e) => {
                           const key = e.target.value as keyof typeof ENDPOINT_PREFERENCE_PRESETS;
+                          setEndpointPresetSelection(
+                            (e.target.value || "") as
+                              | ""
+                              | keyof typeof ENDPOINT_PREFERENCE_PRESETS,
+                          );
                           if (!key || !ENDPOINT_PREFERENCE_PRESETS[key]) return;
-                          setEndpointPreferenceProfile(ENDPOINT_PREFERENCE_PRESETS[key]);
-                          e.currentTarget.value = "";
+                          setEndpointPreferenceProfile({
+                            ...ENDPOINT_PREFERENCE_PRESETS[key],
+                          });
                         }}
                         className="mb-2 w-full bg-eve-input border border-eve-border rounded-sm px-1 py-0.5 text-[11px]"
                         title="Quick profile preset"

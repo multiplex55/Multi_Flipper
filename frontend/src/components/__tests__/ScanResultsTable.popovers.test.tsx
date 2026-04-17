@@ -148,6 +148,15 @@ describe("ScanResultsTable toolbar popovers", () => {
     const modeSelect = within(endpointPanel).getByDisplayValue("Deprioritize");
     fireEvent.change(modeSelect, { target: { value: "hide" } });
     expect(within(endpointPanel).getByDisplayValue("Hide")).toBeInTheDocument();
+
+    const presetSelect = within(endpointPanel).getByTitle("Quick profile preset");
+    fireEvent.change(presetSelect, { target: { value: "structure_exit" } });
+    expect(within(endpointPanel).getByDisplayValue("Structure Exit")).toBeInTheDocument();
+
+    const storedPrefs = JSON.parse(
+      localStorage.getItem("eve-radius-endpoint-preferences:v1") ?? "{}",
+    ) as { profile?: { sellStructureBonus?: number } };
+    expect(storedPrefs.profile?.sellStructureBonus).toBe(16);
   });
 
   it("keeps cache actions callable from compact cache entry point", () => {
