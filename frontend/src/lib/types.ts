@@ -483,6 +483,30 @@ export interface MergedBatchManifest {
   total_buy_isk: number;
   total_sell_isk: number;
   total_profit_isk: number;
+  verification?: RouteManifestVerificationSnapshot;
+}
+
+export interface RouteManifestVerificationLineExpectation {
+  line_ref: string;
+  type_id: number;
+  type_name: string;
+  buy_system_id: number;
+  buy_location_id: number;
+  sell_system_id: number;
+  sell_location_id: number;
+  expected_buy_isk: number;
+  expected_sell_isk: number;
+  expected_profit_isk: number;
+}
+
+export interface RouteManifestVerificationSnapshot {
+  expected_buy_isk: number;
+  expected_sell_isk: number;
+  expected_profit_isk: number;
+  min_acceptable_profit_isk: number;
+  max_buy_drift_pct: number;
+  max_sell_drift_pct: number;
+  lines: RouteManifestVerificationLineExpectation[];
 }
 
 export interface RouteExecutionManifestEndpoint {

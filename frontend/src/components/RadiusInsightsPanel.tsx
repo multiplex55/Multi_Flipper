@@ -15,7 +15,14 @@ type RadiusInsightsPanelProps = {
   actionQueue: ActionQueueItem[];
   suppressionSummary?: string;
   loopOpportunities?: LoopOpportunity[];
-  openRouteWorkbench: (routeKey: string, mode?: "summary" | "batch_builder") => void;
+  openRouteWorkbench: (
+    routeKey: string,
+    mode?: "summary" | "batch_builder",
+    launchContext?: {
+      intentLabel?: string;
+      batchEntryMode?: "core" | "filler" | "loop";
+    },
+  ) => void;
   activeRouteGroupKey?: string | null;
   routeWorkbenchMode?: "summary" | "batch_builder";
   activeRouteLabel?: string | null;
@@ -85,9 +92,19 @@ export function RadiusInsightsPanel({
   const picks = useMemo(
     () =>
       [
-        ["bestRecommendedRoutePack", topRoutePicks.bestRecommendedRoutePack],
-        ["bestQuickSingleRoute", topRoutePicks.bestQuickSingleRoute],
-        ["bestSafeFillerRoute", topRoutePicks.bestSafeFillerRoute],
+        [
+          "bestRecommendedRoutePack",
+          topRoutePicks.bestRecommendedRoutePack,
+          "Primary",
+          "core",
+        ],
+        ["bestQuickSingleRoute", topRoutePicks.bestQuickSingleRoute, "Fast", "core"],
+        [
+          "bestSafeFillerRoute",
+          topRoutePicks.bestSafeFillerRoute,
+          "Safe filler",
+          "filler",
+        ],
       ] as const,
     [topRoutePicks],
   );
@@ -179,7 +196,7 @@ export function RadiusInsightsPanel({
                     {t("topPicksPanelTitle")}
                   </div>
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
-                    {picks.map(([titleKey, pick]) => (
+                    {picks.map(([titleKey, pick, intentLabel, batchEntryMode]) => (
                       <div
                         key={titleKey}
                         className="rounded-sm border border-eve-border/60 bg-eve-panel/50 p-2 text-xs"
@@ -187,7 +204,12 @@ export function RadiusInsightsPanel({
                         <div className="text-eve-dim">{t(titleKey)}</div>
                         {pick ? (
                           <>
-                            <div className="mt-1 text-eve-text font-medium">{pick.routeLabel}</div>
+                            <div className="mt-1 flex items-center justify-between gap-2">
+                              <div className="text-eve-text font-medium">{pick.routeLabel}</div>
+                              <span className="rounded-sm border border-indigo-400/40 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-indigo-200">
+                                {intentLabel}
+                              </span>
+                            </div>
                             <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-0.5 text-[11px]">
                               <span className="text-eve-dim">{t("topPickTotalProfit")}:</span>
                               <span className="text-green-300 text-right">{formatISK(pick.totalProfit)}</span>
@@ -200,7 +222,12 @@ export function RadiusInsightsPanel({
                             </div>
                             <button
                               type="button"
-                              onClick={() => openRouteWorkbench(pick.routeKey, "summary")}
+                              onClick={() =>
+                                openRouteWorkbench(pick.routeKey, "summary", {
+                                  intentLabel,
+                                  batchEntryMode,
+                                })
+                              }
                               className="mt-2 px-2 py-0.5 rounded-sm border border-eve-accent/60 text-eve-accent hover:bg-eve-accent/10 transition-colors text-[11px]"
                             >
                               {t("topPickJumpToGroup")}
@@ -239,7 +266,9 @@ export function RadiusInsightsPanel({
                             <div className="flex items-center justify-between gap-2">
                               <div className="font-medium text-eve-text truncate">{item.routeLabel}</div>
                               <span className="rounded-sm border border-eve-accent/40 bg-eve-accent/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-eve-accent">
-                                {actionLabel(item.action)}
+                                {item.action === "loop_return"
+                                  ? "Backhaul"
+                                  : actionLabel(item.action)}
                               </span>
                             </div>
                             <div className="mt-1 flex flex-wrap gap-1">
@@ -255,7 +284,20 @@ export function RadiusInsightsPanel({
                             </div>
                             <button
                               type="button"
-                              onClick={() => openRouteWorkbench(item.routeKey, "summary")}
+                              onClick={() =>
+                                openRouteWorkbench(item.routeKey, "summary", {
+                                  intentLabel:
+                                    item.action === "loop_return"
+                                      ? "Backhaul"
+                                      : actionLabel(item.action),
+                                  batchEntryMode:
+                                    item.action === "loop_return"
+                                      ? "loop"
+                                      : item.action === "filler"
+                                        ? "filler"
+                                        : "core",
+                                })
+                              }
                               className="mt-2 rounded-sm border border-eve-accent/60 px-2 py-0.5 text-[11px] text-eve-accent transition-colors hover:bg-eve-accent/10"
                             >
                               {t("topPickJumpToGroup")}
@@ -267,11 +309,26 @@ export function RadiusInsightsPanel({
                               {item.routeLabel}
                             </div>
                             <span className="rounded-sm border border-eve-accent/40 bg-eve-accent/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-eve-accent">
-                              {actionLabel(item.action)}
+                              {item.action === "loop_return"
+                                ? "Backhaul"
+                                : actionLabel(item.action)}
                             </span>
                             <button
                               type="button"
-                              onClick={() => openRouteWorkbench(item.routeKey, "summary")}
+                              onClick={() =>
+                                openRouteWorkbench(item.routeKey, "summary", {
+                                  intentLabel:
+                                    item.action === "loop_return"
+                                      ? "Backhaul"
+                                      : actionLabel(item.action),
+                                  batchEntryMode:
+                                    item.action === "loop_return"
+                                      ? "loop"
+                                      : item.action === "filler"
+                                        ? "filler"
+                                        : "core",
+                                })
+                              }
                               className="rounded-sm border border-eve-accent/50 px-1.5 py-0.5 text-[10px] text-eve-accent hover:bg-eve-accent/10"
                             >
                               {t("topPickJumpToGroup")}
@@ -330,7 +387,12 @@ export function RadiusInsightsPanel({
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   <button
                     type="button"
-                    onClick={() => openRouteWorkbench(activeRouteGroupKey, "batch_builder")}
+                    onClick={() =>
+                      openRouteWorkbench(activeRouteGroupKey, "batch_builder", {
+                        intentLabel: "Primary",
+                        batchEntryMode: "core",
+                      })
+                    }
                     className="rounded-sm border border-eve-accent/60 px-2 py-0.5 text-[11px] text-eve-accent hover:bg-eve-accent/10"
                   >
                     Open Batch Builder

@@ -72,9 +72,11 @@ function makeRow(overrides: Partial<FlipResult> = {}): FlipResult {
 function renderTable({
   scanning,
   results,
+  cargoLimit,
 }: {
   scanning: boolean;
   results: FlipResult[];
+  cargoLimit?: number;
 }) {
   return render(
     <I18nProvider>
@@ -84,6 +86,7 @@ function renderTable({
           scanning={scanning}
           progress=""
           tradeStateTab="radius"
+          cargoLimit={cargoLimit}
         />
       </ToastProvider>
     </I18nProvider>,
@@ -2057,6 +2060,72 @@ describe("ScanResultsTable column hint tooltips", () => {
     const slippageTitle = slippageHeader.closest("th")?.getAttribute("title") ?? "";
     expect(slippageTitle).toContain("Why it matters:");
     expect(slippageTitle).toContain("Good vs risky:");
+  });
+});
+
+describe("ScanResultsTable route filler header summary", () => {
+  it("shows filler summary only when remaining capacity and excluded opportunities both exist", async () => {
+    localStorage.setItem("eve-radius-route-view-mode:v1", "route");
+    const core = makeRow({
+      TypeID: 5001,
+      TypeName: "Core Trade",
+      BuySystemID: 31000001,
+      SellSystemID: 31000002,
+      BuyStation: "Core Buy",
+      SellStation: "Core Sell",
+      BuyLocationID: 70000001,
+      SellLocationID: 70000002,
+      Volume: 10,
+      UnitsToBuy: 1,
+      ProfitPerUnit: 1000,
+      TotalProfit: 1000,
+    });
+    const excluded = makeRow({
+      TypeID: 5002,
+      TypeName: "Excluded Opportunity",
+      BuySystemID: core.BuySystemID,
+      SellSystemID: core.SellSystemID,
+      BuyStation: core.BuyStation,
+      SellStation: core.SellStation,
+      BuyLocationID: core.BuyLocationID,
+      SellLocationID: core.SellLocationID,
+      Volume: 5,
+      UnitsToBuy: 1,
+      ProfitPerUnit: -1,
+      TotalProfit: -1,
+    });
+    const noFill = makeRow({
+      TypeID: 5003,
+      TypeName: "No Fill Route",
+      BuySystemID: 32000001,
+      SellSystemID: 32000002,
+      BuyStation: "No Fill Buy",
+      SellStation: "No Fill Sell",
+      BuyLocationID: 71000001,
+      SellLocationID: 71000002,
+      Volume: 10,
+      UnitsToBuy: 10,
+      ProfitPerUnit: 100,
+    });
+    renderTable({
+      scanning: false,
+      results: [core, excluded, noFill],
+      cargoLimit: 100,
+    });
+    const [firstRouteButton] = groupedRouteButtons();
+    fireEvent.click(firstRouteButton);
+    await waitFor(() => {
+      expect(
+        screen.getByTestId(
+          `route-filler-summary:loc:${core.BuyLocationID}->loc:${core.SellLocationID}`,
+        ),
+      ).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByTestId(
+        `route-filler-summary:loc:${noFill.BuyLocationID}->loc:${noFill.SellLocationID}`,
+      ),
+    ).not.toBeInTheDocument();
   });
 });
 

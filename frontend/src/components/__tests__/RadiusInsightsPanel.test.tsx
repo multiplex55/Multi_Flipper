@@ -176,11 +176,36 @@ describe("RadiusInsightsPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Expand" }));
 
     fireEvent.click(screen.getAllByRole("button", { name: /jump to group/i })[0]);
-    expect(openRouteWorkbench).toHaveBeenCalledWith("30000142:30002187", "summary");
+    expect(openRouteWorkbench).toHaveBeenCalledWith("30000142:30002187", "summary", {
+      intentLabel: "Primary",
+      batchEntryMode: "core",
+    });
 
     fireEvent.click(screen.getByRole("button", { name: "Queue" }));
     fireEvent.click(screen.getByRole("button", { name: /jump to group/i }));
     expect(openRouteWorkbench).toHaveBeenCalledTimes(2);
+  });
+
+  it("passes filler launch intent and entry mode for safe filler cards", () => {
+    const picks = makePicks();
+    picks.bestSafeFillerRoute = {
+      routeKey: "30000142:30004999",
+      routeLabel: "Jita → Hek",
+      totalProfit: 400_000,
+      dailyIskPerJump: 200_000,
+      confidenceScore: 70,
+      cargoUsePercent: 35,
+      recommendationScore: 72,
+      stopCount: 2,
+      riskCount: 0,
+    };
+    const { openRouteWorkbench } = renderPanel({ topRoutePicks: picks });
+    fireEvent.click(screen.getByRole("button", { name: "Expand" }));
+    fireEvent.click(screen.getAllByRole("button", { name: /jump to group/i })[2]);
+    expect(openRouteWorkbench).toHaveBeenCalledWith("30000142:30004999", "summary", {
+      intentLabel: "Safe filler",
+      batchEntryMode: "filler",
+    });
   });
 
   it("opens loop entries against the expected route key", () => {
