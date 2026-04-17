@@ -322,6 +322,7 @@ function renderPopup({
   onOpenPriceValidation,
   bannedTypeIDs,
   bannedStationIDs,
+  entryMode,
 }: {
   anchorRow: FlipResult | null;
   rows: FlipResult[];
@@ -330,6 +331,7 @@ function renderPopup({
   onOpenPriceValidation?: (manifestText: string) => void;
   bannedTypeIDs?: number[];
   bannedStationIDs?: number[];
+  entryMode?: "core" | "filler" | "loop";
 }) {
   return render(
     <I18nProvider>
@@ -362,6 +364,7 @@ function renderPopup({
           onOpenPriceValidation={onOpenPriceValidation}
           bannedTypeIDs={bannedTypeIDs}
           bannedStationIDs={bannedStationIDs}
+          entryMode={entryMode}
         />
       </ToastProvider>
     </I18nProvider>,
@@ -454,6 +457,16 @@ describe("BatchBuilderPopup route creation", () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it("supports mode-aware open context for loop entry", () => {
+    renderPopup({ anchorRow, rows, entryMode: "loop" });
+    expect(screen.getByTestId("batch-builder-entry-context")).toHaveTextContent(
+      "Mode: loop",
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Searching route additions...",
+    );
   });
 
   it("shows searching spinner/progress while request is pending", async () => {

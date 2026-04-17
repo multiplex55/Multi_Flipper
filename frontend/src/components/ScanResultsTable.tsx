@@ -15,6 +15,7 @@ import type {
   RouteState,
   SystemDanger,
   StrategyScoreConfig,
+  RouteManifestVerificationSnapshot,
 } from "@/lib/types";
 import { formatISK, formatMargin } from "@/lib/format";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
@@ -101,6 +102,10 @@ import {
   type EndpointPreferenceProfile,
 } from "@/lib/endpointPreferences";
 import { RadiusInsightsPanel } from "./RadiusInsightsPanel";
+import {
+  verifyRouteManifestAgainstRows,
+  type RouteVerificationResult,
+} from "@/lib/routeManifestVerification";
 
 const PAGE_SIZE = 100;
 const GROUP_CONTAINER_PAGE_SIZE = 50;
@@ -1854,6 +1859,28 @@ export function ScanResultsTable({
   const [routeWorkbenchMode, setRouteWorkbenchMode] = useState<
     "summary" | "batch_builder"
   >("summary");
+  const [batchBuilderEntryMode, setBatchBuilderEntryMode] = useState<
+    "core" | "filler" | "loop"
+  >("core");
+  const [batchBuilderLaunchIntent, setBatchBuilderLaunchIntent] = useState<
+    string | null
+  >(null);
+  const [routeManifestByKey, setRouteManifestByKey] = useState<
+    Record<string, RouteManifestVerificationSnapshot>
+  >({});
+  const [routeVerificationByKey, setRouteVerificationByKey] = useState<
+    Record<string, RouteVerificationResult>
+  >({});
+  const [routeFillerSummaryByKey, setRouteFillerSummaryByKey] = useState<
+    Record<
+      string,
+      {
+        remainingCapacityM3: number;
+        candidateCount: number;
+        estimatedIncrementalProfit: number;
+      }
+    >
+  >({});
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [filterSearch, setFilterSearch] = useState("");
   const filterPanelRef = useRef<HTMLDivElement>(null);
@@ -4328,7 +4355,10 @@ export function ScanResultsTable({
   }, []);
 
   const openBatchBuilderForRoute = useCallback(
-    (routeKey: string) => {
+    (
+      routeKey: string,
+      context?: { intentLabel?: string; batchEntryMode?: "core" | "filler" | "loop" },
+    ) => {
       const routeGroup = routeGroupByKey[routeKey];
       const anchor = routeAnchorRowByKey[routeKey];
       if (!routeGroup || !anchor) return;
@@ -4336,22 +4366,69 @@ export function ScanResultsTable({
       setBatchPlanRows(routeGroup.rows.map((item) => item.row));
       setActiveRouteGroupKey(routeKey);
       setRouteWorkbenchMode("batch_builder");
+      setBatchBuilderEntryMode(context?.batchEntryMode ?? "core");
+      setBatchBuilderLaunchIntent(context?.intentLabel ?? null);
     },
     [routeAnchorRowByKey, routeGroupByKey],
   );
 
   const openRouteWorkbench = useCallback(
-    (routeKey: string, mode: "summary" | "batch_builder" = "summary") => {
+    (
+      routeKey: string,
+      mode: "summary" | "batch_builder" = "summary",
+      launchContext?: { intentLabel?: string; batchEntryMode?: "core" | "filler" | "loop" },
+    ) => {
       setActiveRouteGroupKey(routeKey);
       setRouteWorkbenchMode(mode);
       if (mode === "batch_builder") {
-        openBatchBuilderForRoute(routeKey);
+        openBatchBuilderForRoute(routeKey, launchContext);
         return;
       }
       scrollToRouteGroup(routeKey);
     },
     [openBatchBuilderForRoute, scrollToRouteGroup],
   );
+
+  useEffect(() => {
+    const newlyExpanded = Array.from(expandedRouteGroups).filter(
+      (routeKey) => !routeFillerSummaryByKey[routeKey],
+    );
+    if (newlyExpanded.length === 0) return;
+    const next: Record<
+      string,
+      {
+        remainingCapacityM3: number;
+        candidateCount: number;
+        estimatedIncrementalProfit: number;
+      }
+    > = {};
+    for (const routeKey of newlyExpanded) {
+      const summary = batchMetricsByRoute[routeKey];
+      if (!summary) continue;
+      const remaining = summary.routeRemainingCargoM3 ?? 0;
+      const candidateCount = summary.routeUniverseExcludedItemCount;
+      if (!(remaining > 0) || candidateCount <= 0) continue;
+      const perItemProfit =
+        summary.routeItemCount > 0
+          ? summary.routeTotalProfit / summary.routeItemCount
+          : 0;
+      const estProfit = perItemProfit * Math.max(1, Math.min(candidateCount, 3)) * 0.2;
+      if (estProfit > 0) {
+        next[routeKey] = {
+          remainingCapacityM3: remaining,
+          candidateCount,
+          estimatedIncrementalProfit: estProfit,
+        };
+      }
+    }
+    if (Object.keys(next).length > 0) {
+      setRouteFillerSummaryByKey((prev) => ({ ...prev, ...next }));
+    }
+  }, [
+    expandedRouteGroups,
+    routeFillerSummaryByKey,
+    batchMetricsByRoute,
+  ]);
 
   // renderDataRow: renders a DataRow memo component — only the changed row re-renders
   const handleRouteSafetyClick = useCallback(
@@ -5582,6 +5659,8 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                           routeAggregateMetricsByRoute[group.key];
                         const routeScoreSummary =
                           routeScoreSummaryByRoute[group.key];
+                        const fillerSummary = routeFillerSummaryByKey[group.key];
+                        const verification = routeVerificationByKey[group.key];
                         const badgeMetadata =
                           routeBadgeMetadataByRoute[group.key] ??
                           deriveRouteBadgeMetadata(routeSummary, routeAggregate);
@@ -5813,6 +5892,17 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                                     })}{" "}
                                     m³
                                   </span>
+                                  {fillerSummary && (
+                                    <span
+                                      className="text-emerald-300 font-mono"
+                                      data-testid={`route-filler-summary:${group.key}`}
+                                      title="Estimated filler upside"
+                                    >
+                                      Fill {fillerSummary.remainingCapacityM3.toLocaleString(undefined, {
+                                        maximumFractionDigits: 1,
+                                      })}m³ · {fillerSummary.candidateCount} cands · +{formatISK(fillerSummary.estimatedIncrementalProfit)}
+                                    </span>
+                                  )}
                                   <span
                                     className="text-eve-dim font-mono"
                                     title="Weighted slippage percent"
@@ -5851,7 +5941,12 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                                   <div className="inline-flex items-center gap-1 shrink-0">
                                     <button
                                       type="button"
-                                      onClick={() => openBatchBuilderForRoute(group.key)}
+                                      onClick={() =>
+                                        openBatchBuilderForRoute(group.key, {
+                                          intentLabel: "Primary",
+                                          batchEntryMode: "core",
+                                        })
+                                      }
                                       className="rounded-sm border border-eve-accent/60 px-1.5 py-0.5 text-[10px] text-eve-accent hover:bg-eve-accent/10"
                                     >
                                       Batch
@@ -5865,12 +5960,64 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                                     </button>
                                     <button
                                       type="button"
-                                      disabled
-                                      className="rounded-sm border border-eve-border/40 px-1.5 py-0.5 text-[10px] text-eve-dim/50"
-                                      title="Coming soon"
+                                      onClick={() => {
+                                        const snapshot = routeManifestByKey[group.key];
+                                        if (!snapshot) {
+                                          addToast("No stored manifest expectations for this route yet.", "warning");
+                                          return;
+                                        }
+                                        const result = verifyRouteManifestAgainstRows({
+                                          snapshot,
+                                          rows: group.rows.map((entry) => entry.row),
+                                        });
+                                        setRouteVerificationByKey((prev) => ({
+                                          ...prev,
+                                          [group.key]: result,
+                                        }));
+                                        const offenderSummary =
+                                          result.offenders.length > 0
+                                            ? ` Offenders: ${result.offenders
+                                                .slice(0, 3)
+                                                .map(
+                                                  (offender) =>
+                                                    `${offender.type_id}/${offender.direction}`,
+                                                )
+                                                .join(", ")}.`
+                                            : "";
+                                        addToast(
+                                          `Verification ${result.status}: profit ${formatISK(result.current_profit_isk)} (min ${formatISK(result.min_acceptable_profit_isk)}).${offenderSummary}`,
+                                          result.status === "Abort"
+                                            ? "error"
+                                            : result.status === "Reduced edge"
+                                              ? "warning"
+                                              : "success",
+                                        );
+                                      }}
+                                      className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
                                     >
                                       Verify
                                     </button>
+                                    {verification && (
+                                      <span
+                                        className={`rounded-sm border px-1.5 py-0.5 text-[10px] ${
+                                          verification.status === "Good"
+                                            ? "border-emerald-500/60 text-emerald-300"
+                                            : verification.status === "Reduced edge"
+                                              ? "border-amber-500/60 text-amber-200"
+                                              : "border-rose-500/60 text-rose-300"
+                                        }`}
+                                        title={
+                                          verification.offenders
+                                            .map(
+                                              (offender) =>
+                                                `${offender.type_id} ${offender.direction} ${offender.drift_pct.toFixed(1)}%`,
+                                            )
+                                            .join(", ") || "No offenders"
+                                        }
+                                      >
+                                        {verification.status}
+                                      </span>
+                                    )}
                                     <button
                                       type="button"
                                       disabled
@@ -6516,6 +6663,12 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
         onClose={() => setBatchPlanRow(null)}
         anchorRow={batchPlanRow}
         rows={batchPlanRows}
+        manifestRouteKey={activeRouteGroupKey}
+        entryMode={batchBuilderEntryMode}
+        launchIntent={batchBuilderLaunchIntent}
+        onManifestVerificationSnapshot={(routeKey, snapshot) =>
+          setRouteManifestByKey((prev) => ({ ...prev, [routeKey]: snapshot }))
+        }
         defaultCargoM3={cargoLimit}
         originSystemName={originSystemName}
         minRouteSecurity={minRouteSecurity}

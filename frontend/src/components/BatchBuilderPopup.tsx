@@ -23,6 +23,7 @@ import type {
   OrderedRouteManifest,
   RouteAdditionOption,
   StationCacheMeta,
+  RouteManifestVerificationSnapshot,
 } from "@/lib/types";
 import { Modal } from "./Modal";
 import { useGlobalToast } from "./Toast";
@@ -55,6 +56,13 @@ interface BatchBuilderPopupProps {
   onOpenPriceValidation?: (manifestText: string) => void;
   bannedTypeIDs?: number[];
   bannedStationIDs?: number[];
+  manifestRouteKey?: string | null;
+  entryMode?: "core" | "filler" | "loop";
+  launchIntent?: string | null;
+  onManifestVerificationSnapshot?: (
+    routeKey: string,
+    snapshot: RouteManifestVerificationSnapshot,
+  ) => void;
 }
 
 type RouteState = "idle" | "searching" | "results" | "selected";
@@ -125,6 +133,53 @@ function buildMergedManifest(
     total_buy_isk: baseBatch.total_buy_isk + option.total_buy_isk,
     total_sell_isk: baseBatch.total_sell_isk + option.total_sell_isk,
     total_profit_isk: baseBatch.total_profit_isk + option.total_profit_isk,
+    verification: {
+      expected_buy_isk: baseBatch.total_buy_isk + option.total_buy_isk,
+      expected_sell_isk: baseBatch.total_sell_isk + option.total_sell_isk,
+      expected_profit_isk: baseBatch.total_profit_isk + option.total_profit_isk,
+      min_acceptable_profit_isk:
+        (baseBatch.total_profit_isk + option.total_profit_isk) * 0.7,
+      max_buy_drift_pct: 5,
+      max_sell_drift_pct: 5,
+      lines: [
+        ...baseBatch.base_lines.map((line) => ({
+          line_ref: routeLineKey({
+            TypeID: line.type_id,
+            BuyLocationID: line.buy_location_id,
+            BuySystemID: line.buy_system_id,
+            SellLocationID: line.sell_location_id,
+            SellSystemID: line.sell_system_id,
+          } as FlipResult),
+          type_id: line.type_id,
+          type_name: line.type_name,
+          buy_system_id: line.buy_system_id,
+          buy_location_id: line.buy_location_id,
+          sell_system_id: line.sell_system_id,
+          sell_location_id: line.sell_location_id,
+          expected_buy_isk: line.buy_total_isk,
+          expected_sell_isk: line.sell_total_isk,
+          expected_profit_isk: line.profit_total_isk,
+        })),
+        ...option.lines.map((line) => ({
+          line_ref: routeLineKey({
+            TypeID: line.type_id,
+            BuyLocationID: line.buy_location_id,
+            BuySystemID: line.buy_system_id,
+            SellLocationID: line.sell_location_id,
+            SellSystemID: line.sell_system_id,
+          } as FlipResult),
+          type_id: line.type_id,
+          type_name: line.type_name,
+          buy_system_id: line.buy_system_id,
+          buy_location_id: line.buy_location_id,
+          sell_system_id: line.sell_system_id,
+          sell_location_id: line.sell_location_id,
+          expected_buy_isk: line.buy_total_isk,
+          expected_sell_isk: line.sell_total_isk,
+          expected_profit_isk: line.profit_total_isk,
+        })),
+      ],
+    },
   };
 }
 
@@ -226,6 +281,10 @@ export function BatchBuilderPopup({
   onOpenPriceValidation,
   bannedTypeIDs = [],
   bannedStationIDs = [],
+  manifestRouteKey = null,
+  entryMode = "core",
+  launchIntent = null,
+  onManifestVerificationSnapshot,
 }: BatchBuilderPopupProps) {
   const { t } = useI18n();
   const { addToast } = useGlobalToast();
@@ -257,6 +316,7 @@ export function BatchBuilderPopup({
     RouteAdditionOption["lines"]
   >([]);
   const [fillerLoading, setFillerLoading] = useState(false);
+  const [autoCreateRequested, setAutoCreateRequested] = useState(false);
   const activeRequestRef = useRef(0);
   const activeAbortRef = useRef<AbortController | null>(null);
   const activeFillerAbortRef = useRef<AbortController | null>(null);
@@ -269,8 +329,9 @@ export function BatchBuilderPopup({
     setRouteOptions([]);
     setRouteSortBy("recommended");
     setStrategyFilter("all");
-    setExecutionScoringPreset("balanced");
-    lastAppliedPresetRef.current = "balanced";
+    const initialPreset = entryMode === "loop" ? "max_fill" : "balanced";
+    setExecutionScoringPreset(initialPreset);
+    lastAppliedPresetRef.current = initialPreset;
     setRouteError(null);
     setSelectedOptionId(null);
     setMergedManifest(null);
@@ -281,7 +342,8 @@ export function BatchBuilderPopup({
     setSelectedFillerKeys({});
     setAppliedFillerLines([]);
     setFillerLoading(false);
-  }, [open, defaultCargoM3]);
+    setAutoCreateRequested(entryMode === "filler" || entryMode === "loop");
+  }, [open, defaultCargoM3, entryMode]);
 
   const allowedRows = useMemo(
     () => filterFlipResults(rows, bannedTypeIDs, bannedStationIDs),
@@ -393,6 +455,21 @@ export function BatchBuilderPopup({
     originSystemName,
     originLocationId,
     originLocationName,
+  ]);
+
+  useEffect(() => {
+    if (
+      !manifestRouteKey ||
+      !mergedManifest?.verification ||
+      !onManifestVerificationSnapshot
+    ) {
+      return;
+    }
+    onManifestVerificationSnapshot(manifestRouteKey, mergedManifest.verification);
+  }, [
+    manifestRouteKey,
+    mergedManifest,
+    onManifestVerificationSnapshot,
   ]);
 
   const createRouteError = useMemo(() => {
@@ -1055,6 +1132,25 @@ export function BatchBuilderPopup({
   ]);
 
   useEffect(() => {
+    if (
+      !open ||
+      !autoCreateRequested ||
+      routeState !== "idle" ||
+      !baseBatchManifest
+    ) {
+      return;
+    }
+    setAutoCreateRequested(false);
+    void startBatchCreateRoute();
+  }, [
+    open,
+    autoCreateRequested,
+    routeState,
+    baseBatchManifest,
+    startBatchCreateRoute,
+  ]);
+
+  useEffect(() => {
     if (!open || !baseBatchManifest || routeOptions.length === 0) return;
     if (lastAppliedPresetRef.current === executionScoringPreset) return;
     lastAppliedPresetRef.current = executionScoringPreset;
@@ -1211,6 +1307,15 @@ export function BatchBuilderPopup({
     >
       <div className="p-4 flex flex-col gap-3">
         <p className="text-xs text-eve-dim">{t("batchBuilderHint")}</p>
+        <div className="text-[11px] text-eve-dim" data-testid="batch-builder-entry-context">
+          Mode: <span className="text-eve-text">{entryMode}</span>
+          {launchIntent ? (
+            <>
+              {" "}
+              · Intent: <span className="text-eve-text">{launchIntent}</span>
+            </>
+          ) : null}
+        </div>
 
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-xs text-eve-dim">
