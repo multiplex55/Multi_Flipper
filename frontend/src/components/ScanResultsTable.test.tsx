@@ -1,10 +1,15 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 import { I18nProvider } from "@/lib/i18n";
 import { ToastProvider } from "@/components/Toast";
 import { ScanResultsTable, calcRouteConfidence } from "@/components/ScanResultsTable";
 import type { FlipResult } from "@/lib/types";
 import { executionQualityForFlip, requestedUnitsForFlip } from "@/lib/executionQuality";
+import {
+  createSessionStationFilters,
+  type SessionStationFilters,
+} from "@/lib/banlistFilters";
 import {
   addPinnedOpportunity,
   getGankCheckBatch,
@@ -83,6 +88,37 @@ function renderTable({
       </ToastProvider>
     </I18nProvider>,
   );
+}
+
+function renderTableWithSessionFilters({
+  scanning,
+  results,
+  initialFilters,
+}: {
+  scanning: boolean;
+  results: FlipResult[];
+  initialFilters: SessionStationFilters;
+}) {
+  function Wrapper() {
+    const [sessionFilters, setSessionFilters] = useState(initialFilters);
+    return (
+      <I18nProvider>
+        <ToastProvider>
+          <ScanResultsTable
+            results={results}
+            scanning={scanning}
+            progress=""
+            tradeStateTab="radius"
+            sessionStationFilters={sessionFilters}
+            onUpdateSessionStationFilters={(updater) =>
+              setSessionFilters((prev) => updater(prev))
+            }
+          />
+        </ToastProvider>
+      </I18nProvider>
+    );
+  }
+  return render(<Wrapper />);
 }
 
 function groupedRouteButtons() {
@@ -2021,5 +2057,139 @@ describe("ScanResultsTable column hint tooltips", () => {
     const slippageTitle = slippageHeader.closest("th")?.getAttribute("title") ?? "";
     expect(slippageTitle).toContain("Why it matters:");
     expect(slippageTitle).toContain("Good vs risky:");
+  });
+});
+
+describe("ScanResultsTable filter audit chips and stage counts", () => {
+  const ENDPOINT_PREFS_STORAGE_KEY = "eve-radius-endpoint-preferences:v1";
+
+  afterEach(() => {
+    cleanup();
+    localStorage.removeItem(ENDPOINT_PREFS_STORAGE_KEY);
+  });
+
+  function clickLastButtonByName(name: RegExp | string) {
+    const buttons = screen.getAllByRole("button", { name });
+    fireEvent.click(buttons[buttons.length - 1]);
+  }
+
+  function readStageCounts() {
+    const roots = document.querySelectorAll("[data-filter-stage-counts]");
+    const root = roots.item(roots.length - 1);
+    expect(root).not.toBeNull();
+    return JSON.parse(root?.getAttribute("data-filter-stage-counts") ?? "{}") as Record<string, number>;
+  }
+
+  it("renders active chips for endpoint/tracked/safety/hidden/session filters", async () => {
+    const row = makeRow({
+      TypeID: 9101,
+      TypeName: "Chip Target",
+      BuyLocationID: 7000001,
+    });
+    const sessionFilters = createSessionStationFilters();
+    sessionFilters.ignoredBuyStationIds.add(7000001);
+    localStorage.setItem(
+      ENDPOINT_PREFS_STORAGE_KEY,
+      JSON.stringify({
+        mode: "deprioritize",
+        profile: { requireNonHubBuy: true },
+      }),
+    );
+
+    renderTableWithSessionFilters({
+      scanning: false,
+      results: [row],
+      initialFilters: sessionFilters,
+    });
+
+    expect(await screen.findByTestId("active-filter-chip-bar")).toBeInTheDocument();
+    expect(screen.getByTestId("active-filter-chip:endpoint-preferences")).toBeInTheDocument();
+    expect(screen.getByTestId("active-filter-chip:session-ignores")).toBeInTheDocument();
+  });
+
+  it("removing a chip mutates backing source state and updates counts", async () => {
+    const visibleRow = makeRow({
+      TypeID: 9201,
+      TypeName: "Visible Row",
+      BuyLocationID: 9000001,
+    });
+    const ignoredRow = makeRow({
+      TypeID: 9202,
+      TypeName: "Ignored Row",
+      BuyLocationID: 9000002,
+    });
+    const sessionFilters = createSessionStationFilters();
+    sessionFilters.ignoredBuyStationIds.add(9000002);
+
+    renderTableWithSessionFilters({
+      scanning: false,
+      results: [visibleRow, ignoredRow],
+      initialFilters: sessionFilters,
+    });
+
+    await waitFor(() => {
+      expect(readStageCounts().session_hard_ignores).toBe(1);
+    });
+    fireEvent.click(screen.getByTestId("active-filter-chip:session-ignores"));
+    await waitFor(() => {
+      expect(readStageCounts().session_hard_ignores).toBe(2);
+    });
+    expect(screen.queryByTestId("active-filter-chip:session-ignores")).not.toBeInTheDocument();
+  });
+
+  it("keeps deterministic stage counts stable with multiple active filters", async () => {
+    vi.mocked(getWatchlist).mockResolvedValueOnce([
+      {
+        type_id: 9301,
+        threshold_percent: 0,
+        enabled: true,
+        added_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+      },
+    ] as never);
+    const trackedRow = makeRow({
+      TypeID: 9301,
+      TypeName: "Tracked Eligible",
+      BuyLocationID: 8100001,
+      BuySystemName: "Perimeter",
+    });
+    const hubBlockedByEndpoint = makeRow({
+      TypeID: 9302,
+      TypeName: "Hub Blocked",
+      BuyLocationID: 8100002,
+      BuySystemName: "Jita",
+    });
+    const sessionIgnored = makeRow({
+      TypeID: 9303,
+      TypeName: "Session Ignored",
+      BuyLocationID: 8100099,
+      BuySystemName: "Perimeter",
+    });
+    const sessionFilters = createSessionStationFilters();
+    sessionFilters.ignoredBuyStationIds.add(8100099);
+    localStorage.setItem(
+      ENDPOINT_PREFS_STORAGE_KEY,
+      JSON.stringify({
+        mode: "hide",
+        profile: { requireNonHubBuy: true },
+      }),
+    );
+
+    renderTableWithSessionFilters({
+      scanning: false,
+      results: [trackedRow, hubBlockedByEndpoint, sessionIgnored],
+      initialFilters: sessionFilters,
+    });
+
+    await waitFor(() => {
+      const counts = readStageCounts();
+      expect(counts.session_hard_ignores).toBe(2);
+      expect(counts.endpoint_hard_rules).toBe(1);
+      expect(counts.column_filters).toBe(1);
+      expect(counts.tracked_visibility_mode).toBe(1);
+      expect(counts.route_safety_filter).toBe(1);
+      expect(counts.hidden_row_toggle).toBe(1);
+      expect(counts.route_badge_filter).toBe(1);
+    });
   });
 });
