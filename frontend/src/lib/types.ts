@@ -509,6 +509,50 @@ export interface RouteManifestVerificationSnapshot {
   lines: RouteManifestVerificationLineExpectation[];
 }
 
+export type SavedRoutePackVerificationStatus = "Good" | "Reduced edge" | "Abort";
+
+export interface SavedRoutePackVerificationSnapshot {
+  status: SavedRoutePackVerificationStatus;
+  currentProfitIsk: number;
+  minAcceptableProfitIsk: number;
+  verifiedAt: string;
+  offenderCount: number;
+}
+
+export interface SavedRoutePackSummarySnapshot {
+  routeItemCount: number;
+  routeTotalProfit: number;
+  routeTotalCapital: number;
+  routeRealIskPerJump: number;
+  routeDailyIskPerJump: number;
+  routeDailyProfit: number;
+  routeWeightedSlippagePct: number;
+  routeTurnoverDays: number | null;
+  routeSafetyRank: number | null;
+}
+
+export interface SavedRoutePack {
+  routeKey: string;
+  routeLabel: string;
+  buyLocationId: number;
+  sellLocationId: number;
+  buySystemId: number;
+  sellSystemId: number;
+  createdAt: string;
+  updatedAt: string;
+  lastVerifiedAt: string | null;
+  entryMode: "core" | "filler" | "loop";
+  launchIntent: string | null;
+  selectedLineKeys: string[];
+  excludedLineKeys: string[];
+  summarySnapshot: SavedRoutePackSummarySnapshot;
+  manifestSnapshot: RouteManifestVerificationSnapshot | null;
+  verificationSnapshot: SavedRoutePackVerificationSnapshot | null;
+  notes: string;
+  tags: string[];
+  status: "active" | "archived";
+}
+
 export interface RouteExecutionManifestEndpoint {
   system_id: number;
   system_name: string;

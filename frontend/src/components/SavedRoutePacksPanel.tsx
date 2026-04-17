@@ -1,0 +1,72 @@
+import type { SavedRoutePack } from "@/lib/types";
+import { formatISK } from "@/lib/format";
+
+interface SavedRoutePacksPanelProps {
+  packs: SavedRoutePack[];
+  onOpen: (pack: SavedRoutePack) => void;
+  onVerify: (pack: SavedRoutePack) => void;
+  onCopy: (pack: SavedRoutePack) => void;
+  onRemove: (pack: SavedRoutePack) => void;
+}
+
+function verificationAge(lastVerifiedAt: string | null): string {
+  if (!lastVerifiedAt) return "—";
+  const deltaMs = Date.now() - new Date(lastVerifiedAt).getTime();
+  if (!Number.isFinite(deltaMs) || deltaMs < 0) return "—";
+  const minutes = Math.floor(deltaMs / 60000);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
+}
+
+export function SavedRoutePacksPanel({
+  packs,
+  onOpen,
+  onVerify,
+  onCopy,
+  onRemove,
+}: SavedRoutePacksPanelProps) {
+  return (
+    <div className="border border-eve-border rounded-sm p-2 mb-2 bg-eve-panel/40" data-testid="saved-route-packs-panel">
+      <div className="text-xs uppercase tracking-wide text-eve-dim mb-2">Saved routes</div>
+      {packs.length === 0 ? (
+        <div className="text-xs text-eve-dim">No saved routes yet.</div>
+      ) : (
+        <div className="overflow-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-eve-dim text-left border-b border-eve-border/60">
+                <th className="py-1 pr-2">Route</th>
+                <th className="py-1 pr-2">Status</th>
+                <th className="py-1 pr-2">Expected profit</th>
+                <th className="py-1 pr-2">Verification</th>
+                <th className="py-1 pr-2">Last verified</th>
+                <th className="py-1">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {packs.map((pack) => (
+                <tr key={pack.routeKey} className="border-b border-eve-border/40 last:border-b-0">
+                  <td className="py-1 pr-2 text-eve-text">{pack.routeLabel}</td>
+                  <td className="py-1 pr-2">{pack.status}</td>
+                  <td className="py-1 pr-2 font-mono">{formatISK(pack.summarySnapshot.routeTotalProfit)}</td>
+                  <td className="py-1 pr-2">{pack.verificationSnapshot?.status ?? "Unverified"}</td>
+                  <td className="py-1 pr-2">{verificationAge(pack.lastVerifiedAt)}</td>
+                  <td className="py-1">
+                    <div className="inline-flex gap-1">
+                      <button type="button" onClick={() => onOpen(pack)} className="border border-eve-border/60 px-1.5 py-0.5 rounded-sm">Open</button>
+                      <button type="button" onClick={() => onVerify(pack)} className="border border-eve-border/60 px-1.5 py-0.5 rounded-sm">Verify</button>
+                      <button type="button" onClick={() => onCopy(pack)} className="border border-eve-border/60 px-1.5 py-0.5 rounded-sm">Copy</button>
+                      <button type="button" onClick={() => onRemove(pack)} className="border border-rose-500/50 text-rose-200 px-1.5 py-0.5 rounded-sm">Remove</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}

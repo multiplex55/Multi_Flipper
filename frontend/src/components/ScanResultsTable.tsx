@@ -10,6 +10,7 @@ import {
 } from "react";
 import type {
   FlipResult,
+  SavedRoutePack,
   StationCacheMeta,
   WatchlistItem,
   RouteState,
@@ -22,6 +23,7 @@ import { useI18n, type TranslationKey } from "@/lib/i18n";
 import {
   buildRouteBatchMetadata,
   routeGroupKey,
+  routeLineKey,
   type RouteBatchMetadata,
 } from "@/lib/batchMetrics";
 import { routeSafetyRankFromState } from "@/lib/routeSafetySort";
@@ -106,6 +108,14 @@ import {
   verifyRouteManifestAgainstRows,
   type RouteVerificationResult,
 } from "@/lib/routeManifestVerification";
+import {
+  formatSavedRoutePackExport,
+  loadSavedRoutePacks,
+  removeSavedRoutePack,
+  upsertSavedRoutePack,
+} from "@/lib/savedRoutePacks";
+import { buildSavedRoutePack } from "@/lib/routePackBuilder";
+import { SavedRoutePacksPanel } from "@/components/SavedRoutePacksPanel";
 
 const PAGE_SIZE = 100;
 const GROUP_CONTAINER_PAGE_SIZE = 50;
@@ -1513,6 +1523,9 @@ export function ScanResultsTable({
   const [hiddenColumns, setHiddenColumns] = useState<Set<SortKey>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
+  const [savedRoutePacks, setSavedRoutePacks] = useState<SavedRoutePack[]>(() =>
+    loadSavedRoutePacks(),
+  );
   const [page, setPage] = useState(0);
   const [routeGroupPage, setRouteGroupPage] = useState(0);
   const [regionGroupPage, setRegionGroupPage] = useState(0);
@@ -2974,6 +2987,13 @@ export function ScanResultsTable({
     }
     return out;
   }, [routeGroupByKey]);
+  const savedRoutePackByKey = useMemo<Record<string, SavedRoutePack>>(() => {
+    const out: Record<string, SavedRoutePack> = {};
+    for (const pack of savedRoutePacks) {
+      out[pack.routeKey] = pack;
+    }
+    return out;
+  }, [savedRoutePacks]);
 
   const endpointPreferenceDeltaByRoute = useMemo<Record<string, number>>(() => {
     const out: Record<string, number> = {};
@@ -3809,6 +3829,97 @@ export function ScanResultsTable({
     [addToast, t],
   );
 
+  const saveRoutePack = useCallback(
+    (routeKey: string) => {
+      const routeGroup = routeGroupByKey[routeKey];
+      const anchor = routeAnchorRowByKey[routeKey];
+      if (!routeGroup || !anchor) return;
+      const existing = savedRoutePackByKey[routeKey] ?? null;
+      const verificationResult = routeVerificationByKey[routeKey];
+      const pack = buildSavedRoutePack({
+        existingPack: existing,
+        routeKey,
+        routeLabel: routeGroup.label,
+        anchorRow: anchor,
+        routeRows: routeGroup.rows.map((item) => item.row),
+        selectedRows: routeGroup.rows.map((item) => item.row),
+        entryMode: batchBuilderEntryMode,
+        launchIntent: batchBuilderLaunchIntent,
+        summary: batchMetricsByRoute[routeKey] ?? null,
+        routeSafetyRank: routeAggregateMetricsByRoute[routeKey]?.routeSafetyRank ?? null,
+        manifestSnapshot: routeManifestByKey[routeKey] ?? null,
+        verificationResult: verificationResult ?? null,
+      });
+      const next = upsertSavedRoutePack(pack);
+      setSavedRoutePacks(next);
+      addToast("Route saved", "success", 2000);
+    },
+    [
+      addToast,
+      batchBuilderEntryMode,
+      batchBuilderLaunchIntent,
+      batchMetricsByRoute,
+      routeAggregateMetricsByRoute,
+      routeAnchorRowByKey,
+      routeGroupByKey,
+      routeManifestByKey,
+      routeVerificationByKey,
+      savedRoutePackByKey,
+    ],
+  );
+
+  const toggleSavedRoutePack = useCallback(
+    (routeKey: string) => {
+      if (savedRoutePackByKey[routeKey]) {
+        const next = removeSavedRoutePack(routeKey);
+        setSavedRoutePacks(next);
+        addToast("Route removed", "success", 2000);
+        return;
+      }
+      saveRoutePack(routeKey);
+    },
+    [addToast, saveRoutePack, savedRoutePackByKey],
+  );
+
+  const copySavedRoutePack = useCallback(
+    (routeKey: string) => {
+      const pack = savedRoutePackByKey[routeKey];
+      if (pack) {
+        copyText(formatSavedRoutePackExport(pack));
+        return;
+      }
+      const routeGroup = routeGroupByKey[routeKey];
+      const anchor = routeAnchorRowByKey[routeKey];
+      if (!routeGroup || !anchor) return;
+      const transientPack = buildSavedRoutePack({
+        routeKey,
+        routeLabel: routeGroup.label,
+        anchorRow: anchor,
+        routeRows: routeGroup.rows.map((item) => item.row),
+        selectedRows: routeGroup.rows.map((item) => item.row),
+        entryMode: batchBuilderEntryMode,
+        launchIntent: batchBuilderLaunchIntent,
+        summary: batchMetricsByRoute[routeKey] ?? null,
+        routeSafetyRank: routeAggregateMetricsByRoute[routeKey]?.routeSafetyRank ?? null,
+        manifestSnapshot: routeManifestByKey[routeKey] ?? null,
+        verificationResult: routeVerificationByKey[routeKey] ?? null,
+      });
+      copyText(formatSavedRoutePackExport(transientPack));
+    },
+    [
+      batchBuilderEntryMode,
+      batchBuilderLaunchIntent,
+      batchMetricsByRoute,
+      copyText,
+      routeAggregateMetricsByRoute,
+      routeAnchorRowByKey,
+      routeGroupByKey,
+      routeManifestByKey,
+      routeVerificationByKey,
+      savedRoutePackByKey,
+    ],
+  );
+
   const addBuyStationIgnore = useCallback(
     (stationID: number) => {
       if (stationID <= 0) return;
@@ -4387,6 +4498,92 @@ export function ScanResultsTable({
       scrollToRouteGroup(routeKey);
     },
     [openBatchBuilderForRoute, scrollToRouteGroup],
+  );
+
+  const verifyRouteGroup = useCallback(
+    (routeKey: string) => {
+      const group = routeGroupByKey[routeKey];
+      const snapshot = routeManifestByKey[routeKey];
+      if (!group || !snapshot) {
+        addToast("No stored manifest expectations for this route yet.", "warning");
+        return;
+      }
+      const result = verifyRouteManifestAgainstRows({
+        snapshot,
+        rows: group.rows.map((entry) => entry.row),
+      });
+      setRouteVerificationByKey((prev) => ({
+        ...prev,
+        [routeKey]: result,
+      }));
+      const offenderSummary =
+        result.offenders.length > 0
+          ? ` Offenders: ${result.offenders
+              .slice(0, 3)
+              .map((offender) => `${offender.type_id}/${offender.direction}`)
+              .join(", ")}.`
+          : "";
+      addToast(
+        `Verification ${result.status}: profit ${formatISK(result.current_profit_isk)} (min ${formatISK(result.min_acceptable_profit_isk)}).${offenderSummary}`,
+        result.status === "Abort"
+          ? "error"
+          : result.status === "Reduced edge"
+            ? "warning"
+            : "success",
+      );
+      setSavedRoutePacks((prev) => {
+        if (!savedRoutePackByKey[routeKey]) return prev;
+        const routeGroup = routeGroupByKey[routeKey];
+        const anchor = routeAnchorRowByKey[routeKey];
+        if (!routeGroup || !anchor) return prev;
+        const rebuilt = buildSavedRoutePack({
+          existingPack: savedRoutePackByKey[routeKey],
+          routeKey,
+          routeLabel: routeGroup.label,
+          anchorRow: anchor,
+          routeRows: routeGroup.rows.map((item) => item.row),
+          selectedRows: routeGroup.rows.map((item) => item.row),
+          entryMode: savedRoutePackByKey[routeKey].entryMode,
+          launchIntent: savedRoutePackByKey[routeKey].launchIntent,
+          summary: batchMetricsByRoute[routeKey] ?? null,
+          routeSafetyRank: routeAggregateMetricsByRoute[routeKey]?.routeSafetyRank ?? null,
+          manifestSnapshot: routeManifestByKey[routeKey] ?? null,
+          verificationResult: result,
+        });
+        return upsertSavedRoutePack(rebuilt);
+      });
+    },
+    [
+      addToast,
+      batchMetricsByRoute,
+      routeAggregateMetricsByRoute,
+      routeAnchorRowByKey,
+      routeGroupByKey,
+      routeManifestByKey,
+      savedRoutePackByKey,
+    ],
+  );
+
+  const openSavedRoutePack = useCallback(
+    (pack: SavedRoutePack) => {
+      const routeGroup = routeGroupByKey[pack.routeKey];
+      if (!routeGroup) {
+        addToast("Route is not present in current scan results.", "warning");
+        return;
+      }
+      const selectedLineKeySet = new Set(pack.selectedLineKeys);
+      const selected = routeGroup.rows
+        .filter((item) => selectedLineKeySet.has(routeLineKey(item.row)))
+        .map((item) => item.id);
+      if (selected.length > 0) {
+        setSelectedIds(new Set(selected));
+      }
+      openRouteWorkbench(pack.routeKey, "batch_builder", {
+        batchEntryMode: pack.entryMode,
+        intentLabel: pack.launchIntent ?? undefined,
+      });
+    },
+    [addToast, openRouteWorkbench, routeGroupByKey],
   );
 
   useEffect(() => {
@@ -5425,6 +5622,17 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
         />
       )}
 
+      {!isRegionGrouped && (
+        <SavedRoutePacksPanel
+          packs={savedRoutePacks}
+          onOpen={openSavedRoutePack}
+          onVerify={(pack) => verifyRouteGroup(pack.routeKey)}
+          onCopy={(pack) => copyText(formatSavedRoutePackExport(pack))}
+          onRemove={(pack) => {
+            setSavedRoutePacks(removeSavedRoutePack(pack.routeKey));
+          }}
+        />
+      )}
 
       {/* Table */}
       <div className="flex-1 min-h-0 flex flex-col border border-eve-border rounded-sm overflow-auto table-scroll-container">
@@ -5960,39 +6168,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => {
-                                        const snapshot = routeManifestByKey[group.key];
-                                        if (!snapshot) {
-                                          addToast("No stored manifest expectations for this route yet.", "warning");
-                                          return;
-                                        }
-                                        const result = verifyRouteManifestAgainstRows({
-                                          snapshot,
-                                          rows: group.rows.map((entry) => entry.row),
-                                        });
-                                        setRouteVerificationByKey((prev) => ({
-                                          ...prev,
-                                          [group.key]: result,
-                                        }));
-                                        const offenderSummary =
-                                          result.offenders.length > 0
-                                            ? ` Offenders: ${result.offenders
-                                                .slice(0, 3)
-                                                .map(
-                                                  (offender) =>
-                                                    `${offender.type_id}/${offender.direction}`,
-                                                )
-                                                .join(", ")}.`
-                                            : "";
-                                        addToast(
-                                          `Verification ${result.status}: profit ${formatISK(result.current_profit_isk)} (min ${formatISK(result.min_acceptable_profit_isk)}).${offenderSummary}`,
-                                          result.status === "Abort"
-                                            ? "error"
-                                            : result.status === "Reduced edge"
-                                              ? "warning"
-                                              : "success",
-                                        );
-                                      }}
+                                      onClick={() => verifyRouteGroup(group.key)}
                                       className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
                                     >
                                       Verify
@@ -6020,19 +6196,21 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                                     )}
                                     <button
                                       type="button"
-                                      disabled
-                                      className="rounded-sm border border-eve-border/40 px-1.5 py-0.5 text-[10px] text-eve-dim/50"
-                                      title="Coming soon"
+                                      onClick={() => copySavedRoutePack(group.key)}
+                                      className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
                                     >
                                       Copy
                                     </button>
                                     <button
                                       type="button"
-                                      disabled
-                                      className="rounded-sm border border-eve-border/40 px-1.5 py-0.5 text-[10px] text-eve-dim/50"
-                                      title="Coming soon"
+                                      onClick={() => toggleSavedRoutePack(group.key)}
+                                      className={`rounded-sm border px-1.5 py-0.5 text-[10px] ${
+                                        savedRoutePackByKey[group.key]
+                                          ? "border-eve-accent/80 text-eve-accent"
+                                          : "border-eve-border/60 text-eve-dim hover:text-eve-text"
+                                      }`}
                                     >
-                                      Pin
+                                      {savedRoutePackByKey[group.key] ? "Pinned" : "Pin"}
                                     </button>
                                   </div>
                                 </div>
