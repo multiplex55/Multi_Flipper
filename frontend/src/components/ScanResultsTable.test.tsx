@@ -549,6 +549,195 @@ describe("ScanResultsTable radius decision lens and tie sorting", () => {
     expect(screen.queryByText("High A")).not.toBeInTheDocument();
   });
 
+  it(
+    "caps expanded route-group child rows by default with show-more and show-all controls",
+    () => {
+    const routeRows = Array.from({ length: 101 }, (_, idx) =>
+      makeRow({
+        TypeID: 20_000 + idx,
+        TypeName: `Route Cap Item ${idx + 1}`,
+        BuyStation: "Route Cap Buy",
+        SellStation: "Route Cap Sell",
+        BuySystemID: 31_000_001,
+        SellSystemID: 31_000_002,
+      }),
+    );
+    renderTable({ scanning: false, results: routeRows });
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+
+    fireEvent.click(groupedRouteButtons()[0]);
+    expect(screen.getByText("Route Cap Item 50")).toBeInTheDocument();
+    expect(screen.queryByText("Route Cap Item 51")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Show more/i }));
+    expect(screen.getByText("Route Cap Item 100")).toBeInTheDocument();
+    expect(screen.queryByText("Route Cap Item 101")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Show all in this route/i }));
+    expect(screen.getByText("Route Cap Item 101")).toBeInTheDocument();
+    },
+    15_000,
+  );
+
+  it("paginates grouped route headers by container page", () => {
+    const rows = Array.from({ length: 55 }, (_, idx) =>
+      makeRow({
+        TypeID: 30_000 + idx,
+        TypeName: `Paged Route Item ${idx + 1}`,
+        BuyStation: `Paged Buy ${idx + 1}`,
+        SellStation: `Paged Sell ${idx + 1}`,
+        BuySystemID: 32_000_000 + idx,
+        SellSystemID: 33_000_000 + idx,
+      }),
+    );
+    renderTable({ scanning: false, results: rows });
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+
+    expect(screen.getByText("1 / 2")).toBeInTheDocument();
+    expect(
+      groupedRouteButtons().some((btn) =>
+        (btn.textContent ?? "").includes("Paged Buy 1 → Paged Sell 1"),
+      ),
+    ).toBe(true);
+    expect(
+      groupedRouteButtons().some((btn) =>
+        (btn.textContent ?? "").includes("Paged Buy 55 → Paged Sell 55"),
+      ),
+    ).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "›" }));
+    expect(screen.getByText("2 / 2")).toBeInTheDocument();
+    expect(
+      groupedRouteButtons().some((btn) =>
+        (btn.textContent ?? "").includes("Paged Buy 1 → Paged Sell 1"),
+      ),
+    ).toBe(false);
+    expect(
+      groupedRouteButtons().some((btn) =>
+        (btn.textContent ?? "").includes("Paged Buy 55 → Paged Sell 55"),
+      ),
+    ).toBe(true);
+  });
+
+  it("limits grouped selection scope to currently rendered page rows", () => {
+    const rows = Array.from({ length: 55 }, (_, idx) =>
+      makeRow({
+        TypeID: 40_000 + idx,
+        TypeName: `Select Scope ${idx + 1}`,
+        BuyStation: `Select Buy ${idx + 1}`,
+        SellStation: `Select Sell ${idx + 1}`,
+        BuySystemID: 34_000_000 + idx,
+        SellSystemID: 35_000_000 + idx,
+      }),
+    );
+    const view = renderTable({ scanning: false, results: rows });
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+
+    const selectAll = view.container.querySelector(
+      "thead input[type='checkbox']",
+    ) as HTMLInputElement;
+    fireEvent.click(groupedRouteButtons()[0]);
+    fireEvent.click(selectAll);
+    expect(selectAll.checked).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "›" }));
+    expect((screen.getAllByRole("checkbox")[0] as HTMLInputElement).checked).toBe(
+      false,
+    );
+  });
+
+  it("prunes route expansion state when filters remove then restore a previously expanded group", async () => {
+    const riskyA = makeRow({
+      TypeID: 50_001,
+      TypeName: "Prune Risky A",
+      BuyStation: "Prune Risk Buy",
+      SellStation: "Prune Risk Sell",
+      BuySystemID: 36_000_001,
+      SellSystemID: 36_000_002,
+      DayNowProfit: 5,
+      DayPeriodProfit: -1,
+      DayTargetPeriodPrice: 100,
+      DayTargetNowPrice: 160,
+      UnitsToBuy: 20,
+      FilledQty: 5,
+      SlippageBuyPct: 12,
+      SlippageSellPct: 12,
+    });
+    const riskyB = makeRow({
+      TypeID: 50_002,
+      TypeName: "Prune Risky B",
+      BuyStation: riskyA.BuyStation,
+      SellStation: riskyA.SellStation,
+      BuySystemID: riskyA.BuySystemID,
+      SellSystemID: riskyA.SellSystemID,
+      UnitsToBuy: 20,
+      FilledQty: 5,
+      DayNowProfit: 5,
+      DayPeriodProfit: -1,
+      DayTargetPeriodPrice: 100,
+      DayTargetNowPrice: 160,
+    });
+    const clean = makeRow({
+      TypeID: 50_003,
+      TypeName: "Prune Clean",
+      BuyStation: "Prune Clean Buy",
+      SellStation: "Prune Clean Sell",
+      BuySystemID: 36_000_011,
+      SellSystemID: 36_000_012,
+      RealProfit: 500,
+      DailyProfit: 300,
+      SlippageBuyPct: 0.2,
+      SlippageSellPct: 0.2,
+      DayTargetPeriodPrice: 120,
+      DayTargetNowPrice: 121,
+      FilledQty: 20,
+      UnitsToBuy: 20,
+    });
+
+    const view = renderTable({ scanning: false, results: [riskyA, riskyB, clean] });
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /Prune Risk Buy → Prune Risk Sell/,
+      }),
+    );
+    expect(screen.getByText("Prune Risky B")).toBeInTheDocument();
+
+    view.rerender(
+      <I18nProvider>
+        <ToastProvider>
+          <ScanResultsTable
+            results={[clean]}
+            scanning={false}
+            progress=""
+            tradeStateTab="radius"
+          />
+        </ToastProvider>
+      </I18nProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+    await waitFor(() => expect(groupedRouteButtons()).toHaveLength(1));
+
+    view.rerender(
+      <I18nProvider>
+        <ToastProvider>
+          <ScanResultsTable
+            results={[riskyA, riskyB, clean]}
+            scanning={false}
+            progress=""
+            tradeStateTab="radius"
+          />
+        </ToastProvider>
+      </I18nProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Group by route" }));
+    const riskyHeader = await screen.findByRole("button", {
+      name: /Prune Risk Buy → Prune Risk Sell/,
+    });
+    expect(riskyHeader).toBeInTheDocument();
+    expect(screen.queryByText("Prune Risky B")).not.toBeInTheDocument();
+  });
+
   it("honors Safest lens route ordering in route mode", async () => {
     vi.mocked(getGankCheckBatch).mockResolvedValueOnce([
       { key: "30000142:30002187", danger: "red", kills: 3, totalISK: 10_000_000 },
