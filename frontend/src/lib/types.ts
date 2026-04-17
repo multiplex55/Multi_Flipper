@@ -531,6 +531,32 @@ export interface SavedRoutePackSummarySnapshot {
   routeSafetyRank: number | null;
 }
 
+export type SavedRoutePackLineExecutionStatus =
+  | "planned"
+  | "bought"
+  | "partially_sold"
+  | "completed"
+  | "skipped";
+
+export interface SavedRoutePackLineExecutionEntry {
+  lineKey: string;
+  typeId: number;
+  typeName: string;
+  plannedQty: number;
+  plannedBuyPrice: number;
+  plannedSellPrice: number;
+  plannedProfit: number;
+  plannedVolume: number;
+  boughtQty: number;
+  boughtTotal: number;
+  soldQty: number;
+  soldTotal: number;
+  remainingQty: number;
+  status: SavedRoutePackLineExecutionStatus;
+  skipReason: string | null;
+  notes: string;
+}
+
 export interface SavedRoutePack {
   routeKey: string;
   routeLabel: string;
@@ -546,6 +572,7 @@ export interface SavedRoutePack {
   selectedLineKeys: string[];
   excludedLineKeys: string[];
   summarySnapshot: SavedRoutePackSummarySnapshot;
+  lines: Record<string, SavedRoutePackLineExecutionEntry>;
   manifestSnapshot: RouteManifestVerificationSnapshot | null;
   verificationSnapshot: SavedRoutePackVerificationSnapshot | null;
   notes: string;

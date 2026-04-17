@@ -1,5 +1,5 @@
 import { formatISK } from "@/lib/format";
-import type { SavedRoutePack } from "@/lib/types";
+import type { SavedRoutePack, SavedRoutePackLineExecutionEntry } from "@/lib/types";
 
 const SAVED_ROUTE_PACKS_STORAGE_KEY = "eve-saved-route-packs:v1";
 
@@ -16,6 +16,42 @@ function normalizeSavedRoutePack(value: unknown): SavedRoutePack | null {
     return null;
   }
   if (!pack.summarySnapshot || typeof pack.summarySnapshot !== "object") return null;
+  const normalizedLines: Record<string, SavedRoutePackLineExecutionEntry> = {};
+  if (pack.lines && typeof pack.lines === "object") {
+    for (const [lineKey, rawLine] of Object.entries(pack.lines)) {
+      if (!rawLine || typeof rawLine !== "object") continue;
+      const line = rawLine as Partial<SavedRoutePackLineExecutionEntry>;
+      const plannedQty = Math.max(0, Math.floor(Number(line.plannedQty ?? 0)));
+      const soldQty = Math.max(0, Math.floor(Number(line.soldQty ?? 0)));
+      normalizedLines[String(lineKey)] = {
+        lineKey: String(line.lineKey ?? lineKey),
+        typeId: Math.trunc(Number(line.typeId ?? 0)),
+        typeName: String(line.typeName ?? ""),
+        plannedQty,
+        plannedBuyPrice: Math.max(0, Number(line.plannedBuyPrice ?? 0)),
+        plannedSellPrice: Math.max(0, Number(line.plannedSellPrice ?? 0)),
+        plannedProfit: Math.max(0, Number(line.plannedProfit ?? 0)),
+        plannedVolume: Math.max(0, Number(line.plannedVolume ?? 0)),
+        boughtQty: Math.max(0, Math.floor(Number(line.boughtQty ?? 0))),
+        boughtTotal: Math.max(0, Number(line.boughtTotal ?? 0)),
+        soldQty,
+        soldTotal: Math.max(0, Number(line.soldTotal ?? 0)),
+        remainingQty:
+          line.remainingQty != null
+            ? Math.max(0, Math.floor(Number(line.remainingQty)))
+            : Math.max(0, plannedQty - soldQty),
+        status:
+          line.status === "bought" ||
+          line.status === "partially_sold" ||
+          line.status === "completed" ||
+          line.status === "skipped"
+            ? line.status
+            : "planned",
+        skipReason: line.skipReason ? String(line.skipReason) : null,
+        notes: typeof line.notes === "string" ? line.notes : "",
+      };
+    }
+  }
   return {
     ...pack,
     buyLocationId: Math.trunc(Number(pack.buyLocationId ?? 0)),
@@ -35,6 +71,7 @@ function normalizeSavedRoutePack(value: unknown): SavedRoutePack | null {
       a.localeCompare(b),
     ),
     summarySnapshot: pack.summarySnapshot,
+    lines: normalizedLines,
     manifestSnapshot: pack.manifestSnapshot ?? null,
     verificationSnapshot: pack.verificationSnapshot ?? null,
     notes: typeof pack.notes === "string" ? pack.notes : "",

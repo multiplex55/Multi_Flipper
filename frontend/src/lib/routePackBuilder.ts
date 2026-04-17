@@ -30,6 +30,57 @@ function normalizeLineKeys(rows: FlipResult[]): string[] {
   );
 }
 
+function plannedUnits(row: FlipResult): number {
+  const unitsToBuy = Math.floor(Number(row.UnitsToBuy ?? 0));
+  if (unitsToBuy > 0) return unitsToBuy;
+  const buyRemain = Math.floor(Math.max(0, Number(row.BuyOrderRemain ?? 0)));
+  const sellRemain = Math.floor(Math.max(0, Number(row.SellOrderRemain ?? 0)));
+  if (buyRemain > 0 && sellRemain > 0) return Math.min(buyRemain, sellRemain);
+  return Math.max(buyRemain, sellRemain, 0);
+}
+
+function mergeExecutionLines(
+  rows: FlipResult[],
+  existingLines: SavedRoutePack["lines"] | undefined,
+): SavedRoutePack["lines"] {
+  const next: SavedRoutePack["lines"] = {};
+  for (const row of rows) {
+    const lineKey = routeLineKey(row);
+    const plannedQty = plannedUnits(row);
+    const plannedBuyPrice = Number(row.ExpectedBuyPrice ?? row.BuyPrice ?? 0);
+    const plannedSellPrice = Number(row.ExpectedSellPrice ?? row.SellPrice ?? 0);
+    const plannedProfit = plannedQty * Number(row.ProfitPerUnit ?? 0);
+    const plannedVolume = plannedQty * Number(row.Volume ?? 0);
+    const existing = existingLines?.[lineKey];
+    next[lineKey] = existing
+      ? {
+          ...existing,
+          lineKey,
+          typeId: Number(existing.typeId || row.TypeID || 0),
+          typeName: existing.typeName || row.TypeName || "",
+        }
+      : {
+          lineKey,
+          typeId: Number(row.TypeID ?? 0),
+          typeName: String(row.TypeName ?? ""),
+          plannedQty,
+          plannedBuyPrice,
+          plannedSellPrice,
+          plannedProfit,
+          plannedVolume,
+          boughtQty: 0,
+          boughtTotal: 0,
+          soldQty: 0,
+          soldTotal: 0,
+          remainingQty: plannedQty,
+          status: "planned",
+          skipReason: null,
+          notes: "",
+        };
+  }
+  return next;
+}
+
 function buildVerificationSnapshot(
   verificationResult?: RouteVerificationResult | null,
   nowIso?: string,
@@ -79,6 +130,7 @@ export function buildSavedRoutePack(
       routeTurnoverDays: params.summary?.routeTurnoverDays ?? null,
       routeSafetyRank: params.routeSafetyRank,
     },
+    lines: mergeExecutionLines(params.selectedRows, params.existingPack?.lines),
     manifestSnapshot: params.manifestSnapshot ?? params.existingPack?.manifestSnapshot ?? null,
     verificationSnapshot:
       buildVerificationSnapshot(params.verificationResult, nowIso) ??
