@@ -995,6 +995,22 @@ type RouteBadgeMetadata = {
   confidence: ReturnType<typeof calcRouteConfidence>;
 };
 
+type FilterStageKey =
+  | "session_hard_ignores"
+  | "endpoint_hard_rules"
+  | "column_filters"
+  | "tracked_visibility_mode"
+  | "route_safety_filter"
+  | "hidden_row_toggle"
+  | "route_badge_filter";
+
+type FilterChip = {
+  key: string;
+  label: string;
+  impactCount?: number;
+  onRemove: () => void;
+};
+
 function routeScoreToneClass(score: number): string {
   if (score >= 70) return "text-green-300 border-green-500/50 bg-green-900/20";
   if (score >= 40)
@@ -2725,6 +2741,184 @@ export function ScanResultsTable({
     selectedBadgeFilters,
   ]);
 
+  const filterAudit = useMemo(() => {
+    const hasColumnFilters = Object.values(filters).some((value) => !!value);
+    const stageCounts: Record<FilterStageKey, number> = {
+      session_hard_ignores: 0,
+      endpoint_hard_rules: 0,
+      column_filters: 0,
+      tracked_visibility_mode: 0,
+      route_safety_filter: 0,
+      hidden_row_toggle: 0,
+      route_badge_filter: 0,
+    };
+    const rowReasons = new Map<number, Set<string>>();
+    const addReason = (rowId: number, reason: string) => {
+      const existing = rowReasons.get(rowId);
+      if (existing) {
+        existing.add(reason);
+        return;
+      }
+      rowReasons.set(rowId, new Set([reason]));
+    };
+    const routeBadgePassByRowId = new Map<number, boolean>();
+    const routeBadgeMatches = (row: FlipResult): boolean => {
+      if (!isRouteGrouped || selectedBadgeFilters.size === 0) return true;
+      const routeKey = routeGroupKey(row);
+      const metadata =
+        routeBadgeMetadataByRoute[routeKey] ??
+        deriveRouteBadgeMetadata(
+          batchMetricsByRoute[routeKey],
+          routeAggregateMetricsByRoute[routeKey],
+        );
+      for (const filter of selectedBadgeFilters) {
+        if (metadata.filters.has(filter)) return true;
+      }
+      return false;
+    };
+
+    const stageSessionPass = indexed.map((item) => {
+      const buyLocationId = getBuyLocationID(item.row);
+      const sellLocationId = getSellLocationID(item.row);
+      const blockedBuy = !!(
+        buyLocationId > 0 &&
+        sessionStationFilters?.ignoredBuyStationIds.has(buyLocationId)
+      );
+      const blockedSell = !!(
+        sellLocationId > 0 &&
+        sessionStationFilters?.ignoredSellStationIds.has(sellLocationId)
+      );
+      if (blockedBuy) addReason(item.id, "session_ignore_buy_station");
+      if (blockedSell) addReason(item.id, "session_ignore_sell_station");
+      const pass = !blockedBuy && !blockedSell;
+      return { item, pass };
+    });
+    stageCounts.session_hard_ignores = stageSessionPass.filter((entry) => entry.pass).length;
+
+    const stageEndpointPass = stageSessionPass.map(({ item, pass }) => {
+      const endpointExcluded = !!item.endpointPreferences?.excluded;
+      if (endpointExcluded) {
+        const reasons = item.endpointPreferences?.excludedReasons ?? [];
+        if (reasons.length === 0) {
+          addReason(item.id, "endpoint_excluded");
+        } else {
+          for (const reason of reasons) {
+            addReason(item.id, `endpoint_${reason}`);
+          }
+        }
+      }
+      return { item, pass: pass && !endpointExcluded };
+    });
+    stageCounts.endpoint_hard_rules = stageEndpointPass.filter((entry) => entry.pass).length;
+
+    const stageColumnPass = stageEndpointPass.map(({ item, pass }) => {
+      let columnsPass = true;
+      if (hasColumnFilters) {
+        for (const col of columnDefs) {
+          const fval = filters[col.key];
+          if (!fval) continue;
+          if (!passesFilter(item.row, col, fval, batchMetricsByRow, opportunityProfile)) {
+            columnsPass = false;
+            addReason(item.id, `column_filter_${String(col.key)}`);
+            break;
+          }
+        }
+      }
+      return { item, pass: pass && columnsPass };
+    });
+    stageCounts.column_filters = stageColumnPass.filter((entry) => entry.pass).length;
+
+    const stageTrackedPass = stageColumnPass.map(({ item, pass }) => {
+      const isTracked = watchlistIds.has(item.row.TypeID);
+      const trackedPass = trackedVisibilityMode !== "tracked_only" || isTracked;
+      if (!trackedPass) addReason(item.id, "tracked_visibility_tracked_only");
+      return { item, pass: pass && trackedPass };
+    });
+    stageCounts.tracked_visibility_mode = stageTrackedPass.filter((entry) => entry.pass).length;
+
+    const stageRouteSafetyPass = stageTrackedPass.map(({ item, pass }) => {
+      let routePass = true;
+      if (routeSafetyFilter !== "all") {
+        const key = `${item.row.BuySystemID}:${item.row.SellSystemID}`;
+        const rank = routeSafetyRankFromState(routeSafetyMap[key]);
+        routePass =
+          routeSafetyFilter === "green"
+            ? rank === 0
+            : routeSafetyFilter === "yellow"
+              ? rank === 1
+              : rank === 2;
+        if (!routePass) addReason(item.id, `route_safety_${routeSafetyFilter}`);
+      }
+      return { item, pass: pass && routePass };
+    });
+    stageCounts.route_safety_filter = stageRouteSafetyPass.filter((entry) => entry.pass).length;
+
+    const stageHiddenPass = stageRouteSafetyPass.map(({ item, pass }) => {
+      const hiddenExcluded = !showHiddenRows && !!hiddenMap[flipStateKey(item.row)];
+      if (hiddenExcluded) addReason(item.id, "hidden_row_toggle");
+      const trackedHidePass =
+        trackedVisibilityMode !== "hide_non_tracked" ||
+        watchlistIds.has(item.row.TypeID);
+      if (!trackedHidePass) addReason(item.id, "tracked_visibility_hide_non_tracked");
+      return { item, pass: pass && !hiddenExcluded && trackedHidePass };
+    });
+    stageCounts.hidden_row_toggle = stageHiddenPass.filter((entry) => entry.pass).length;
+
+    const stageRouteBadgePass = stageHiddenPass.map(({ item, pass }) => {
+      const routeBadgePass = routeBadgeMatches(item.row);
+      routeBadgePassByRowId.set(item.id, routeBadgePass);
+      if (!routeBadgePass) addReason(item.id, "route_badge_filter");
+      return { item, pass: pass && routeBadgePass };
+    });
+    stageCounts.route_badge_filter = stageRouteBadgePass.filter((entry) => entry.pass).length;
+
+    const routeReasonMap = new Map<string, Set<string>>();
+    for (const { item } of stageRouteBadgePass) {
+      const rowKey = routeGroupKey(item.row);
+      const reasons = rowReasons.get(item.id);
+      if (!reasons || reasons.size === 0) continue;
+      const existing = routeReasonMap.get(rowKey) ?? new Set<string>();
+      for (const reason of reasons) existing.add(reason);
+      routeReasonMap.set(rowKey, existing);
+    }
+
+    const rowReasonCodes = new Map<number, string[]>();
+    for (const [rowId, reasons] of rowReasons.entries()) {
+      rowReasonCodes.set(rowId, [...reasons].sort());
+    }
+
+    const routeReasonCodes = new Map<string, string[]>();
+    for (const [routeKey, reasons] of routeReasonMap.entries()) {
+      routeReasonCodes.set(routeKey, [...reasons].sort());
+    }
+
+    return {
+      stageCounts,
+      rowReasonCodes,
+      routeReasonCodes,
+      visibleAfterAllStages: stageCounts.route_badge_filter,
+      routeBadgePassByRowId,
+    };
+  }, [
+    batchMetricsByRoute,
+    batchMetricsByRow,
+    columnDefs,
+    filters,
+    hiddenMap,
+    indexed,
+    isRouteGrouped,
+    opportunityProfile,
+    routeAggregateMetricsByRoute,
+    routeBadgeMetadataByRoute,
+    routeSafetyFilter,
+    routeSafetyMap,
+    selectedBadgeFilters,
+    sessionStationFilters,
+    showHiddenRows,
+    trackedVisibilityMode,
+    watchlistIds,
+  ]);
+
   const routeGroupByKey = useMemo<Record<string, RouteGroup>>(() => {
     const out: Record<string, RouteGroup> = {};
     for (const ir of datasetRows) {
@@ -2922,14 +3116,26 @@ export function ScanResultsTable({
 
   const suppressionTelemetry = useMemo(
     () => ({
-      hardBanFiltered: Math.max(0, results.length - indexed.length),
-      softSessionFiltered: Math.max(0, indexed.length - filtered.length),
-      endpointExcluded: Math.max(0, indexed.length - filtered.length),
+      hardBanFiltered: Math.max(
+        0,
+        results.length - filterAudit.stageCounts.session_hard_ignores,
+      ),
+      softSessionFiltered: Math.max(
+        0,
+        filterAudit.stageCounts.endpoint_hard_rules -
+          filterAudit.stageCounts.route_badge_filter,
+      ),
+      endpointExcluded: Math.max(
+        0,
+        filterAudit.stageCounts.session_hard_ignores -
+          filterAudit.stageCounts.endpoint_hard_rules,
+      ),
       deprioritizedRows: sorted.filter((item) =>
         isFlipResultDeprioritized(item.row, sessionStationFilters),
       ).length,
+      stageCounts: filterAudit.stageCounts,
     }),
-    [filtered.length, indexed.length, results.length, sessionStationFilters, sorted],
+    [filterAudit.stageCounts, results.length, sessionStationFilters, sorted],
   );
 
   const actionQueue = useMemo<ActionQueueItem[]>(
@@ -3910,56 +4116,117 @@ export function ScanResultsTable({
     ? hiddenMap[flipStateKey(contextMenu.row)]
     : undefined;
 
-  const activeSessionFilterChips = useMemo(() => {
-    if (!sessionStationFilters) return [] as Array<{ key: string; label: string; onRemove: () => void }>;
-    const chips: Array<{ key: string; label: string; onRemove: () => void }> = [];
-    for (const stationID of sessionStationFilters.ignoredBuyStationIds) {
+  const activeFilterChips = useMemo<FilterChip[]>(() => {
+    const chips: FilterChip[] = [];
+    const { stageCounts } = filterAudit;
+    const badgeLabelByKey: Record<RouteBadgeFilter, string> = {
+      clean: "Clean",
+      moderate: "Moderate",
+      busy: "Busy",
+      spike: "Spike",
+      no_history: "No hist",
+      unstable: "Unstable",
+      thin: "Thin",
+      high: "Confidence high",
+      medium: "Confidence medium",
+      low: "Confidence low",
+    };
+
+    const endpointFlags: string[] = [];
+    if (endpointPreferenceProfile.requireNonHubBuy) endpointFlags.push("buy non-hub");
+    if (endpointPreferenceProfile.requireHubSell) endpointFlags.push("sell hub");
+    if (endpointPreferenceProfile.requireSellStructure) endpointFlags.push("sell structure");
+    if (endpointPreferenceProfile.requireSellNpc) endpointFlags.push("sell npc");
+    if (
+      endpointPreferenceMode !== EndpointPreferenceApplicationMode.Deprioritize ||
+      endpointFlags.length > 0
+    ) {
       chips.push({
-        key: `buy:${stationID}`,
-        label: `Ignore buy: ${stationID}`,
-        onRemove: () =>
-          onUpdateSessionStationFilters?.((prev) => {
-            const next = {
-              ...prev,
-              ignoredBuyStationIds: new Set(prev.ignoredBuyStationIds),
-            };
-            next.ignoredBuyStationIds.delete(stationID);
-            return next;
-          }),
+        key: "endpoint-preferences",
+        label: `Endpoint: ${endpointPreferenceMode}${endpointFlags.length > 0 ? ` • ${endpointFlags.join(", ")}` : ""}`,
+        impactCount:
+          stageCounts.session_hard_ignores - stageCounts.endpoint_hard_rules,
+        onRemove: () => {
+          setEndpointPreferenceMode(EndpointPreferenceApplicationMode.Deprioritize);
+          setEndpointPreferenceProfile(DEFAULT_ENDPOINT_PREFERENCE_PROFILE);
+          setEndpointPresetSelection("");
+        },
       });
     }
-    for (const stationID of sessionStationFilters.ignoredSellStationIds) {
+
+    if (trackedVisibilityMode !== "all") {
       chips.push({
-        key: `sell:${stationID}`,
-        label: `Ignore sell: ${stationID}`,
-        onRemove: () =>
-          onUpdateSessionStationFilters?.((prev) => {
-            const next = {
-              ...prev,
-              ignoredSellStationIds: new Set(prev.ignoredSellStationIds),
-            };
-            next.ignoredSellStationIds.delete(stationID);
-            return next;
-          }),
+        key: "tracked-visibility",
+        label:
+          trackedVisibilityMode === "tracked_only"
+            ? "Tracked: only tracked"
+            : "Tracked: hide non-tracked",
+        impactCount:
+          stageCounts.column_filters - stageCounts.tracked_visibility_mode,
+        onRemove: () => setTrackedVisibilityMode("all"),
       });
     }
-    for (const stationID of sessionStationFilters.deprioritizedStationIds) {
+
+    if (routeSafetyFilter !== "all") {
       chips.push({
-        key: `deprio:${stationID}`,
-        label: `Deprioritized: ${stationID}`,
-        onRemove: () =>
-          onUpdateSessionStationFilters?.((prev) => {
-            const next = {
-              ...prev,
-              deprioritizedStationIds: new Set(prev.deprioritizedStationIds),
-            };
-            next.deprioritizedStationIds.delete(stationID);
-            return next;
-          }),
+        key: "route-safety",
+        label: `Route safety: ${routeSafetyFilter}`,
+        impactCount:
+          stageCounts.tracked_visibility_mode - stageCounts.route_safety_filter,
+        onRemove: () => setRouteSafetyFilter("all"),
       });
     }
+
+    if (showHiddenRows) {
+      chips.push({
+        key: "hidden-toggle",
+        label: "Hidden rows: visible",
+        impactCount:
+          stageCounts.route_safety_filter - stageCounts.hidden_row_toggle,
+        onRemove: () => setShowHiddenRows(false),
+      });
+    }
+
+    if (selectedBadgeFilters.size > 0) {
+      const labels = [...selectedBadgeFilters].map(
+        (key) => badgeLabelByKey[key] ?? key,
+      );
+      chips.push({
+        key: "route-badge-filter",
+        label: `Route badges: ${labels.join(", ")}`,
+        impactCount:
+          stageCounts.hidden_row_toggle - stageCounts.route_badge_filter,
+        onRemove: () => setSelectedBadgeFilters(new Set()),
+      });
+    }
+
+    if (sessionStationFilters) {
+      const ignoredCount =
+        sessionStationFilters.ignoredBuyStationIds.size +
+        sessionStationFilters.ignoredSellStationIds.size;
+      if (ignoredCount > 0) {
+        chips.push({
+          key: "session-ignores",
+          label: `Session ignores: ${ignoredCount}`,
+          impactCount: results.length - stageCounts.session_hard_ignores,
+          onRemove: clearTemporaryStationFilters,
+        });
+      }
+    }
+
     return chips;
-  }, [onUpdateSessionStationFilters, sessionStationFilters]);
+  }, [
+    clearTemporaryStationFilters,
+    endpointPreferenceMode,
+    endpointPreferenceProfile,
+    filterAudit,
+    results.length,
+    routeSafetyFilter,
+    selectedBadgeFilters,
+    sessionStationFilters,
+    showHiddenRows,
+    trackedVisibilityMode,
+  ]);
 
   // Stable LMB handler for region detail panel
   const onLmbClick = useCallback((row: FlipResult) => {
@@ -4153,6 +4420,7 @@ export function ScanResultsTable({
         opportunityProfile={opportunityProfile}
         scoreContext={displayScoreContext}
         endpointPreferenceMeta={endpointPreferenceMetaByRowId.get(ir.id)}
+        debugReasonCodes={filterAudit.rowReasonCodes.get(ir.id) ?? []}
       />
     ),
     [
@@ -4179,32 +4447,40 @@ export function ScanResultsTable({
       opportunityProfile,
       displayScoreContext,
       endpointPreferenceMetaByRowId,
+      filterAudit.rowReasonCodes,
     ],
   );
 
   // ── Render ──
   return (
-      <div ref={keyNavRootRef} className="relative flex-1 flex flex-col min-h-0">
-      {activeSessionFilterChips.length > 0 && (
-        <div className="shrink-0 px-2 pt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
-          {activeSessionFilterChips.map((chip) => (
+      <div
+        ref={keyNavRootRef}
+        className="relative flex-1 flex flex-col min-h-0"
+        data-filter-stage-counts={JSON.stringify(filterAudit.stageCounts)}
+      >
+      {activeFilterChips.length > 0 && (
+        <div
+          className="shrink-0 px-2 pt-1 flex flex-wrap items-center gap-1.5 text-[11px]"
+          data-testid="active-filter-chip-bar"
+        >
+          {activeFilterChips.map((chip) => (
             <button
               key={chip.key}
               type="button"
               onClick={chip.onRemove}
+              data-testid={`active-filter-chip:${chip.key}`}
               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-eve-accent/40 bg-eve-accent/10 text-eve-accent hover:bg-eve-accent/20"
               title="Remove temporary filter"
             >
-              {chip.label} <span aria-hidden>✕</span>
+              {chip.label}
+              {typeof chip.impactCount === "number" && chip.impactCount > 0 ? (
+                <span className="rounded-sm border border-eve-accent/40 px-1 text-[10px] text-eve-accent/90">
+                  -{chip.impactCount}
+                </span>
+              ) : null}{" "}
+              <span aria-hidden>✕</span>
             </button>
           ))}
-          <button
-            type="button"
-            onClick={clearTemporaryStationFilters}
-            className="px-2 py-0.5 rounded-sm border border-eve-border text-eve-dim hover:text-eve-text"
-          >
-            Clear all
-          </button>
         </div>
       )}
       {/* Toolbar */}
@@ -5323,6 +5599,10 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                             <tr
                               className="border-b border-eve-border/60 bg-eve-dark/50"
                               data-route-group={group.key}
+                              data-route-missing-reasons={
+                                filterAudit.routeReasonCodes.get(group.key)?.join(",") ??
+                                ""
+                              }
                             >
                               <td
                                 colSpan={columnDefs.length + 2}
@@ -6307,6 +6587,7 @@ interface DataRowProps {
     excluded: boolean;
     excludedReasons: string[];
   };
+  debugReasonCodes: string[];
 }
 
 /* ─── Trade Score Badge ─── */
@@ -6412,6 +6693,7 @@ const DataRow = memo(
     opportunityProfile,
     scoreContext,
     endpointPreferenceMeta,
+    debugReasonCodes,
   }: DataRowProps) {
     return (
       <tr
@@ -6421,6 +6703,7 @@ const DataRow = memo(
         data-endpoint-excluded-reasons={
           endpointPreferenceMeta?.excludedReasons.join(",") ?? ""
         }
+        data-filter-reason-codes={debugReasonCodes.join(",")}
         onContextMenu={(e) => onContextMenu(e, ir.id, ir.row)}
         onClick={(e) => {
           if (!isRegionGrouped) return;
