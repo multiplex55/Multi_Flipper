@@ -114,6 +114,7 @@ const ROUTE_GROUPING_STORAGE_KEY = "eve-radius-route-view-mode:v1";
 const ENDPOINT_PREFS_STORAGE_KEY = "eve-radius-endpoint-preferences:v1";
 const ADVANCED_TOOLBAR_VISIBLE_STORAGE_KEY =
   "eve-radius-advanced-toolbar-visible:v1";
+const COMPACT_DASHBOARD_STORAGE_KEY = "eve-radius-compact-dashboard:v1";
 
 type SyntheticSortKey =
   | "RouteSafety"
@@ -1489,7 +1490,15 @@ export function ScanResultsTable({
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(0);
-  const [compactMode, setCompactMode] = useState(false);
+  const [compactRows, setCompactRows] = useState(false);
+  const [compactDashboard, setCompactDashboard] = useState<boolean>(() => {
+    try {
+      const raw = localStorage.getItem(COMPACT_DASHBOARD_STORAGE_KEY);
+      return raw == null ? false : raw === "1";
+    } catch {
+      return false;
+    }
+  });
   const previousScanningRef = useRef(scanning);
   const [groupByItem, setGroupByItem] = useState<boolean>(() => {
     try {
@@ -1696,7 +1705,7 @@ export function ScanResultsTable({
   useEffect(() => {
     const wasScanning = previousScanningRef.current;
     if (wasScanning && !scanning && results.length > 0) {
-      setCompactMode(true);
+      setCompactRows(true);
     }
     previousScanningRef.current = scanning;
   }, [results.length, scanning]);
@@ -1990,6 +1999,17 @@ export function ScanResultsTable({
       // ignore storage quota errors
     }
   }, [showAdvancedToolbar]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        COMPACT_DASHBOARD_STORAGE_KEY,
+        compactDashboard ? "1" : "0",
+      );
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [compactDashboard]);
 
   useEffect(() => {
     if (!isRouteGrouped && selectedBadgeFilters.size > 0) {
@@ -3878,7 +3898,7 @@ export function ScanResultsTable({
         ir={ir}
         globalIdx={globalIdx}
         columnDefs={columnDefs}
-        compactMode={compactMode}
+        compactMode={compactRows}
         isPinned={pinnedKeys.has(
           mapScanRowToPinnedOpportunity(ir.row).opportunity_key,
         )}
@@ -3911,7 +3931,7 @@ export function ScanResultsTable({
     ),
     [
       columnDefs,
-      compactMode,
+      compactRows,
       focusedRowId,
       handleContextMenu,
       hiddenMap,
@@ -3938,7 +3958,7 @@ export function ScanResultsTable({
 
   // ── Render ──
   return (
-    <div ref={keyNavRootRef} className="relative flex-1 flex flex-col min-h-0">
+      <div ref={keyNavRootRef} className="relative flex-1 flex flex-col min-h-0">
       {activeSessionFilterChips.length > 0 && (
         <div className="shrink-0 px-2 pt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
           {activeSessionFilterChips.map((chip) => (
@@ -3962,7 +3982,7 @@ export function ScanResultsTable({
         </div>
       )}
       {/* Toolbar */}
-      <div className="shrink-0 px-2 py-1.5">
+      <div className={`shrink-0 px-2 ${compactDashboard ? "py-1" : "py-1.5"}`}>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <div className="flex items-center gap-2 text-eve-dim">
             {scanning ? (
@@ -3977,7 +3997,7 @@ export function ScanResultsTable({
                 t("foundDeals", { count: indexed.length })
               )
             ) : null}
-            {!scanning && results.length > 0 && hiddenCounts.total > 0 && (
+            {!compactDashboard && !scanning && results.length > 0 && hiddenCounts.total > 0 && (
               <span className="text-eve-dim">
                 | {" "}
                 {t("hiddenVisibleSummary", {
@@ -3986,10 +4006,10 @@ export function ScanResultsTable({
                 })}
               </span>
             )}
-            {pinnedKeys.size > 0 && (
+            {!compactDashboard && pinnedKeys.size > 0 && (
               <span className="text-eve-accent">📌 {t("pinned", { count: pinnedKeys.size })}</span>
             )}
-            {watchlistIds.size > 0 && (
+            {!compactDashboard && watchlistIds.size > 0 && (
               <span className="text-emerald-300">★ Tracked: {watchlistIds.size}</span>
             )}
             {selectedIds.size > 0 && (
@@ -4054,6 +4074,19 @@ export function ScanResultsTable({
               >
                 Advanced {showAdvancedToolbar ? "▾" : "▸"}
               </button>
+              <button
+                type="button"
+                onClick={() => setCompactDashboard((prev) => !prev)}
+                className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
+                  compactDashboard
+                    ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10"
+                    : "border-eve-border/60 bg-eve-dark/40 text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent"
+                }`}
+                aria-pressed={compactDashboard}
+                title="Compact dashboard layout"
+              >
+                Compact Dashboard
+              </button>
             </>
           )}
 
@@ -4073,16 +4106,21 @@ export function ScanResultsTable({
           {results.length > 0 && (
             <>
               <ToolbarBtn
-                label={compactMode ? "⊞" : "⊟"}
-                title={compactMode ? t("comfyRows") : t("compactRows")}
-                active={compactMode}
-                onClick={() => setCompactMode((v) => !v)}
+                label={compactRows ? "⊞" : "⊟"}
+                title={compactRows ? t("comfyRows") : t("compactRows")}
+                active={compactRows}
+                onClick={() => setCompactRows((v) => !v)}
               />
               <ToolbarBtn label="CSV" title={t("exportCSV")} onClick={exportCSV} />
               <ToolbarBtn label="⎘" title={t("copyTable")} onClick={copyTable} />
             </>
           )}
         </div>
+        {!compactDashboard && results.length > 0 && !scanning && (
+          <div className="mt-1 text-[11px] text-eve-dim/80">
+            Use Advanced for endpoint preferences, tracked visibility, and cache controls.
+          </div>
+        )}
 
         {showAdvancedToolbar && results.length > 0 && !scanning && (
           <div id="scan-results-advanced-toolbar" className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
@@ -4710,6 +4748,8 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               : undefined
           }
           jumpToRouteGroup={jumpToRouteGroup}
+          defaultExpanded={!compactDashboard}
+          compactDashboard={compactDashboard}
         />
       )}
 
