@@ -66,6 +66,7 @@ export function RadiusInsightsPanel({
   const { t } = useI18n();
   const [expanded, setExpanded] = useState<boolean>(() => loadVisibleState());
   const [activeTab, setActiveTab] = useState<InsightsTab>(() => loadTabState());
+  const [showAllQueueItems, setShowAllQueueItems] = useState(false);
 
   const picks = useMemo(
     () =>
@@ -93,6 +94,7 @@ export function RadiusInsightsPanel({
 
   const setTab = (tab: InsightsTab) => {
     setActiveTab(tab);
+    if (tab !== "queue") setShowAllQueueItems(false);
     try {
       localStorage.setItem(INSIGHTS_TAB_STORAGE_KEY, tab);
     } catch {
@@ -202,52 +204,92 @@ export function RadiusInsightsPanel({
 
             {activeTab === "queue" && (
               <div className="mt-2">
-                <div className="text-[11px] uppercase tracking-wider text-eve-dim mb-2">
+                <div className="mb-2 text-[11px] uppercase tracking-wider text-eve-dim">
                   Action Queue
                 </div>
                 <div className="space-y-1.5">
                   {actionQueue.length === 0 ? (
                     <div className="text-[11px] text-eve-dim">No queue actions available.</div>
                   ) : (
-                    actionQueue.map((item) => (
+                    (showAllQueueItems ? actionQueue : actionQueue.slice(0, 3)).map((item) => (
                       <div
                         key={`queue-${item.routeKey}`}
                         className="rounded-sm border border-eve-border/60 bg-eve-panel/30 px-2 py-1.5 text-xs"
                       >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="font-medium text-eve-text truncate">{item.routeLabel}</div>
-                          <span className="rounded-sm border border-eve-accent/40 bg-eve-accent/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-eve-accent">
-                            {actionLabel(item.action)}
-                          </span>
-                        </div>
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {item.reasons.map((reason) => (
-                            <span
-                              key={`${item.routeKey}-reason-${reason}`}
-                              title={reason}
-                              className="rounded-sm border border-eve-border/60 bg-eve-dark/50 px-1.5 py-0.5 text-[10px] text-eve-dim"
+                        {showAllQueueItems ? (
+                          <>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="font-medium text-eve-text truncate">{item.routeLabel}</div>
+                              <span className="rounded-sm border border-eve-accent/40 bg-eve-accent/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-eve-accent">
+                                {actionLabel(item.action)}
+                              </span>
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {item.reasons.map((reason) => (
+                                <span
+                                  key={`${item.routeKey}-reason-${reason}`}
+                                  title={reason}
+                                  className="rounded-sm border border-eve-border/60 bg-eve-dark/50 px-1.5 py-0.5 text-[10px] text-eve-dim"
+                                >
+                                  {reason}
+                                </span>
+                              ))}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => jumpToRouteGroup(item.routeKey)}
+                              className="mt-2 rounded-sm border border-eve-accent/60 px-2 py-0.5 text-[11px] text-eve-accent transition-colors hover:bg-eve-accent/10"
                             >
-                              {reason}
+                              {t("topPickJumpToGroup")}
+                            </button>
+                          </>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <div className="min-w-0 flex-1 truncate font-medium text-eve-text" title={item.routeLabel}>
+                              {item.routeLabel}
+                            </div>
+                            <span className="rounded-sm border border-eve-accent/40 bg-eve-accent/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-eve-accent">
+                              {actionLabel(item.action)}
                             </span>
-                          ))}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => jumpToRouteGroup(item.routeKey)}
-                          className="mt-2 px-2 py-0.5 rounded-sm border border-eve-accent/60 text-eve-accent hover:bg-eve-accent/10 transition-colors text-[11px]"
-                        >
-                          {t("topPickJumpToGroup")}
-                        </button>
+                            <button
+                              type="button"
+                              onClick={() => jumpToRouteGroup(item.routeKey)}
+                              className="rounded-sm border border-eve-accent/50 px-1.5 py-0.5 text-[10px] text-eve-accent hover:bg-eve-accent/10"
+                            >
+                              {t("topPickJumpToGroup")}
+                            </button>
+                            <div className="flex max-w-[45%] flex-wrap justify-end gap-1">
+                              {item.reasons.slice(0, 2).map((reason) => (
+                                <span
+                                  key={`${item.routeKey}-reason-${reason}`}
+                                  title={reason}
+                                  className="rounded-sm border border-eve-border/60 bg-eve-dark/50 px-1.5 py-0.5 text-[10px] text-eve-dim"
+                                >
+                                  {reason}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))
                   )}
                 </div>
+                {actionQueue.length > 3 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllQueueItems((prev) => !prev)}
+                    className="mt-2 rounded-sm border border-eve-border/60 px-2 py-0.5 text-[11px] text-eve-accent hover:border-eve-accent"
+                  >
+                    {showAllQueueItems ? "Show fewer queue items" : "Show all queue items"}
+                  </button>
+                )}
               </div>
             )}
 
             {activeTab === "loops" && (
               <div className="mt-2">
-                <LoopOpportunitiesPanel loops={loopOpportunities} />
+                <LoopOpportunitiesPanel loops={loopOpportunities} collapsed defaultExpanded={false} />
               </div>
             )}
           </>
