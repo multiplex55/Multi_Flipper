@@ -16,6 +16,8 @@ type RadiusInsightsPanelProps = {
   suppressionSummary?: string;
   loopOpportunities?: LoopOpportunity[];
   jumpToRouteGroup: (routeKey: string) => void;
+  defaultExpanded?: boolean;
+  compactDashboard?: boolean;
 };
 
 function actionLabel(action: ActionQueueItem["action"]): string {
@@ -37,11 +39,13 @@ function actionLabel(action: ActionQueueItem["action"]): string {
   }
 }
 
-function loadVisibleState(): boolean {
+function loadVisibleState(defaultExpanded: boolean): boolean {
   try {
-    return localStorage.getItem(INSIGHTS_VISIBLE_STORAGE_KEY) === "1";
+    const saved = localStorage.getItem(INSIGHTS_VISIBLE_STORAGE_KEY);
+    if (saved == null) return defaultExpanded;
+    return saved === "1";
   } catch {
-    return false;
+    return defaultExpanded;
   }
 }
 
@@ -62,9 +66,13 @@ export function RadiusInsightsPanel({
   suppressionSummary,
   loopOpportunities = [],
   jumpToRouteGroup,
+  defaultExpanded = false,
+  compactDashboard = false,
 }: RadiusInsightsPanelProps) {
   const { t } = useI18n();
-  const [expanded, setExpanded] = useState<boolean>(() => loadVisibleState());
+  const [expanded, setExpanded] = useState<boolean>(() =>
+    loadVisibleState(defaultExpanded),
+  );
   const [activeTab, setActiveTab] = useState<InsightsTab>(() => loadTabState());
   const [showAllQueueItems, setShowAllQueueItems] = useState(false);
 
@@ -103,8 +111,12 @@ export function RadiusInsightsPanel({
   };
 
   return (
-    <div className="shrink-0 px-2 pb-2">
-      <section className="border border-eve-border rounded-sm bg-eve-dark/40 p-2">
+    <div className={`shrink-0 px-2 ${compactDashboard ? "pb-1" : "pb-2"}`}>
+      <section
+        className={`border border-eve-border rounded-sm bg-eve-dark/40 ${
+          compactDashboard ? "p-1.5" : "p-2"
+        }`}
+      >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <h3 className="text-[11px] uppercase tracking-wider text-eve-dim">Insights</h3>
