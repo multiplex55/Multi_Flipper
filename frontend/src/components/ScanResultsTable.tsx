@@ -153,6 +153,12 @@ import {
   type RouteBadgeFilter,
 } from "@/lib/useRadiusRouteInsights";
 import type { RadiusScanSession } from "@/lib/radiusScanSession";
+import {
+  buildRouteManifestFromFlipRows,
+  type RouteHandoffContext,
+  type RouteHandoffEntryAction,
+  type RouteHandoffLegContext,
+} from "@/lib/routeHandoff";
 
 export const calcRouteConfidence = calcRouteConfidenceFromInsights;
 
@@ -350,6 +356,11 @@ interface Props {
   onOpenInRoute?: (routeKey: string) => void;
   onOpenInRouteWorkbench?: (routeKey: string) => void;
   onSendToRouteQueue?: (routeKey: string) => void;
+  onRouteHandoff?: (
+    context: RouteHandoffContext,
+    manifestText: string,
+    selectedLeg: RouteHandoffLegContext | null,
+  ) => void;
   featureConfig?: ScanResultsTableFeatureConfig;
 }
 
@@ -1486,6 +1497,7 @@ export function ScanResultsTable({
   onOpenInRoute,
   onOpenInRouteWorkbench,
   onSendToRouteQueue,
+  onRouteHandoff,
   featureConfig = DEFAULT_SCAN_RESULTS_TABLE_FEATURE_CONFIG,
 }: Props) {
   const { t } = useI18n();
@@ -4704,6 +4716,85 @@ export function ScanResultsTable({
     };
   }, [indexed, routeGroupByKey, selectedIds]);
 
+  const selectedRouteRows = useMemo(() => {
+    if (!selectedRouteDerivation) return [];
+    return indexed
+      .filter(
+        (row) =>
+          selectedIds.has(row.id) &&
+          routeGroupKey(row.row) === selectedRouteDerivation.routeKey,
+      )
+      .map((entry) => entry.row);
+  }, [indexed, selectedIds, selectedRouteDerivation]);
+
+  const selectedRouteLegContexts = useMemo<RouteHandoffLegContext[]>(() => {
+    const legs = new Map<string, RouteHandoffLegContext>();
+    for (const row of selectedRouteRows) {
+      const buyLocationID = Math.trunc(row.BuyLocationID ?? 0);
+      const sellLocationID = Math.trunc(row.SellLocationID ?? 0);
+      const key = `${buyLocationID}:${sellLocationID}`;
+      if (legs.has(key)) continue;
+      legs.set(key, {
+        buyLocationID,
+        sellLocationID,
+        buySystemID: Math.trunc(row.BuySystemID ?? 0),
+        sellSystemID: Math.trunc(row.SellSystemID ?? 0),
+        buySystemName: row.BuySystemName ?? "",
+        sellSystemName: row.SellSystemName ?? "",
+        buyStationName: row.BuyStation ?? "",
+        sellStationName: row.SellStation ?? "",
+        totalJumps: Math.max(0, Math.trunc(row.TotalJumps ?? 0)),
+        profitPerJump: Math.max(0, row.ProfitPerJump ?? 0),
+        routeKey: selectedRouteDerivation?.routeKey ?? "",
+      });
+    }
+    return Array.from(legs.values());
+  }, [selectedRouteDerivation?.routeKey, selectedRouteRows]);
+
+  const selectedRouteManifestText = useMemo(
+    () => buildRouteManifestFromFlipRows(selectedRouteRows),
+    [selectedRouteRows],
+  );
+
+  const emitRouteHandoff = useCallback(
+    (preferredEntryAction: RouteHandoffEntryAction) => {
+      if (!selectedRouteDerivation) return;
+      const payload: RouteHandoffContext = {
+        source: "scanner",
+        routeKey: selectedRouteDerivation.routeKey,
+        routeLabel: selectedRouteDerivation.routeLabel,
+        legContexts: selectedRouteLegContexts,
+        preferredEntryAction,
+      };
+      if (import.meta.env.DEV) {
+        console.debug("[ScanResultsTable] route handoff", payload);
+      }
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("eve:route-handoff-telemetry", {
+            detail: {
+              source: payload.source,
+              routeKey: payload.routeKey,
+              preferredEntryAction,
+              legCount: payload.legContexts.length,
+            },
+          }),
+        );
+      }
+      onRouteHandoff?.(
+        payload,
+        selectedRouteManifestText,
+        selectedRouteLegContexts[0] ?? null,
+      );
+    },
+    [
+      onRouteHandoff,
+      selectedRouteDerivation,
+      selectedRouteLegContexts,
+      selectedRouteManifestText,
+    ],
+  );
+
   const verifyRouteGroup = useCallback(
     (routeKey: string, profileId?: string) => {
       const group = routeGroupByKey[routeKey];
@@ -5263,24 +5354,24 @@ export function ScanResultsTable({
               <>
                 <button
                   type="button"
-                  onClick={() => onOpenInRoute?.(selectedRouteDerivation.routeKey)}
+                  onClick={() => emitRouteHandoff("planner")}
                   className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
                 >
-                  Open in Route
+                  Open in Route Planner
                 </button>
                 <button
                   type="button"
-                  onClick={() => onOpenInRouteWorkbench?.(selectedRouteDerivation.routeKey)}
+                  onClick={() => emitRouteHandoff("validation")}
                   className="rounded-sm border border-eve-accent/60 px-1.5 py-0.5 text-[10px] text-eve-accent hover:bg-eve-accent/10"
                 >
-                  Open in Route Workbench
+                  Open in Route Validation
                 </button>
                 <button
                   type="button"
-                  onClick={() => onSendToRouteQueue?.(selectedRouteDerivation.routeKey)}
+                  onClick={() => emitRouteHandoff("cargo")}
                   className="rounded-sm border border-indigo-400/50 px-1.5 py-0.5 text-[10px] text-indigo-200 hover:bg-indigo-500/10"
                 >
-                  Send to Route Queue
+                  Open in Cargo Plan
                 </button>
               </>
             )}

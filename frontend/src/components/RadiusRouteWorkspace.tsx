@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { RouteBuilder } from "@/components/RouteBuilder";
 import { EmptyState } from "@/components/EmptyState";
+import type {
+  RouteHandoffContext,
+  RouteHandoffLegContext,
+} from "@/lib/routeHandoff";
 import type { RadiusScanSession } from "@/lib/radiusScanSession";
 import type { RouteResult, ScanParams } from "@/lib/types";
 import { formatISK } from "@/lib/format";
@@ -20,6 +24,9 @@ type RadiusRouteWorkspaceProps = {
   onWorkspaceModeChange?: (mode: RadiusRouteWorkspaceTab) => void;
   workspaceSource?: "radius" | "finder";
   routeQueueKeys?: string[];
+  pendingRouteContext?: RouteHandoffContext | null;
+  pendingRadiusManifest?: string;
+  pendingSelectedLeg?: RouteHandoffLegContext | null;
 };
 
 function EmptySessionState({
@@ -55,6 +62,9 @@ export function RadiusRouteWorkspace({
   onWorkspaceModeChange,
   workspaceSource = "radius",
   routeQueueKeys = [],
+  pendingRouteContext = null,
+  pendingRadiusManifest = "",
+  pendingSelectedLeg = null,
 }: RadiusRouteWorkspaceProps) {
   const [uncontrolledActiveTab, setUncontrolledActiveTab] =
     useState<RadiusRouteWorkspaceTab>("discover");
@@ -219,6 +229,9 @@ export function RadiusRouteWorkspace({
               onChange={onChange}
               loadedResults={routeLoadedResults}
               isLoggedIn={isLoggedIn}
+              pendingRouteContext={pendingRouteContext}
+              pendingRadiusManifest={pendingRadiusManifest}
+              pendingSelectedLeg={pendingSelectedLeg}
             />
           </div>
         )}

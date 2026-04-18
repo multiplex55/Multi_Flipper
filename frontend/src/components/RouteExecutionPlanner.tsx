@@ -75,6 +75,7 @@ interface RouteExecutionPlannerProps {
   onClose: () => void;
   selection: RoutePlannerSelection | null;
   initialAction: RoutePlannerAction | null;
+  onOpenPriceValidation?: (manifestText: string) => void;
 }
 
 const OPTION_CONFIG: Array<{
@@ -106,6 +107,7 @@ export function RouteExecutionPlanner({
   onClose,
   selection,
   initialAction,
+  onOpenPriceValidation,
 }: RouteExecutionPlannerProps) {
   const { t } = useI18n();
   const { addToast } = useGlobalToast();
@@ -222,6 +224,16 @@ export function RouteExecutionPlanner({
     }
   };
 
+  const openVerifier = () => {
+    if (!manifestText) return;
+    if (import.meta.env.DEV) {
+      console.debug("[RouteExecutionPlanner] open verifier", {
+        action: selectedAction,
+      });
+    }
+    onOpenPriceValidation?.(manifestText);
+  };
+
   return (
     <Modal
       open={open}
@@ -278,6 +290,34 @@ export function RouteExecutionPlanner({
               </div>
             ) : null}
             <div className="text-xs text-eve-dim">Select a planner option:</div>
+            {plannerStep === "manifest" && selectedAction && (
+              <div
+                className="rounded-sm border border-eve-accent/40 bg-eve-accent/10 p-2 text-xs flex flex-wrap items-center gap-2"
+                data-testid="route-ops-priority"
+              >
+                <span className="text-eve-accent">
+                  Validation: {validation?.band ?? "yellow"}
+                </span>
+                <button
+                  type="button"
+                  className="px-2 py-1 rounded-sm border border-eve-accent/70 text-eve-accent hover:bg-eve-accent/10 transition-colors text-[11px] font-semibold"
+                  onClick={() => {
+                    void copyManifest();
+                  }}
+                  data-testid="route-priority-copy-manifest"
+                >
+                  Copy manifest
+                </button>
+                <button
+                  type="button"
+                  className="px-2 py-1 rounded-sm border border-purple-400/70 text-purple-200 hover:bg-purple-500/10 transition-colors text-[11px] font-semibold"
+                  onClick={openVerifier}
+                  data-testid="route-priority-open-verifier"
+                >
+                  Open verifier
+                </button>
+              </div>
+            )}
             <div className="grid grid-cols-1 gap-2">
               {visibleOptions.map((option) => {
                 const active = option.id === selectedAction;
@@ -463,6 +503,7 @@ export function RouteExecutionPlanner({
                       void copyManifest();
                     }}
                     aria-label="Copy planner manifest"
+                    data-testid="route-copy-planner-manifest"
                   >
                     Copy Planner Manifest
                   </button>

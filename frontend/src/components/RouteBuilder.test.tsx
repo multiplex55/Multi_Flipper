@@ -9,6 +9,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@/lib/i18n";
 import { ToastProvider } from "@/components/Toast";
 import { RouteBuilder } from "@/components/RouteBuilder";
+import type {
+  RouteHandoffContext,
+  RouteHandoffLegContext,
+} from "@/lib/routeHandoff";
 import type { RouteResult, ScanParams } from "@/lib/types";
 
 vi.mock("@/lib/api", async () => {
@@ -76,11 +80,24 @@ const baseParams: ScanParams = {
   route_low_attention_avoid_item_concentration: true,
 };
 
-function renderRouteBuilder(routes: RouteResult[] = [makeRouteResult()]) {
+function renderRouteBuilder(
+  routes: RouteResult[] = [makeRouteResult()],
+  handoff?: {
+    context: RouteHandoffContext;
+    selectedLeg: RouteHandoffLegContext;
+    manifestText?: string;
+  },
+) {
   return render(
     <I18nProvider>
       <ToastProvider>
-        <RouteBuilder params={baseParams} loadedResults={routes} />
+        <RouteBuilder
+          params={baseParams}
+          loadedResults={routes}
+          pendingRouteContext={handoff?.context ?? null}
+          pendingSelectedLeg={handoff?.selectedLeg ?? null}
+          pendingRadiusManifest={handoff?.manifestText ?? ""}
+        />
       </ToastProvider>
     </I18nProvider>,
   );
@@ -342,5 +359,62 @@ describe("RouteBuilder planner interactions", () => {
 
     expect(await screen.findByText("Enriched Buy Station")).toBeInTheDocument();
     expect(screen.getByText("Legacy Sell Station")).toBeInTheDocument();
+  });
+
+  it("scanner handoff context prepopulates expected route inputs", async () => {
+    const context: RouteHandoffContext = {
+      source: "scanner",
+      routeKey: "loc:60003760->loc:60008494",
+      routeLabel: "Jita → Amarr",
+      preferredEntryAction: "planner",
+      legContexts: [],
+    };
+    const selectedLeg: RouteHandoffLegContext = {
+      buyLocationID: 60003760,
+      sellLocationID: 60008494,
+      buySystemID: 30000142,
+      sellSystemID: 30002187,
+      buySystemName: "Jita",
+      sellSystemName: "Amarr",
+      buyStationName: "Jita IV - Moon 4",
+      sellStationName: "Amarr VIII",
+      totalJumps: 3,
+      profitPerJump: 5555,
+      routeKey: context.routeKey,
+    };
+    renderRouteBuilder([makeRouteResult()], { context, selectedLeg });
+
+    expect(await screen.findByDisplayValue("Amarr")).toBeInTheDocument();
+    expect(screen.getAllByDisplayValue("3").length).toBeGreaterThan(0);
+    expect(screen.getByDisplayValue("5555")).toBeInTheDocument();
+  });
+
+  it("scanner handoff opens the requested initial validation action", async () => {
+    const context: RouteHandoffContext = {
+      source: "scanner",
+      routeKey: "loc:60003760->loc:60008494",
+      routeLabel: "Jita → Amarr",
+      preferredEntryAction: "validation",
+      legContexts: [],
+    };
+    const selectedLeg: RouteHandoffLegContext = {
+      buyLocationID: 60003760,
+      sellLocationID: 60008494,
+      buySystemID: 30000142,
+      sellSystemID: 30002187,
+      buySystemName: "Jita",
+      sellSystemName: "Amarr",
+      buyStationName: "Jita IV - Moon 4",
+      sellStationName: "Amarr VIII",
+      totalJumps: 3,
+      profitPerJump: 5555,
+      routeKey: context.routeKey,
+    };
+    renderRouteBuilder([makeRouteResult()], { context, selectedLeg });
+
+    expect(
+      await screen.findByTestId("route-execution-planner"),
+    ).toBeInTheDocument();
+    expect(await screen.findByTestId("route-validation-band")).toBeInTheDocument();
   });
 });
