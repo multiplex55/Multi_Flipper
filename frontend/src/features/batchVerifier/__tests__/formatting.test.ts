@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { ComparisonResult, ComparisonRow } from "@/features/batchVerifier/compare";
+import { computeAggregateStats, type ComparisonResult, type ComparisonRow } from "@/features/batchVerifier/compare";
 import {
   formatDecisionReason,
   formatDoNotBuyList,
@@ -48,6 +48,7 @@ function result(rows: ComparisonRow[], summaryOverrides: Partial<ComparisonResul
       maxPriceDiffPercent: 18.75,
       ...summaryOverrides,
     },
+    aggregate: computeAggregateStats(rows),
   };
 }
 

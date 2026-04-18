@@ -199,6 +199,85 @@ describe("BatchBuyVerifier", () => {
     expect(doNotBuyPayload).toContain("Tritanium — Cannot evaluate sell-value threshold: manifest sell-per is missing.");
   });
 
+  it("renders verdict badge for all summary states", () => {
+    render(<BatchBuyVerifier />);
+
+    fireEvent.change(screen.getByLabelText("Batch Buy Manifest"), {
+      target: { value: "Tritanium | qty 10 | buy per 5 | buy total 50 | sell per 6" },
+    });
+    fireEvent.change(screen.getByLabelText("Export Order"), { target: { value: "Tritanium\t10\t5\t50" } });
+    fireEvent.click(screen.getByLabelText("Sell Value Evaluate"));
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
+    expect(screen.getByTestId("summary-verdict-badge")).toHaveTextContent("Good");
+
+    fireEvent.change(screen.getByLabelText("Export Order"), { target: { value: "Tritanium\t10\t5.2\t52" } });
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
+    expect(screen.getByTestId("summary-verdict-badge")).toHaveTextContent("Reduced edge");
+
+    fireEvent.change(screen.getByLabelText("Export Order"), { target: { value: "Tritanium\t10\t7\t70" } });
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
+    expect(screen.getByTestId("summary-verdict-badge")).toHaveTextContent("Abort");
+  });
+
+  it("shows aggregate summary totals from fixture data", () => {
+    render(<BatchBuyVerifier />);
+
+    const aggregateManifest = [
+      "Tritanium | qty 10 | buy per 5 | buy total 50 | sell per 7",
+      "Pyerite | qty 8 | buy per 4 | buy total 32 | sell per 6",
+      "Mexallon | qty 5 | buy per 3 | buy total 15 | sell per 4",
+    ].join("\n");
+    const aggregateExport = [
+      ["Tritanium", "10", "5", "50"].join("\t"),
+      ["Pyerite", "8", "4.5", "36"].join("\t"),
+    ].join("\n");
+
+    fireEvent.change(screen.getByLabelText("Batch Buy Manifest"), { target: { value: aggregateManifest } });
+    fireEvent.change(screen.getByLabelText("Export Order"), { target: { value: aggregateExport } });
+    fireEvent.click(screen.getByLabelText("Sell Value Evaluate"));
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
+
+    expect(screen.getByTestId("summary-line-count")).toHaveTextContent("3");
+    expect(screen.getByTestId("summary-total-buy")).toHaveTextContent("97 / 86 ISK");
+    expect(screen.getByTestId("summary-missing-lines")).toHaveTextContent("1");
+    expect(screen.getByTestId("summary-total-sell")).toHaveTextContent("138 ISK");
+    expect(screen.getByTestId("summary-reduced-edge")).toHaveTextContent("1");
+  });
+
+  it("copy summary actions include only intended lines", async () => {
+    render(<BatchBuyVerifier />);
+
+    const copyManifest = [
+      "Tritanium | qty 10 | buy per 5 | buy total 50 | sell per 6",
+      "Pyerite | qty 8 | buy per 4 | buy total 32 | sell per 6",
+      "Mexallon | qty 5 | buy per 3 | buy total 15 | sell per 4",
+    ].join("\n");
+    const copyExport = [
+      ["Tritanium", "10", "5", "50"].join("\t"),
+      ["Pyerite", "8", "4.5", "36"].join("\t"),
+      ["Mexallon", "5", "5", "25"].join("\t"),
+    ].join("\n");
+
+    fireEvent.change(screen.getByLabelText("Batch Buy Manifest"), { target: { value: copyManifest } });
+    fireEvent.change(screen.getByLabelText("Export Order"), { target: { value: copyExport } });
+    fireEvent.click(screen.getByLabelText("Sell Value Evaluate"));
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy Changed Lines" }));
+    await waitFor(() => expect(writeTextMock).toHaveBeenCalledTimes(1));
+    const changedPayload = writeTextMock.mock.calls[0][0] as string;
+    expect(changedPayload).toContain("Pyerite");
+    expect(changedPayload).toContain("Mexallon");
+    expect(changedPayload).not.toContain("Tritanium");
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy Do-Not-Buy Lines" }));
+    await waitFor(() => expect(writeTextMock).toHaveBeenCalledTimes(2));
+    const blockedPayload = writeTextMock.mock.calls[1][0] as string;
+    expect(blockedPayload).toContain("Mexallon");
+    expect(blockedPayload).not.toContain("Pyerite");
+    expect(blockedPayload).not.toContain("Tritanium");
+  });
+
   it("shows parse errors without crashing", () => {
     render(<BatchBuyVerifier />);
 
