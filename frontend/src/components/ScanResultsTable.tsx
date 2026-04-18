@@ -31,7 +31,6 @@ import {
   classifyFlipUrgency,
   dailyIskPerJump,
   deriveActionQueue,
-  radiusRouteKey,
   realIskPerJump,
   realIskPerM3PerJump,
   slippageCostIsk,
@@ -2436,7 +2435,7 @@ export function ScanResultsTable({
             routeSafetyRankForRow(left.row) - routeSafetyRankForRow(right.row);
           const primaryRisk = sortDir === "asc" ? diff : -diff;
           if (primaryRisk !== 0) return primaryRisk;
-          return routeSafetyTieBreaker(left, right);
+          return routeSafetyTieBreaker(left as IndexedRow, right as IndexedRow);
         },
       });
     });

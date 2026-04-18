@@ -6,7 +6,7 @@ export type SortDir = "asc" | "desc";
 
 export interface IndexedOrderingRow {
   id: number;
-  sourceIndex?: number;
+  sourceIndex: number;
   row: FlipResult;
   endpointPreferences?: {
     scoreDelta?: number;
