@@ -516,7 +516,13 @@ export interface SavedRoutePackVerificationSnapshot {
   currentProfitIsk: number;
   minAcceptableProfitIsk: number;
   verifiedAt: string;
+  checkedAt: string;
   offenderCount: number;
+  buyDriftPct: number;
+  sellDriftPct: number;
+  profitRetentionPct: number;
+  offenderLines: string[];
+  summary: string;
 }
 
 export interface SavedRoutePackSummarySnapshot {
@@ -567,6 +573,7 @@ export interface SavedRoutePack {
   createdAt: string;
   updatedAt: string;
   lastVerifiedAt: string | null;
+  verificationProfileId: string;
   entryMode: "core" | "filler" | "loop";
   launchIntent: string | null;
   selectedLineKeys: string[];

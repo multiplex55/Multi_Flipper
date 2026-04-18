@@ -55,6 +55,12 @@ describe("routePackBuilder", () => {
       expected_profit_isk: 50,
       min_acceptable_profit_isk: 30,
       offenders: [],
+      buyDriftPct: 1,
+      sellDriftPct: 1,
+      profitRetentionPct: 110,
+      offenderLines: [],
+      checkedAt: "2026-01-01T00:00:00.000Z",
+      summary: "All good",
     };
     const pack = buildSavedRoutePack({
       routeKey: "loc:1->loc:2",

@@ -122,6 +122,9 @@ import {
 } from "@/lib/savedRouteExecution";
 import { buildSavedRoutePack } from "@/lib/routePackBuilder";
 import { SavedRoutePacksPanel } from "@/components/SavedRoutePacksPanel";
+import {
+  getVerificationProfileById,
+} from "@/lib/verificationProfiles";
 
 const PAGE_SIZE = 100;
 const GROUP_CONTAINER_PAGE_SIZE = 50;
@@ -1890,6 +1893,8 @@ export function ScanResultsTable({
   const [routeVerificationByKey, setRouteVerificationByKey] = useState<
     Record<string, RouteVerificationResult>
   >({});
+  const [routeVerificationProfileByKey, setRouteVerificationProfileByKey] =
+    useState<Record<string, string>>({});
   const [routeFillerSummaryByKey, setRouteFillerSummaryByKey] = useState<
     Record<
       string,
@@ -3001,6 +3006,16 @@ export function ScanResultsTable({
     return out;
   }, [savedRoutePacks]);
 
+  useEffect(() => {
+    setRouteVerificationProfileByKey((prev) => {
+      const next = { ...prev };
+      for (const pack of savedRoutePacks) {
+        next[pack.routeKey] = pack.verificationProfileId || "standard";
+      }
+      return next;
+    });
+  }, [savedRoutePacks]);
+
   const endpointPreferenceDeltaByRoute = useMemo<Record<string, number>>(() => {
     const out: Record<string, number> = {};
     for (const ir of datasetRows) {
@@ -3854,6 +3869,10 @@ export function ScanResultsTable({
       if (!routeGroup || !anchor) return;
       const existing = savedRoutePackByKey[routeKey] ?? null;
       const verificationResult = routeVerificationByKey[routeKey];
+      const verificationProfileId =
+        routeVerificationProfileByKey[routeKey] ??
+        existing?.verificationProfileId ??
+        "standard";
       const pack = buildSavedRoutePack({
         existingPack: existing,
         routeKey,
@@ -3867,6 +3886,7 @@ export function ScanResultsTable({
         routeSafetyRank: routeAggregateMetricsByRoute[routeKey]?.routeSafetyRank ?? null,
         manifestSnapshot: routeManifestByKey[routeKey] ?? null,
         verificationResult: verificationResult ?? null,
+        verificationProfileId,
       });
       const next = upsertSavedRoutePack(pack);
       setSavedRoutePacks(next);
@@ -3882,6 +3902,7 @@ export function ScanResultsTable({
       routeGroupByKey,
       routeManifestByKey,
       routeVerificationByKey,
+      routeVerificationProfileByKey,
       savedRoutePackByKey,
     ],
   );
@@ -3921,6 +3942,10 @@ export function ScanResultsTable({
         routeSafetyRank: routeAggregateMetricsByRoute[routeKey]?.routeSafetyRank ?? null,
         manifestSnapshot: routeManifestByKey[routeKey] ?? null,
         verificationResult: routeVerificationByKey[routeKey] ?? null,
+        verificationProfileId:
+          routeVerificationProfileByKey[routeKey] ??
+          savedRoutePackByKey[routeKey]?.verificationProfileId ??
+          "standard",
       });
       copyText(formatSavedRoutePackExport(transientPack));
     },
@@ -3934,6 +3959,7 @@ export function ScanResultsTable({
       routeGroupByKey,
       routeManifestByKey,
       routeVerificationByKey,
+      routeVerificationProfileByKey,
       savedRoutePackByKey,
     ],
   );
@@ -4519,17 +4545,28 @@ export function ScanResultsTable({
   );
 
   const verifyRouteGroup = useCallback(
-    (routeKey: string) => {
+    (routeKey: string, profileId?: string) => {
       const group = routeGroupByKey[routeKey];
       const snapshot = routeManifestByKey[routeKey];
       if (!group || !snapshot) {
         addToast("No stored manifest expectations for this route yet.", "warning");
         return;
       }
+      const resolvedProfileId =
+        profileId ??
+        routeVerificationProfileByKey[routeKey] ??
+        savedRoutePackByKey[routeKey]?.verificationProfileId ??
+        "standard";
+      const verificationProfile = getVerificationProfileById(resolvedProfileId);
       const result = verifyRouteManifestAgainstRows({
         snapshot,
         rows: group.rows.map((entry) => entry.row),
+        profile: verificationProfile,
       });
+      setRouteVerificationProfileByKey((prev) => ({
+        ...prev,
+        [routeKey]: resolvedProfileId,
+      }));
       setRouteVerificationByKey((prev) => ({
         ...prev,
         [routeKey]: result,
@@ -4542,7 +4579,7 @@ export function ScanResultsTable({
               .join(", ")}.`
           : "";
       addToast(
-        `Verification ${result.status}: profit ${formatISK(result.current_profit_isk)} (min ${formatISK(result.min_acceptable_profit_isk)}).${offenderSummary}`,
+        `Verification ${result.status}: profit ${formatISK(result.current_profit_isk)} (min ${formatISK(result.min_acceptable_profit_isk)}). ${result.summary}${offenderSummary}`,
         result.status === "Abort"
           ? "error"
           : result.status === "Reduced edge"
@@ -4567,6 +4604,7 @@ export function ScanResultsTable({
           routeSafetyRank: routeAggregateMetricsByRoute[routeKey]?.routeSafetyRank ?? null,
           manifestSnapshot: routeManifestByKey[routeKey] ?? null,
           verificationResult: result,
+          verificationProfileId: resolvedProfileId,
         });
         return upsertSavedRoutePack(rebuilt);
       });
@@ -4578,6 +4616,7 @@ export function ScanResultsTable({
       routeAnchorRowByKey,
       routeGroupByKey,
       routeManifestByKey,
+      routeVerificationProfileByKey,
       savedRoutePackByKey,
     ],
   );
@@ -5644,7 +5683,25 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
         <SavedRoutePacksPanel
           packs={savedRoutePacks}
           onOpen={openSavedRoutePack}
-          onVerify={(pack) => verifyRouteGroup(pack.routeKey)}
+          onVerify={(pack) =>
+            verifyRouteGroup(
+              pack.routeKey,
+              routeVerificationProfileByKey[pack.routeKey] ??
+                pack.verificationProfileId ??
+                "standard",
+            )
+          }
+          onVerificationProfileChange={(pack, profileId) => {
+            setRouteVerificationProfileByKey((prev) => ({
+              ...prev,
+              [pack.routeKey]: profileId,
+            }));
+            updateSavedPackExecution(pack.routeKey, (current) => ({
+              ...current,
+              verificationProfileId: profileId,
+              updatedAt: new Date().toISOString(),
+            }));
+          }}
           onCopy={(pack) => copyText(formatSavedRoutePackExport(pack))}
           onRemove={(pack) => {
             setSavedRoutePacks(removeSavedRoutePack(pack.routeKey));
@@ -6222,7 +6279,14 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                                     </button>
                                     <button
                                       type="button"
-                                      onClick={() => verifyRouteGroup(group.key)}
+                                      onClick={() =>
+                                        verifyRouteGroup(
+                                          group.key,
+                                          routeVerificationProfileByKey[group.key] ??
+                                            savedRoutePackByKey[group.key]?.verificationProfileId ??
+                                            "standard",
+                                        )
+                                      }
                                       className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
                                     >
                                       Verify
@@ -6898,6 +6962,13 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
         manifestRouteKey={activeRouteGroupKey}
         entryMode={batchBuilderEntryMode}
         launchIntent={batchBuilderLaunchIntent}
+        verificationProfileId={
+          activeRouteGroupKey
+            ? routeVerificationProfileByKey[activeRouteGroupKey] ??
+              savedRoutePackByKey[activeRouteGroupKey]?.verificationProfileId ??
+              "standard"
+            : "standard"
+        }
         onManifestVerificationSnapshot={(routeKey, snapshot) =>
           setRouteManifestByKey((prev) => ({ ...prev, [routeKey]: snapshot }))
         }

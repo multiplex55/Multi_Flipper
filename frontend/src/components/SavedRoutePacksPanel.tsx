@@ -6,6 +6,7 @@ interface SavedRoutePacksPanelProps {
   packs: SavedRoutePack[];
   onOpen: (pack: SavedRoutePack) => void;
   onVerify: (pack: SavedRoutePack) => void;
+  onVerificationProfileChange: (pack: SavedRoutePack, profileId: string) => void;
   onCopy: (pack: SavedRoutePack) => void;
   onRemove: (pack: SavedRoutePack) => void;
   onMarkBought: (pack: SavedRoutePack, lineKey: string, qty: number) => void;
@@ -29,6 +30,7 @@ export function SavedRoutePacksPanel({
   packs,
   onOpen,
   onVerify,
+  onVerificationProfileChange,
   onCopy,
   onRemove,
   onMarkBought,
@@ -71,6 +73,11 @@ export function SavedRoutePacksPanel({
                     </div>
                     <RouteWorkbenchPanel
                       pack={pack}
+                      verificationProfileId={pack.verificationProfileId}
+                      onVerificationProfileChange={(profileId) =>
+                        onVerificationProfileChange(pack, profileId)
+                      }
+                      onVerifyNow={() => onVerify(pack)}
                       onMarkBought={(lineKey, qty) => onMarkBought(pack, lineKey, qty)}
                       onMarkSold={(lineKey, qty) => onMarkSold(pack, lineKey, qty)}
                       onMarkSkipped={(lineKey, reason) => onMarkSkipped(pack, lineKey, reason)}
