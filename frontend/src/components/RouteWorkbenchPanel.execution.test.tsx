@@ -21,6 +21,7 @@ function makePack(): SavedRoutePack {
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     lastVerifiedAt: null,
+    verificationProfileId: "standard",
     entryMode: "core",
     launchIntent: null,
     selectedLineKeys: ["100:1:2"],
@@ -66,9 +67,13 @@ function makePack(): SavedRoutePack {
 
 function Harness() {
   const [pack, setPack] = useState(makePack());
+  const [profileId, setProfileId] = useState("standard");
   return (
     <RouteWorkbenchPanel
       pack={pack}
+      verificationProfileId={profileId}
+      onVerificationProfileChange={setProfileId}
+      onVerifyNow={() => {}}
       onMarkBought={(lineKey, qty) =>
         setPack((prev) => markLineBought(prev, prev.routeKey, lineKey, qty, qty * 100))
       }

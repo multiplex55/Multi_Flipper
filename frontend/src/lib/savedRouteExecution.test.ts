@@ -19,6 +19,7 @@ function makePack(): SavedRoutePack {
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     lastVerifiedAt: null,
+    verificationProfileId: "standard",
     entryMode: "core",
     launchIntent: null,
     selectedLineKeys: ["100:1:2", "200:1:2"],

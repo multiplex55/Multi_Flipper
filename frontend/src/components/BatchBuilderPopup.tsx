@@ -28,6 +28,7 @@ import type {
 import { Modal } from "./Modal";
 import { useGlobalToast } from "./Toast";
 import { filterFlipResults } from "@/lib/banlistFilters";
+import { getVerificationProfileById } from "@/lib/verificationProfiles";
 
 interface BatchBuilderPopupProps {
   open: boolean;
@@ -63,6 +64,7 @@ interface BatchBuilderPopupProps {
     routeKey: string,
     snapshot: RouteManifestVerificationSnapshot,
   ) => void;
+  verificationProfileId?: string;
 }
 
 type RouteState = "idle" | "searching" | "results" | "selected";
@@ -106,7 +108,9 @@ function toKnownJumpCount(value: unknown): number | null {
 function buildMergedManifest(
   baseBatch: BaseBatchManifest,
   option: RouteAdditionOption,
+  verificationProfileId?: string,
 ): MergedBatchManifest {
+  const verificationProfile = getVerificationProfileById(verificationProfileId);
   const baseUnits = baseBatch.base_lines.reduce(
     (sum, line) => sum + line.units,
     0,
@@ -138,9 +142,10 @@ function buildMergedManifest(
       expected_sell_isk: baseBatch.total_sell_isk + option.total_sell_isk,
       expected_profit_isk: baseBatch.total_profit_isk + option.total_profit_isk,
       min_acceptable_profit_isk:
-        (baseBatch.total_profit_isk + option.total_profit_isk) * 0.7,
-      max_buy_drift_pct: 5,
-      max_sell_drift_pct: 5,
+        (baseBatch.total_profit_isk + option.total_profit_isk) *
+        (verificationProfile.minProfitRetentionPct / 100),
+      max_buy_drift_pct: verificationProfile.maxBuyDriftPct,
+      max_sell_drift_pct: verificationProfile.maxSellDriftPct,
       lines: [
         ...baseBatch.base_lines.map((line) => ({
           line_ref: routeLineKey({
@@ -285,6 +290,7 @@ export function BatchBuilderPopup({
   entryMode = "core",
   launchIntent = null,
   onManifestVerificationSnapshot,
+  verificationProfileId = "standard",
 }: BatchBuilderPopupProps) {
   const { t } = useI18n();
   const { addToast } = useGlobalToast();
@@ -1078,7 +1084,9 @@ export function BatchBuilderPopup({
         null;
       if (recommended && baseBatchManifest) {
         setSelectedOptionId(recommended.option_id);
-        setMergedManifest(buildMergedManifest(baseBatchManifest, recommended));
+        setMergedManifest(
+          buildMergedManifest(baseBatchManifest, recommended, verificationProfileId),
+        );
         setAppliedFillerLines([]);
         setFillerSuggestions([]);
         setSelectedFillerKeys({});
@@ -1177,7 +1185,9 @@ export function BatchBuilderPopup({
       safe_filler_line_count: effectiveSelectedSummary.safe_filler_line_count,
       stretch_filler_line_count: effectiveSelectedSummary.stretch_filler_line_count,
     };
-    setMergedManifest(buildMergedManifest(baseBatchManifest, optionForMerge));
+    setMergedManifest(
+      buildMergedManifest(baseBatchManifest, optionForMerge, verificationProfileId),
+    );
   }, [baseBatchManifest, selectedOption, effectiveSelectedSummary]);
 
   useEffect(() => {
@@ -1259,7 +1269,9 @@ export function BatchBuilderPopup({
     (option: RouteAdditionOption) => {
       if (!baseBatchManifest) return;
       setSelectedOptionId(option.option_id);
-      setMergedManifest(buildMergedManifest(baseBatchManifest, option));
+      setMergedManifest(
+        buildMergedManifest(baseBatchManifest, option, verificationProfileId),
+      );
       setAppliedFillerLines([]);
       setSelectedFillerKeys({});
       setRouteState("selected");
@@ -1498,7 +1510,7 @@ export function BatchBuilderPopup({
             <div className="grid grid-cols-1 gap-2">
               {visibleRouteOptions.map((option) => {
                 const optionMerged = baseBatchManifest
-                  ? buildMergedManifest(baseBatchManifest, option)
+                  ? buildMergedManifest(baseBatchManifest, option, verificationProfileId)
                   : null;
                 const selected = option.option_id === selectedOptionId;
                 const recommended = !!option.recommended;

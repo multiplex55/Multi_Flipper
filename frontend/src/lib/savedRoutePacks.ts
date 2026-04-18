@@ -61,6 +61,7 @@ function normalizeSavedRoutePack(value: unknown): SavedRoutePack | null {
     createdAt: String(pack.createdAt ?? new Date(0).toISOString()),
     updatedAt: String(pack.updatedAt ?? new Date(0).toISOString()),
     lastVerifiedAt: pack.lastVerifiedAt ? String(pack.lastVerifiedAt) : null,
+    verificationProfileId: typeof pack.verificationProfileId === "string" ? pack.verificationProfileId : "standard",
     entryMode:
       pack.entryMode === "filler" || pack.entryMode === "loop" ? pack.entryMode : "core",
     launchIntent: pack.launchIntent ? String(pack.launchIntent) : null,
@@ -73,7 +74,23 @@ function normalizeSavedRoutePack(value: unknown): SavedRoutePack | null {
     summarySnapshot: pack.summarySnapshot,
     lines: normalizedLines,
     manifestSnapshot: pack.manifestSnapshot ?? null,
-    verificationSnapshot: pack.verificationSnapshot ?? null,
+    verificationSnapshot: pack.verificationSnapshot
+      ? {
+          ...pack.verificationSnapshot,
+          checkedAt: String(
+            pack.verificationSnapshot.checkedAt ??
+              pack.verificationSnapshot.verifiedAt ??
+              new Date(0).toISOString(),
+          ),
+          buyDriftPct: Number(pack.verificationSnapshot.buyDriftPct ?? 0),
+          sellDriftPct: Number(pack.verificationSnapshot.sellDriftPct ?? 0),
+          profitRetentionPct: Number(pack.verificationSnapshot.profitRetentionPct ?? 0),
+          offenderLines: Array.isArray(pack.verificationSnapshot.offenderLines)
+            ? pack.verificationSnapshot.offenderLines.map((line) => String(line))
+            : [],
+          summary: String(pack.verificationSnapshot.summary ?? ""),
+        }
+      : null,
     notes: typeof pack.notes === "string" ? pack.notes : "",
     tags: Array.isArray(pack.tags) ? pack.tags.map((v) => String(v)) : [],
     status: pack.status === "archived" ? "archived" : "active",

@@ -20,6 +20,7 @@ function makePack(overrides: Partial<SavedRoutePack> = {}): SavedRoutePack {
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     lastVerifiedAt: null,
+    verificationProfileId: "standard",
     entryMode: "core",
     launchIntent: null,
     selectedLineKeys: ["200:1:2", "100:1:2"],
@@ -115,5 +116,15 @@ describe("savedRoutePacks", () => {
     const twice = loadSavedRoutePacks()[0].selectedLineKeys;
     expect(once).toEqual(["a:1:2", "m:1:2", "z:1:2"]);
     expect(twice).toEqual(["a:1:2", "m:1:2", "z:1:2"]);
+  });
+
+  it("legacy packs without verification profile id default to standard", () => {
+    const legacyPack = makePack() as unknown as Record<string, unknown>;
+    delete legacyPack.verificationProfileId;
+    localStorage.setItem(
+      SAVED_ROUTE_PACKS_STORAGE_KEY,
+      JSON.stringify([legacyPack]),
+    );
+    expect(loadSavedRoutePacks()[0].verificationProfileId).toBe("standard");
   });
 });

@@ -21,6 +21,7 @@ export type BuildSavedRoutePackParams = {
   routeSafetyRank: number | null;
   manifestSnapshot?: RouteManifestVerificationSnapshot | null;
   verificationResult?: RouteVerificationResult | null;
+  verificationProfileId?: string;
   now?: Date;
 };
 
@@ -91,7 +92,13 @@ function buildVerificationSnapshot(
     currentProfitIsk: verificationResult.current_profit_isk,
     minAcceptableProfitIsk: verificationResult.min_acceptable_profit_isk,
     verifiedAt: nowIso ?? new Date().toISOString(),
+    checkedAt: verificationResult.checkedAt,
     offenderCount: verificationResult.offenders.length,
+    buyDriftPct: verificationResult.buyDriftPct,
+    sellDriftPct: verificationResult.sellDriftPct,
+    profitRetentionPct: verificationResult.profitRetentionPct,
+    offenderLines: verificationResult.offenderLines,
+    summary: verificationResult.summary,
   };
 }
 
@@ -115,6 +122,7 @@ export function buildSavedRoutePack(
     createdAt: params.existingPack?.createdAt ?? nowIso,
     updatedAt: nowIso,
     lastVerifiedAt: params.verificationResult ? nowIso : params.existingPack?.lastVerifiedAt ?? null,
+    verificationProfileId: params.verificationProfileId ?? params.existingPack?.verificationProfileId ?? "standard",
     entryMode: params.entryMode,
     launchIntent: params.launchIntent,
     selectedLineKeys,

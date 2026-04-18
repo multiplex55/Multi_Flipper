@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FlipResult, RouteManifestVerificationSnapshot } from "@/lib/types";
 import { verifyRouteManifestAgainstRows } from "@/lib/routeManifestVerification";
+import { getVerificationProfileById } from "@/lib/verificationProfiles";
 
 function makeRow(overrides: Partial<FlipResult>): FlipResult {
   return {
@@ -113,5 +114,46 @@ describe("verifyRouteManifestAgainstRows", () => {
       ]),
     );
   });
-});
 
+  it("same data under strict vs aggressive yields different status", () => {
+    const rows = [makeRow({ UnitsToBuy: 10, BuyPrice: 104, SellPrice: 143 })];
+    const strict = verifyRouteManifestAgainstRows({
+      snapshot,
+      rows,
+      profile: getVerificationProfileById("strict"),
+    });
+    const aggressive = verifyRouteManifestAgainstRows({
+      snapshot,
+      rows,
+      profile: getVerificationProfileById("aggressive"),
+    });
+    expect(strict.status).toBe("Abort");
+    expect(aggressive.status).toBe("Reduced edge");
+  });
+
+  it("stale status when timestamp exceeds max age", () => {
+    const result = verifyRouteManifestAgainstRows({
+      snapshot,
+      rows: [makeRow({ UnitsToBuy: 10, BuyPrice: 100, SellPrice: 150 })],
+      profile: getVerificationProfileById("strict"),
+      checkedAt: "2026-01-01T00:00:00.000Z",
+      now: new Date("2026-01-01T02:00:01.000Z"),
+    });
+    expect(result.status).toBe("Abort");
+    expect(result.summary.toLowerCase()).toContain("stale");
+  });
+
+  it("populates UI explanation metric fields", () => {
+    const result = verifyRouteManifestAgainstRows({
+      snapshot,
+      rows: [makeRow({ UnitsToBuy: 10, BuyPrice: 102, SellPrice: 142 })],
+      profile: getVerificationProfileById("standard"),
+    });
+    expect(result.buyDriftPct).toBeGreaterThanOrEqual(0);
+    expect(result.sellDriftPct).toBeGreaterThanOrEqual(0);
+    expect(result.profitRetentionPct).toBeGreaterThan(0);
+    expect(result.checkedAt).toMatch(/T/);
+    expect(result.offenderLines).toEqual(expect.any(Array));
+    expect(result.summary.length).toBeGreaterThan(0);
+  });
+});
