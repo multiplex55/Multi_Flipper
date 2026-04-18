@@ -133,6 +133,13 @@ import { RouteWorkbenchPanel, type RouteWorkbenchMode, type RouteWorkbenchSectio
 import {
   getVerificationProfileById,
 } from "@/lib/verificationProfiles";
+import { OneLegModePanel } from "@/features/oneLegMode/OneLegModePanel";
+import {
+  buildOneLegFillers,
+  buildOneLegSuggestions,
+  sameLegKey,
+  verifyOneLegSelection,
+} from "@/features/oneLegMode/oneLegMode";
 import {
   calcRouteConfidence as calcRouteConfidenceFromInsights,
   deriveRadiusRouteInsights,
@@ -159,6 +166,7 @@ const ENDPOINT_PREFS_STORAGE_KEY = "eve-radius-endpoint-preferences:v1";
 const ADVANCED_TOOLBAR_VISIBLE_STORAGE_KEY =
   "eve-radius-advanced-toolbar-visible:v1";
 const COMPACT_DASHBOARD_STORAGE_KEY = "eve-radius-compact-dashboard:v1";
+const ONE_LEG_MODE_STORAGE_KEY = "eve-radius-one-leg-mode:v1";
 const PERFORMANCE_LOG_THRESHOLD_MS = 8;
 
 type SyntheticSortKey =
@@ -1652,6 +1660,17 @@ export function ScanResultsTable({
   const [routeSafetyModal, setRouteSafetyModal] = useState<{
     systems: SystemDanger[];
   } | null>(null);
+  const [oneLegModeEnabled, setOneLegModeEnabled] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem(ONE_LEG_MODE_STORAGE_KEY);
+      if (stored != null) return stored === "1";
+    } catch {
+      // ignore storage errors
+    }
+    return featureConfig.defaultViewMode === "rows";
+  });
+  const [oneLegVerificationResult, setOneLegVerificationResult] =
+    useState<RouteVerificationResult | null>(null);
 
   const isRegionGrouped = columnProfile === "region_eveguru";
   const allowRouteGrouping = featureConfig.allowRouteGrouping;
@@ -3411,6 +3430,58 @@ export function ScanResultsTable({
     selectedIds,
     selectionScopeRows,
   ]);
+  const selectedOneLegAnchor = useMemo(() => {
+    const selected = selectionScopeRows.find((entry) => selectedIds.has(entry.id));
+    return selected?.row ?? null;
+  }, [selectedIds, selectionScopeRows]);
+  const selectedOneLegBatchRows = useMemo(() => {
+    if (!selectedOneLegAnchor) return [] as FlipResult[];
+    const selectedRows = selectionScopeRows
+      .filter((entry) => selectedIds.has(entry.id))
+      .map((entry) => entry.row);
+    const scopeRows = selectedRows.length > 0 ? selectedRows : [selectedOneLegAnchor];
+    return scopeRows.filter((row) => sameLegKey(row) === sameLegKey(selectedOneLegAnchor));
+  }, [selectedIds, selectedOneLegAnchor, selectionScopeRows]);
+  const oneLegSuggestions = useMemo(() => {
+    if (!selectedOneLegAnchor || !oneLegModeEnabled) {
+      return { sameLeg: [], sameOriginOrDestination: [], nextBestTrade: [] };
+    }
+    return buildOneLegSuggestions({
+      rows: datasetRows,
+      anchor: selectedOneLegAnchor,
+      cargoLimit,
+      profile: opportunityProfile,
+      context: displayScoreContext,
+    });
+  }, [
+    cargoLimit,
+    datasetRows,
+    displayScoreContext,
+    oneLegModeEnabled,
+    opportunityProfile,
+    selectedOneLegAnchor,
+  ]);
+  const oneLegFillers = useMemo(() => {
+    if (!selectedOneLegAnchor || !oneLegModeEnabled) {
+      return { remainingCapacityM3: 0, candidates: [] };
+    }
+    return buildOneLegFillers({
+      rows: datasetRows,
+      anchor: selectedOneLegAnchor,
+      cargoLimit,
+    });
+  }, [cargoLimit, datasetRows, oneLegModeEnabled, selectedOneLegAnchor]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ONE_LEG_MODE_STORAGE_KEY, oneLegModeEnabled ? "1" : "0");
+    } catch {
+      // ignore storage errors
+    }
+  }, [oneLegModeEnabled]);
+  useEffect(() => {
+    setOneLegVerificationResult(null);
+  }, [selectedOneLegAnchor, selectedIds, oneLegModeEnabled]);
 
   const { totalPages, safePage } = useMemo(() => {
     if (isRegionGrouped) {
@@ -4596,6 +4667,22 @@ export function ScanResultsTable({
       savedRoutePackByKey,
     ],
   );
+  const verifyOneLegBatch = useCallback(() => {
+    if (!selectedOneLegAnchor || selectedOneLegBatchRows.length === 0) return;
+    const result = verifyOneLegSelection({
+      batchRows: selectedOneLegBatchRows,
+      profileId: "standard",
+    });
+    setOneLegVerificationResult(result);
+    addToast(
+      `One-leg verify ${result.status} · ${result.offenders.length} offenders`,
+      result.status === "Abort"
+        ? "error"
+        : result.status === "Reduced edge"
+          ? "warning"
+          : "success",
+    );
+  }, [addToast, selectedOneLegAnchor, selectedOneLegBatchRows]);
 
   const openSavedRoutePack = useCallback(
     (
@@ -4946,6 +5033,20 @@ export function ScanResultsTable({
                 active={compactRows}
                 onClick={() => setCompactRows((v) => !v)}
               />
+            )}
+            {isRadiusMode && !isRegionGrouped && (
+              <button
+                type="button"
+                className={`rounded-sm border px-1.5 py-0.5 text-[10px] transition-colors ${
+                  oneLegModeEnabled
+                    ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10"
+                    : "border-eve-border/60 text-eve-dim hover:text-eve-text"
+                }`}
+                onClick={() => setOneLegModeEnabled((prev) => !prev)}
+                data-testid="one-leg-mode-toggle"
+              >
+                One-leg mode {oneLegModeEnabled ? "On" : "Off"}
+              </button>
             )}
           </div>
           <div data-testid="radius-toolbar-secondary-actions" className="flex flex-wrap items-center gap-1">
@@ -6606,6 +6707,18 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
             </span>
           )}
         </div>
+      )}
+      {isRadiusMode && (
+        <OneLegModePanel
+          enabled={oneLegModeEnabled}
+          anchor={selectedOneLegAnchor}
+          batchRows={selectedOneLegBatchRows}
+          sameEndpoint={oneLegSuggestions.sameOriginOrDestination}
+          nextBest={oneLegSuggestions.nextBestTrade}
+          fillers={oneLegFillers}
+          verificationResult={oneLegVerificationResult}
+          onVerifySelection={verifyOneLegBatch}
+        />
       )}
 
       {scoreExplainRow && (
