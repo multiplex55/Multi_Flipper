@@ -8,7 +8,7 @@ import {
   type ScanResultsTableFeatureConfig,
 } from "./components/ScanResultsTable";
 import { ContractResultsTable } from "./components/ContractResultsTable";
-import { RouteBuilder } from "./components/RouteBuilder";
+import { RadiusRouteWorkspace } from "./components/RadiusRouteWorkspace";
 import { WatchlistTab } from "./components/WatchlistTab";
 import { BanlistTab } from "./components/BanlistTab";
 import { StationTrading } from "./components/StationTrading";
@@ -77,6 +77,7 @@ import {
   type SessionStationFilters,
 } from "@/lib/banlistFilters";
 import { computeLoopOpportunities } from "@/lib/loopPlanner";
+import { deriveRadiusScanSession } from "@/lib/radiusScanSession";
 
 type Tab =
   | "radius"
@@ -721,6 +722,15 @@ function App() {
   const [showPatrons, setShowPatrons] = useState(false);
   const [showCharacter, setShowCharacter] = useState(false);
   const [showRadiusColumnGuide, setShowRadiusColumnGuide] = useState(false);
+  const radiusScanSession = useMemo(
+    () =>
+      deriveRadiusScanSession({
+        results: radiusResults,
+        scanParams: params,
+        sessionStationFilters,
+      }),
+    [radiusResults, params, sessionStationFilters],
+  );
   const loopOpportunities = useMemo(
     () =>
       computeLoopOpportunities(radiusResults, {
@@ -2499,11 +2509,12 @@ const handleScanAndRefresh = useCallback(async () => {
             <div
               className={`flex-1 min-h-0 flex flex-col ${tab === "route" ? "" : "hidden"}`}
             >
-              <RouteBuilder
+              <RadiusRouteWorkspace
                 params={params}
                 onChange={setParams}
-                loadedResults={routeLoadedResults}
+                routeLoadedResults={routeLoadedResults}
                 isLoggedIn={authStatus.logged_in}
+                radiusScanSession={radiusScanSession}
               />
             </div>
             <div
