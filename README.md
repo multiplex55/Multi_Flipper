@@ -219,6 +219,15 @@ npm -C frontend install
 npm -C frontend run dev
 ```
 
+### CI regression gate (Route workspace continuity)
+
+To prevent UI-density and state-reset regressions in the Radius ⇄ Route flow, keep the `App.routeWorkspaceContinuity.integration.test.tsx` suite as a required frontend CI check.
+
+```bash
+npm -C frontend run test -- App.routeWorkspaceContinuity.integration.test.tsx
+```
+
+
 Tests:
 
 ```bash
