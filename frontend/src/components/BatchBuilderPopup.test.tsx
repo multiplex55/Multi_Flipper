@@ -323,6 +323,7 @@ function renderPopup({
   bannedTypeIDs,
   bannedStationIDs,
   entryMode,
+  mode,
 }: {
   anchorRow: FlipResult | null;
   rows: FlipResult[];
@@ -332,6 +333,7 @@ function renderPopup({
   bannedTypeIDs?: number[];
   bannedStationIDs?: number[];
   entryMode?: "core" | "filler" | "loop";
+  mode?: "single_anchor" | "same_leg_fill";
 }) {
   return render(
     <I18nProvider>
@@ -365,6 +367,7 @@ function renderPopup({
           bannedTypeIDs={bannedTypeIDs}
           bannedStationIDs={bannedStationIDs}
           entryMode={entryMode}
+          mode={mode}
         />
       </ToastProvider>
     </I18nProvider>,
@@ -1256,6 +1259,23 @@ describe("BatchBuilderPopup route creation", () => {
     expect(
       screen.getByRole("button", { name: "Copy merged manifest" }),
     ).toBeEnabled();
+  });
+
+  it("shows same-leg label and prefers strongest profit option in same_leg_fill mode", async () => {
+    batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
+    renderPopup({ anchorRow, rows, mode: "same_leg_fill" });
+
+    expect(screen.getByTestId("batch-builder-entry-context")).toHaveTextContent(
+      "Same-leg batch",
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Batch Create Route" }),
+    );
+
+    expect(await screen.findByTestId("route-option-rank-2")).toHaveClass(
+      "border-blue-400",
+    );
   });
 
   it("renders Open Price Validation button and emits deterministic manifest payload", async () => {

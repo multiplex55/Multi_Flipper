@@ -581,6 +581,10 @@ function App() {
   const [showVerifierModal, setShowVerifierModal] = useState(false);
   const [verifierInitialManifestText, setVerifierInitialManifestText] =
     useState("");
+  const openVerifierFromManifest = useCallback((manifestText: string) => {
+    setVerifierInitialManifestText(manifestText);
+    setShowVerifierModal(true);
+  }, []);
 
   const [params, setParams] = useState<ScanParams>({
     system_name: "Jita",
@@ -2385,10 +2389,7 @@ const handleScanAndRefresh = useCallback(async () => {
                 allowLowsec={(params.min_route_security ?? 0.45) < 0.45}
                 allowNullsec={(params.min_route_security ?? 0.45) <= 0}
                 allowWormhole={false}
-                onOpenPriceValidation={(manifestText) => {
-                  setVerifierInitialManifestText(manifestText);
-                  setShowVerifierModal(true);
-                }}
+                onOpenPriceValidation={openVerifierFromManifest}
                 strategyScore={strategyScore}
                 radiusScanSession={radiusScanSession}
                 loopOpportunities={radiusScanSession.loopOpportunities}
@@ -2496,10 +2497,7 @@ const handleScanAndRefresh = useCallback(async () => {
                 allowLowsec={(params.min_route_security ?? 0.45) < 0.45}
                 allowNullsec={(params.min_route_security ?? 0.45) <= 0}
                 allowWormhole={false}
-                onOpenPriceValidation={(manifestText) => {
-                  setVerifierInitialManifestText(manifestText);
-                  setShowVerifierModal(true);
-                }}
+                onOpenPriceValidation={openVerifierFromManifest}
                 strategyScore={strategyScore}
                 featureConfig={REGION_SCAN_RESULTS_FEATURE_CONFIG}
               />
