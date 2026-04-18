@@ -348,6 +348,107 @@ describe("ScanResultsTable compact mode defaults", () => {
   });
 });
 
+describe("ScanResultsTable urgency controls", () => {
+  afterEach(() => {
+    window.localStorage.removeItem("eve-radius-advanced-toolbar-visible:v1");
+    cleanup();
+  });
+
+  it("shows urgency badge with expected band style", async () => {
+    renderTable({
+      scanning: false,
+      results: [
+        makeRow({
+          TypeID: 2001,
+          TypeName: "Fragile Row",
+          UnitsToBuy: 100,
+          FilledQty: 15,
+          BuyOrderRemain: 20,
+          SellOrderRemain: 20,
+          SlippageBuyPct: 8,
+          SlippageSellPct: 8,
+          TotalJumps: 10,
+          HistoryAvailable: false,
+        }),
+      ],
+    });
+
+    const badge = await screen.findByTestId("urgency-badge:fragile");
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveClass("text-rose-300");
+  });
+
+  it("filters rows by urgency chip", async () => {
+    window.localStorage.setItem("eve-radius-advanced-toolbar-visible:v1", "1");
+    renderTable({
+      scanning: false,
+      results: [
+        makeRow({
+          TypeID: 2101,
+          TypeName: "Stable Item",
+          UnitsToBuy: 100,
+          FilledQty: 95,
+          SlippageBuyPct: 0.2,
+          SlippageSellPct: 0.2,
+        }),
+        makeRow({
+          TypeID: 2102,
+          TypeName: "Fragile Item",
+          UnitsToBuy: 100,
+          FilledQty: 10,
+          BuyOrderRemain: 10,
+          SellOrderRemain: 10,
+          SlippageBuyPct: 10,
+          SlippageSellPct: 8,
+          HistoryAvailable: false,
+        }),
+      ],
+    });
+    fireEvent.click(screen.getByTestId("urgency-filter-chip:fragile"));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Stable Item")).not.toBeInTheDocument();
+      expect(screen.getByText("Fragile Item")).toBeInTheDocument();
+    });
+  });
+
+  it("sorts rows by urgency score when urgency sort mode is selected", async () => {
+    window.localStorage.setItem("eve-radius-advanced-toolbar-visible:v1", "1");
+    renderTable({
+      scanning: false,
+      results: [
+        makeRow({
+          TypeID: 2201,
+          TypeName: "Low Urgency",
+          UnitsToBuy: 100,
+          FilledQty: 98,
+          SlippageBuyPct: 0.1,
+          SlippageSellPct: 0.1,
+        }),
+        makeRow({
+          TypeID: 2202,
+          TypeName: "High Urgency",
+          UnitsToBuy: 100,
+          FilledQty: 10,
+          BuyOrderRemain: 10,
+          SellOrderRemain: 10,
+          SlippageBuyPct: 10,
+          SlippageSellPct: 8,
+          HistoryAvailable: false,
+        }),
+      ],
+    });
+    fireEvent.click(screen.getByTestId("urgency-sort-button"));
+
+    await waitFor(() => {
+      const firstDataRow = document.querySelector(
+        'tbody tr[data-row-id] td:nth-child(3)',
+      );
+      expect(firstDataRow?.textContent).toContain("High Urgency");
+    });
+  });
+});
+
 describe("ScanResultsTable filter visibility defaults", () => {
   afterEach(() => {
     cleanup();

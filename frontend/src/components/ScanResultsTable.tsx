@@ -28,6 +28,7 @@ import {
 } from "@/lib/batchMetrics";
 import { routeSafetyRankFromState } from "@/lib/routeSafetySort";
 import {
+  classifyFlipUrgency,
   dailyIskPerJump,
   deriveActionQueue,
   radiusRouteKey,
@@ -210,13 +211,15 @@ type SyntheticSortKey =
   | "DailyIskPerJump"
   | "RealIskPerM3PerJump"
   | "TurnoverDays"
-  | "SlippageCostIsk";
+  | "SlippageCostIsk"
+  | "UrgencyScore";
 type SortKey = keyof FlipResult | SyntheticSortKey;
 type SortDir = "asc" | "desc";
 type RegionGroupSortMode = "period_profit" | "now_profit" | "trade_score";
 type HiddenMode = "done" | "ignored";
 type HiddenFilterTab = "all" | "done" | "ignored";
 type TrackedVisibilityMode = "all" | "tracked_only" | "hide_non_tracked";
+type UrgencyFilterMode = "all" | "stable" | "aging" | "fragile";
 type DecisionLensPreset =
   | "recommended"
   | "best_route_pack"
@@ -1215,6 +1218,7 @@ function getCellValue(
   if (key === "RealIskPerM3PerJump") return realIskPerM3PerJump(row);
   if (key === "TurnoverDays") return turnoverDays(row);
   if (key === "SlippageCostIsk") return slippageCostIsk(row);
+  if (key === "UrgencyScore") return classifyFlipUrgency(row).urgency_score;
   if (key === "ExecutionQuality") return executionQualityForFlip(row).score;
   if (key === "ExitOverhangDays")
     return exitOverhangDays(row.TargetSellSupply, rowS2BPerDay(row));
@@ -1353,6 +1357,11 @@ function fmtCell(
     if (!Number.isFinite(v)) return "—";
     return v.toFixed(0);
   }
+  if (col.key === "UrgencyScore") {
+    const v = Number(val ?? 0);
+    if (!Number.isFinite(v)) return "—";
+    return v.toFixed(0);
+  }
   if (col.key === "DayTargetDOS") {
     const dos = Number(val);
     return Number.isFinite(dos) ? dos.toFixed(2) : "\u2014";
@@ -1423,6 +1432,16 @@ function complexityBadgeClass(complexity: "Clean" | "Moderate" | "Busy"): string
     return "border-emerald-500/60 text-emerald-300 bg-emerald-950/40";
   }
   if (complexity === "Moderate") {
+    return "border-amber-500/60 text-amber-300 bg-amber-950/40";
+  }
+  return "border-rose-500/60 text-rose-300 bg-rose-950/40";
+}
+
+function urgencyBadgeClass(band: "stable" | "aging" | "fragile"): string {
+  if (band === "stable") {
+    return "border-emerald-500/60 text-emerald-300 bg-emerald-950/40";
+  }
+  if (band === "aging") {
     return "border-amber-500/60 text-amber-300 bg-amber-950/40";
   }
   return "border-rose-500/60 text-rose-300 bg-rose-950/40";
@@ -1679,6 +1698,7 @@ export function ScanResultsTable({
   const [routeSafetyFilter, setRouteSafetyFilter] = useState<
     "all" | "green" | "yellow" | "red"
   >("all");
+  const [urgencyFilter, setUrgencyFilter] = useState<UrgencyFilterMode>("all");
   const [routeSafetyModal, setRouteSafetyModal] = useState<{
     systems: SystemDanger[];
   } | null>(null);
@@ -2209,6 +2229,7 @@ export function ScanResultsTable({
 
   useEffect(() => {
     if (columnDefs.length === 0) return;
+    if (sortKey === "UrgencyScore") return;
     if (!columnDefs.some((col) => col.key === sortKey)) {
       if (columnDefs.some((col) => col.key === preferredSortKey)) {
         setSortKey(preferredSortKey);
@@ -2584,6 +2605,12 @@ export function ScanResultsTable({
         return routeSafetyRankFromState(rs) === 2;
       });
     }
+    if (urgencyFilter !== "all") {
+      rows = rows.filter((ir) => {
+        const { urgency_band } = classifyFlipUrgency(ir.row);
+        return urgency_band === urgencyFilter;
+      });
+    }
     if (trackedVisibilityMode === "hide_non_tracked") {
       rows = rows.filter((ir) => watchlistIds.has(ir.row.TypeID));
     }
@@ -2597,6 +2624,7 @@ export function ScanResultsTable({
     securityFilter,
     groupFilter,
     routeSafetyFilter,
+    urgencyFilter,
     routeSafetyMap,
     trackedVisibilityMode,
     watchlistIds,
@@ -4419,6 +4447,13 @@ export function ScanResultsTable({
         onRemove: () => setRouteSafetyFilter("all"),
       });
     }
+    if (urgencyFilter !== "all") {
+      chips.push({
+        key: "urgency-filter",
+        label: `${t("colUrgency")}: ${urgencyFilter}`,
+        onRemove: () => setUrgencyFilter("all"),
+      });
+    }
 
     if (showHiddenRows) {
       chips.push({
@@ -4465,9 +4500,11 @@ export function ScanResultsTable({
     filterAudit,
     results.length,
     routeSafetyFilter,
+    urgencyFilter,
     selectedBadgeFilters,
     sessionStationFilters,
     showHiddenRows,
+    t,
     trackedVisibilityMode,
   ]);
 
@@ -5495,6 +5532,46 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                 );
               })}
             </div>
+            <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
+              {(
+                [
+                  ["all", t("urgencyFilterAll")],
+                  ["stable", t("urgencyStable")],
+                  ["aging", t("urgencyAging")],
+                  ["fragile", t("urgencyFragile")],
+                ] as const
+              ).map(([mode, label]) => {
+                const active = urgencyFilter === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setUrgencyFilter(mode)}
+                    className={`px-1.5 py-0.5 border-r last:border-r-0 border-eve-border/40 flex items-center transition-colors ${active ? "bg-eve-accent/15 text-eve-accent border-eve-accent/40" : "text-eve-dim hover:text-eve-text"}`}
+                    title={t("urgencyFilterHint")}
+                    data-testid={`urgency-filter-chip:${mode}`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSortKey("UrgencyScore");
+                setSortDir("desc");
+              }}
+              className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
+                sortKey === "UrgencyScore"
+                  ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent"
+                  : "border-eve-border/60 text-eve-dim bg-eve-dark/40 hover:border-eve-accent/40 hover:text-eve-accent/70"
+              }`}
+              title={t("urgencySortHint")}
+              data-testid="urgency-sort-button"
+            >
+              {t("urgencySortLabel")}
+            </button>
 
             {!isRegionGrouped && !isRadiusMode && (
               <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
@@ -7835,21 +7912,54 @@ const DataRow = memo(
             ) : col.key === "DayTradeScore" ? (
               <TradeScoreBadge score={ir.row.DayTradeScore ?? 0} />
             ) : col.key === "OpportunityScore" ? (
-              <button
-                type="button"
-                className="inline-flex items-center justify-center min-w-[44px] px-1.5 py-0.5 rounded-sm bg-eve-accent/15 border border-eve-accent/35 text-eve-accent font-mono hover:border-eve-accent/60"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenScore(ir.row);
-                }}
-                aria-label="Why this score?"
-              >
-                {scoreFlipResult(
-                  ir.row,
-                  opportunityProfile,
-                  scoreContext,
-                ).finalScore.toFixed(1)}
-              </button>
+              <div className="inline-flex items-center gap-1.5">
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center min-w-[44px] px-1.5 py-0.5 rounded-sm bg-eve-accent/15 border border-eve-accent/35 text-eve-accent font-mono hover:border-eve-accent/60"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenScore(ir.row);
+                  }}
+                  aria-label="Why this score?"
+                >
+                  {scoreFlipResult(
+                    ir.row,
+                    opportunityProfile,
+                    scoreContext,
+                  ).finalScore.toFixed(1)}
+                </button>
+                {(() => {
+                  const urgency = classifyFlipUrgency(ir.row);
+                  const bandLabel =
+                    urgency.urgency_band === "stable"
+                      ? tFn("urgencyStable")
+                      : urgency.urgency_band === "aging"
+                        ? tFn("urgencyAging")
+                        : tFn("urgencyFragile");
+                  return (
+                    <span
+                      className={`inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${urgencyBadgeClass(urgency.urgency_band)}`}
+                      title={`${tFn("colUrgency")}: ${urgency.urgency_score} (${bandLabel})`}
+                      data-testid={`urgency-badge:${urgency.urgency_band}`}
+                    >
+                      {bandLabel}
+                    </span>
+                  );
+                })()}
+              </div>
+            ) : col.key === "UrgencyScore" ? (
+              (() => {
+                const urgency = classifyFlipUrgency(ir.row);
+                return (
+                  <span
+                    className={`inline-flex items-center rounded-sm border px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${urgencyBadgeClass(urgency.urgency_band)}`}
+                    title={`${tFn("colUrgency")}: ${urgency.urgency_score}`}
+                    data-testid={`urgency-score-cell:${urgency.urgency_band}`}
+                  >
+                    {urgency.urgency_score}
+                  </span>
+                );
+              })()
             ) : col.key === ("RouteSafety" as SortKey) ? (
               <RouteSafetyCell
                 entry={routeSafetyEntry}

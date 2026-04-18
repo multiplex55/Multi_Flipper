@@ -82,6 +82,8 @@ export interface FlipResult {
   DayPriceHistory?: number[];
   /** Lowest sell order price at the destination — populated in sell-order mode */
   DayTargetLowestSell?: number;
+  urgency_score?: number;
+  urgency_band?: "stable" | "aging" | "fragile";
 }
 
 export interface RegionalDayTradeItem {
@@ -272,6 +274,8 @@ export interface BaseBatchLine {
   sell_total_isk: number;
   profit_total_isk: number;
   jumps: number;
+  urgency_score?: number;
+  urgency_band?: "stable" | "aging" | "fragile";
 }
 
 export interface BaseBatchManifest {
