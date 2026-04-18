@@ -76,8 +76,10 @@ import {
   filterStationTrades,
   type SessionStationFilters,
 } from "@/lib/banlistFilters";
-import { computeLoopOpportunities } from "@/lib/loopPlanner";
-import { deriveRadiusScanSession } from "@/lib/radiusScanSession";
+import {
+  createEmptyRadiusScanSession,
+  createRadiusScanSession,
+} from "@/lib/radiusScanSession";
 
 type Tab =
   | "radius"
@@ -729,32 +731,8 @@ function App() {
   const [showPatrons, setShowPatrons] = useState(false);
   const [showCharacter, setShowCharacter] = useState(false);
   const [showRadiusColumnGuide, setShowRadiusColumnGuide] = useState(false);
-  const radiusScanSession = useMemo(
-    () =>
-      deriveRadiusScanSession({
-        results: radiusResults,
-        scanParams: params,
-        sessionStationFilters,
-      }),
-    [radiusResults, params, sessionStationFilters],
-  );
-  const loopOpportunities = useMemo(
-    () =>
-      computeLoopOpportunities(radiusResults, {
-        homeSystemName: params.system_name,
-        maxDetourJumps: params.max_detour_jumps_per_node ?? 0,
-        cargoCapacityM3: params.cargo_capacity,
-        minLegProfit: params.min_item_profit ?? 0,
-        minTotalLoopProfit: Math.max(0, (params.min_item_profit ?? 0) * 2),
-        maxResults: 24,
-      }),
-    [
-      radiusResults,
-      params.system_name,
-      params.max_detour_jumps_per_node,
-      params.cargo_capacity,
-      params.min_item_profit,
-    ],
+  const [radiusScanSession, setRadiusScanSession] = useState(() =>
+    createEmptyRadiusScanSession(),
   );
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
@@ -785,6 +763,15 @@ function App() {
     },
     [],
   );
+  const clearRadiusScanSession = useCallback(() => {
+    setRadiusResults([]);
+    setRadiusCacheMeta(null);
+    setRadiusScanSession(createEmptyRadiusScanSession());
+    setRouteQueueKeys([]);
+    setActiveRadiusRouteKey(null);
+    setRouteWorkspaceMode("discover");
+    setRouteWorkspaceSource("radius");
+  }, []);
   const openRouteWorkspaceFromRadius = useCallback(
     (routeKey: string, mode: RouteWorkspaceMode) => {
       setActiveRadiusRouteKey(routeKey);
@@ -1364,8 +1351,6 @@ const scanParams = overrideParams ?? params;
     if (currentTab === "contracts") {
       setContractResults([]);
       setContractScanCompleted(false);
-    } else if (currentTab === "radius") {
-      setRadiusResults([]);
     } else if (currentTab === "region") {
       setRegionResults([]);
     }
@@ -1492,10 +1477,17 @@ const radiusParams =
             meta = m;
           },
         );
-        setRadiusResults(
-          filterFlipResults(results, bannedTypeIDs, bannedStationIDs),
-        );
+        const filtered = filterFlipResults(results, bannedTypeIDs, bannedStationIDs);
+        setRadiusResults(filtered);
         setRadiusCacheMeta(meta ?? null);
+        setRadiusScanSession(
+          createRadiusScanSession({
+            results: filtered,
+            cacheMeta: meta ?? null,
+            scanParams: radiusParams,
+            sessionStationFilters,
+          }),
+        );
         await triggerDesktopAlerts(results);
       } else if (currentTab === "region") {
         let meta: StationCacheMeta | undefined;
@@ -1578,6 +1570,7 @@ const results = await scanMultiRegion(
     alertChannels,
     bannedStationIDs,
     bannedTypeIDs,
+    sessionStationFilters,
   ]);
 
 const handleScanAndRefresh = useCallback(async () => {
@@ -2360,6 +2353,13 @@ const handleScanAndRefresh = useCallback(async () => {
                       active
                     </span>
                   )}
+                  <button
+                    type="button"
+                    onClick={clearRadiusScanSession}
+                    className="ml-auto px-2 py-0.5 rounded-sm border border-eve-border/60 text-eve-dim hover:text-eve-text hover:border-eve-border-light transition-colors"
+                  >
+                    Reset session
+                  </button>
                 </div>
               )}
               <ScanResultsTable
@@ -2390,7 +2390,8 @@ const handleScanAndRefresh = useCallback(async () => {
                   setShowVerifierModal(true);
                 }}
                 strategyScore={strategyScore}
-                loopOpportunities={loopOpportunities}
+                radiusScanSession={radiusScanSession}
+                loopOpportunities={radiusScanSession.loopOpportunities}
                 sessionStationFilters={sessionStationFilters}
                 onUpdateSessionStationFilters={updateSessionStationFilters}
                 onOpenInRoute={(routeKey) =>
@@ -2716,12 +2717,19 @@ const handleScanAndRefresh = useCallback(async () => {
               // Load historical results into appropriate tab
               if (resultTab === "radius") {
                 const normalizedRows = normalizeRegionalResults(results);
-                setRadiusResults(
-                  filterFlipResults(
-                    normalizedRows,
-                    bannedTypeIDs,
-                    bannedStationIDs,
-                  ),
+                const filtered = filterFlipResults(
+                  normalizedRows,
+                  bannedTypeIDs,
+                  bannedStationIDs,
+                );
+                setRadiusResults(filtered);
+                setRadiusScanSession(
+                  createRadiusScanSession({
+                    results: filtered,
+                    cacheMeta: null,
+                    scanParams: loadedParams ?? params,
+                    sessionStationFilters,
+                  }),
                 );
                 setTab("radius");
               } else if (resultTab === "region") {
