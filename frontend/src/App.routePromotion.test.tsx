@@ -21,9 +21,9 @@ vi.mock("@/lib/api", () => ({
 }));
 
 vi.mock("@/lib/radiusScanSession", () => ({
-  deriveRadiusScanSession: vi.fn(() => ({
+  createEmptyRadiusScanSession: vi.fn(() => ({
     hasScan: true,
-    insights: {
+    routeInsightsSnapshot: {
       routeSummaries: [
         {
           routeKey: "route:1",
@@ -39,7 +39,33 @@ vi.mock("@/lib/radiusScanSession", () => ({
       },
       actionQueue: [],
     },
+    results: [{ TypeID: 34 }],
     loopOpportunities: [],
+  })),
+  createRadiusScanSession: vi.fn(() => ({
+    hasScan: true,
+    routeInsightsSnapshot: {
+      routeSummaries: [
+        {
+          routeKey: "route:1",
+          routeLabel: "Jita → Amarr",
+          aggregate: { dailyProfit: 1000, dailyIskPerJump: 100 },
+          badge: { confidence: { score: 88 } },
+        },
+      ],
+      topRoutePicks: {
+        bestRecommendedRoutePack: null,
+        bestQuickSingleRoute: null,
+        bestSafeFillerRoute: null,
+      },
+      actionQueue: [],
+    },
+    routeInsightsSnapshotVersion: "v1",
+    paramsSnapshot: { system_name: "Jita" },
+    scanCompletedAt: "2026-04-18T00:00:00.000Z",
+    cacheMeta: null,
+    loopOpportunities: [],
+    results: [{ TypeID: 34 }],
   })),
 }));
 

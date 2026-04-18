@@ -139,6 +139,7 @@ import {
   type RouteAggregateMetrics,
   type RouteBadgeFilter,
 } from "@/lib/useRadiusRouteInsights";
+import type { RadiusScanSession } from "@/lib/radiusScanSession";
 
 export const calcRouteConfidence = calcRouteConfidenceFromInsights;
 
@@ -323,6 +324,7 @@ interface Props {
   onOpenPriceValidation?: (manifestText: string) => void;
   strategyScore?: StrategyScoreConfig;
   loopOpportunities?: LoopOpportunity[];
+  radiusScanSession?: RadiusScanSession | null;
   sessionStationFilters?: SessionStationFilters;
   onUpdateSessionStationFilters?: (
     updater: (prev: SessionStationFilters) => SessionStationFilters,
@@ -1444,6 +1446,7 @@ export function ScanResultsTable({
   onOpenPriceValidation,
   strategyScore,
   loopOpportunities,
+  radiusScanSession,
   sessionStationFilters,
   onUpdateSessionStationFilters,
   onOpenInRoute,
@@ -1460,6 +1463,8 @@ export function ScanResultsTable({
     () => strategyScoreToOpportunityProfile(strategyScore),
     [strategyScore],
   );
+  const effectiveLoopOpportunities =
+    radiusScanSession?.loopOpportunities ?? loopOpportunities ?? [];
 
   const allColumnDefs = useMemo(
     () => buildColumnDefs(showRegions, columnProfile),
@@ -1472,6 +1477,7 @@ export function ScanResultsTable({
   );
 
   // ── State ──
+  const tableUiStateStoragePrefix = `eve-scan-ui-state:v1:${tradeStateTab}:${columnProfile}`;
   const [sortKey, setSortKey] = useState<SortKey>(() =>
     columnProfile === "region_eveguru" ? "DayPeriodProfit" : "RealProfit",
   );
@@ -1479,7 +1485,15 @@ export function ScanResultsTable({
   const [decisionLens, setDecisionLens] = useState<
     "custom" | DecisionLensPreset
   >("recommended");
-  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [filters, setFilters] = useState<Record<string, string>>(() => {
+    try {
+      const raw = localStorage.getItem(`${tableUiStateStoragePrefix}:filters`);
+      const parsed = raw ? (JSON.parse(raw) as Record<string, string>) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  });
   const [showFilters, setShowFilters] = useState(
     () => tradeStateTab === "radius",
   );
@@ -1582,7 +1596,13 @@ export function ScanResultsTable({
       return DEFAULT_MAJOR_HUB_SYSTEMS.join(", ");
     }
   });
-  const [showHiddenRows, setShowHiddenRows] = useState(false);
+  const [showHiddenRows, setShowHiddenRows] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(`${tableUiStateStoragePrefix}:show-hidden`) === "1";
+    } catch {
+      return false;
+    }
+  });
   const [selectedBadgeFilters, setSelectedBadgeFilters] = useState<
     Set<RouteBadgeFilter>
   >(new Set());
@@ -1727,6 +1747,28 @@ export function ScanResultsTable({
     }
     previousScanningRef.current = scanning;
   }, [results.length, scanning]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        `${tableUiStateStoragePrefix}:filters`,
+        JSON.stringify(filters),
+      );
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [filters, tableUiStateStoragePrefix]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        `${tableUiStateStoragePrefix}:show-hidden`,
+        showHiddenRows ? "1" : "0",
+      );
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [showHiddenRows, tableUiStateStoragePrefix]);
 
   // Watchlist
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
@@ -5609,7 +5651,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
           actionQueue={actionQueue}
           routeExplanationByKey={routeExplanationByKey}
           lensDeltaByRouteKey={routeLensDeltaByKey}
-          loopOpportunities={showLoopPanel ? (loopOpportunities ?? []) : []}
+          loopOpportunities={showLoopPanel ? effectiveLoopOpportunities : []}
           suppressionSummary={
             suppressionTelemetry.softSessionFiltered > 0 ||
             suppressionTelemetry.deprioritizedRows > 0 ||

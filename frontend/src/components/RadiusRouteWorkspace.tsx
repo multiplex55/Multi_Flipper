@@ -70,27 +70,28 @@ export function RadiusRouteWorkspace({
     { id: "finder", label: "Finder", hint: "Route search flow" },
     { id: "validate", label: "Validate", hint: "Route and batch readiness checks" },
   ];
+  const routeInsights = radiusScanSession?.routeInsightsSnapshot;
 
   const topRouteRows = useMemo(
     () =>
-      radiusScanSession?.insights.routeSummaries.slice(0, 8).map((route) => ({
+      routeInsights?.routeSummaries.slice(0, 8).map((route) => ({
         key: route.routeKey,
         label: route.routeLabel,
         dailyProfit: route.aggregate.dailyProfit,
         dailyIskPerJump: route.aggregate.dailyIskPerJump,
         confidence: route.badge.confidence.score,
       })) ?? [],
-    [radiusScanSession],
+    [routeInsights],
   );
   const routeSummaryByKey = useMemo(
     () =>
       new Map(
-        (radiusScanSession?.insights.routeSummaries ?? []).map((summary) => [
+        (routeInsights?.routeSummaries ?? []).map((summary) => [
           summary.routeKey,
           summary,
         ]),
       ),
-    [radiusScanSession],
+    [routeInsights],
   );
   const resolvedActiveRoute = activeRouteKey
     ? routeSummaryByKey.get(activeRouteKey) ?? null
@@ -142,15 +143,15 @@ export function RadiusRouteWorkspace({
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
                   <div className="rounded-sm border border-eve-border/60 bg-eve-panel/50 p-2">
                     <div className="text-eve-dim">Grouped routes</div>
-                    <div className="text-eve-text font-semibold">{radiusScanSession.insights.routeSummaries.length}</div>
+                    <div className="text-eve-text font-semibold">{routeInsights?.routeSummaries.length ?? 0}</div>
                   </div>
                   <div className="rounded-sm border border-eve-border/60 bg-eve-panel/50 p-2">
                     <div className="text-eve-dim">Top picks</div>
-                    <div className="text-eve-text font-semibold">{Object.values(radiusScanSession.insights.topRoutePicks).filter(Boolean).length}</div>
+                    <div className="text-eve-text font-semibold">{Object.values(routeInsights?.topRoutePicks ?? {}).filter(Boolean).length}</div>
                   </div>
                   <div className="rounded-sm border border-eve-border/60 bg-eve-panel/50 p-2">
                     <div className="text-eve-dim">Queue</div>
-                    <div className="text-eve-text font-semibold">{radiusScanSession.insights.actionQueue.length}</div>
+                    <div className="text-eve-text font-semibold">{routeInsights?.actionQueue.length ?? 0}</div>
                   </div>
                   <div className="rounded-sm border border-eve-border/60 bg-eve-panel/50 p-2">
                     <div className="text-eve-dim">Loops</div>
@@ -204,7 +205,7 @@ export function RadiusRouteWorkspace({
                 )}
                 <div className="text-eve-dim">Saved routes: 0 (workspace migration placeholder)</div>
                 <div className="text-eve-dim">Execution state: idle</div>
-                <div className="text-eve-dim">Filler options: {radiusScanSession.insights.actionQueue.filter((q) => q.action === "filler").length}</div>
+                <div className="text-eve-dim">Filler options: {(routeInsights?.actionQueue ?? []).filter((q) => q.action === "filler").length}</div>
                 <div className="text-eve-dim">Source: {workspaceSource}</div>
               </>
             )}
@@ -229,10 +230,10 @@ export function RadiusRouteWorkspace({
             ) : (
               <>
                 <div className="rounded-sm border border-eve-border/60 bg-eve-panel/40 p-2 text-eve-dim">
-                  Route checks: {radiusScanSession.insights.routeSummaries.length > 0 ? "ready" : "no route groups"}
+                  Route checks: {(routeInsights?.routeSummaries.length ?? 0) > 0 ? "ready" : "no route groups"}
                 </div>
                 <div className="rounded-sm border border-eve-border/60 bg-eve-panel/40 p-2 text-eve-dim">
-                  Batch checks: {radiusScanSession.insights.actionQueue.length > 0 ? "queue available" : "empty queue"}
+                  Batch checks: {(routeInsights?.actionQueue.length ?? 0) > 0 ? "queue available" : "empty queue"}
                 </div>
               </>
             )}
