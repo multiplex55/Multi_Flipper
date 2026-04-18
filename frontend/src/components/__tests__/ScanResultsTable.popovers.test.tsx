@@ -199,6 +199,74 @@ describe("ScanResultsTable toolbar popovers", () => {
     expect(screen.getByText("Structure Sell Result")).toBeInTheDocument();
   });
 
+  it("supports Disabled mode and Neutral preset in endpoint controls", () => {
+    renderTable([
+      makeRow({ TypeID: 301, TypeName: "Hub Buy", BuySystemName: "Jita" }),
+      makeRow({ TypeID: 302, TypeName: "Non-Hub Buy", BuySystemName: "Perimeter" }),
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: /endpoint prefs ▸/i }));
+    const endpointPanel = screen.getByRole("dialog", {
+      name: /endpoint preferences/i,
+    });
+
+    const modeSelect = within(endpointPanel).getByDisplayValue("Rank-only");
+    fireEvent.change(modeSelect, { target: { value: "disabled" } });
+    expect(within(endpointPanel).getByDisplayValue("Disabled")).toBeInTheDocument();
+
+    const presetSelect = within(endpointPanel).getByTitle("Quick profile preset");
+    fireEvent.change(presetSelect, { target: { value: "neutral" } });
+    expect(within(endpointPanel).getByDisplayValue("Neutral")).toBeInTheDocument();
+  });
+
+  it("disabled mode removes endpoint ordering/filtering influence metadata", () => {
+    renderTable([
+      makeRow({
+        TypeID: 401,
+        TypeName: "Hub constrained",
+        BuySystemName: "Jita",
+        BuyLocationID: 60003760,
+        SellLocationID: 60008494,
+      }),
+      makeRow({
+        TypeID: 402,
+        TypeName: "Structure sell",
+        BuySystemName: "Perimeter",
+        SellLocationID: 1_000_000_000_123,
+        SellStation: "Perimeter Keepstar",
+      }),
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: /endpoint prefs ▸/i }));
+    const endpointPanel = screen.getByRole("dialog", {
+      name: /endpoint preferences/i,
+    });
+
+    fireEvent.change(within(endpointPanel).getByDisplayValue("Rank-only"), {
+      target: { value: "hide" },
+    });
+    fireEvent.change(within(endpointPanel).getByTitle("Sell endpoint type selector"), {
+      target: { value: "structure" },
+    });
+
+    expect(screen.queryByText("Hub constrained")).not.toBeInTheDocument();
+    expect(screen.getByText("Structure sell")).toBeInTheDocument();
+
+    fireEvent.change(within(endpointPanel).getByDisplayValue("Hide non-matching"), {
+      target: { value: "disabled" },
+    });
+
+    expect(screen.getByText("Hub constrained")).toBeInTheDocument();
+    const endpointRows = document.querySelectorAll("tr[data-endpoint-score-delta]");
+    expect(endpointRows.length).toBeGreaterThan(0);
+    endpointRows.forEach((row) => {
+      expect(row.getAttribute("data-endpoint-score-delta")).toBe("0");
+      expect(row.getAttribute("data-endpoint-excluded-reasons")).toBe("");
+      expect(row.getAttribute("data-applied-rules")).toBe("");
+    });
+  });
+
+
   it("keeps cache actions callable from compact cache entry point", () => {
     renderTable([makeRow()]);
 

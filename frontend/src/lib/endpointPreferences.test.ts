@@ -105,7 +105,7 @@ describe("endpointPreferences", () => {
       baseRow,
       profile,
       ["Jita", "Amarr"],
-      EndpointPreferenceApplicationMode.Deprioritize,
+      EndpointPreferenceApplicationMode.RankOnly,
     );
 
     expect(hideEval.excluded).toBe(true);
@@ -135,4 +135,99 @@ describe("endpointPreferences", () => {
     expect(evaluated.excluded).toBe(false);
     expect(evaluated.appliedRules).toContain("sell_structure_bonus");
   });
+  it("disabled mode returns neutral output regardless of row and profile", () => {
+    const profile = {
+      ...DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
+      requireSellStructure: true,
+      buyHubPenalty: -999,
+      routeDirectionBonus: 777,
+    };
+    const row = {
+      ...baseRow,
+      BuySystemName: "Jita",
+      SellSystemName: "Perimeter",
+      SellLocationID: 60008494,
+    };
+
+    const evaluated = evaluateEndpointPreferences(
+      row,
+      profile,
+      ["Jita", "Amarr"],
+      EndpointPreferenceApplicationMode.Disabled,
+    );
+
+    expect(evaluated).toEqual({
+      scoreDelta: 0,
+      excluded: false,
+      excludedReasons: [],
+      appliedRules: [],
+    });
+  });
+
+  it("rank_only computes score delta but does not exclude", () => {
+    const profile = {
+      ...DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
+      requireNonHubBuy: true,
+      nonHubBuyBonus: 11,
+      routeDirectionBonus: 13,
+    };
+    const row = {
+      ...baseRow,
+      BuySystemName: "Jita",
+      SellSystemName: "Amarr",
+    };
+
+    const evaluated = evaluateEndpointPreferences(
+      row,
+      profile,
+      ["Jita", "Amarr"],
+      EndpointPreferenceApplicationMode.RankOnly,
+    );
+
+    expect(evaluated.scoreDelta).toBe(profile.buyHubPenalty);
+    expect(evaluated.excluded).toBe(false);
+    expect(evaluated.excludedReasons).toContain("hard_require_non_hub_buy");
+  });
+
+  it("hide mode can still exclude on hard-rule mismatch", () => {
+    const profile = {
+      ...DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
+      requireNonHubBuy: true,
+    };
+
+    const evaluated = evaluateEndpointPreferences(
+      baseRow,
+      profile,
+      ["Jita", "Amarr"],
+      EndpointPreferenceApplicationMode.Hide,
+    );
+
+    expect(evaluated.excluded).toBe(true);
+    expect(evaluated.excludedReasons).toContain("hard_require_non_hub_buy");
+  });
+
+  it("neutral preset has zero soft deltas and no exclusions in non-disabled modes", () => {
+    const neutralProfile = ENDPOINT_PREFERENCE_PRESETS.neutral;
+    const rankOnlyEval = evaluateEndpointPreferences(
+      baseRow,
+      neutralProfile,
+      ["Jita", "Amarr"],
+      EndpointPreferenceApplicationMode.RankOnly,
+    );
+    const hideEval = evaluateEndpointPreferences(
+      baseRow,
+      neutralProfile,
+      ["Jita", "Amarr"],
+      EndpointPreferenceApplicationMode.Hide,
+    );
+
+    expect(rankOnlyEval).toEqual({
+      scoreDelta: 0,
+      excluded: false,
+      excludedReasons: [],
+      appliedRules: [],
+    });
+    expect(hideEval).toEqual(rankOnlyEval);
+  });
+
 });

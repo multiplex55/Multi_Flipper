@@ -2256,7 +2256,7 @@ describe("ScanResultsTable filter audit chips and stage counts", () => {
     localStorage.setItem(
       ENDPOINT_PREFS_STORAGE_KEY,
       JSON.stringify({
-        mode: "deprioritize",
+        mode: "rank_only",
         profile: { requireNonHubBuy: true },
       }),
     );
