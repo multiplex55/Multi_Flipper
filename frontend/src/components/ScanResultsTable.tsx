@@ -27,18 +27,13 @@ import {
   type RouteBatchMetadata,
 } from "@/lib/batchMetrics";
 import { routeSafetyRankFromState } from "@/lib/routeSafetySort";
-import { calcRouteConfidence as calcRouteConfidenceFromInputs } from "@/lib/routeConfidence";
 import {
   dailyIskPerJump,
+  deriveActionQueue,
   radiusRouteKey,
   realIskPerJump,
   realIskPerM3PerJump,
-  routeRecommendationScoreFromMetrics,
-  selectTopRoutePicks,
-  deriveActionQueue,
   slippageCostIsk,
-  type ActionQueueItem,
-  type TopRoutePickCandidate,
   turnoverDays,
 } from "@/lib/radiusMetrics";
 import type { LoopOpportunity } from "@/lib/loopPlanner";
@@ -138,6 +133,14 @@ import { RouteWorkbenchPanel, type RouteWorkbenchMode, type RouteWorkbenchSectio
 import {
   getVerificationProfileById,
 } from "@/lib/verificationProfiles";
+import {
+  calcRouteConfidence as calcRouteConfidenceFromInsights,
+  deriveRadiusRouteInsights,
+  type RouteAggregateMetrics,
+  type RouteBadgeFilter,
+} from "@/lib/useRadiusRouteInsights";
+
+export const calcRouteConfidence = calcRouteConfidenceFromInsights;
 
 const PAGE_SIZE = 100;
 const GROUP_CONTAINER_PAGE_SIZE = 50;
@@ -241,26 +244,6 @@ type CacheMetaView = {
   scopeLabel: string;
   regionCount: number;
 };
-
-function trackedRecommendationBonus(params: {
-  trackedShare: number;
-  baselineRecommendationScore: number;
-  bestTrackedRowScore: number;
-}): number {
-  const trackedShare = Math.max(0, Math.min(1, params.trackedShare));
-  if (trackedShare <= 0) return 0;
-  const baselineGate = Math.max(
-    0,
-    Math.min(1, (params.baselineRecommendationScore - 35) / 45),
-  );
-  if (baselineGate <= 0) return 0;
-  const trackedRowQualityGate = Math.max(
-    0,
-    Math.min(1, (params.bestTrackedRowScore - 50) / 35),
-  );
-  const rawBonus = trackedShare * 7 + trackedRowQualityGate * 5;
-  return Math.min(9, rawBonus * baselineGate);
-}
 
 function getBuyLocationID(row: FlipResult): number {
   return Math.trunc(row.BuyLocationID ?? 0);
@@ -1041,56 +1024,6 @@ interface RouteGroup {
   rows: IndexedRow[];
 }
 
-type RouteAggregateMetrics = {
-  routeSafetyRank: number;
-  dailyIskPerJump: number;
-  dailyProfit: number;
-  iskPerM3PerJump: number;
-  fastestIskPerJump: number;
-  weakestExecutionQuality: number;
-  riskSpikeCount: number;
-  riskNoHistoryCount: number;
-  riskUnstableHistoryCount: number;
-  riskThinFillCount: number;
-  riskTotalCount: number;
-  turnoverDays: number | null;
-  exitOverhangDays: number | null;
-  breakevenBuffer: number | null;
-  dailyProfitOverCapital: number | null;
-  routeTotalProfit: number;
-  routeTotalCapital: number;
-  weightedSlippagePct: number;
-};
-
-type RouteScoreSummary = {
-  routeRecommendationScore: number;
-  bestRowScore: number;
-  avgRowScore: number;
-  trackedShare: number;
-};
-
-type RouteBadgeFilter =
-  | "clean"
-  | "moderate"
-  | "busy"
-  | "spike"
-  | "no_history"
-  | "unstable"
-  | "thin"
-  | "high"
-  | "medium"
-  | "low";
-
-type RouteBadgeMetadata = {
-  filters: Set<RouteBadgeFilter>;
-  complexity: "Clean" | "Moderate" | "Busy";
-  riskSpikeCount: number;
-  riskNoHistoryCount: number;
-  riskUnstableHistoryCount: number;
-  riskThinFillCount: number;
-  confidence: ReturnType<typeof calcRouteConfidence>;
-};
-
 type FilterStageKey =
   | "session_hard_ignores"
   | "endpoint_hard_rules"
@@ -1464,32 +1397,6 @@ function routeAggregateValueForSortKey(
   return null;
 }
 
-export function calcRouteConfidence(
-  metrics: RouteAggregateMetrics | undefined,
-): {
-  score: number;
-  label: string;
-  color: string;
-  hint: string;
-} {
-  if (!metrics) {
-    return {
-      score: 0,
-      label: "Low",
-      color: "text-red-300 border-red-500/60 bg-red-900/20",
-      hint: "Score 0/100 — route metrics unavailable",
-    };
-  }
-  return calcRouteConfidenceFromInputs({
-    routeSafetyRank: metrics.routeSafetyRank,
-    weakestExecutionQuality: metrics.weakestExecutionQuality,
-    weightedSlippagePct: metrics.weightedSlippagePct,
-    riskSpikeCount: metrics.riskSpikeCount,
-    riskNoHistoryCount: metrics.riskNoHistoryCount,
-    riskUnstableHistoryCount: metrics.riskUnstableHistoryCount,
-    exitOverhangDays: metrics.exitOverhangDays,
-  });
-}
 
 function complexityBadgeClass(complexity: "Clean" | "Moderate" | "Busy"): string {
   if (complexity === "Clean") {
@@ -1499,34 +1406,6 @@ function complexityBadgeClass(complexity: "Clean" | "Moderate" | "Busy"): string
     return "border-amber-500/60 text-amber-300 bg-amber-950/40";
   }
   return "border-rose-500/60 text-rose-300 bg-rose-950/40";
-}
-
-function deriveRouteBadgeMetadata(
-  routeSummary: RouteBatchMetadata | undefined,
-  routeAggregate: RouteAggregateMetrics | undefined,
-): RouteBadgeMetadata {
-  const complexity = routeSummary?.routeComplexity ?? "Busy";
-  const confidence = calcRouteConfidence(routeAggregate);
-  const riskSpikeCount = routeAggregate?.riskSpikeCount ?? 0;
-  const riskNoHistoryCount = routeAggregate?.riskNoHistoryCount ?? 0;
-  const riskUnstableHistoryCount = routeAggregate?.riskUnstableHistoryCount ?? 0;
-  const riskThinFillCount = routeAggregate?.riskThinFillCount ?? 0;
-  const filters = new Set<RouteBadgeFilter>();
-  filters.add(complexity.toLowerCase() as RouteBadgeFilter);
-  if (riskSpikeCount > 0) filters.add("spike");
-  if (riskNoHistoryCount > 0) filters.add("no_history");
-  if (riskUnstableHistoryCount > 0) filters.add("unstable");
-  if (riskThinFillCount > 0) filters.add("thin");
-  filters.add(confidence.label.toLowerCase() as RouteBadgeFilter);
-  return {
-    filters,
-    complexity,
-    riskSpikeCount,
-    riskNoHistoryCount,
-    riskUnstableHistoryCount,
-    riskThinFillCount,
-    confidence,
-  };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -2683,51 +2562,46 @@ export function ScanResultsTable({
     return [...byType.values()];
   }, [datasetRows, isItemGrouped, t]);
 
-  const routeAggregateMetricsByRoute = useMemo<
-    Record<string, RouteAggregateMetrics>
-  >(() => {
-    const routeKeyToSystemPair: Record<string, string> = {};
-    for (const ir of datasetRows) {
-      const key = routeGroupKey(ir.row);
-      if (!(key in routeKeyToSystemPair)) {
-        routeKeyToSystemPair[key] =
-          `${ir.row.BuySystemID}:${ir.row.SellSystemID}`;
-      }
-    }
-
-    const aggregates: Record<string, RouteAggregateMetrics> = {};
-    for (const [routeKey, meta] of Object.entries(batchMetricsByRoute)) {
-      const routeSafetyRank = routeSafetyRankFromState(
-        routeSafetyMap[routeKeyToSystemPair[routeKey] ?? ""],
-      );
-      const riskTotalCount =
-        meta.routeRiskSpikeCount +
-        meta.routeRiskNoHistoryCount +
-        meta.routeRiskUnstableHistoryCount +
-        meta.routeRiskThinFillCount;
-      aggregates[routeKey] = {
-        routeSafetyRank,
-        dailyIskPerJump: meta.routeDailyIskPerJump,
-        dailyProfit: meta.routeDailyProfit,
-        iskPerM3PerJump: meta.routeRealIskPerM3PerJump,
-        fastestIskPerJump: meta.routeRealIskPerJump,
-        weakestExecutionQuality: meta.routeWeakestExecutionQuality,
-        riskSpikeCount: meta.routeRiskSpikeCount,
-        riskNoHistoryCount: meta.routeRiskNoHistoryCount,
-        riskUnstableHistoryCount: meta.routeRiskUnstableHistoryCount,
-        riskThinFillCount: meta.routeRiskThinFillCount,
-        riskTotalCount,
-        turnoverDays: meta.routeTurnoverDays,
-        exitOverhangDays: meta.routeExitOverhangDays,
-        breakevenBuffer: meta.routeBreakevenBuffer,
-        dailyProfitOverCapital: meta.routeDailyProfitOverCapital,
-        routeTotalProfit: meta.routeTotalProfit,
-        routeTotalCapital: meta.routeTotalCapital,
-        weightedSlippagePct: meta.routeWeightedSlippagePct,
-      };
-    }
-    return aggregates;
-  }, [batchMetricsByRoute, datasetRows, routeSafetyMap]);
+  const routeInsights = useMemo(
+    () =>
+      deriveRadiusRouteInsights({
+        rows: datasetRows,
+        resultsCount: results.length,
+        batchMetricsByRoute,
+        routeSafetyMap,
+        trackedTypeIds: watchlistIds,
+        sessionStationFilters,
+        routeVerificationByKey,
+        opportunityProfile,
+        scoreContext: displayScoreContext,
+        hiddenRowCount: sorted.length - datasetRows.length,
+        endpointPreferenceMode,
+        filterSnapshots: filters,
+      }),
+    [
+      datasetRows,
+      results.length,
+      batchMetricsByRoute,
+      routeSafetyMap,
+      watchlistIds,
+      sessionStationFilters,
+      routeVerificationByKey,
+      opportunityProfile,
+      displayScoreContext,
+      sorted.length,
+      endpointPreferenceMode,
+      filters,
+    ],
+  );
+  const {
+    routeAggregateMetricsByRoute,
+    routeScoreSummaryByRoute,
+    routeBadgeMetadataByRoute,
+    topRoutePickCandidates,
+    topRoutePicks,
+    suppressionTelemetry: suppressionTelemetryBase,
+    explanationMetaByRouteKey,
+  } = routeInsights;
 
   const routeGroups = useMemo<RouteGroup[]>(() => {
     if (!isRouteGrouped) return [];
@@ -2837,30 +2711,16 @@ export function ScanResultsTable({
     sortKey,
   ]);
 
-  const routeBadgeMetadataByRoute = useMemo<
-    Record<string, RouteBadgeMetadata>
-  >(() => {
-    if (!isRouteGrouped) return {};
-    const out: Record<string, RouteBadgeMetadata> = {};
-    for (const group of routeGroups) {
-      out[group.key] = deriveRouteBadgeMetadata(
-        batchMetricsByRoute[group.key],
-        routeAggregateMetricsByRoute[group.key],
-      );
-    }
-    return out;
-  }, [
-    batchMetricsByRoute,
-    isRouteGrouped,
-    routeAggregateMetricsByRoute,
-    routeGroups,
-  ]);
+  const routeBadgeMetadataByRouteGrouped = useMemo(
+    () => (isRouteGrouped ? routeBadgeMetadataByRoute : {}),
+    [isRouteGrouped, routeBadgeMetadataByRoute],
+  );
 
   const filteredRouteGroups = useMemo<RouteGroup[]>(() => {
     if (!isRouteGrouped) return routeGroups;
     if (selectedBadgeFilters.size === 0) return routeGroups;
     return routeGroups.filter((group) => {
-      const metadata = routeBadgeMetadataByRoute[group.key];
+      const metadata = routeBadgeMetadataByRouteGrouped[group.key];
       if (!metadata) return false;
       for (const filter of selectedBadgeFilters) {
         if (metadata.filters.has(filter)) return true;
@@ -2869,7 +2729,7 @@ export function ScanResultsTable({
     });
   }, [
     isRouteGrouped,
-    routeBadgeMetadataByRoute,
+    routeBadgeMetadataByRouteGrouped,
     routeGroups,
     selectedBadgeFilters,
   ]);
@@ -2898,12 +2758,8 @@ export function ScanResultsTable({
     const routeBadgeMatches = (row: FlipResult): boolean => {
       if (!isRouteGrouped || selectedBadgeFilters.size === 0) return true;
       const routeKey = routeGroupKey(row);
-      const metadata =
-        routeBadgeMetadataByRoute[routeKey] ??
-        deriveRouteBadgeMetadata(
-          batchMetricsByRoute[routeKey],
-          routeAggregateMetricsByRoute[routeKey],
-        );
+      const metadata = routeBadgeMetadataByRouteGrouped[routeKey];
+      if (!metadata) return false;
       for (const filter of selectedBadgeFilters) {
         if (metadata.filters.has(filter)) return true;
       }
@@ -3042,7 +2898,7 @@ export function ScanResultsTable({
     isRouteGrouped,
     opportunityProfile,
     routeAggregateMetricsByRoute,
-    routeBadgeMetadataByRoute,
+    routeBadgeMetadataByRouteGrouped,
     routeSafetyFilter,
     routeSafetyMap,
     selectedBadgeFilters,
@@ -3051,6 +2907,46 @@ export function ScanResultsTable({
     trackedVisibilityMode,
     watchlistIds,
   ]);
+
+  const suppressionTelemetry = useMemo(
+    () => ({
+      ...suppressionTelemetryBase,
+      hardBanFiltered: Math.max(
+        0,
+        results.length - filterAudit.stageCounts.session_hard_ignores,
+      ),
+      softSessionFiltered: Math.max(
+        0,
+        filterAudit.stageCounts.endpoint_hard_rules -
+          filterAudit.stageCounts.route_badge_filter,
+      ),
+      endpointExcluded: Math.max(
+        0,
+        filterAudit.stageCounts.session_hard_ignores -
+          filterAudit.stageCounts.endpoint_hard_rules,
+      ),
+      deprioritizedRows: sorted.filter((item) =>
+        isFlipResultDeprioritized(item.row, sessionStationFilters),
+      ).length,
+      stageCounts: filterAudit.stageCounts,
+    }),
+    [
+      filterAudit.stageCounts,
+      results.length,
+      sessionStationFilters,
+      sorted,
+      suppressionTelemetryBase,
+    ],
+  );
+
+  const actionQueue = useMemo(
+    () =>
+      deriveActionQueue({
+        candidates: topRoutePickCandidates,
+        suppression: suppressionTelemetry,
+      }).slice(0, 6),
+    [suppressionTelemetry, topRoutePickCandidates],
+  );
 
   const routeGroupByKey = useMemo<Record<string, RouteGroup>>(() => {
     const out: Record<string, RouteGroup> = {};
@@ -3106,207 +3002,6 @@ export function ScanResultsTable({
     });
   }, [savedRoutePacks]);
 
-  const endpointPreferenceDeltaByRoute = useMemo<Record<string, number>>(() => {
-    const out: Record<string, number> = {};
-    for (const ir of datasetRows) {
-      const routeKey = routeGroupKey(ir.row);
-      out[routeKey] = (out[routeKey] ?? 0) + (ir.endpointPreferences?.scoreDelta ?? 0);
-    }
-    return out;
-  }, [datasetRows]);
-
-  const routeScoreSummaryByRoute = useMemo<Record<string, RouteScoreSummary>>(
-    () =>
-      measureCalc("routeScoreSummaryByRoute", () => {
-      if (!isRouteGrouped) return {};
-      const out: Record<string, RouteScoreSummary> = {};
-      for (const group of routeGroups) {
-        const routeSummary = batchMetricsByRoute[group.key];
-        const routeRecommendationScore =
-          routeRecommendationScoreFromMetrics({
-            routeDailyIskPerJump: routeSummary?.routeDailyIskPerJump ?? 0,
-            routeWeakestExecutionQuality:
-              routeSummary?.routeWeakestExecutionQuality ?? 0,
-            routeWeightedSlippagePct:
-              routeSummary?.routeWeightedSlippagePct ?? 0,
-            routeTotalRiskCount:
-              (routeSummary?.routeRiskSpikeCount ?? 0) +
-              (routeSummary?.routeRiskNoHistoryCount ?? 0) +
-              (routeSummary?.routeRiskUnstableHistoryCount ?? 0) +
-              (routeSummary?.routeRiskThinFillCount ?? 0),
-            routeTurnoverDays: routeSummary?.routeTurnoverDays ?? null,
-            routeCapacityUsedPercent:
-              routeSummary?.routeCapacityUsedPercent ?? null,
-          }) ?? 0;
-        const rowScores = group.rows.map((item) => ({
-          score: scoreFlipResult(
-            item.row,
-            opportunityProfile,
-            displayScoreContext,
-          ).finalScore,
-          tracked: watchlistIds.has(item.row.TypeID),
-        }));
-        const bestRowScore =
-          rowScores.length > 0 ? Math.max(...rowScores.map((item) => item.score)) : 0;
-        const avgRowScore =
-          rowScores.length > 0
-            ? rowScores.reduce((sum, value) => sum + value.score, 0) /
-              rowScores.length
-            : 0;
-        const trackedCount = rowScores.filter((item) => item.tracked).length;
-        const trackedShare =
-          rowScores.length > 0 ? trackedCount / rowScores.length : 0;
-        const bestTrackedRowScore = rowScores
-          .filter((item) => item.tracked)
-          .reduce((best, item) => Math.max(best, item.score), 0);
-        const trackedBonus = trackedRecommendationBonus({
-          trackedShare,
-          baselineRecommendationScore: routeRecommendationScore,
-          bestTrackedRowScore,
-        });
-        out[group.key] = {
-          routeRecommendationScore: Math.max(
-            0,
-            routeRecommendationScore +
-              (endpointPreferenceDeltaByRoute[group.key] ?? 0) +
-              trackedBonus,
-          ),
-          bestRowScore,
-          avgRowScore,
-          trackedShare,
-        };
-      }
-      return out;
-      }),
-    [
-      batchMetricsByRoute,
-      displayScoreContext,
-      endpointPreferenceDeltaByRoute,
-      isRouteGrouped,
-      opportunityProfile,
-      routeGroups,
-      watchlistIds,
-    ],
-  );
-
-  const topRoutePickCandidates = useMemo(() => {
-    return measureCalc("topRoutePickCandidates", () => {
-    const labelByRoute = new Map<string, string>();
-    const endpointDeltaByRoute = new Map<string, number>();
-    const endpointRuleHitsByRoute = new Map<string, number>();
-    const trackedCountByRoute = new Map<string, number>();
-    const deprioritizedByRoute = new Map<string, boolean>();
-    const loopOutboundByRoute = new Map<string, boolean>();
-    const loopReturnByRoute = new Map<string, boolean>();
-    for (const ir of datasetRows) {
-      const key = routeGroupKey(ir.row);
-      if (!labelByRoute.has(key)) {
-        labelByRoute.set(
-          key,
-          `${ir.row.BuyStation || ir.row.BuySystemName} → ${
-            ir.row.SellStation || ir.row.SellSystemName
-          }`,
-        );
-      }
-      endpointDeltaByRoute.set(
-        key,
-        (endpointDeltaByRoute.get(key) ?? 0) +
-          (ir.endpointPreferences?.scoreDelta ?? 0),
-      );
-      endpointRuleHitsByRoute.set(
-        key,
-        (endpointRuleHitsByRoute.get(key) ?? 0) +
-          (ir.endpointPreferences?.appliedRules.length ?? 0),
-      );
-      if (watchlistIds.has(ir.row.TypeID)) {
-        trackedCountByRoute.set(key, (trackedCountByRoute.get(key) ?? 0) + 1);
-      }
-      if (isFlipResultDeprioritized(ir.row, sessionStationFilters)) {
-        deprioritizedByRoute.set(key, true);
-      }
-      const outboundKey = `${ir.row.BuySystemID}:${ir.row.SellSystemID}`;
-      const returnKey = `${ir.row.SellSystemID}:${ir.row.BuySystemID}`;
-      loopOutboundByRoute.set(key, routeSafetyMap[outboundKey] !== undefined);
-      loopReturnByRoute.set(key, routeSafetyMap[returnKey] !== undefined);
-    }
-    const candidates: TopRoutePickCandidate[] = [];
-    for (const [routeKey, routeLabel] of labelByRoute.entries()) {
-      const routeSummary = batchMetricsByRoute[routeKey];
-      const routeAggregate = routeAggregateMetricsByRoute[routeKey];
-      const confidence = calcRouteConfidence(routeAggregate);
-      const routeScoreSummary = routeScoreSummaryByRoute[routeKey];
-      candidates.push({
-        routeKey,
-        routeLabel,
-        totalProfit: routeSummary?.routeTotalProfit ?? 0,
-        dailyIskPerJump: routeSummary?.routeDailyIskPerJump ?? 0,
-        confidenceScore: confidence.score,
-        cargoUsePercent: routeSummary?.routeCapacityUsedPercent ?? 0,
-        recommendationScore: routeScoreSummary?.routeRecommendationScore ?? 0,
-        trackedShare: routeScoreSummary?.trackedShare ?? 0,
-        stopCount: routeSummary?.routeStopCount ?? 0,
-        riskCount:
-          (routeSummary?.routeRiskSpikeCount ?? 0) +
-          (routeSummary?.routeRiskNoHistoryCount ?? 0) +
-          (routeSummary?.routeRiskUnstableHistoryCount ?? 0) +
-          (routeSummary?.routeRiskThinFillCount ?? 0),
-        endpointScoreDelta: endpointDeltaByRoute.get(routeKey) ?? 0,
-        endpointRuleHits: endpointRuleHitsByRoute.get(routeKey) ?? 0,
-        hasWatchlistSignal: (trackedCountByRoute.get(routeKey) ?? 0) > 0,
-        hasLoopCandidate: loopOutboundByRoute.get(routeKey) ?? false,
-        hasBackhaulCandidate: loopReturnByRoute.get(routeKey) ?? false,
-        hasDeprioritizedRows: deprioritizedByRoute.get(routeKey) ?? false,
-      });
-    }
-    return candidates;
-    });
-  }, [
-    batchMetricsByRoute,
-    datasetRows,
-    routeAggregateMetricsByRoute,
-    routeScoreSummaryByRoute,
-    routeSafetyMap,
-    sessionStationFilters,
-    watchlistIds,
-  ]);
-
-  const topRoutePicks = useMemo(
-    () => selectTopRoutePicks(topRoutePickCandidates),
-    [topRoutePickCandidates],
-  );
-
-  const suppressionTelemetry = useMemo(
-    () => ({
-      hardBanFiltered: Math.max(
-        0,
-        results.length - filterAudit.stageCounts.session_hard_ignores,
-      ),
-      softSessionFiltered: Math.max(
-        0,
-        filterAudit.stageCounts.endpoint_hard_rules -
-          filterAudit.stageCounts.route_badge_filter,
-      ),
-      endpointExcluded: Math.max(
-        0,
-        filterAudit.stageCounts.session_hard_ignores -
-          filterAudit.stageCounts.endpoint_hard_rules,
-      ),
-      deprioritizedRows: sorted.filter((item) =>
-        isFlipResultDeprioritized(item.row, sessionStationFilters),
-      ).length,
-      stageCounts: filterAudit.stageCounts,
-    }),
-    [filterAudit.stageCounts, results.length, sessionStationFilters, sorted],
-  );
-
-  const actionQueue = useMemo<ActionQueueItem[]>(
-    () =>
-      deriveActionQueue({
-        candidates: topRoutePickCandidates,
-        suppression: suppressionTelemetry,
-      }).slice(0, 6),
-    [suppressionTelemetry, topRoutePickCandidates],
-  );
 
   const previousLensRef = useRef<DecisionLensPreset | "custom">("recommended");
   useEffect(() => {
@@ -3345,28 +3040,11 @@ export function ScanResultsTable({
       measureCalc("routeExplanationByKey", () => {
         const out: Record<string, RouteDecisionExplanation> = {};
         for (const routeKey of explanationRouteKeys) {
-          const summary = batchMetricsByRoute[routeKey];
-          if (!summary) continue;
-          const candidate = topRoutePickCandidates.find((entry) => entry.routeKey === routeKey);
+          const meta = explanationMetaByRouteKey[routeKey];
+          if (!meta) continue;
           out[routeKey] = buildRouteDecisionExplanation(
             {
-              routeKey,
-              routeLabel: routeGroupByKey[routeKey]?.label ?? candidate?.routeLabel ?? routeKey,
-              recommendationScore: routeScoreSummaryByRoute[routeKey]?.routeRecommendationScore ?? candidate?.recommendationScore ?? 0,
-              dailyIskPerJump: summary.routeDailyIskPerJump ?? candidate?.dailyIskPerJump ?? 0,
-              totalProfit: summary.routeTotalProfit ?? candidate?.totalProfit ?? 0,
-              confidenceScore: calcRouteConfidence(routeAggregateMetricsByRoute[routeKey]).score,
-              executionQuality: summary.routeWeakestExecutionQuality ?? 0,
-              weightedSlippagePct: summary.routeWeightedSlippagePct ?? 0,
-              turnoverDays: summary.routeTurnoverDays ?? null,
-              cargoUsePercent: summary.routeCapacityUsedPercent ?? null,
-              riskCount:
-                (summary.routeRiskSpikeCount ?? 0) +
-                (summary.routeRiskNoHistoryCount ?? 0) +
-                (summary.routeRiskUnstableHistoryCount ?? 0) +
-                (summary.routeRiskThinFillCount ?? 0),
-              staleVerificationPenalty:
-                routeVerificationByKey[routeKey]?.status === "Abort" ? 12 : 0,
+              ...meta,
             },
             normalizeDecisionLensForRoute(decisionLens),
           );
@@ -3374,39 +3052,21 @@ export function ScanResultsTable({
         return out;
       }),
     [
-      batchMetricsByRoute,
       decisionLens,
       explanationRouteKeys,
-      routeAggregateMetricsByRoute,
-      routeGroupByKey,
-      routeScoreSummaryByRoute,
-      routeVerificationByKey,
-      topRoutePickCandidates,
+      explanationMetaByRouteKey,
     ],
   );
 
   const routeLensDeltaByKey = useMemo<Record<string, string>>(() => {
     const out: Record<string, string> = {};
     for (const routeKey of Object.keys(routeExplanationByKey)) {
-      const summary = batchMetricsByRoute[routeKey];
-      if (!summary) continue;
+      const meta = explanationMetaByRouteKey[routeKey];
+      if (!meta) continue;
       out[routeKey] = explainLensDelta(
         {
-          routeKey,
-          routeLabel: routeGroupByKey[routeKey]?.label ?? routeKey,
-          recommendationScore: routeScoreSummaryByRoute[routeKey]?.routeRecommendationScore ?? 0,
-          dailyIskPerJump: summary.routeDailyIskPerJump ?? 0,
-          totalProfit: summary.routeTotalProfit ?? 0,
-          confidenceScore: calcRouteConfidence(routeAggregateMetricsByRoute[routeKey]).score,
-          executionQuality: summary.routeWeakestExecutionQuality ?? 0,
-          weightedSlippagePct: summary.routeWeightedSlippagePct ?? 0,
-          turnoverDays: summary.routeTurnoverDays ?? null,
-          cargoUsePercent: summary.routeCapacityUsedPercent ?? null,
-          riskCount:
-            (summary.routeRiskSpikeCount ?? 0) +
-            (summary.routeRiskNoHistoryCount ?? 0) +
-            (summary.routeRiskUnstableHistoryCount ?? 0) +
-            (summary.routeRiskThinFillCount ?? 0),
+          ...meta,
+          staleVerificationPenalty: 0,
         },
         normalizeDecisionLensForRoute(previousLensRef.current),
         normalizeDecisionLensForRoute(decisionLens),
@@ -3414,12 +3074,9 @@ export function ScanResultsTable({
     }
     return out;
   }, [
-    batchMetricsByRoute,
     decisionLens,
-    routeAggregateMetricsByRoute,
+    explanationMetaByRouteKey,
     routeExplanationByKey,
-    routeGroupByKey,
-    routeScoreSummaryByRoute,
   ]);
 
   useEffect(() => {
@@ -6312,9 +5969,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                             )
                           : null;
                         const verification = routeVerificationByKey[group.key];
-                        const badgeMetadata =
-                          routeBadgeMetadataByRoute[group.key] ??
-                          deriveRouteBadgeMetadata(routeSummary, routeAggregate);
+                        const badgeMetadata = routeBadgeMetadataByRoute[group.key];
                         const routeLimit = Math.max(
                           1,
                           routeGroupRowLimit.get(group.key) ??
