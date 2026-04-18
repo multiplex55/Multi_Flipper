@@ -1,10 +1,12 @@
 import type { SavedRoutePack } from "@/lib/types";
 import { formatISK } from "@/lib/format";
-import { RouteWorkbenchPanel } from "@/components/RouteWorkbenchPanel";
 
 interface SavedRoutePacksPanelProps {
   packs: SavedRoutePack[];
-  onOpen: (pack: SavedRoutePack) => void;
+  onOpen: (
+    pack: SavedRoutePack,
+    mode?: "summary" | "execution" | "filler" | "verification",
+  ) => void;
   onVerify: (pack: SavedRoutePack) => void;
   onVerificationProfileChange: (pack: SavedRoutePack, profileId: string) => void;
   onCopy: (pack: SavedRoutePack) => void;
@@ -33,10 +35,6 @@ export function SavedRoutePacksPanel({
   onVerificationProfileChange,
   onCopy,
   onRemove,
-  onMarkBought,
-  onMarkSold,
-  onMarkSkipped,
-  onResetLine,
 }: SavedRoutePacksPanelProps) {
   return (
     <div className="border border-eve-border rounded-sm p-2 mb-2 bg-eve-panel/40" data-testid="saved-route-packs-panel">
@@ -65,24 +63,15 @@ export function SavedRoutePacksPanel({
                   <td className="py-1 pr-2">{pack.verificationSnapshot?.status ?? "Unverified"}</td>
                   <td className="py-1 pr-2">{verificationAge(pack.lastVerifiedAt)}</td>
                   <td className="py-1">
-                    <div className="inline-flex gap-1">
-                      <button type="button" onClick={() => onOpen(pack)} className="border border-eve-border/60 px-1.5 py-0.5 rounded-sm">Open</button>
+                    <div className="inline-flex flex-wrap gap-1">
+                      <button type="button" onClick={() => onOpen(pack, "summary")} className="border border-eve-border/60 px-1.5 py-0.5 rounded-sm" aria-label={`Open ${pack.routeLabel} summary`}>Open</button>
+                      <button type="button" onClick={() => onOpen(pack, "execution")} className="border border-eve-border/60 px-1.5 py-0.5 rounded-sm" aria-label={`Open ${pack.routeLabel} execution`}>Execution</button>
+                      <button type="button" onClick={() => onOpen(pack, "verification")} className="border border-eve-border/60 px-1.5 py-0.5 rounded-sm" aria-label={`Open ${pack.routeLabel} verification`}>Verification</button>
                       <button type="button" onClick={() => onVerify(pack)} className="border border-eve-border/60 px-1.5 py-0.5 rounded-sm">Verify</button>
+                      <button type="button" onClick={() => onVerificationProfileChange(pack, "standard")} className="border border-eve-border/60 px-1.5 py-0.5 rounded-sm">Std Profile</button>
                       <button type="button" onClick={() => onCopy(pack)} className="border border-eve-border/60 px-1.5 py-0.5 rounded-sm">Copy</button>
                       <button type="button" onClick={() => onRemove(pack)} className="border border-rose-500/50 text-rose-200 px-1.5 py-0.5 rounded-sm">Remove</button>
                     </div>
-                    <RouteWorkbenchPanel
-                      pack={pack}
-                      verificationProfileId={pack.verificationProfileId}
-                      onVerificationProfileChange={(profileId) =>
-                        onVerificationProfileChange(pack, profileId)
-                      }
-                      onVerifyNow={() => onVerify(pack)}
-                      onMarkBought={(lineKey, qty) => onMarkBought(pack, lineKey, qty)}
-                      onMarkSold={(lineKey, qty) => onMarkSold(pack, lineKey, qty)}
-                      onMarkSkipped={(lineKey, reason) => onMarkSkipped(pack, lineKey, reason)}
-                      onResetLine={(lineKey) => onResetLine(pack, lineKey)}
-                    />
                   </td>
                 </tr>
               ))}

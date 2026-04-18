@@ -17,14 +17,14 @@ type RadiusInsightsPanelProps = {
   loopOpportunities?: LoopOpportunity[];
   openRouteWorkbench: (
     routeKey: string,
-    mode?: "summary" | "batch_builder",
+    mode?: "summary" | "execution" | "filler" | "verification",
     launchContext?: {
       intentLabel?: string;
       batchEntryMode?: "core" | "filler" | "loop";
     },
   ) => void;
   activeRouteGroupKey?: string | null;
-  routeWorkbenchMode?: "summary" | "batch_builder";
+  routeWorkbenchMode?: "summary" | "execution" | "filler" | "verification";
   activeRouteLabel?: string | null;
   defaultExpanded?: boolean;
   compactDashboard?: boolean;
@@ -381,21 +381,18 @@ export function RadiusInsightsPanel({
                     {activeRouteLabel ?? activeRouteGroupKey}
                   </div>
                   <span className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-eve-dim">
-                    {routeWorkbenchMode === "batch_builder" ? "Batch builder" : "Summary"}
+                    {routeWorkbenchMode[0].toUpperCase() + routeWorkbenchMode.slice(1)}
                   </span>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   <button
                     type="button"
                     onClick={() =>
-                      openRouteWorkbench(activeRouteGroupKey, "batch_builder", {
-                        intentLabel: "Primary",
-                        batchEntryMode: "core",
-                      })
+                      openRouteWorkbench(activeRouteGroupKey, "execution")
                     }
                     className="rounded-sm border border-eve-accent/60 px-2 py-0.5 text-[11px] text-eve-accent hover:bg-eve-accent/10"
                   >
-                    Open Batch Builder
+Open execution
                   </button>
                   <button
                     type="button"

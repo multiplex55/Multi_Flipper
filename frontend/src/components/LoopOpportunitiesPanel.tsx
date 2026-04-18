@@ -6,7 +6,7 @@ type LoopOpportunitiesPanelProps = {
   loops: LoopOpportunity[];
   collapsed?: boolean;
   defaultExpanded?: boolean;
-  onOpenRouteWorkbench?: (routeKey: string, mode?: "summary" | "batch_builder") => void;
+  onOpenRouteWorkbench?: (routeKey: string, mode?: "summary" | "execution" | "filler" | "verification") => void;
 };
 
 function formatIsk(value: number): string {

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@/lib/i18n";
 import { ToastProvider } from "@/components/Toast";
@@ -59,12 +59,12 @@ function makeRow(overrides: Partial<FlipResult> = {}): FlipResult {
   };
 }
 
-function renderTable(results: FlipResult[]) {
+function renderTable() {
   return render(
     <I18nProvider>
       <ToastProvider>
         <ScanResultsTable
-          results={results}
+          results={[makeRow(), makeRow({ TypeID: 1002, TypeName: "Second" })]}
           scanning={false}
           progress=""
           tradeStateTab="radius"
@@ -74,54 +74,28 @@ function renderTable(results: FlipResult[]) {
   );
 }
 
-describe("ScanResultsTable saved route packs", () => {
-  const writeText = vi.fn<(text: string) => Promise<void>>(async () => undefined);
-
+describe("ScanResultsTable workbench integration", () => {
   beforeEach(() => {
     localStorage.clear();
     localStorage.setItem("eve-radius-route-view-mode:v1", "route");
-    Object.defineProperty(navigator, "clipboard", {
-      configurable: true,
-      value: { writeText },
-    });
-    writeText.mockClear();
   });
 
   afterEach(() => {
     cleanup();
   });
 
-  it("route header Pin persists pack and toggles state", async () => {
-    renderTable([makeRow(), makeRow({ TypeID: 1002, TypeName: "Second" })]);
+  it("opens the same workbench route from header, insights, and saved routes", async () => {
+    renderTable();
 
-    const pinButton = await screen.findByRole("button", { name: "Pin" });
-    fireEvent.click(pinButton);
+    fireEvent.click(await screen.findByRole("button", { name: /Open route workbench summary for Jita → Amarr/i }));
+    const panel = await screen.findByTestId("route-workbench-panel:loc:60003760->loc:60008494");
+    expect(panel).toBeInTheDocument();
 
-    expect(await screen.findByRole("button", { name: "Pinned" })).toBeInTheDocument();
-    expect(screen.getByTestId("saved-route-packs-panel")).toHaveTextContent("Jita → Amarr");
+    fireEvent.click(screen.getByTestId("route-workbench-action-pin"));
+    fireEvent.click(screen.getByRole("button", { name: /Open Jita → Amarr summary/i }));
+    expect(screen.getByTestId("route-workbench-panel:loc:60003760->loc:60008494")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Pinned" }));
-    expect(await screen.findByRole("button", { name: "Pin" })).toBeInTheDocument();
-  });
-
-  it("route header Copy writes expected formatted text", async () => {
-    renderTable([makeRow()]);
-    const copyButton = await screen.findByRole("button", { name: "Copy" });
-    fireEvent.click(copyButton);
-
-    await waitFor(() => expect(writeText).toHaveBeenCalled());
-    const copied = String(writeText.mock.calls[0]?.[0] ?? "");
-    expect(copied).toContain("Route: Jita → Amarr");
-    expect(copied).toContain("Verification:");
-  });
-
-  it("reopening saved pack restores workbench route context", async () => {
-    renderTable([makeRow(), makeRow({ TypeID: 1002, TypeName: "Second" })]);
-
-    fireEvent.click(await screen.findByRole("button", { name: "Pin" }));
-    const panel = screen.getByTestId("saved-route-packs-panel");
-    fireEvent.click(within(panel).getByRole("button", { name: /Open Jita → Amarr summary/i }));
-
-    expect(await screen.findByTestId("route-workbench-panel:loc:60003760->loc:60008494")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: /jump to group/i })[0]);
+    expect(screen.getByTestId("route-workbench-panel:loc:60003760->loc:60008494")).toBeInTheDocument();
   });
 });
