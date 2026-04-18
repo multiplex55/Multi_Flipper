@@ -3430,10 +3430,15 @@ export function ScanResultsTable({
     selectedIds,
     selectionScopeRows,
   ]);
+  const focusedRowEntry = useMemo(
+    () => selectionScopeRows.find((entry) => entry.id === focusedRowId) ?? null,
+    [focusedRowId, selectionScopeRows],
+  );
   const selectedOneLegAnchor = useMemo(() => {
+    if (focusedRowEntry) return focusedRowEntry.row;
     const selected = selectionScopeRows.find((entry) => selectedIds.has(entry.id));
     return selected?.row ?? null;
-  }, [selectedIds, selectionScopeRows]);
+  }, [focusedRowEntry, selectedIds, selectionScopeRows]);
   const selectedOneLegBatchRows = useMemo(() => {
     if (!selectedOneLegAnchor) return [] as FlipResult[];
     const selectedRows = selectionScopeRows
@@ -4810,6 +4815,7 @@ export function ScanResultsTable({
         onToggleVariantGroup={toggleItemGroupExpanded}
         onContextMenu={handleContextMenu}
         onLmbClick={onLmbClick}
+        onActivateRow={() => setFocusedRowId(ir.id)}
         onToggleSelect={toggleSelect}
         onTogglePin={togglePin}
         tFn={t}
@@ -5034,7 +5040,9 @@ export function ScanResultsTable({
                 onClick={() => setCompactRows((v) => !v)}
               />
             )}
-            {isRadiusMode && !isRegionGrouped && (
+            {isRadiusMode &&
+              !isRegionGrouped &&
+              effectiveRouteViewMode === "rows" && (
               <button
                 type="button"
                 className={`rounded-sm border px-1.5 py-0.5 text-[10px] transition-colors ${
@@ -6708,7 +6716,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
           )}
         </div>
       )}
-      {isRadiusMode && (
+      {isRadiusMode && effectiveRouteViewMode === "rows" && (
         <OneLegModePanel
           enabled={oneLegModeEnabled}
           anchor={selectedOneLegAnchor}
@@ -7296,6 +7304,7 @@ interface DataRowProps {
     row: FlipResult,
   ) => void;
   onLmbClick: (row: FlipResult) => void;
+  onActivateRow: () => void;
   onToggleSelect: (id: number) => void;
   onTogglePin: (row: FlipResult) => void;
   tFn: (key: TranslationKey, vars?: Record<string, string | number>) => string;
@@ -7410,8 +7419,9 @@ const DataRow = memo(
     variantExpanded,
     onToggleVariantGroup,
     onContextMenu,
-    onLmbClick,
-    onToggleSelect,
+  onLmbClick,
+  onActivateRow,
+  onToggleSelect,
     onTogglePin,
     tFn,
     routeSafetyEntry,
@@ -7434,10 +7444,12 @@ const DataRow = memo(
         data-filter-reason-codes={debugReasonCodes.join(",")}
         onContextMenu={(e) => onContextMenu(e, ir.id, ir.row)}
         onClick={(e) => {
-          if (!isRegionGrouped) return;
           const target = e.target as HTMLElement;
           if (target.closest("input,button,a")) return;
-          onLmbClick(ir.row);
+          onActivateRow();
+          if (isRegionGrouped) {
+            onLmbClick(ir.row);
+          }
         }}
         className={`border-b border-eve-border/50 hover:bg-eve-accent/5 transition-colors cursor-pointer ${compactMode ? "text-xs" : ""} ${
           isFocused
@@ -7615,6 +7627,7 @@ const DataRow = memo(
     prev.onToggleVariantGroup === next.onToggleVariantGroup &&
     prev.onContextMenu === next.onContextMenu &&
     prev.onLmbClick === next.onLmbClick &&
+    prev.onActivateRow === next.onActivateRow &&
     prev.onToggleSelect === next.onToggleSelect &&
     prev.onTogglePin === next.onTogglePin &&
     prev.routeSafetyEntry === next.routeSafetyEntry &&
