@@ -18,7 +18,7 @@ export type RadiusScanSession = {
   cacheMeta: StationCacheMeta | null;
   paramsSnapshot: ScanParams | null;
   scanCompletedAt: string | null;
-  insights?: RadiusRouteInsights;
+  insights: RadiusRouteInsights;
   routeInsightsSnapshot?: RadiusRouteInsights;
   routeInsightsSnapshotVersion?: string;
   loopOpportunities: LoopOpportunity[];
@@ -41,13 +41,20 @@ function deriveInsights(
 }
 
 export function createEmptyRadiusScanSession(): RadiusScanSession {
+  const insights = deriveRadiusRouteInsights({
+    rows: [],
+    resultsCount: 0,
+    batchMetricsByRoute: {},
+    routeSafetyMap: {},
+    trackedTypeIds: new Set<number>(),
+  });
   return {
     hasScan: false,
     results: [],
     cacheMeta: null,
     paramsSnapshot: null,
     scanCompletedAt: null,
-    insights: undefined,
+    insights,
     routeInsightsSnapshot: undefined,
     routeInsightsSnapshotVersion: ROUTE_INSIGHTS_SNAPSHOT_VERSION,
     loopOpportunities: [],

@@ -12,7 +12,7 @@ vi.mock("@/lib/api", () => ({
   getConfig: vi.fn(async () => ({ system_name: "Jita", cargo_capacity: 10000 })),
   skipAppUpdateForSession: vi.fn(async () => ({})),
   updateConfig: vi.fn(async () => ({})),
-  scan: (...args: unknown[]) => mockScan(...args),
+  scan: mockScan,
   scanMultiRegion: vi.fn(async () => []),
   scanRegionalDayTrader: vi.fn(async () => []),
   scanContracts: vi.fn(async () => []),

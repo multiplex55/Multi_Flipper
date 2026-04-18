@@ -2727,7 +2727,7 @@ const handleScanAndRefresh = useCallback(async () => {
                   createRadiusScanSession({
                     results: filtered,
                     cacheMeta: null,
-                    scanParams: loadedParams ?? params,
+                    scanParams: params,
                     sessionStationFilters,
                   }),
                 );

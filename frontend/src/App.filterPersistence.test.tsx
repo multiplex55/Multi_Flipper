@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import App from "@/App";
 
-const mockScan = vi.fn(async () => [{ TypeID: 34, TypeName: "Tritanium" }]);
+const { mockScan } = vi.hoisted(() => ({
+  mockScan: vi.fn(async () => [{ TypeID: 34, TypeName: "Tritanium" }]),
+}));
 
 vi.mock("@/lib/api", () => ({
   applyAppUpdate: vi.fn(),
@@ -11,7 +13,7 @@ vi.mock("@/lib/api", () => ({
   getConfig: vi.fn(async () => ({ system_name: "Jita", cargo_capacity: 10000 })),
   skipAppUpdateForSession: vi.fn(async () => ({})),
   updateConfig: vi.fn(async () => ({})),
-  scan: (...args: unknown[]) => mockScan(...args),
+  scan: mockScan,
   scanMultiRegion: vi.fn(async () => []),
   scanRegionalDayTrader: vi.fn(async () => []),
   scanContracts: vi.fn(async () => []),

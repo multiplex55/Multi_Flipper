@@ -1463,6 +1463,8 @@ export function ScanResultsTable({
     () => strategyScoreToOpportunityProfile(strategyScore),
     [strategyScore],
   );
+  const effectiveLoopOpportunities =
+    radiusScanSession?.loopOpportunities ?? loopOpportunities ?? [];
 
   const allColumnDefs = useMemo(
     () => buildColumnDefs(showRegions, columnProfile),
@@ -7984,4 +7986,3 @@ function ContextItem({
     </div>
   );
 }
-  const effectiveLoopOpportunities = radiusScanSession?.loopOpportunities ?? loopOpportunities ?? [];
