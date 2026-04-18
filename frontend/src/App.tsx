@@ -3,7 +3,10 @@ import { useKeyboardShortcuts } from "./lib/useKeyboardShortcuts";
 import { StatusBar } from "./components/StatusBar";
 import { ParametersPanel } from "./components/ParametersPanel";
 import { ContractParametersPanel } from "./components/ContractParametersPanel";
-import { ScanResultsTable } from "./components/ScanResultsTable";
+import {
+  ScanResultsTable,
+  type ScanResultsTableFeatureConfig,
+} from "./components/ScanResultsTable";
 import { ContractResultsTable } from "./components/ContractResultsTable";
 import { RouteBuilder } from "./components/RouteBuilder";
 import { WatchlistTab } from "./components/WatchlistTab";
@@ -111,6 +114,24 @@ const defaultPatronsURL =
 const patronsDataURL =
   (import.meta.env.VITE_PATRONS_URL as string | undefined)?.trim() ||
   defaultPatronsURL;
+
+const RADIUS_SCAN_RESULTS_FEATURE_CONFIG = {
+  allowRouteGrouping: false,
+  showRouteInsights: false,
+  showRouteWorkbench: false,
+  showSavedRoutes: false,
+  showLoopPanel: false,
+  defaultViewMode: "rows",
+} satisfies ScanResultsTableFeatureConfig;
+
+const REGION_SCAN_RESULTS_FEATURE_CONFIG = {
+  allowRouteGrouping: true,
+  showRouteInsights: false,
+  showRouteWorkbench: false,
+  showSavedRoutes: false,
+  showLoopPanel: false,
+  defaultViewMode: "rows",
+} satisfies ScanResultsTableFeatureConfig;
 
 type DesktopRuntimeWindow = Window & {
   __TAURI_INTERNALS__?: unknown;
@@ -2336,6 +2357,7 @@ const handleScanAndRefresh = useCallback(async () => {
                 loopOpportunities={loopOpportunities}
                 sessionStationFilters={sessionStationFilters}
                 onUpdateSessionStationFilters={updateSessionStationFilters}
+                featureConfig={RADIUS_SCAN_RESULTS_FEATURE_CONFIG}
               />
             </div>
             <div
@@ -2435,6 +2457,7 @@ const handleScanAndRefresh = useCallback(async () => {
                   setShowVerifierModal(true);
                 }}
                 strategyScore={strategyScore}
+                featureConfig={REGION_SCAN_RESULTS_FEATURE_CONFIG}
               />
             </div>
             <div

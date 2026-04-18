@@ -270,6 +270,47 @@ function getSellLocationID(row: FlipResult): number {
   return Math.trunc(row.SellLocationID ?? 0);
 }
 
+type ScanResultsTableRouteHeavyConfig = {
+  allowRouteGrouping: true;
+  showRouteInsights: true;
+  showRouteWorkbench: true;
+  showSavedRoutes: true;
+  showLoopPanel: boolean;
+  defaultViewMode: "rows" | "route";
+};
+
+type ScanResultsTableRouteLightConfig = {
+  allowRouteGrouping: true;
+  showRouteInsights: false;
+  showRouteWorkbench: false;
+  showSavedRoutes: false;
+  showLoopPanel: false;
+  defaultViewMode: "rows";
+};
+
+type ScanResultsTableRowFirstConfig = {
+  allowRouteGrouping: false;
+  showRouteInsights: false;
+  showRouteWorkbench: false;
+  showSavedRoutes: false;
+  showLoopPanel: false;
+  defaultViewMode: "rows";
+};
+
+export type ScanResultsTableFeatureConfig =
+  | ScanResultsTableRouteHeavyConfig
+  | ScanResultsTableRouteLightConfig
+  | ScanResultsTableRowFirstConfig;
+
+const DEFAULT_SCAN_RESULTS_TABLE_FEATURE_CONFIG: ScanResultsTableFeatureConfig = {
+  allowRouteGrouping: true,
+  showRouteInsights: true,
+  showRouteWorkbench: true,
+  showSavedRoutes: true,
+  showLoopPanel: true,
+  defaultViewMode: "rows",
+};
+
 interface Props {
   results: FlipResult[];
   scanning: boolean;
@@ -303,6 +344,7 @@ interface Props {
   onUpdateSessionStationFilters?: (
     updater: (prev: SessionStationFilters) => SessionStationFilters,
   ) => void;
+  featureConfig?: ScanResultsTableFeatureConfig;
 }
 
 type ColumnDef = {
@@ -1522,6 +1564,7 @@ export function ScanResultsTable({
   loopOpportunities,
   sessionStationFilters,
   onUpdateSessionStationFilters,
+  featureConfig = DEFAULT_SCAN_RESULTS_TABLE_FEATURE_CONFIG,
 }: Props) {
   const { t } = useI18n();
   const emptyReason: EmptyReason = scanCompletedWithZero
@@ -1587,11 +1630,13 @@ export function ScanResultsTable({
   });
   const [routeViewMode, setRouteViewMode] = useState<"rows" | "route">(() => {
     try {
-      return localStorage.getItem(ROUTE_GROUPING_STORAGE_KEY) === "route"
-        ? "route"
-        : "rows";
+      const storedMode = localStorage.getItem(ROUTE_GROUPING_STORAGE_KEY);
+      if (storedMode === "route" || storedMode === "rows") {
+        return storedMode;
+      }
+      return featureConfig.defaultViewMode;
     } catch {
-      return "rows";
+      return featureConfig.defaultViewMode;
     }
   });
   const [trackedVisibilityMode, setTrackedVisibilityMode] =
@@ -1704,9 +1749,19 @@ export function ScanResultsTable({
   } | null>(null);
 
   const isRegionGrouped = columnProfile === "region_eveguru";
+  const allowRouteGrouping = featureConfig.allowRouteGrouping;
+  const showRouteInsights = featureConfig.showRouteInsights;
+  const showRouteWorkbench = featureConfig.showRouteWorkbench;
+  const showSavedRoutes = featureConfig.showSavedRoutes;
+  const showLoopPanel = featureConfig.showLoopPanel;
+  const effectiveRouteViewMode =
+    allowRouteGrouping && routeViewMode === "route" ? "route" : "rows";
   const isItemGrouped =
-    !isRegionGrouped && groupByItem && routeViewMode === "rows";
-  const isRouteGrouped = !isRegionGrouped && routeViewMode === "route";
+    !isRegionGrouped && groupByItem && effectiveRouteViewMode === "rows";
+  const isRouteGrouped =
+    !isRegionGrouped &&
+    allowRouteGrouping &&
+    effectiveRouteViewMode === "route";
 
   const routeBadgeFilterOptions: Array<{
     key: RouteBadgeFilter;
@@ -2092,11 +2147,17 @@ export function ScanResultsTable({
 
   useEffect(() => {
     try {
-      localStorage.setItem(ROUTE_GROUPING_STORAGE_KEY, routeViewMode);
+      localStorage.setItem(ROUTE_GROUPING_STORAGE_KEY, effectiveRouteViewMode);
     } catch {
       // ignore storage quota errors
     }
-  }, [routeViewMode]);
+  }, [effectiveRouteViewMode]);
+
+  useEffect(() => {
+    if (!allowRouteGrouping && routeViewMode !== "rows") {
+      setRouteViewMode("rows");
+    }
+  }, [allowRouteGrouping, routeViewMode]);
 
   useEffect(() => {
     try {
@@ -3684,7 +3745,7 @@ export function ScanResultsTable({
     trackedVisibilityMode,
     endpointPreferenceMode,
     endpointPreferenceProfile,
-    routeViewMode,
+    effectiveRouteViewMode,
   ]);
 
   // Reset selection/pins/context menu/group limits when results change
@@ -3906,7 +3967,7 @@ export function ScanResultsTable({
         capital_efficient: { key: "RoutePackTurnoverDays", dir: "asc" },
       };
       const next =
-        routeViewMode === "route"
+        effectiveRouteViewMode === "route"
           ? routeModeMapping[preset]
           : (rowModeMapping[
               preset as Exclude<typeof preset, "best_route_pack">
@@ -3915,7 +3976,7 @@ export function ScanResultsTable({
       setSortDir(next.dir);
       setDecisionLens(preset);
     },
-    [routeViewMode],
+    [effectiveRouteViewMode],
   );
 
   useEffect(() => {
@@ -5110,36 +5171,13 @@ export function ScanResultsTable({
           {results.length > 0 && !scanning && (
             <>
               {!isRegionGrouped && (
-                <>
-                  <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
-                    {([
-                      ["rows", "Row view"],
-                      ["route", "Group by route"],
-                    ] as const).map(([mode, label]) => {
-                      const active = routeViewMode === mode;
-                      return (
-                        <button
-                          key={mode}
-                          type="button"
-                          onClick={() => setRouteViewMode(mode)}
-                          className={`px-2 py-0.5 border-r last:border-r-0 border-eve-border/40 transition-colors ${
-                            active
-                              ? "bg-eve-accent/15 text-eve-accent border-eve-accent/40"
-                              : "text-eve-dim hover:text-eve-text"
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {routeViewMode === "rows" && (
-                    <label className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] cursor-pointer">
-                      <input type="checkbox" checked={groupByItem} onChange={(e) => setGroupByItem(e.target.checked)} className="accent-eve-accent" />
-                      <span>Group by item</span>
-                    </label>
-                  )}
-                </>
+                <RadiusRowControls
+                  allowRouteGrouping={allowRouteGrouping}
+                  routeViewMode={effectiveRouteViewMode}
+                  setRouteViewMode={setRouteViewMode}
+                  groupByItem={groupByItem}
+                  setGroupByItem={setGroupByItem}
+                />
               )}
 
               <button
@@ -5431,7 +5469,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
             {!isRegionGrouped && (
               <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
                 <span className="text-eve-dim px-1">{t("decisionLensTitle")}</span>
-                {(routeViewMode === "route"
+                {(effectiveRouteViewMode === "route"
                   ? ([
                       ["recommended", "decisionLensTitle"],
                       ["best_route_pack", "decisionLensBestRoutePack"],
@@ -5859,13 +5897,13 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
         </div>
       )}
 
-      {!isRegionGrouped && (
+      {!isRegionGrouped && showRouteInsights && (
         <RadiusInsightsPanel
           topRoutePicks={topRoutePicks}
           actionQueue={actionQueue}
           routeExplanationByKey={routeExplanationByKey}
           lensDeltaByRouteKey={routeLensDeltaByKey}
-          loopOpportunities={loopOpportunities ?? []}
+          loopOpportunities={showLoopPanel ? (loopOpportunities ?? []) : []}
           suppressionSummary={
             suppressionTelemetry.softSessionFiltered > 0 ||
             suppressionTelemetry.deprioritizedRows > 0 ||
@@ -5882,7 +5920,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
         />
       )}
 
-      {!isRegionGrouped && (
+      {!isRegionGrouped && showSavedRoutes && (
         <SavedRoutePacksPanel
           packs={savedRoutePacks}
           onOpen={openSavedRoutePack}
@@ -5948,7 +5986,10 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
         />
       )}
 
-      {!isRegionGrouped && activeWorkbenchPack && activeRouteGroupKey && (
+      {!isRegionGrouped &&
+        showRouteWorkbench &&
+        activeWorkbenchPack &&
+        activeRouteGroupKey && (
         <RouteWorkbenchPanel
           pack={activeWorkbenchPack}
           mode={routeWorkbenchMode}
@@ -8076,6 +8117,60 @@ function PriceSparkLine({ prices }: { prices: number[] }) {
         <span>today</span>
       </div>
     </div>
+  );
+}
+
+function RadiusRowControls({
+  allowRouteGrouping,
+  routeViewMode,
+  setRouteViewMode,
+  groupByItem,
+  setGroupByItem,
+}: {
+  allowRouteGrouping: boolean;
+  routeViewMode: "rows" | "route";
+  setRouteViewMode: (mode: "rows" | "route") => void;
+  groupByItem: boolean;
+  setGroupByItem: (next: boolean) => void;
+}) {
+  return (
+    <>
+      {allowRouteGrouping && (
+        <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
+          {([
+            ["rows", "Row view"],
+            ["route", "Group by route"],
+          ] as const).map(([mode, label]) => {
+            const active = routeViewMode === mode;
+            return (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setRouteViewMode(mode)}
+                className={`px-2 py-0.5 border-r last:border-r-0 border-eve-border/40 transition-colors ${
+                  active
+                    ? "bg-eve-accent/15 text-eve-accent border-eve-accent/40"
+                    : "text-eve-dim hover:text-eve-text"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {routeViewMode === "rows" && (
+        <label className="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] cursor-pointer">
+          <input
+            type="checkbox"
+            checked={groupByItem}
+            onChange={(e) => setGroupByItem(e.target.checked)}
+            className="accent-eve-accent"
+          />
+          <span>Group by item</span>
+        </label>
+      )}
+    </>
   );
 }
 
