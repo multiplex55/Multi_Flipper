@@ -1,6 +1,13 @@
 import type { FlipResult } from "@/lib/types";
 import { safeNumber } from "@/lib/batchMetrics";
 
+export type UrgencyBand = "stable" | "aging" | "fragile";
+
+export type UrgencyClassification = {
+  urgency_score: number;
+  urgency_band: UrgencyBand;
+};
+
 export function safeJumps(totalJumps: unknown): number {
   return Math.max(1, safeNumber(totalJumps));
 }
@@ -61,6 +68,87 @@ export function slippageCostIsk(row: FlipResult): number {
     sellExec > 0 && sellBase > 0 ? Math.max(0, sellBase - sellExec) : 0;
 
   return qty * (buySlipPerUnit + sellSlipPerUnit);
+}
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
+export function classifyFlipUrgency(row: FlipResult): UrgencyClassification {
+  const requestedUnits = Math.max(
+    safeNumber(row.PreExecutionUnits),
+    safeNumber(row.UnitsToBuy),
+    safeNumber(row.BuyOrderRemain),
+    safeNumber(row.SellOrderRemain),
+    1,
+  );
+  const fillableUnits = Math.max(
+    safeNumber(row.FilledQty),
+    Math.min(safeNumber(row.BuyOrderRemain), safeNumber(row.SellOrderRemain)),
+    0,
+  );
+  const fillRatio = clamp01(fillableUnits / requestedUnits);
+  const depthRisk = 1 - fillRatio;
+
+  const explicitSlipPct = Math.max(
+    0,
+    safeNumber(row.SlippageBuyPct) + safeNumber(row.SlippageSellPct),
+  );
+  const buyBase = safeNumber(row.BuyPrice);
+  const sellBase = safeNumber(row.SellPrice);
+  const buyExec = safeNumber(row.ExpectedBuyPrice);
+  const sellExec = safeNumber(row.ExpectedSellPrice);
+  const buySlipPctFromExec =
+    buyExec > 0 && buyBase > 0 ? ((buyExec - buyBase) / buyBase) * 100 : 0;
+  const sellSlipPctFromExec =
+    sellExec > 0 && sellBase > 0 ? ((sellBase - sellExec) / sellBase) * 100 : 0;
+  const derivedSlipPct = Math.max(0, buySlipPctFromExec + sellSlipPctFromExec);
+  const slippageRisk = clamp01(
+    Math.max(explicitSlipPct, derivedSlipPct) / 18,
+  );
+
+  const totalJumps = safeNumber(row.TotalJumps);
+  const jumpRisk = clamp01((Math.max(1, totalJumps) - 1) / 20);
+
+  const staleRisk = clamp01(
+    (row.HistoryAvailable === false ? 1 : 0) +
+      (hasDestinationPriceDrift(row) ? 0.7 : 0),
+  );
+  const structuralRisk = clamp01(
+    (row.CanFill === false ? 1 : 0) +
+      (safeNumber(row.BuyCompetitors) >= 8 ? 0.25 : 0) +
+      (safeNumber(row.SellCompetitors) >= 8 ? 0.25 : 0),
+  );
+
+  const urgency_score = Math.round(
+    Math.max(
+      0,
+      Math.min(
+        100,
+        (depthRisk * 0.34 +
+          slippageRisk * 0.32 +
+          jumpRisk * 0.12 +
+          staleRisk * 0.12 +
+          structuralRisk * 0.1) *
+          100,
+      ),
+    ),
+  );
+
+  let urgency_band: UrgencyBand = "stable";
+  if (urgency_score >= 70) urgency_band = "fragile";
+  else if (urgency_score >= 40) urgency_band = "aging";
+
+  return { urgency_score, urgency_band };
+}
+
+function hasDestinationPriceDrift(row: FlipResult): boolean {
+  const period = safeNumber(row.DayTargetPeriodPrice);
+  const now = safeNumber(row.DayTargetNowPrice);
+  if (period <= 0 || now <= 0) return false;
+  const driftPct = Math.abs(now - period) / period;
+  return driftPct >= 0.08;
 }
 
 export function radiusRouteKey(row: FlipResult): string {

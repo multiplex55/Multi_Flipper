@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FlipResult } from "@/lib/types";
 import {
+  classifyFlipUrgency,
   deriveActionQueue,
   dailyIskPerJump,
   realIskPerJump,
@@ -142,6 +143,76 @@ describe("radiusMetrics formulas", () => {
     expect(realIskPerJump(row)).toBe(-100);
     expect(realIskPerM3PerJump(row)).toBe(-2);
     expect(slippageCostIsk(row)).toBe(450);
+  });
+
+  it("urgency score increases with higher slippage and lower depth", () => {
+    const lowUrgency = classifyFlipUrgency(
+      makeRow({
+        UnitsToBuy: 100,
+        FilledQty: 95,
+        BuyOrderRemain: 120,
+        SellOrderRemain: 120,
+        SlippageBuyPct: 0.2,
+        SlippageSellPct: 0.2,
+        TotalJumps: 1,
+      }),
+    );
+    const highUrgency = classifyFlipUrgency(
+      makeRow({
+        UnitsToBuy: 100,
+        FilledQty: 15,
+        BuyOrderRemain: 20,
+        SellOrderRemain: 20,
+        SlippageBuyPct: 8,
+        SlippageSellPct: 7,
+        TotalJumps: 10,
+      }),
+    );
+
+    expect(highUrgency.urgency_score).toBeGreaterThan(lowUrgency.urgency_score);
+  });
+
+  it("maps urgency bands at threshold edges", () => {
+    expect(
+      classifyFlipUrgency(
+        makeRow({
+          UnitsToBuy: 100,
+          FilledQty: 100,
+          BuyOrderRemain: 100,
+          SellOrderRemain: 100,
+          SlippageBuyPct: 0,
+          SlippageSellPct: 0,
+          TotalJumps: 1,
+        }),
+      ).urgency_band,
+    ).toBe("stable");
+    expect(
+      classifyFlipUrgency(
+        makeRow({
+          UnitsToBuy: 100,
+          FilledQty: 35,
+          BuyOrderRemain: 40,
+          SellOrderRemain: 40,
+          SlippageBuyPct: 7,
+          SlippageSellPct: 6,
+          TotalJumps: 8,
+        }),
+      ).urgency_band,
+    ).toBe("aging");
+    expect(
+      classifyFlipUrgency(
+        makeRow({
+          UnitsToBuy: 100,
+          FilledQty: 20,
+          BuyOrderRemain: 20,
+          SellOrderRemain: 20,
+          SlippageBuyPct: 9,
+          SlippageSellPct: 8,
+          TotalJumps: 12,
+          HistoryAvailable: false,
+        }),
+      ).urgency_band,
+    ).toBe("fragile");
   });
 
   it("selects top picks using route pick selectors", () => {
