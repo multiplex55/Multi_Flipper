@@ -117,7 +117,10 @@ describe("ScanResultsTable same-leg rail", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Fill this leg" }));
     fireEvent.click(await screen.findByRole("button", { name: "Open Price Validation" }));
-    const manifest = onOpenPriceValidation.mock.calls.at(-1)?.[0] as string;
+    const manifest =
+      onOpenPriceValidation.mock.calls[
+        onOpenPriceValidation.mock.calls.length - 1
+      ]?.[0] as string;
     expect(manifest).toContain("Anchor");
     expect(manifest).toContain("Same Leg");
     expect(manifest).not.toContain("Off Leg");
