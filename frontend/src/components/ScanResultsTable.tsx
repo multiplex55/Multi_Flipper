@@ -166,6 +166,8 @@ const ENDPOINT_PREFS_STORAGE_KEY = "eve-radius-endpoint-preferences:v1";
 const ADVANCED_TOOLBAR_VISIBLE_STORAGE_KEY =
   "eve-radius-advanced-toolbar-visible:v1";
 const COMPACT_DASHBOARD_STORAGE_KEY = "eve-radius-compact-dashboard:v1";
+const RADIUS_ROUTE_INSIGHTS_HIDDEN_STORAGE_KEY =
+  "eve-radius-route-insights-hidden:v1";
 const ONE_LEG_MODE_STORAGE_KEY = "eve-radius-one-leg-mode:v1";
 const PERFORMANCE_LOG_THRESHOLD_MS = 8;
 
@@ -1527,6 +1529,14 @@ export function ScanResultsTable({
       return false;
     }
   });
+  const [radiusRouteInsightsHidden, setRadiusRouteInsightsHidden] =
+    useState<boolean>(() => {
+      try {
+        return localStorage.getItem(RADIUS_ROUTE_INSIGHTS_HIDDEN_STORAGE_KEY) === "1";
+      } catch {
+        return false;
+      }
+    });
   const previousScanningRef = useRef(scanning);
   const [groupByItem, setGroupByItem] = useState<boolean>(() => {
     try {
@@ -2127,6 +2137,17 @@ export function ScanResultsTable({
       // ignore storage quota errors
     }
   }, [compactDashboard]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        RADIUS_ROUTE_INSIGHTS_HIDDEN_STORAGE_KEY,
+        radiusRouteInsightsHidden ? "1" : "0",
+      );
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [radiusRouteInsightsHidden]);
 
   useEffect(() => {
     if (!isRouteGrouped && selectedBadgeFilters.size > 0) {
@@ -5019,6 +5040,24 @@ export function ScanResultsTable({
               >
                 Compact Dashboard
               </button>
+              {isRadiusMode && !isRegionGrouped && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setRadiusRouteInsightsHidden((previous) => !previous)
+                  }
+                  className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
+                    radiusRouteInsightsHidden
+                      ? "border-eve-border/60 bg-eve-dark/40 text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent"
+                      : "border-eve-accent/60 text-eve-accent bg-eve-accent/10"
+                  }`}
+                  aria-pressed={radiusRouteInsightsHidden}
+                >
+                  {radiusRouteInsightsHidden
+                    ? t("showRadiusRouteInsights")
+                    : t("hideRadiusRouteInsights")}
+                </button>
+              )}
             </>
           )}
 
@@ -5768,7 +5807,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
         </div>
       )}
 
-      {!isRegionGrouped && isRadiusMode && (
+      {!isRegionGrouped && isRadiusMode && !radiusRouteInsightsHidden && (
         <RadiusInsightsPanel
           topRoutePicks={topRoutePicks}
           actionQueue={actionQueue}

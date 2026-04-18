@@ -196,6 +196,8 @@ export const en = {
     decisionLensLowestCapitalLockup: "Lowest Capital Lock-up",
     topPicksToggleLabel: "Top Picks",
     topPicksToggleTooltip: "Show or hide the Top Picks panel",
+    hideRadiusRouteInsights: "Hide Radius Route Insights",
+    showRadiusRouteInsights: "Show Radius Route Insights",
     topPicksPanelTitle: "Top Picks",
     bestRecommendedRoutePack: "Best Recommended Route Pack",
     bestQuickSingleRoute: "Best Quick Single Route",

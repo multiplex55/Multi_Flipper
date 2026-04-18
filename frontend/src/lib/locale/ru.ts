@@ -194,6 +194,8 @@ export const ru = {
     decisionLensLowestCapitalLockup: "Минимум капитала",
     topPicksToggleLabel: "Топ-пики",
     topPicksToggleTooltip: "Показать или скрыть панель топ-пиков",
+    hideRadiusRouteInsights: "Скрыть подсказки маршрутов радиуса",
+    showRadiusRouteInsights: "Показать подсказки маршрутов радиуса",
     topPicksPanelTitle: "Топ-пики",
     bestRecommendedRoutePack: "Лучший рекомендованный пакет маршрутов",
     bestQuickSingleRoute: "Лучший быстрый одиночный маршрут",
