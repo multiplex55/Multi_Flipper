@@ -60,6 +60,9 @@ import {
   type OpportunityWeightProfile,
 } from "@/lib/opportunityScore";
 import { OpportunityScoreDetails } from "./OpportunityScorePopover";
+import { ExplanationPopoverShell } from "@/components/decision/ExplanationPopoverShell";
+import { FilterAuditChips } from "@/components/decision/FilterAuditChips";
+import { saveCandidatePattern } from "@/lib/savedCandidatePatterns";
 import { mapStationRowToPinnedOpportunity } from "@/lib/pinnedOpportunityMapper";
 import { DEFAULT_STRATEGY_SCORE } from "@/lib/scoringPresets";
 import {
@@ -1466,6 +1469,15 @@ export function StationTrading({
       displayRows.reduce((sum, r) => sum + r.CTS, 0) / displayRows.length;
     return { totalProfit, avgMargin, avgCTS, count: displayRows.length };
   }, [displayRows]);
+  const recommendedRow = displayRows[0] ?? null;
+  const recommendedExplanation = useMemo(
+    () =>
+      recommendedRow
+        ? scoreStationTrade(recommendedRow, opportunityProfile, displayScoreContext)
+        : null,
+    [displayScoreContext, opportunityProfile, recommendedRow],
+  );
+  const activeFilterCount = activeAdvancedCount + Number(minItemProfit > 0);
   const showOperatorColumns = operatorModeDevOnly && operatorMode && isLoggedIn;
   const operatorPanelAvailable = showOperatorColumns && displayRows.length > 0;
   const operatorPanelVisible =
@@ -2893,6 +2905,44 @@ export function StationTrading({
             </span>
           </button>
         )}
+
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <FilterAuditChips
+            chips={[
+              { label: "Rows", value: displayRows.length },
+              { label: "Active filters", value: activeFilterCount },
+              { label: "Hidden", value: hiddenCounts.total },
+            ]}
+          />
+          <div className="inline-flex items-center gap-1">
+            {recommendedExplanation && (
+              <ExplanationPopoverShell label="Why this recommendation?">
+                <OpportunityScoreDetails explanation={recommendedExplanation} />
+              </ExplanationPopoverShell>
+            )}
+            <button
+              type="button"
+              className="text-[11px] px-1.5 py-0.5 rounded border border-eve-border/70 text-eve-dim hover:text-eve-accent hover:border-eve-accent/60"
+              onClick={() =>
+                saveCandidatePattern({
+                  label: "station-current",
+                  tab: "station",
+                  query: JSON.stringify({
+                    minItemProfit,
+                    minDemandPerDay,
+                    minBfSPerDay,
+                    minPeriodROI,
+                    maxPVI,
+                    maxSDS,
+                  }),
+                  pinned: true,
+                })
+              }
+            >
+              Save/Pin pattern
+            </button>
+          </div>
+        </div>
 
         {/* Table */}
         <div
