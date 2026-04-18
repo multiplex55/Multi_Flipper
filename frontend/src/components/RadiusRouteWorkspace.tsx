@@ -15,6 +15,11 @@ type RadiusRouteWorkspaceProps = {
   radiusScanSession?: RadiusScanSession | null;
   loadingScanSession?: boolean;
   scanSessionError?: string | null;
+  activeRouteKey?: string | null;
+  workspaceMode?: RadiusRouteWorkspaceTab;
+  onWorkspaceModeChange?: (mode: RadiusRouteWorkspaceTab) => void;
+  workspaceSource?: "radius" | "finder";
+  routeQueueKeys?: string[];
 };
 
 function EmptySessionState({
@@ -45,8 +50,19 @@ export function RadiusRouteWorkspace({
   radiusScanSession,
   loadingScanSession = false,
   scanSessionError = null,
+  activeRouteKey = null,
+  workspaceMode,
+  onWorkspaceModeChange,
+  workspaceSource = "radius",
+  routeQueueKeys = [],
 }: RadiusRouteWorkspaceProps) {
-  const [activeTab, setActiveTab] = useState<RadiusRouteWorkspaceTab>("discover");
+  const [uncontrolledActiveTab, setUncontrolledActiveTab] =
+    useState<RadiusRouteWorkspaceTab>("discover");
+  const activeTab = workspaceMode ?? uncontrolledActiveTab;
+  const setActiveTab = (next: RadiusRouteWorkspaceTab) => {
+    onWorkspaceModeChange?.(next);
+    if (!workspaceMode) setUncontrolledActiveTab(next);
+  };
 
   const tabs: Array<{ id: RadiusRouteWorkspaceTab; label: string; hint: string }> = [
     { id: "discover", label: "Discover", hint: "Grouped routes, top picks, queue, loops" },
@@ -66,6 +82,21 @@ export function RadiusRouteWorkspace({
       })) ?? [],
     [radiusScanSession],
   );
+  const routeSummaryByKey = useMemo(
+    () =>
+      new Map(
+        (radiusScanSession?.insights.routeSummaries ?? []).map((summary) => [
+          summary.routeKey,
+          summary,
+        ]),
+      ),
+    [radiusScanSession],
+  );
+  const resolvedActiveRoute = activeRouteKey
+    ? routeSummaryByKey.get(activeRouteKey) ?? null
+    : null;
+  const showMissingRouteNotice =
+    !!activeRouteKey && !resolvedActiveRoute && !!radiusScanSession?.hasScan;
 
   const renderSessionState = () => (
     <EmptySessionState
@@ -126,6 +157,14 @@ export function RadiusRouteWorkspace({
                     <div className="text-eve-text font-semibold">{radiusScanSession.loopOpportunities.length}</div>
                   </div>
                 </div>
+                {routeQueueKeys.length > 0 && (
+                  <div className="rounded-sm border border-indigo-400/40 bg-indigo-500/5 p-2 text-xs">
+                    <div className="text-indigo-200">Route queue ({routeQueueKeys.length})</div>
+                    <div className="mt-1 text-eve-dim">
+                      {routeQueueKeys.slice(0, 4).join(", ")}
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-1">
                   <h3 className="text-xs uppercase tracking-wide text-eve-dim">Top grouped routes</h3>
                   {topRouteRows.length === 0 ? (
@@ -152,10 +191,21 @@ export function RadiusRouteWorkspace({
               renderSessionState()
             ) : (
               <>
-                <div className="text-eve-dim">Selected route: {radiusScanSession.insights.routeSummaries[0]?.routeLabel ?? "None"}</div>
+                <div className="text-eve-dim">
+                  Selected route: {resolvedActiveRoute?.routeLabel ?? activeRouteKey ?? "None"}
+                </div>
+                {showMissingRouteNotice && (
+                  <div
+                    className="rounded-sm border border-amber-500/50 bg-amber-900/20 p-2 text-amber-200"
+                    data-testid="route-workspace-stale-key-notice"
+                  >
+                    Selected route key is missing from the current scan map. Re-open from Radius to refresh.
+                  </div>
+                )}
                 <div className="text-eve-dim">Saved routes: 0 (workspace migration placeholder)</div>
                 <div className="text-eve-dim">Execution state: idle</div>
                 <div className="text-eve-dim">Filler options: {radiusScanSession.insights.actionQueue.filter((q) => q.action === "filler").length}</div>
+                <div className="text-eve-dim">Source: {workspaceSource}</div>
               </>
             )}
           </div>

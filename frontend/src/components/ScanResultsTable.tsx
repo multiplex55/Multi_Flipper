@@ -327,6 +327,9 @@ interface Props {
   onUpdateSessionStationFilters?: (
     updater: (prev: SessionStationFilters) => SessionStationFilters,
   ) => void;
+  onOpenInRoute?: (routeKey: string) => void;
+  onOpenInRouteWorkbench?: (routeKey: string) => void;
+  onSendToRouteQueue?: (routeKey: string) => void;
   featureConfig?: ScanResultsTableFeatureConfig;
 }
 
@@ -1443,6 +1446,9 @@ export function ScanResultsTable({
   loopOpportunities,
   sessionStationFilters,
   onUpdateSessionStationFilters,
+  onOpenInRoute,
+  onOpenInRouteWorkbench,
+  onSendToRouteQueue,
   featureConfig = DEFAULT_SCAN_RESULTS_TABLE_FEATURE_CONFIG,
 }: Props) {
   const { t } = useI18n();
@@ -4455,6 +4461,22 @@ export function ScanResultsTable({
     [getWorkbenchPackForRoute, savedRoutePackByKey, scrollToRouteGroup],
   );
 
+  const selectedRouteDerivation = useMemo(() => {
+    if (selectedIds.size === 0) return null;
+    const selectedRouteKeys = new Set<string>();
+    for (const row of indexed) {
+      if (selectedIds.has(row.id)) {
+        selectedRouteKeys.add(routeGroupKey(row.row));
+      }
+    }
+    if (selectedRouteKeys.size !== 1) return null;
+    const [routeKey] = Array.from(selectedRouteKeys);
+    return {
+      routeKey,
+      routeLabel: routeGroupByKey[routeKey]?.label ?? routeKey,
+    };
+  }, [indexed, routeGroupByKey, selectedIds]);
+
   const verifyRouteGroup = useCallback(
     (routeKey: string, profileId?: string) => {
       const group = routeGroupByKey[routeKey];
@@ -4765,7 +4787,34 @@ export function ScanResultsTable({
               <span className="text-emerald-300">★ Tracked: {watchlistIds.size}</span>
             )}
             {selectedIds.size > 0 && (
-              <span className="text-eve-accent">{t("selected", { count: selectedIds.size })}</span>
+              <>
+                <span className="text-eve-accent">{t("selected", { count: selectedIds.size })}</span>
+                {selectedRouteDerivation && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onOpenInRoute?.(selectedRouteDerivation.routeKey)}
+                      className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
+                    >
+                      Open in Route
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onOpenInRouteWorkbench?.(selectedRouteDerivation.routeKey)}
+                      className="rounded-sm border border-eve-accent/60 px-1.5 py-0.5 text-[10px] text-eve-accent hover:bg-eve-accent/10"
+                    >
+                      Open in Route Workbench
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onSendToRouteQueue?.(selectedRouteDerivation.routeKey)}
+                      className="rounded-sm border border-indigo-400/50 px-1.5 py-0.5 text-[10px] text-indigo-200 hover:bg-indigo-500/10"
+                    >
+                      Send to Route Queue
+                    </button>
+                  </>
+                )}
+              </>
             )}
           </div>
 
@@ -5569,6 +5618,12 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               : undefined
           }
           openRouteWorkbench={openRouteWorkbench}
+          onOpenInRoute={onOpenInRoute}
+          onOpenInRouteWorkbench={(routeKey) => {
+            onOpenInRouteWorkbench?.(routeKey);
+            openRouteWorkbench(routeKey, "summary");
+          }}
+          onSendToRouteQueue={onSendToRouteQueue}
           activeRouteGroupKey={activeRouteGroupKey}
           routeWorkbenchMode={routeWorkbenchMode}
           activeRouteLabel={activeRouteGroupKey ? routeGroupByKey[activeRouteGroupKey]?.label ?? null : null}
@@ -6247,6 +6302,14 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                                   <div className="inline-flex items-center gap-1 shrink-0">
                                     <button
                                       type="button"
+                                      onClick={() => onOpenInRoute?.(group.key)}
+                                      className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
+                                      aria-label={`Open in route for ${group.label}`}
+                                    >
+                                      Open
+                                    </button>
+                                    <button
+                                      type="button"
                                       onClick={() =>
                                         openBatchBuilderForRoute(group.key, {
                                           intentLabel: "Primary",
@@ -6280,6 +6343,14 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                                       aria-label={`Open route workbench verification for ${group.label}`}
                                     >
                                       Verify panel
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => onSendToRouteQueue?.(group.key)}
+                                      className="rounded-sm border border-indigo-400/50 px-1.5 py-0.5 text-[10px] text-indigo-200 hover:bg-indigo-500/10"
+                                      aria-label={`Send to route queue for ${group.label}`}
+                                    >
+                                      Queue
                                     </button>
                                     <button
                                       type="button"

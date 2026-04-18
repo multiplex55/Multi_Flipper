@@ -25,6 +25,9 @@ type RadiusInsightsPanelProps = {
       batchEntryMode?: "core" | "filler" | "loop";
     },
   ) => void;
+  onOpenInRoute?: (routeKey: string) => void;
+  onOpenInRouteWorkbench?: (routeKey: string) => void;
+  onSendToRouteQueue?: (routeKey: string) => void;
   activeRouteGroupKey?: string | null;
   routeWorkbenchMode?: "summary" | "execution" | "filler" | "verification";
   activeRouteLabel?: string | null;
@@ -80,6 +83,9 @@ export function RadiusInsightsPanel({
   suppressionSummary,
   loopOpportunities = [],
   openRouteWorkbench,
+  onOpenInRoute,
+  onOpenInRouteWorkbench,
+  onSendToRouteQueue,
   activeRouteGroupKey = null,
   routeWorkbenchMode = "summary",
   activeRouteLabel = null,
@@ -229,6 +235,27 @@ export function RadiusInsightsPanel({
                             <div className="mt-2 flex flex-wrap items-center gap-2">
                               <button
                                 type="button"
+                                onClick={() => onOpenInRoute?.(pick.routeKey)}
+                                className="px-2 py-0.5 rounded-sm border border-eve-border/60 text-eve-dim hover:text-eve-text transition-colors text-[11px]"
+                              >
+                                Open in Route
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onOpenInRouteWorkbench?.(pick.routeKey)}
+                                className="px-2 py-0.5 rounded-sm border border-eve-accent/60 text-eve-accent hover:bg-eve-accent/10 transition-colors text-[11px]"
+                              >
+                                Open in Route Workbench
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onSendToRouteQueue?.(pick.routeKey)}
+                                className="px-2 py-0.5 rounded-sm border border-indigo-400/50 text-indigo-200 hover:bg-indigo-500/10 transition-colors text-[11px]"
+                              >
+                                Send to Route Queue
+                              </button>
+                              <button
+                                type="button"
                                 onClick={() =>
                                   openRouteWorkbench(pick.routeKey, "summary", {
                                     intentLabel,
@@ -327,6 +354,29 @@ export function RadiusInsightsPanel({
                             >
                               {t("topPickJumpToGroup")}
                             </button>
+                            <div className="mt-1 flex flex-wrap gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => onOpenInRoute?.(item.routeKey)}
+                                className="rounded-sm border border-eve-border/60 px-2 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
+                              >
+                                Open in Route
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onOpenInRouteWorkbench?.(item.routeKey)}
+                                className="rounded-sm border border-eve-accent/60 px-2 py-0.5 text-[10px] text-eve-accent hover:bg-eve-accent/10"
+                              >
+                                Open in Route Workbench
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onSendToRouteQueue?.(item.routeKey)}
+                                className="rounded-sm border border-indigo-400/50 px-2 py-0.5 text-[10px] text-indigo-200 hover:bg-indigo-500/10"
+                              >
+                                Send to Route Queue
+                              </button>
+                            </div>
                           </>
                         ) : (
                           <div className="flex items-center gap-2">
@@ -357,6 +407,20 @@ export function RadiusInsightsPanel({
                               className="rounded-sm border border-eve-accent/50 px-1.5 py-0.5 text-[10px] text-eve-accent hover:bg-eve-accent/10"
                             >
                               {t("topPickJumpToGroup")}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onOpenInRoute?.(item.routeKey)}
+                              className="rounded-sm border border-eve-border/50 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
+                            >
+                              Open in Route
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onSendToRouteQueue?.(item.routeKey)}
+                              className="rounded-sm border border-indigo-400/50 px-1.5 py-0.5 text-[10px] text-indigo-200 hover:bg-indigo-500/10"
+                            >
+                              Queue
                             </button>
                             <div className="flex max-w-[45%] flex-wrap justify-end gap-1">
                               {item.reasons.slice(0, 2).map((reason) => (
