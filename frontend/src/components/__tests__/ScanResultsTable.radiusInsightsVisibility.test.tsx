@@ -24,7 +24,8 @@ vi.mock("@/lib/api", () => ({
   setWaypointInGame: vi.fn(async () => undefined),
 }));
 
-const COMPACT_DASHBOARD_STORAGE_KEY = "eve-radius-compact-dashboard:v1";
+const RADIUS_ROUTE_INSIGHTS_HIDDEN_STORAGE_KEY =
+  "eve-radius-route-insights-hidden:v1";
 
 function makeRow(overrides: Partial<FlipResult> = {}): FlipResult {
   return {
@@ -79,76 +80,56 @@ afterEach(() => {
   localStorage.clear();
 });
 
-describe("ScanResultsTable compact dashboard", () => {
-  it("toggles compact dashboard and updates dashboard spacing + helper visibility", () => {
+describe("ScanResultsTable radius insights visibility", () => {
+  it("shows compact insights by default, hides them, and restores with show toggle", () => {
     renderTable([makeRow()]);
 
     expect(
-      screen.getByText(
-        "Use Advanced for endpoint preferences, tracked visibility, and cache controls.",
-      ),
+      screen.getByRole("heading", { name: /radius route insights/i }),
     ).toBeInTheDocument();
-    const insightsCard = screen.getByRole("heading", { name: /radius route insights/i }).closest("section");
-    expect(insightsCard?.className).toContain("p-2");
+    const hideButton = screen.getByRole("button", {
+      name: /hide radius route insights/i,
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: /compact dashboard/i }));
+    fireEvent.click(hideButton);
 
     expect(
-      screen.queryByText(
-        "Use Advanced for endpoint preferences, tracked visibility, and cache controls.",
-      ),
+      screen.queryByRole("heading", { name: /radius route insights/i }),
     ).not.toBeInTheDocument();
-    expect(insightsCard?.className).toContain("p-1.5");
+    expect(
+      screen.getByRole("button", { name: /show radius route insights/i }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /show radius route insights/i }),
+    );
+
+    expect(
+      screen.getByRole("heading", { name: /radius route insights/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /hide radius route insights/i }),
+    ).toBeInTheDocument();
   });
 
-  it("persists compact dashboard preference and restores it on reload", () => {
+  it("persists hidden state in localStorage and restores it on rerender", () => {
     const firstRender = renderTable([makeRow()]);
 
-    fireEvent.click(screen.getByRole("button", { name: /compact dashboard/i }));
-    expect(localStorage.getItem(COMPACT_DASHBOARD_STORAGE_KEY)).toBe("1");
+    fireEvent.click(
+      screen.getByRole("button", { name: /hide radius route insights/i }),
+    );
+    expect(localStorage.getItem(RADIUS_ROUTE_INSIGHTS_HIDDEN_STORAGE_KEY)).toBe(
+      "1",
+    );
 
     firstRender.unmount();
     renderTable([makeRow()]);
 
-    expect(screen.getByRole("button", { name: /compact dashboard/i })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
     expect(
-      screen.queryByText(
-        "Use Advanced for endpoint preferences, tracked visibility, and cache controls.",
-      ),
+      screen.queryByRole("heading", { name: /radius route insights/i }),
     ).not.toBeInTheDocument();
-  });
-
-  it("allows compact rows and compact dashboard to be toggled independently", () => {
-    renderTable([makeRow()]);
-
-    const compactDashboardBtn = screen.getByRole("button", {
-      name: /compact dashboard/i,
-    });
-    const compactRowsBtn = screen.getByTitle("Compact rows");
-
-    fireEvent.click(compactDashboardBtn);
-    expect(compactDashboardBtn).toHaveAttribute("aria-pressed", "true");
-    expect(compactRowsBtn).toHaveAttribute("title", "Compact rows");
-
-    fireEvent.click(compactRowsBtn);
-    expect(compactRowsBtn).toHaveAttribute("title", "Comfy rows");
-    expect(compactDashboardBtn).toHaveAttribute("aria-pressed", "true");
-  });
-
-  it("suppresses helper text only in compact dashboard mode", () => {
-    renderTable([makeRow()]);
-    const helperText =
-      "Use Advanced for endpoint preferences, tracked visibility, and cache controls.";
-
-    expect(screen.getByText(helperText)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByTitle("Compact rows"));
-    expect(screen.getByText(helperText)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /compact dashboard/i }));
-    expect(screen.queryByText(helperText)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /show radius route insights/i }),
+    ).toBeInTheDocument();
   });
 });
