@@ -141,6 +141,11 @@ import {
   verifyOneLegSelection,
 } from "@/features/oneLegMode/oneLegMode";
 import {
+  getExactLegKey,
+  getSameLegRows,
+  rankSameLegRows,
+} from "@/lib/sameLegSuggestions";
+import {
   calcRouteConfidence as calcRouteConfidenceFromInsights,
   deriveRadiusRouteInsights,
   type RouteAggregateMetrics,
@@ -1628,6 +1633,13 @@ export function ScanResultsTable({
     {},
   );
   const [focusedRowId, setFocusedRowId] = useState<number | null>(null);
+  const [lockedBuyLocationId, setLockedBuyLocationId] = useState<number | null>(
+    null,
+  );
+  const [lockedSellLocationId, setLockedSellLocationId] = useState<number | null>(
+    null,
+  );
+  const [lockedLegKey, setLockedLegKey] = useState<string | null>(null);
   // Column DnD state
   const [colDraggedKey, setColDraggedKey] = useState<SortKey | null>(null);
   const [colDragOverKey, setColDragOverKey] = useState<SortKey | null>(null);
@@ -1930,6 +1942,9 @@ export function ScanResultsTable({
   const [batchBuilderLaunchIntent, setBatchBuilderLaunchIntent] = useState<
     string | null
   >(null);
+  const [batchBuilderMode, setBatchBuilderMode] = useState<
+    "single_anchor" | "same_leg_fill"
+  >("single_anchor");
   const [routeManifestByKey, setRouteManifestByKey] = useState<
     Record<string, RouteManifestVerificationSnapshot>
   >({});
@@ -2309,9 +2324,20 @@ export function ScanResultsTable({
       trackedVisibilityMode === "tracked_only"
         ? baseFiltered.filter((ir) => watchlistIds.has(ir.row.TypeID))
         : baseFiltered;
+    const lockFiltered = filtered.filter((ir) => {
+      const buyMatches =
+        lockedBuyLocationId == null ||
+        getBuyLocationID(ir.row) === lockedBuyLocationId;
+      const sellMatches =
+        lockedSellLocationId == null ||
+        getSellLocationID(ir.row) === lockedSellLocationId;
+      const legMatches =
+        lockedLegKey == null || getExactLegKey(ir.row) === lockedLegKey;
+      return buyMatches && sellMatches && legMatches;
+    });
 
     const filteredScoreContext = buildFlipScoreContext(
-      filtered.map((item) => item.row),
+      lockFiltered.map((item) => item.row),
     );
 
     const routeSafetyRankForRow = (row: FlipResult): number => {
@@ -2346,7 +2372,7 @@ export function ScanResultsTable({
       return compareRowsStable(a, b);
     };
 
-    const sorted = filtered.slice();
+    const sorted = lockFiltered.slice();
     sorted.sort((a, b) => {
       const aPin = pinnedKeys.has(
         mapScanRowToPinnedOpportunity(a.row).opportunity_key,
@@ -2457,7 +2483,13 @@ export function ScanResultsTable({
       });
     }
 
-    return { indexed, filtered, sorted, variantByRowId, endpointPreferenceMetaByRowId };
+    return {
+      indexed,
+      filtered: lockFiltered,
+      sorted,
+      variantByRowId,
+      endpointPreferenceMetaByRowId,
+    };
   }, [
     results,
     filters,
@@ -2476,6 +2508,9 @@ export function ScanResultsTable({
     trackedFirst,
     trackedVisibilityMode,
     watchlistIds,
+    lockedBuyLocationId,
+    lockedSellLocationId,
+    lockedLegKey,
   ]);
 
   // Available market groups derived from current results (region mode only)
@@ -3455,11 +3490,21 @@ export function ScanResultsTable({
     () => selectionScopeRows.find((entry) => entry.id === focusedRowId) ?? null,
     [focusedRowId, selectionScopeRows],
   );
-  const selectedOneLegAnchor = useMemo(() => {
+  const selectedLegAnchor = useMemo(() => {
     if (focusedRowEntry) return focusedRowEntry.row;
     const selected = selectionScopeRows.find((entry) => selectedIds.has(entry.id));
     return selected?.row ?? null;
   }, [focusedRowEntry, selectedIds, selectionScopeRows]);
+  const selectedOneLegAnchor = selectedLegAnchor;
+  const sameLegRowsForAnchor = useMemo(() => {
+    if (!selectedLegAnchor) return [] as FlipResult[];
+    return rankSameLegRows(
+      getSameLegRows(
+        selectedLegAnchor,
+        selectionScopeRows.map((entry) => entry.row),
+      ),
+    );
+  }, [selectedLegAnchor, selectionScopeRows]);
   const selectedOneLegBatchRows = useMemo(() => {
     if (!selectedOneLegAnchor) return [] as FlipResult[];
     const selectedRows = selectionScopeRows
@@ -4538,6 +4583,7 @@ export function ScanResultsTable({
       setActiveRouteGroupKey(routeKey);
       setBatchBuilderEntryMode(context?.batchEntryMode ?? "core");
       setBatchBuilderLaunchIntent(context?.intentLabel ?? null);
+      setBatchBuilderMode("single_anchor");
     },
     [routeAnchorRowByKey, routeGroupByKey],
   );
@@ -4714,6 +4760,42 @@ export function ScanResultsTable({
     );
   }, [addToast, selectedOneLegAnchor, selectedOneLegBatchRows]);
 
+  const buildManifestForRows = useCallback((rows: FlipResult[]): string => {
+    if (rows.length === 0) return "";
+    const lines = rows.map((row) => {
+      const qty = Math.max(
+        1,
+        Math.trunc(row.FilledQty ?? row.UnitsToBuy ?? row.BuyOrderRemain ?? 1),
+      );
+      return `${row.TypeName}\t${qty}`;
+    });
+    return lines.join("\n");
+  }, []);
+
+  const openBatchBuilderForSameLeg = useCallback(() => {
+    if (!selectedLegAnchor) return;
+    const rows = sameLegRowsForAnchor.length > 0 ? sameLegRowsForAnchor : [selectedLegAnchor];
+    setBatchPlanRow(selectedLegAnchor);
+    setBatchPlanRows(rows);
+    setActiveRouteGroupKey(routeGroupKey(selectedLegAnchor));
+    setBatchBuilderEntryMode("core");
+    setBatchBuilderLaunchIntent("Same-leg fill");
+    setBatchBuilderMode("same_leg_fill");
+  }, [sameLegRowsForAnchor, selectedLegAnchor]);
+
+  const openRailVerifier = useCallback(
+    (useSameLegRows: boolean) => {
+      if (!selectedLegAnchor) return;
+      const rows = useSameLegRows
+        ? sameLegRowsForAnchor.length > 0
+          ? sameLegRowsForAnchor
+          : [selectedLegAnchor]
+        : [selectedLegAnchor];
+      onOpenPriceValidation?.(buildManifestForRows(rows));
+    },
+    [buildManifestForRows, onOpenPriceValidation, sameLegRowsForAnchor, selectedLegAnchor],
+  );
+
   const openSavedRoutePack = useCallback(
     (
       pack: SavedRoutePack,
@@ -4737,6 +4819,17 @@ export function ScanResultsTable({
     },
     [addToast, openRouteWorkbench, routeGroupByKey],
   );
+
+  const applyLegFilter = useCallback(() => {
+    if (!selectedLegAnchor) return;
+    setLockedLegKey(getExactLegKey(selectedLegAnchor));
+  }, [selectedLegAnchor]);
+
+  const clearLegLocks = useCallback(() => {
+    setLockedBuyLocationId(null);
+    setLockedSellLocationId(null);
+    setLockedLegKey(null);
+  }, []);
 
   const activeWorkbenchPack = useMemo(() => {
     if (activeSavedRoutePackRef) return activeSavedRoutePackRef;
@@ -5102,6 +5195,33 @@ export function ScanResultsTable({
           </div>
           <div data-testid="radius-toolbar-secondary-actions" className="flex flex-wrap items-center gap-1">
             {selectedIds.size > 0 && <span className="text-eve-accent">{t("selected", { count: selectedIds.size })}</span>}
+            {lockedBuyLocationId != null && (
+              <button
+                type="button"
+                className="rounded-sm border border-cyan-500/50 px-1.5 py-0.5 text-[10px] text-cyan-200"
+                onClick={() => setLockedBuyLocationId(null)}
+              >
+                Buy lock #{lockedBuyLocationId} ×
+              </button>
+            )}
+            {lockedSellLocationId != null && (
+              <button
+                type="button"
+                className="rounded-sm border border-fuchsia-500/50 px-1.5 py-0.5 text-[10px] text-fuchsia-200"
+                onClick={() => setLockedSellLocationId(null)}
+              >
+                Sell lock #{lockedSellLocationId} ×
+              </button>
+            )}
+            {lockedLegKey && (
+              <button
+                type="button"
+                className="rounded-sm border border-indigo-500/50 px-1.5 py-0.5 text-[10px] text-indigo-200"
+                onClick={() => setLockedLegKey(null)}
+              >
+                Leg filter ×
+              </button>
+            )}
             {selectedRouteDerivation && (
               <>
                 <button
@@ -6020,6 +6140,48 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
         />
       )}
 
+      {selectedLegAnchor && (
+        <div
+          className="mb-2 rounded-sm border border-eve-accent/40 bg-eve-accent/5 p-2 text-[11px]"
+          data-testid="same-leg-rail"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-eve-accent font-semibold">
+              {selectedLegAnchor.BuyStation} → {selectedLegAnchor.SellStation}
+            </span>
+            <span className="text-eve-dim">
+              {selectedLegAnchor.TypeName} · {formatISK(selectedLegAnchor.RealProfit ?? selectedLegAnchor.TotalProfit)} · {sameLegRowsForAnchor.length} rows
+            </span>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            <button type="button" className="rounded-sm border border-eve-accent/60 px-1.5 py-0.5 text-eve-accent" onClick={openBatchBuilderForSameLeg}>
+              Open Batch Builder
+            </button>
+            <button type="button" className="rounded-sm border border-blue-500/60 px-1.5 py-0.5 text-blue-200" onClick={openBatchBuilderForSameLeg}>
+              Fill this leg
+            </button>
+            <button type="button" className="rounded-sm border border-purple-500/60 px-1.5 py-0.5 text-purple-200" onClick={() => openRailVerifier(false)}>
+              Quick Verify
+            </button>
+            <button type="button" className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-eve-dim" onClick={() => { void copyText(buildManifestForRows(sameLegRowsForAnchor.length > 0 ? sameLegRowsForAnchor : [selectedLegAnchor])); }}>
+              Copy Manifest
+            </button>
+            <button type="button" className="rounded-sm border border-indigo-500/60 px-1.5 py-0.5 text-indigo-200" onClick={applyLegFilter}>
+              Filter to leg
+            </button>
+            <button type="button" className="rounded-sm border border-cyan-500/60 px-1.5 py-0.5 text-cyan-200" onClick={() => setLockedBuyLocationId(getBuyLocationID(selectedLegAnchor) || null)}>
+              Lock buy
+            </button>
+            <button type="button" className="rounded-sm border border-fuchsia-500/60 px-1.5 py-0.5 text-fuchsia-200" onClick={() => setLockedSellLocationId(getSellLocationID(selectedLegAnchor) || null)}>
+              Lock sell
+            </button>
+            <button type="button" className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-eve-dim" onClick={clearLegLocks}>
+              Clear locks
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="flex-1 min-h-0 flex flex-col border border-eve-border rounded-sm overflow-auto table-scroll-container">
         <table className="w-full text-sm">
@@ -6865,6 +7027,51 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               onClick={() => {
                 setBatchPlanRow(contextMenu.row);
                 setBatchPlanRows(results);
+                setBatchBuilderMode("single_anchor");
+                setContextMenu(null);
+              }}
+            />
+            <ContextItem
+              label="Fill this leg"
+              onClick={() => {
+                const legRows = rankSameLegRows(
+                  getSameLegRows(
+                    contextMenu.row,
+                    selectionScopeRows.map((entry) => entry.row),
+                  ),
+                );
+                setBatchPlanRow(contextMenu.row);
+                setBatchPlanRows(legRows.length > 0 ? legRows : [contextMenu.row]);
+                setBatchBuilderMode("same_leg_fill");
+                setBatchBuilderLaunchIntent("Same-leg fill");
+                setContextMenu(null);
+              }}
+            />
+            <ContextItem
+              label="Filter to this leg"
+              onClick={() => {
+                setLockedLegKey(getExactLegKey(contextMenu.row));
+                setContextMenu(null);
+              }}
+            />
+            <ContextItem
+              label="Lock this buy"
+              onClick={() => {
+                setLockedBuyLocationId(getBuyLocationID(contextMenu.row) || null);
+                setContextMenu(null);
+              }}
+            />
+            <ContextItem
+              label="Lock this sell"
+              onClick={() => {
+                setLockedSellLocationId(getSellLocationID(contextMenu.row) || null);
+                setContextMenu(null);
+              }}
+            />
+            <ContextItem
+              label="Clear locks"
+              onClick={() => {
+                clearLegLocks();
                 setContextMenu(null);
               }}
             />
@@ -7300,6 +7507,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
         onClose={() => setBatchPlanRow(null)}
         anchorRow={batchPlanRow}
         rows={batchPlanRows}
+        mode={batchBuilderMode}
         manifestRouteKey={activeRouteGroupKey}
         entryMode={batchBuilderEntryMode}
         launchIntent={batchBuilderLaunchIntent}

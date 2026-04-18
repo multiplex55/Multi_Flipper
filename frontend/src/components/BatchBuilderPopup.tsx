@@ -67,6 +67,7 @@ interface BatchBuilderPopupProps {
   ) => void;
   verificationProfileId?: string;
   precomputedFillerCandidates?: FillerCandidate[];
+  mode?: "single_anchor" | "same_leg_fill";
 }
 
 type RouteState = "idle" | "searching" | "results" | "selected";
@@ -294,6 +295,7 @@ export function BatchBuilderPopup({
   onManifestVerificationSnapshot,
   verificationProfileId = "standard",
   precomputedFillerCandidates = [],
+  mode = "single_anchor",
 }: BatchBuilderPopupProps) {
   const { t } = useI18n();
   const { addToast } = useGlobalToast();
@@ -1079,6 +1081,13 @@ export function BatchBuilderPopup({
         return;
       }
       const recommended =
+        (mode === "same_leg_fill"
+          ? [...options].sort(
+              (a, b) =>
+                (b.total_profit_isk ?? 0) - (a.total_profit_isk ?? 0) ||
+                (b.isk_per_jump ?? 0) - (a.isk_per_jump ?? 0),
+            )[0]
+          : null) ??
         options.find((option) => option.recommended) ??
         [...options].sort(
           (a, b) =>
@@ -1138,6 +1147,7 @@ export function BatchBuilderPopup({
     scanSourceTab,
     candidateSnapshot,
     executionScoringPreset,
+    mode,
     t,
     addToast,
   ]);
@@ -1324,6 +1334,12 @@ export function BatchBuilderPopup({
         <p className="text-xs text-eve-dim">{t("batchBuilderHint")}</p>
         <div className="text-[11px] text-eve-dim" data-testid="batch-builder-entry-context">
           Mode: <span className="text-eve-text">{entryMode}</span>
+          {mode === "same_leg_fill" ? (
+            <>
+              {" "}
+              · <span className="text-blue-300">Same-leg batch</span>
+            </>
+          ) : null}
           {launchIntent ? (
             <>
               {" "}
