@@ -127,6 +127,7 @@ import {
 } from "@/lib/savedRouteExecution";
 import { buildSavedRoutePack } from "@/lib/routePackBuilder";
 import { SavedRoutePacksPanel } from "@/components/SavedRoutePacksPanel";
+import { RouteWorkbenchPanel, type RouteWorkbenchMode, type RouteWorkbenchSectionId } from "./RouteWorkbenchPanel";
 import {
   getVerificationProfileById,
 } from "@/lib/verificationProfiles";
@@ -1883,9 +1884,10 @@ export function ScanResultsTable({
   const [activeRouteGroupKey, setActiveRouteGroupKey] = useState<string | null>(
     null,
   );
-  const [routeWorkbenchMode, setRouteWorkbenchMode] = useState<
-    "summary" | "batch_builder"
-  >("summary");
+  const [routeWorkbenchMode, setRouteWorkbenchMode] = useState<RouteWorkbenchMode>("summary");
+  const [activeSavedRoutePackRouteKey, setActiveSavedRoutePackRouteKey] = useState<string | null>(null);
+  const [activeSavedRoutePackRef, setActiveSavedRoutePackRef] = useState<SavedRoutePack | null>(null);
+  const [activeRouteWorkbenchSection, setActiveRouteWorkbenchSection] = useState<RouteWorkbenchSectionId>("summary");
   const [batchBuilderEntryMode, setBatchBuilderEntryMode] = useState<
     "core" | "filler" | "loop"
   >("core");
@@ -3000,6 +3002,14 @@ export function ScanResultsTable({
     }
     return out;
   }, [savedRoutePacks]);
+
+  useEffect(() => {
+    if (!activeSavedRoutePackRouteKey) return;
+    const livePack = savedRoutePackByKey[activeSavedRoutePackRouteKey];
+    if (livePack) {
+      setActiveSavedRoutePackRef(livePack);
+    }
+  }, [activeSavedRoutePackRouteKey, savedRoutePackByKey]);
 
   useEffect(() => {
     setRouteVerificationProfileByKey((prev) => {
@@ -4515,28 +4525,73 @@ export function ScanResultsTable({
       setBatchPlanRow(anchor);
       setBatchPlanRows(routeGroup.rows.map((item) => item.row));
       setActiveRouteGroupKey(routeKey);
-      setRouteWorkbenchMode("batch_builder");
       setBatchBuilderEntryMode(context?.batchEntryMode ?? "core");
       setBatchBuilderLaunchIntent(context?.intentLabel ?? null);
     },
     [routeAnchorRowByKey, routeGroupByKey],
   );
 
+  const getWorkbenchPackForRoute = useCallback(
+    (routeKey: string): SavedRoutePack | null => {
+      const existing = savedRoutePackByKey[routeKey];
+      if (existing) return existing;
+      const routeGroup = routeGroupByKey[routeKey];
+      const anchor = routeAnchorRowByKey[routeKey];
+      if (!routeGroup || !anchor) return null;
+      return buildSavedRoutePack({
+        routeKey,
+        routeLabel: routeGroup.label,
+        anchorRow: anchor,
+        routeRows: routeGroup.rows.map((item) => item.row),
+        selectedRows: routeGroup.rows.map((item) => item.row),
+        entryMode: batchBuilderEntryMode,
+        launchIntent: batchBuilderLaunchIntent,
+        summary: batchMetricsByRoute[routeKey] ?? null,
+        routeSafetyRank: routeAggregateMetricsByRoute[routeKey]?.routeSafetyRank ?? null,
+        manifestSnapshot: routeManifestByKey[routeKey] ?? null,
+        verificationResult: routeVerificationByKey[routeKey] ?? null,
+        verificationProfileId:
+          routeVerificationProfileByKey[routeKey] ??
+          savedRoutePackByKey[routeKey]?.verificationProfileId ??
+          "standard",
+      });
+    },
+    [
+      batchBuilderEntryMode,
+      batchBuilderLaunchIntent,
+      batchMetricsByRoute,
+      routeAggregateMetricsByRoute,
+      routeAnchorRowByKey,
+      routeGroupByKey,
+      routeManifestByKey,
+      routeVerificationByKey,
+      routeVerificationProfileByKey,
+      savedRoutePackByKey,
+    ],
+  );
+
   const openRouteWorkbench = useCallback(
     (
       routeKey: string,
-      mode: "summary" | "batch_builder" = "summary",
-      launchContext?: { intentLabel?: string; batchEntryMode?: "core" | "filler" | "loop" },
+      mode: RouteWorkbenchMode = "summary",
+      _launchContext?: { intentLabel?: string; batchEntryMode?: "core" | "filler" | "loop" },
     ) => {
       setActiveRouteGroupKey(routeKey);
       setRouteWorkbenchMode(mode);
-      if (mode === "batch_builder") {
-        openBatchBuilderForRoute(routeKey, launchContext);
-        return;
-      }
+      setActiveRouteWorkbenchSection(
+        mode === "execution"
+          ? "execution"
+          : mode === "verification"
+            ? "verification"
+            : mode === "filler"
+              ? "filler"
+              : "summary",
+      );
+      setActiveSavedRoutePackRouteKey(savedRoutePackByKey[routeKey] ? routeKey : null);
+      setActiveSavedRoutePackRef(getWorkbenchPackForRoute(routeKey));
       scrollToRouteGroup(routeKey);
     },
-    [openBatchBuilderForRoute, scrollToRouteGroup],
+    [getWorkbenchPackForRoute, savedRoutePackByKey, scrollToRouteGroup],
   );
 
   const verifyRouteGroup = useCallback(
@@ -4617,7 +4672,10 @@ export function ScanResultsTable({
   );
 
   const openSavedRoutePack = useCallback(
-    (pack: SavedRoutePack) => {
+    (
+      pack: SavedRoutePack,
+      mode: RouteWorkbenchMode = "summary",
+    ) => {
       const routeGroup = routeGroupByKey[pack.routeKey];
       if (!routeGroup) {
         addToast("Route is not present in current scan results.", "warning");
@@ -4630,13 +4688,18 @@ export function ScanResultsTable({
       if (selected.length > 0) {
         setSelectedIds(new Set(selected));
       }
-      openRouteWorkbench(pack.routeKey, "batch_builder", {
-        batchEntryMode: pack.entryMode,
-        intentLabel: pack.launchIntent ?? undefined,
-      });
+      setActiveSavedRoutePackRouteKey(pack.routeKey);
+      setActiveSavedRoutePackRef(pack);
+      openRouteWorkbench(pack.routeKey, mode);
     },
     [addToast, openRouteWorkbench, routeGroupByKey],
   );
+
+  const activeWorkbenchPack = useMemo(() => {
+    if (activeSavedRoutePackRef) return activeSavedRoutePackRef;
+    if (!activeRouteGroupKey) return null;
+    return getWorkbenchPackForRoute(activeRouteGroupKey);
+  }, [activeRouteGroupKey, activeSavedRoutePackRef, getWorkbenchPackForRoute]);
 
   const routeFillerCandidatesByKey = useMemo<
     Record<string, { remainingCapacityM3: number; candidates: FillerCandidate[] }>
@@ -5740,6 +5803,87 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
         />
       )}
 
+      {!isRegionGrouped && activeWorkbenchPack && activeRouteGroupKey && (
+        <RouteWorkbenchPanel
+          pack={activeWorkbenchPack}
+          mode={routeWorkbenchMode}
+          activeSection={activeRouteWorkbenchSection}
+          isPinned={Boolean(savedRoutePackByKey[activeWorkbenchPack.routeKey])}
+          verificationProfileId={
+            routeVerificationProfileByKey[activeWorkbenchPack.routeKey] ??
+            activeWorkbenchPack.verificationProfileId ??
+            "standard"
+          }
+          onVerificationProfileChange={(profileId) => {
+            setRouteVerificationProfileByKey((prev) => ({
+              ...prev,
+              [activeWorkbenchPack.routeKey]: profileId,
+            }));
+            if (savedRoutePackByKey[activeWorkbenchPack.routeKey]) {
+              updateSavedPackExecution(activeWorkbenchPack.routeKey, (current) => ({
+                ...current,
+                verificationProfileId: profileId,
+                updatedAt: new Date().toISOString(),
+              }));
+            }
+          }}
+          onVerifyNow={() =>
+            verifyRouteGroup(
+              activeWorkbenchPack.routeKey,
+              routeVerificationProfileByKey[activeWorkbenchPack.routeKey] ??
+                activeWorkbenchPack.verificationProfileId ??
+                "standard",
+            )
+          }
+          onMarkBought={(lineKey, qty) => {
+            const line = activeWorkbenchPack.lines[lineKey];
+            if (!line) return;
+            updateSavedPackExecution(activeWorkbenchPack.routeKey, (current) =>
+              markLineBought(
+                current,
+                activeWorkbenchPack.routeKey,
+                lineKey,
+                qty,
+                qty * line.plannedBuyPrice,
+              ),
+            );
+          }}
+          onMarkSold={(lineKey, qty) => {
+            const line = activeWorkbenchPack.lines[lineKey];
+            if (!line) return;
+            updateSavedPackExecution(activeWorkbenchPack.routeKey, (current) =>
+              markLineSold(
+                current,
+                activeWorkbenchPack.routeKey,
+                lineKey,
+                qty,
+                qty * line.plannedSellPrice,
+              ),
+            );
+          }}
+          onMarkSkipped={(lineKey, reason) =>
+            updateSavedPackExecution(activeWorkbenchPack.routeKey, (current) =>
+              markLineSkipped(current, activeWorkbenchPack.routeKey, lineKey, reason),
+            )
+          }
+          onResetLine={(lineKey) =>
+            updateSavedPackExecution(activeWorkbenchPack.routeKey, (current) =>
+              resetLineState(current, activeWorkbenchPack.routeKey, lineKey),
+            )
+          }
+          onCopySummary={() => copySavedRoutePack(activeWorkbenchPack.routeKey)}
+          onCopyManifest={() => copySavedRoutePack(activeWorkbenchPack.routeKey)}
+          onTogglePin={() => toggleSavedRoutePack(activeWorkbenchPack.routeKey)}
+          onOpenBatchBuilder={() =>
+            openBatchBuilderForRoute(activeWorkbenchPack.routeKey, {
+              intentLabel: "Primary",
+              batchEntryMode: "core",
+            })
+          }
+          onScrollToTable={() => scrollToRouteGroup(activeWorkbenchPack.routeKey)}
+        />
+      )}
+
       {/* Table */}
       <div className="flex-1 min-h-0 flex flex-col border border-eve-border rounded-sm overflow-auto table-scroll-container">
         <table className="w-full text-sm">
@@ -6276,8 +6420,25 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                                       type="button"
                                       onClick={() => openRouteWorkbench(group.key, "summary")}
                                       className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
+                                      aria-label={`Open route workbench summary for ${group.label}`}
                                     >
-                                      Scroll
+                                      Summary
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => openRouteWorkbench(group.key, "execution")}
+                                      className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
+                                      aria-label={`Open route workbench execution for ${group.label}`}
+                                    >
+                                      Exec
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => openRouteWorkbench(group.key, "verification")}
+                                      className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
+                                      aria-label={`Open route workbench verification for ${group.label}`}
+                                    >
+                                      Verify panel
                                     </button>
                                     <button
                                       type="button"
