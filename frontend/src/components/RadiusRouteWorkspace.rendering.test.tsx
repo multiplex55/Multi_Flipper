@@ -4,6 +4,7 @@ import { I18nProvider } from "@/lib/i18n";
 import { ToastProvider } from "@/components/Toast";
 import { RadiusRouteWorkspace } from "@/components/RadiusRouteWorkspace";
 import { deriveRadiusScanSession } from "@/lib/radiusScanSession";
+import type { RadiusScanSession } from "@/lib/radiusScanSession";
 import type { FlipResult, ScanParams } from "@/lib/types";
 import { createSessionStationFilters } from "@/lib/banlistFilters";
 
@@ -44,7 +45,7 @@ function makeFlip(overrides: Partial<FlipResult> = {}): FlipResult {
   } as FlipResult;
 }
 
-function renderWorkspace(session = null) {
+function renderWorkspace(session: RadiusScanSession | null = null) {
   return render(
     <I18nProvider>
       <ToastProvider>
