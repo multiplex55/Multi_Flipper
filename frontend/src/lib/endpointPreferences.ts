@@ -15,9 +15,13 @@ export type EndpointPreferenceProfile = {
 };
 
 export enum EndpointPreferenceApplicationMode {
+  Disabled = "disabled",
+  RankOnly = "rank_only",
   Hide = "hide",
-  Deprioritize = "deprioritize",
+  Deprioritize = "rank_only",
 }
+
+export type EndpointPreferenceMode = EndpointPreferenceApplicationMode;
 
 export type EndpointPreferenceRuleResult = {
   rule: string;
@@ -59,9 +63,20 @@ export const DEFAULT_ENDPOINT_PREFERENCE_PROFILE: EndpointPreferenceProfile = {
 };
 
 export const ENDPOINT_PREFERENCE_PRESETS: Record<
-  "safe_arbitrage" | "structure_exit" | "low_attention",
+  "neutral" | "safe_arbitrage" | "structure_exit" | "low_attention",
   EndpointPreferenceProfile
 > = {
+  neutral: {
+    buyHubPenalty: 0,
+    nonHubBuyBonus: 0,
+    sellStructureBonus: 0,
+    routeDirectionBonus: 0,
+    deadheadPenalty: 0,
+    requireSellStructure: false,
+    requireSellNpc: false,
+    requireNonHubBuy: false,
+    requireHubSell: false,
+  },
   safe_arbitrage: {
     buyHubPenalty: -16,
     nonHubBuyBonus: 4,
@@ -270,6 +285,14 @@ export function evaluateEndpointPreferences(
   majorHubSystems: string[],
   mode: EndpointPreferenceApplicationMode,
 ): EndpointPreferenceEvaluation {
+  if (mode === EndpointPreferenceApplicationMode.Disabled) {
+    return {
+      scoreDelta: 0,
+      excluded: false,
+      excludedReasons: [],
+      appliedRules: [],
+    };
+  }
   const softRuleResults = evaluateEndpointPreferenceRules(row, profile, majorHubSystems);
   const scoreDelta = softRuleResults.reduce((sum, entry) => sum + entry.scoreDelta, 0);
   const excludedReasons = evaluateHardConstraintViolations(

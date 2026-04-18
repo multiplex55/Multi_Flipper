@@ -1618,13 +1618,17 @@ export function ScanResultsTable({
     useState<EndpointPreferenceApplicationMode>(() => {
       try {
         const raw = localStorage.getItem(ENDPOINT_PREFS_STORAGE_KEY);
-        if (!raw) return EndpointPreferenceApplicationMode.Deprioritize;
+        if (!raw) return EndpointPreferenceApplicationMode.RankOnly;
         const parsed = JSON.parse(raw) as { mode?: string };
-        return parsed.mode === EndpointPreferenceApplicationMode.Hide
-          ? EndpointPreferenceApplicationMode.Hide
-          : EndpointPreferenceApplicationMode.Deprioritize;
+        if (parsed.mode === EndpointPreferenceApplicationMode.Disabled) {
+          return EndpointPreferenceApplicationMode.Disabled;
+        }
+        if (parsed.mode === EndpointPreferenceApplicationMode.Hide) {
+          return EndpointPreferenceApplicationMode.Hide;
+        }
+        return EndpointPreferenceApplicationMode.RankOnly;
       } catch {
-        return EndpointPreferenceApplicationMode.Deprioritize;
+        return EndpointPreferenceApplicationMode.RankOnly;
       }
     });
   const [endpointPresetSelection, setEndpointPresetSelection] = useState<
@@ -2226,13 +2230,19 @@ export function ScanResultsTable({
     if (endpointPreferenceProfile.requireHubSell) active.push("sell: hub");
     if (endpointPreferenceProfile.requireSellStructure) active.push("sell: structure");
     if (endpointPreferenceProfile.requireSellNpc) active.push("sell: NPC");
-    if (active.length === 0) return "Hard rules: none (soft ranking only)";
+    if (endpointPreferenceMode === EndpointPreferenceApplicationMode.Disabled) {
+      return t("endpointPreferencesSummaryDisabled");
+    }
+    if (active.length === 0) return t("endpointPreferencesSummaryNoHardRules");
     const modeLabel =
       endpointPreferenceMode === EndpointPreferenceApplicationMode.Hide
-        ? "Hide non-matching"
-        : "Rank-only";
-    return `Hard rules (${modeLabel}): ${active.join(", ")}`;
-  }, [endpointPreferenceMode, endpointPreferenceProfile]);
+        ? t("endpointPreferenceModeHide")
+        : t("endpointPreferenceModeRankOnly");
+    return t("endpointPreferencesSummaryHardRules", {
+      modeLabel,
+      rules: active.join(", "),
+    });
+  }, [endpointPreferenceMode, endpointPreferenceProfile, t]);
 
   useEffect(() => {
     if (columnDefs.length === 0) return;
@@ -4380,16 +4390,22 @@ export function ScanResultsTable({
     if (endpointPreferenceProfile.requireSellStructure) endpointFlags.push("sell structure");
     if (endpointPreferenceProfile.requireSellNpc) endpointFlags.push("sell npc");
     if (
-      endpointPreferenceMode !== EndpointPreferenceApplicationMode.Deprioritize ||
+      endpointPreferenceMode !== EndpointPreferenceApplicationMode.RankOnly ||
       endpointFlags.length > 0
     ) {
       chips.push({
         key: "endpoint-preferences",
-        label: `Endpoint: ${endpointPreferenceMode}${endpointFlags.length > 0 ? ` • ${endpointFlags.join(", ")}` : ""}`,
+        label: `Endpoint: ${
+          endpointPreferenceMode === EndpointPreferenceApplicationMode.Disabled
+            ? t("endpointPreferenceModeDisabled")
+            : endpointPreferenceMode === EndpointPreferenceApplicationMode.Hide
+              ? t("endpointPreferenceModeHide")
+              : t("endpointPreferenceModeRankOnly")
+        }${endpointFlags.length > 0 ? ` • ${endpointFlags.join(", ")}` : ""}`,
         impactCount:
           stageCounts.session_hard_ignores - stageCounts.endpoint_hard_rules,
         onRemove: () => {
-          setEndpointPreferenceMode(EndpointPreferenceApplicationMode.Deprioritize);
+          setEndpointPreferenceMode(EndpointPreferenceApplicationMode.RankOnly);
           setEndpointPreferenceProfile(DEFAULT_ENDPOINT_PREFERENCE_PROFILE);
           setEndpointPresetSelection("");
         },
@@ -5438,22 +5454,26 @@ export function ScanResultsTable({
                       aria-label="Endpoint preferences"
                       className="absolute z-40 mt-1 min-w-[320px] rounded-sm border border-eve-border bg-eve-panel p-2 shadow-2xl"
                     >
-                      <div className="mb-1 text-eve-dim">Endpoint mode</div>
+                      <div className="mb-1 text-eve-dim">{t("endpointPreferenceModeLabel")}</div>
                       <select
                         value={endpointPreferenceMode}
                         onChange={(e) =>
                           setEndpointPreferenceMode(
-                            e.target.value === EndpointPreferenceApplicationMode.Hide
-                              ? EndpointPreferenceApplicationMode.Hide
-                              : EndpointPreferenceApplicationMode.Deprioritize,
+                            e.target.value === EndpointPreferenceApplicationMode.Disabled
+                              ? EndpointPreferenceApplicationMode.Disabled
+                              : e.target.value === EndpointPreferenceApplicationMode.Hide
+                                ? EndpointPreferenceApplicationMode.Hide
+                                : EndpointPreferenceApplicationMode.RankOnly,
                           )
                         }
                         className="mb-2 w-full bg-eve-input border border-eve-border rounded-sm px-1 py-0.5 text-[11px]"
                       >
-                        <option value={EndpointPreferenceApplicationMode.Deprioritize}>Rank-only</option>
-                        <option value={EndpointPreferenceApplicationMode.Hide}>Hide non-matching</option>
+                        <option value={EndpointPreferenceApplicationMode.Disabled}>{t("endpointPreferenceModeDisabled")}</option>
+                        <option value={EndpointPreferenceApplicationMode.RankOnly}>{t("endpointPreferenceModeRankOnly")}</option>
+                        <option value={EndpointPreferenceApplicationMode.Hide}>{t("endpointPreferenceModeHide")}</option>
                       </select>
-                      <div className="mb-1 text-eve-dim">Preset</div>
+                      <div className="mb-2 text-[10px] text-eve-dim">{t("endpointPreferenceModeHelp")}</div>
+                      <div className="mb-1 text-eve-dim">{t("endpointPreferencePresetLabel")}</div>
                       <select
                         value={endpointPresetSelection}
                         onChange={(e) => {
@@ -5471,10 +5491,11 @@ export function ScanResultsTable({
                         className="mb-2 w-full bg-eve-input border border-eve-border rounded-sm px-1 py-0.5 text-[11px]"
                         title="Quick profile preset"
                       >
-                        <option value="">Preset…</option>
-                        <option value="safe_arbitrage">Safe Arbitrage</option>
-                        <option value="structure_exit">Structure Exit</option>
-                        <option value="low_attention">Low Attention</option>
+                        <option value="">{t("endpointPreferencePresetPlaceholder")}</option>
+                        <option value="neutral">{t("endpointPreferencePresetNeutral")}</option>
+                        <option value="safe_arbitrage">{t("endpointPreferencePresetSafeArbitrage")}</option>
+                        <option value="structure_exit">{t("endpointPreferencePresetStructureExit")}</option>
+                        <option value="low_attention">{t("endpointPreferencePresetLowAttention")}</option>
                       </select>
                       <div className="mb-1 text-eve-dim">Buy endpoint type</div>
                       <select
