@@ -133,6 +133,13 @@ import { RouteWorkbenchPanel, type RouteWorkbenchMode, type RouteWorkbenchSectio
 import {
   getVerificationProfileById,
 } from "@/lib/verificationProfiles";
+import { OneLegModePanel } from "@/features/oneLegMode/OneLegModePanel";
+import {
+  buildOneLegFillers,
+  buildOneLegSuggestions,
+  sameLegKey,
+  verifyOneLegSelection,
+} from "@/features/oneLegMode/oneLegMode";
 import {
   calcRouteConfidence as calcRouteConfidenceFromInsights,
   deriveRadiusRouteInsights,
@@ -159,6 +166,7 @@ const ENDPOINT_PREFS_STORAGE_KEY = "eve-radius-endpoint-preferences:v1";
 const ADVANCED_TOOLBAR_VISIBLE_STORAGE_KEY =
   "eve-radius-advanced-toolbar-visible:v1";
 const COMPACT_DASHBOARD_STORAGE_KEY = "eve-radius-compact-dashboard:v1";
+const ONE_LEG_MODE_STORAGE_KEY = "eve-radius-one-leg-mode:v1";
 const PERFORMANCE_LOG_THRESHOLD_MS = 8;
 
 type SyntheticSortKey =
@@ -1652,6 +1660,17 @@ export function ScanResultsTable({
   const [routeSafetyModal, setRouteSafetyModal] = useState<{
     systems: SystemDanger[];
   } | null>(null);
+  const [oneLegModeEnabled, setOneLegModeEnabled] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem(ONE_LEG_MODE_STORAGE_KEY);
+      if (stored != null) return stored === "1";
+    } catch {
+      // ignore storage errors
+    }
+    return featureConfig.defaultViewMode === "rows";
+  });
+  const [oneLegVerificationResult, setOneLegVerificationResult] =
+    useState<RouteVerificationResult | null>(null);
 
   const isRegionGrouped = columnProfile === "region_eveguru";
   const allowRouteGrouping = featureConfig.allowRouteGrouping;
@@ -3411,6 +3430,67 @@ export function ScanResultsTable({
     selectedIds,
     selectionScopeRows,
   ]);
+  const focusedRowEntry = useMemo(
+    () => selectionScopeRows.find((entry) => entry.id === focusedRowId) ?? null,
+    [focusedRowId, selectionScopeRows],
+  );
+  const selectedOneLegAnchor = useMemo(() => {
+    if (focusedRowEntry) return focusedRowEntry.row;
+    const selected = selectionScopeRows.find((entry) => selectedIds.has(entry.id));
+    return selected?.row ?? null;
+  }, [focusedRowEntry, selectedIds, selectionScopeRows]);
+  const selectedOneLegBatchRows = useMemo(() => {
+    if (!selectedOneLegAnchor) return [] as FlipResult[];
+    const selectedRows = selectionScopeRows
+      .filter((entry) => selectedIds.has(entry.id))
+      .map((entry) => entry.row);
+    const scopeRows = selectedRows.length > 0 ? selectedRows : [selectedOneLegAnchor];
+    return scopeRows.filter((row) => sameLegKey(row) === sameLegKey(selectedOneLegAnchor));
+  }, [selectedIds, selectedOneLegAnchor, selectionScopeRows]);
+  const datasetFlipRows = useMemo(
+    () => datasetRows.map((entry) => entry.row),
+    [datasetRows],
+  );
+  const oneLegSuggestions = useMemo(() => {
+    if (!selectedOneLegAnchor || !oneLegModeEnabled) {
+      return { sameLeg: [], sameOriginOrDestination: [], nextBestTrade: [] };
+    }
+    return buildOneLegSuggestions({
+      rows: datasetFlipRows,
+      anchor: selectedOneLegAnchor,
+      cargoLimit,
+      profile: opportunityProfile,
+      context: displayScoreContext,
+    });
+  }, [
+    cargoLimit,
+    datasetFlipRows,
+    displayScoreContext,
+    oneLegModeEnabled,
+    opportunityProfile,
+    selectedOneLegAnchor,
+  ]);
+  const oneLegFillers = useMemo(() => {
+    if (!selectedOneLegAnchor || !oneLegModeEnabled) {
+      return { remainingCapacityM3: 0, candidates: [] };
+    }
+    return buildOneLegFillers({
+      rows: datasetFlipRows,
+      anchor: selectedOneLegAnchor,
+      cargoLimit,
+    });
+  }, [cargoLimit, datasetFlipRows, oneLegModeEnabled, selectedOneLegAnchor]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ONE_LEG_MODE_STORAGE_KEY, oneLegModeEnabled ? "1" : "0");
+    } catch {
+      // ignore storage errors
+    }
+  }, [oneLegModeEnabled]);
+  useEffect(() => {
+    setOneLegVerificationResult(null);
+  }, [selectedOneLegAnchor, selectedIds, oneLegModeEnabled]);
 
   const { totalPages, safePage } = useMemo(() => {
     if (isRegionGrouped) {
@@ -4596,6 +4676,22 @@ export function ScanResultsTable({
       savedRoutePackByKey,
     ],
   );
+  const verifyOneLegBatch = useCallback(() => {
+    if (!selectedOneLegAnchor || selectedOneLegBatchRows.length === 0) return;
+    const result = verifyOneLegSelection({
+      batchRows: selectedOneLegBatchRows,
+      profileId: "standard",
+    });
+    setOneLegVerificationResult(result);
+    addToast(
+      `One-leg verify ${result.status} · ${result.offenders.length} offenders`,
+      result.status === "Abort"
+        ? "error"
+        : result.status === "Reduced edge"
+          ? "warning"
+          : "success",
+    );
+  }, [addToast, selectedOneLegAnchor, selectedOneLegBatchRows]);
 
   const openSavedRoutePack = useCallback(
     (
@@ -4723,6 +4819,7 @@ export function ScanResultsTable({
         onToggleVariantGroup={toggleItemGroupExpanded}
         onContextMenu={handleContextMenu}
         onLmbClick={onLmbClick}
+        onActivateRow={() => setFocusedRowId(ir.id)}
         onToggleSelect={toggleSelect}
         onTogglePin={togglePin}
         tFn={t}
@@ -4946,6 +5043,22 @@ export function ScanResultsTable({
                 active={compactRows}
                 onClick={() => setCompactRows((v) => !v)}
               />
+            )}
+            {isRadiusMode &&
+              !isRegionGrouped &&
+              effectiveRouteViewMode === "rows" && (
+              <button
+                type="button"
+                className={`rounded-sm border px-1.5 py-0.5 text-[10px] transition-colors ${
+                  oneLegModeEnabled
+                    ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10"
+                    : "border-eve-border/60 text-eve-dim hover:text-eve-text"
+                }`}
+                onClick={() => setOneLegModeEnabled((prev) => !prev)}
+                data-testid="one-leg-mode-toggle"
+              >
+                One-leg mode {oneLegModeEnabled ? "On" : "Off"}
+              </button>
             )}
           </div>
           <div data-testid="radius-toolbar-secondary-actions" className="flex flex-wrap items-center gap-1">
@@ -6607,6 +6720,18 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
           )}
         </div>
       )}
+      {isRadiusMode && effectiveRouteViewMode === "rows" && (
+        <OneLegModePanel
+          enabled={oneLegModeEnabled}
+          anchor={selectedOneLegAnchor}
+          batchRows={selectedOneLegBatchRows}
+          sameEndpoint={oneLegSuggestions.sameOriginOrDestination}
+          nextBest={oneLegSuggestions.nextBestTrade}
+          fillers={oneLegFillers}
+          verificationResult={oneLegVerificationResult}
+          onVerifySelection={verifyOneLegBatch}
+        />
+      )}
 
       {scoreExplainRow && (
         <div
@@ -7183,6 +7308,7 @@ interface DataRowProps {
     row: FlipResult,
   ) => void;
   onLmbClick: (row: FlipResult) => void;
+  onActivateRow: () => void;
   onToggleSelect: (id: number) => void;
   onTogglePin: (row: FlipResult) => void;
   tFn: (key: TranslationKey, vars?: Record<string, string | number>) => string;
@@ -7297,8 +7423,9 @@ const DataRow = memo(
     variantExpanded,
     onToggleVariantGroup,
     onContextMenu,
-    onLmbClick,
-    onToggleSelect,
+  onLmbClick,
+  onActivateRow,
+  onToggleSelect,
     onTogglePin,
     tFn,
     routeSafetyEntry,
@@ -7321,10 +7448,12 @@ const DataRow = memo(
         data-filter-reason-codes={debugReasonCodes.join(",")}
         onContextMenu={(e) => onContextMenu(e, ir.id, ir.row)}
         onClick={(e) => {
-          if (!isRegionGrouped) return;
           const target = e.target as HTMLElement;
           if (target.closest("input,button,a")) return;
-          onLmbClick(ir.row);
+          onActivateRow();
+          if (isRegionGrouped) {
+            onLmbClick(ir.row);
+          }
         }}
         className={`border-b border-eve-border/50 hover:bg-eve-accent/5 transition-colors cursor-pointer ${compactMode ? "text-xs" : ""} ${
           isFocused
@@ -7502,6 +7631,7 @@ const DataRow = memo(
     prev.onToggleVariantGroup === next.onToggleVariantGroup &&
     prev.onContextMenu === next.onContextMenu &&
     prev.onLmbClick === next.onLmbClick &&
+    prev.onActivateRow === next.onActivateRow &&
     prev.onToggleSelect === next.onToggleSelect &&
     prev.onTogglePin === next.onTogglePin &&
     prev.routeSafetyEntry === next.routeSafetyEntry &&
