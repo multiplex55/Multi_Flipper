@@ -90,6 +90,8 @@ type Tab =
   | "plex"
   | "pinned";
 
+type RouteWorkspaceMode = "discover" | "workbench" | "finder" | "validate";
+
 type AlertChannels = {
   telegram: boolean;
   discord: boolean;
@@ -701,6 +703,11 @@ function App() {
   const [routeLoadedResults, setRouteLoadedResults] = useState<
     RouteResult[] | null
   >(null);
+  const [activeRadiusRouteKey, setActiveRadiusRouteKey] = useState<string | null>(null);
+  const [routeWorkspaceMode, setRouteWorkspaceMode] =
+    useState<RouteWorkspaceMode>("discover");
+  const [routeWorkspaceSource, setRouteWorkspaceSource] = useState<"radius" | "finder">("radius");
+  const [routeQueueKeys, setRouteQueueKeys] = useState<string[]>([]);
   const [bannedTypeIDs, setBannedTypeIDs] = useState<number[]>([]);
   const [bannedStationIDs, setBannedStationIDs] = useState<number[]>([]);
   const [sessionStationFilters, setSessionStationFilters] =
@@ -777,6 +784,25 @@ function App() {
       setSessionStationFilters((prev) => updater(prev));
     },
     [],
+  );
+  const openRouteWorkspaceFromRadius = useCallback(
+    (routeKey: string, mode: RouteWorkspaceMode) => {
+      setActiveRadiusRouteKey(routeKey);
+      setRouteWorkspaceMode(mode);
+      setRouteWorkspaceSource("radius");
+      setTab("route");
+    },
+    [setTab],
+  );
+  const sendRouteToQueueFromRadius = useCallback(
+    (routeKey: string) => {
+      setRouteQueueKeys((prev) => {
+        if (prev.includes(routeKey)) return prev;
+        return [...prev, routeKey];
+      });
+      openRouteWorkspaceFromRadius(routeKey, "discover");
+    },
+    [openRouteWorkspaceFromRadius],
   );
 
   const abortRef = useRef<AbortController | null>(null);
@@ -2367,6 +2393,13 @@ const handleScanAndRefresh = useCallback(async () => {
                 loopOpportunities={loopOpportunities}
                 sessionStationFilters={sessionStationFilters}
                 onUpdateSessionStationFilters={updateSessionStationFilters}
+                onOpenInRoute={(routeKey) =>
+                  openRouteWorkspaceFromRadius(routeKey, "discover")
+                }
+                onOpenInRouteWorkbench={(routeKey) =>
+                  openRouteWorkspaceFromRadius(routeKey, "workbench")
+                }
+                onSendToRouteQueue={sendRouteToQueueFromRadius}
                 featureConfig={RADIUS_SCAN_RESULTS_FEATURE_CONFIG}
               />
             </div>
@@ -2515,6 +2548,14 @@ const handleScanAndRefresh = useCallback(async () => {
                 routeLoadedResults={routeLoadedResults}
                 isLoggedIn={authStatus.logged_in}
                 radiusScanSession={radiusScanSession}
+                activeRouteKey={activeRadiusRouteKey}
+                workspaceMode={routeWorkspaceMode}
+                onWorkspaceModeChange={(mode) => {
+                  setRouteWorkspaceMode(mode);
+                  setRouteWorkspaceSource(mode === "finder" ? "finder" : "radius");
+                }}
+                workspaceSource={routeWorkspaceSource}
+                routeQueueKeys={routeQueueKeys}
               />
             </div>
             <div
