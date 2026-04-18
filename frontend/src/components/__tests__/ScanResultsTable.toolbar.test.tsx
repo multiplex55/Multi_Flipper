@@ -111,4 +111,27 @@ describe("ScanResultsTable advanced toolbar", () => {
     expect(screen.getByRole("button", { name: /advanced ▾/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /endpoint prefs ▸/i })).toBeInTheDocument();
   });
+
+  it("toggles ordering mode and updates pins-first control state", () => {
+    renderTable([makeRow(), makeRow({ TypeID: 102, TypeName: "Item 102" })]);
+    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
+
+    const smartButton = screen.getByTestId("ordering-mode-toggle:smart");
+    const columnOnlyButton = screen.getByTestId("ordering-mode-toggle:column_only");
+    const pinsFirstToggle = screen.getByTestId("pins-first-toggle") as HTMLInputElement;
+
+    expect(smartButton).toBeInTheDocument();
+    expect(columnOnlyButton).toBeInTheDocument();
+    expect(pinsFirstToggle.checked).toBe(true);
+    expect(pinsFirstToggle.disabled).toBe(false);
+
+    fireEvent.click(columnOnlyButton);
+    expect(pinsFirstToggle.disabled).toBe(true);
+
+    fireEvent.click(smartButton);
+    expect(pinsFirstToggle.disabled).toBe(false);
+
+    fireEvent.click(pinsFirstToggle);
+    expect(pinsFirstToggle.checked).toBe(false);
+  });
 });
