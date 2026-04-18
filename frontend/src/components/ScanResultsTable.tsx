@@ -159,6 +159,12 @@ import {
   type RouteHandoffEntryAction,
   type RouteHandoffLegContext,
 } from "@/lib/routeHandoff";
+import {
+  compareRowsStable,
+  compareScanRows,
+  type OrderingMode,
+  type SortDir,
+} from "@/components/scanResultsOrdering";
 
 export const calcRouteConfidence = calcRouteConfidenceFromInsights;
 
@@ -220,7 +226,6 @@ type SyntheticSortKey =
   | "SlippageCostIsk"
   | "UrgencyScore";
 type SortKey = keyof FlipResult | SyntheticSortKey;
-type SortDir = "asc" | "desc";
 type RegionGroupSortMode = "period_profit" | "now_profit" | "trade_score";
 type HiddenMode = "done" | "ignored";
 type HiddenFilterTab = "all" | "done" | "ignored";
@@ -1034,6 +1039,7 @@ function getRowId(row: FlipResult): number {
 /* ─── IndexedRow: carries stable identity for rows ─── */
 interface IndexedRow {
   id: number; // stable id from WeakMap
+  sourceIndex: number;
   row: FlipResult;
   endpointPreferences?: EndpointPreferenceEvaluation;
 }
@@ -1390,18 +1396,6 @@ function fmtCell(
   return String(val ?? "");
 }
 
-function compareRowsStable(a: IndexedRow, b: IndexedRow): number {
-  const typeDiff = (a.row.TypeID ?? 0) - (b.row.TypeID ?? 0);
-  if (typeDiff !== 0) return typeDiff;
-  const routeCmp = radiusRouteKey(a.row).localeCompare(radiusRouteKey(b.row));
-  if (routeCmp !== 0) return routeCmp;
-  const typeNameCmp = String(a.row.TypeName ?? "").localeCompare(
-    String(b.row.TypeName ?? ""),
-  );
-  if (typeNameCmp !== 0) return typeNameCmp;
-  return a.id - b.id;
-}
-
 function routeAggregateValueForSortKey(
   metrics: RouteAggregateMetrics | undefined,
   sortKey: SortKey,
@@ -1528,6 +1522,8 @@ export function ScanResultsTable({
     columnProfile === "region_eveguru" ? "DayPeriodProfit" : "RealProfit",
   );
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [orderingMode, setOrderingMode] = useState<OrderingMode>("smart");
+  const [pinsFirst, setPinsFirst] = useState(true);
   const [decisionLens, setDecisionLens] = useState<
     "custom" | DecisionLensPreset
   >("recommended");
@@ -2316,7 +2312,7 @@ export function ScanResultsTable({
       sessionStationFilters,
     );
 
-    const indexed: IndexedRow[] = sessionVisibleRows.map((row) => {
+    const indexed: IndexedRow[] = sessionVisibleRows.map((row, sourceIndex) => {
       const endpointPreferences = evaluateEndpointPreferences(
         row,
         endpointPreferenceProfile,
@@ -2325,6 +2321,7 @@ export function ScanResultsTable({
       );
       return {
         id: getRowId(row),
+        sourceIndex,
         row,
         endpointPreferences,
       };
@@ -2407,80 +2404,41 @@ export function ScanResultsTable({
 
     const sorted = lockFiltered.slice();
     sorted.sort((a, b) => {
-      const aPin = pinnedKeys.has(
-        mapScanRowToPinnedOpportunity(a.row).opportunity_key,
-      );
-      const bPin = pinnedKeys.has(
-        mapScanRowToPinnedOpportunity(b.row).opportunity_key,
-      );
-      if (aPin !== bPin) return aPin ? -1 : 1;
-
-      if (trackedFirst) {
-        const aTracked = watchlistIds.has(a.row.TypeID);
-        const bTracked = watchlistIds.has(b.row.TypeID);
-        if (aTracked !== bTracked) return aTracked ? -1 : 1;
-      }
-
-      const aDeprioritized = isFlipResultDeprioritized(
-        a.row,
-        sessionStationFilters,
-      );
-      const bDeprioritized = isFlipResultDeprioritized(
-        b.row,
-        sessionStationFilters,
-      );
-      if (aDeprioritized !== bDeprioritized) return aDeprioritized ? 1 : -1;
-
-      const aEndpointDelta = a.endpointPreferences?.scoreDelta ?? 0;
-      const bEndpointDelta = b.endpointPreferences?.scoreDelta ?? 0;
-      if (aEndpointDelta !== bEndpointDelta) {
-        return bEndpointDelta - aEndpointDelta;
-      }
-
-      if (sortKey === ("RouteSafety" as SortKey)) {
-        const diff =
-          routeSafetyRankForRow(a.row) - routeSafetyRankForRow(b.row);
-        const primaryRisk = sortDir === "asc" ? diff : -diff;
-        if (primaryRisk !== 0) return primaryRisk;
-        return routeSafetyTieBreaker(a, b);
-      }
-
-      const av = getCellValue(
-        a.row,
+      return compareScanRows(a, b, {
+        orderingMode,
+        pinsFirst,
+        trackedFirst,
         sortKey,
-        batchMetricsByRow,
-        opportunityProfile,
-        filteredScoreContext,
-      );
-      const bv = getCellValue(
-        b.row,
-        sortKey,
-        batchMetricsByRow,
-        opportunityProfile,
-        filteredScoreContext,
-      );
-      if (isBatchSyntheticKey(sortKey)) {
-        const syntheticCmp = compareBatchSyntheticValues(
-          av as number | null,
-          bv as number | null,
-          sortDir,
-        );
-        if (syntheticCmp !== 0) return syntheticCmp;
-        return compareRowsStable(a, b);
-      }
-      if (typeof av === "number" || typeof bv === "number") {
-        if (av == null && bv == null) return compareRowsStable(a, b);
-        if (av == null) return 1;
-        if (bv == null) return -1;
-        const diff = (av as number) - (bv as number);
-        const primaryNum = sortDir === "asc" ? diff : -diff;
-        if (primaryNum !== 0) return primaryNum;
-        return compareRowsStable(a, b);
-      }
-      const cmp = String(av ?? "").localeCompare(String(bv ?? ""));
-      const primary = sortDir === "asc" ? cmp : -cmp;
-      if (primary !== 0) return primary;
-      return compareRowsStable(a, b);
+        sortDir,
+        getSmartSignals: (item) => ({
+          isPinned: pinnedKeys.has(
+            mapScanRowToPinnedOpportunity(item.row).opportunity_key,
+          ),
+          isTracked: watchlistIds.has(item.row.TypeID),
+          isSessionDeprioritized: isFlipResultDeprioritized(
+            item.row,
+            sessionStationFilters,
+          ),
+          endpointScoreDelta: item.endpointPreferences?.scoreDelta ?? 0,
+        }),
+        getCellValue: (row, key) =>
+          getCellValue(
+            row,
+            key,
+            batchMetricsByRow,
+            opportunityProfile,
+            filteredScoreContext,
+          ),
+        isBatchSyntheticKey: (key) => isBatchSyntheticKey(key as SortKey),
+        compareBatchSyntheticValues,
+        compareRouteSafety: (left, right) => {
+          const diff =
+            routeSafetyRankForRow(left.row) - routeSafetyRankForRow(right.row);
+          const primaryRisk = sortDir === "asc" ? diff : -diff;
+          if (primaryRisk !== 0) return primaryRisk;
+          return routeSafetyTieBreaker(left, right);
+        },
+      });
     });
 
     const totalByType = new Map<number, number>();
@@ -2529,6 +2487,8 @@ export function ScanResultsTable({
     columnDefs,
     sortKey,
     sortDir,
+    orderingMode,
+    pinsFirst,
     pinnedKeys,
     routeSafetyMap,
     batchMetricsByRoute,
@@ -5663,6 +5623,53 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
             >
               {t("urgencySortLabel")}
             </button>
+            <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
+              <span className="text-eve-dim px-1">{t("orderingModeLabel")}</span>
+              {([
+                ["smart", t("orderingModeSmartLabel"), t("orderingModeSmartDescription")],
+                [
+                  "column_only",
+                  t("orderingModeColumnOnlyLabel"),
+                  t("orderingModeColumnOnlyDescription"),
+                ],
+              ] as const).map(([mode, label, description]) => {
+                const active = orderingMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setOrderingMode(mode)}
+                    className={`px-1.5 py-0.5 rounded-sm border transition-colors ${
+                      active
+                        ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent"
+                        : "border-eve-border/50 text-eve-dim hover:text-eve-text"
+                    }`}
+                    title={description}
+                    data-testid={`ordering-mode-toggle:${mode}`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+              <label
+                className={`ml-1 inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 ${
+                  orderingMode === "smart"
+                    ? "border-eve-border/50 text-eve-dim hover:text-eve-text"
+                    : "border-eve-border/30 text-eve-dim/50"
+                }`}
+                title={t("pinsFirstHelp")}
+              >
+                <input
+                  type="checkbox"
+                  checked={pinsFirst}
+                  onChange={(e) => setPinsFirst(e.target.checked)}
+                  className="accent-eve-accent"
+                  disabled={orderingMode !== "smart"}
+                  data-testid="pins-first-toggle"
+                />
+                <span>{t("pinsFirstLabel")}</span>
+              </label>
+            </div>
 
             {!isRegionGrouped && !isRadiusMode && (
               <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
