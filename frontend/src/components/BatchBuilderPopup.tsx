@@ -29,6 +29,7 @@ import { Modal } from "./Modal";
 import { useGlobalToast } from "./Toast";
 import { filterFlipResults } from "@/lib/banlistFilters";
 import { getVerificationProfileById } from "@/lib/verificationProfiles";
+import type { FillerCandidate } from "@/lib/fillerCandidates";
 
 interface BatchBuilderPopupProps {
   open: boolean;
@@ -65,6 +66,7 @@ interface BatchBuilderPopupProps {
     snapshot: RouteManifestVerificationSnapshot,
   ) => void;
   verificationProfileId?: string;
+  precomputedFillerCandidates?: FillerCandidate[];
 }
 
 type RouteState = "idle" | "searching" | "results" | "selected";
@@ -291,6 +293,7 @@ export function BatchBuilderPopup({
   launchIntent = null,
   onManifestVerificationSnapshot,
   verificationProfileId = "standard",
+  precomputedFillerCandidates = [],
 }: BatchBuilderPopupProps) {
   const { t } = useI18n();
   const { addToast } = useGlobalToast();
@@ -1743,6 +1746,27 @@ export function BatchBuilderPopup({
                   {effectiveSelectedSummary.safe_filler_line_count} · Stretch{" "}
                   {effectiveSelectedSummary.stretch_filler_line_count}
                 </div>
+                {precomputedFillerCandidates.length > 0 && (
+                  <div className="mt-2 text-[11px] text-eve-dim">
+                    <div className="font-semibold text-eve-text/90">
+                      Route-ranked filler candidates
+                    </div>
+                    <div className="mt-1 grid grid-cols-1 md:grid-cols-3 gap-1">
+                      {precomputedFillerCandidates.slice(0, 6).map((candidate) => (
+                        <div
+                          key={candidate.lineKey}
+                          className="rounded-sm border border-eve-border/50 px-2 py-1"
+                        >
+                          <div className="text-eve-text truncate">{candidate.typeName}</div>
+                          <div>
+                            +{formatISK(candidate.incrementalProfitIsk)} ·{" "}
+                            {candidate.fitPercent.toFixed(0)}% fit
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {fillerLoading ? (
                   <div className="mt-2 text-xs text-eve-dim">Loading filler suggestions…</div>
                 ) : fillerSuggestions.length === 0 ? (

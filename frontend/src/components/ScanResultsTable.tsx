@@ -49,6 +49,11 @@ import {
   hasDestinationPriceSpike,
 } from "@/lib/executionQuality";
 import {
+  buildFillerCandidates,
+  summarizeTopFillerCandidates,
+  type FillerCandidate,
+} from "@/lib/fillerCandidates";
+import {
   type BatchSyntheticKey,
   compareBatchSyntheticValues,
   formatBatchSyntheticCell,
@@ -1895,16 +1900,6 @@ export function ScanResultsTable({
   >({});
   const [routeVerificationProfileByKey, setRouteVerificationProfileByKey] =
     useState<Record<string, string>>({});
-  const [routeFillerSummaryByKey, setRouteFillerSummaryByKey] = useState<
-    Record<
-      string,
-      {
-        remainingCapacityM3: number;
-        candidateCount: number;
-        estimatedIncrementalProfit: number;
-      }
-    >
-  >({});
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [filterSearch, setFilterSearch] = useState("");
   const filterPanelRef = useRef<HTMLDivElement>(null);
@@ -4643,46 +4638,46 @@ export function ScanResultsTable({
     [addToast, openRouteWorkbench, routeGroupByKey],
   );
 
-  useEffect(() => {
-    const newlyExpanded = Array.from(expandedRouteGroups).filter(
-      (routeKey) => !routeFillerSummaryByKey[routeKey],
-    );
-    if (newlyExpanded.length === 0) return;
-    const next: Record<
+  const routeFillerCandidatesByKey = useMemo<
+    Record<string, { remainingCapacityM3: number; candidates: FillerCandidate[] }>
+  >(() => {
+    if (!isRouteGrouped) return {};
+    const selectedLineKeys = new Set<string>();
+    for (const row of indexed) {
+      if (selectedIds.has(row.id)) {
+        selectedLineKeys.add(routeLineKey(row.row));
+      }
+    }
+    const out: Record<
       string,
-      {
-        remainingCapacityM3: number;
-        candidateCount: number;
-        estimatedIncrementalProfit: number;
-      }
+      { remainingCapacityM3: number; candidates: FillerCandidate[] }
     > = {};
-    for (const routeKey of newlyExpanded) {
-      const summary = batchMetricsByRoute[routeKey];
-      if (!summary) continue;
-      const remaining = summary.routeRemainingCargoM3 ?? 0;
-      const candidateCount = summary.routeUniverseExcludedItemCount;
-      if (!(remaining > 0) || candidateCount <= 0) continue;
-      const perItemProfit =
-        summary.routeItemCount > 0
-          ? summary.routeTotalProfit / summary.routeItemCount
-          : 0;
-      const estProfit = perItemProfit * Math.max(1, Math.min(candidateCount, 3)) * 0.2;
-      if (estProfit > 0) {
-        next[routeKey] = {
-          remainingCapacityM3: remaining,
-          candidateCount,
-          estimatedIncrementalProfit: estProfit,
-        };
-      }
+    for (const group of routeGroups) {
+      const summary = batchMetricsByRoute[group.key];
+      const remainingCargoM3 = summary?.routeRemainingCargoM3 ?? 0;
+      if (!(remainingCargoM3 > 0)) continue;
+      const selectedInGroup = group.rows
+        .map((item) => routeLineKey(item.row))
+        .filter((lineKey) => selectedLineKeys.has(lineKey));
+      const fallbackCore =
+        selectedInGroup.length > 0
+          ? selectedInGroup
+          : group.rows[0]
+            ? [routeLineKey(group.rows[0].row)]
+            : [];
+      const candidates = buildFillerCandidates({
+        routeRows: group.rows.map((item) => item.row),
+        selectedCoreLineKeys: fallbackCore,
+        remainingCargoM3,
+        remainingCapitalIsk: summary?.routeTotalCapital ?? Number.POSITIVE_INFINITY,
+        minConfidencePercent: 0,
+        minExecutionQuality: 0,
+      });
+      if (candidates.length === 0) continue;
+      out[group.key] = { remainingCapacityM3: remainingCargoM3, candidates };
     }
-    if (Object.keys(next).length > 0) {
-      setRouteFillerSummaryByKey((prev) => ({ ...prev, ...next }));
-    }
-  }, [
-    expandedRouteGroups,
-    routeFillerSummaryByKey,
-    batchMetricsByRoute,
-  ]);
+    return out;
+  }, [batchMetricsByRoute, indexed, isRouteGrouped, routeGroups, selectedIds]);
 
   // renderDataRow: renders a DataRow memo component — only the changed row re-renders
   const handleRouteSafetyClick = useCallback(
@@ -5978,7 +5973,14 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                           routeAggregateMetricsByRoute[group.key];
                         const routeScoreSummary =
                           routeScoreSummaryByRoute[group.key];
-                        const fillerSummary = routeFillerSummaryByKey[group.key];
+                        const fillerCandidatesEntry =
+                          routeFillerCandidatesByKey[group.key];
+                        const fillerSummary = fillerCandidatesEntry
+                          ? summarizeTopFillerCandidates(
+                              fillerCandidatesEntry.candidates,
+                              3,
+                            )
+                          : null;
                         const verification = routeVerificationByKey[group.key];
                         const badgeMetadata =
                           routeBadgeMetadataByRoute[group.key] ??
@@ -6211,15 +6213,15 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                                     })}{" "}
                                     m³
                                   </span>
-                                  {fillerSummary && (
+                                  {fillerSummary && fillerSummary.count > 0 && (
                                     <span
                                       className="text-emerald-300 font-mono"
                                       data-testid={`route-filler-summary:${group.key}`}
-                                      title="Estimated filler upside"
+                                      title="Top filler candidates from ranked solver"
                                     >
-                                      Fill {fillerSummary.remainingCapacityM3.toLocaleString(undefined, {
+                                      Fill {fillerCandidatesEntry.remainingCapacityM3.toLocaleString(undefined, {
                                         maximumFractionDigits: 1,
-                                      })}m³ · {fillerSummary.candidateCount} cands · +{formatISK(fillerSummary.estimatedIncrementalProfit)}
+                                      })}m³ · top {fillerSummary.count} · +{formatISK(fillerSummary.totalProfitIsk)}
                                     </span>
                                   )}
                                   <span
@@ -6968,6 +6970,11 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               savedRoutePackByKey[activeRouteGroupKey]?.verificationProfileId ??
               "standard"
             : "standard"
+        }
+        precomputedFillerCandidates={
+          activeRouteGroupKey
+            ? routeFillerCandidatesByKey[activeRouteGroupKey]?.candidates ?? []
+            : []
         }
         onManifestVerificationSnapshot={(routeKey, snapshot) =>
           setRouteManifestByKey((prev) => ({ ...prev, [routeKey]: snapshot }))

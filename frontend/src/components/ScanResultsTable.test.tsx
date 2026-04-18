@@ -2091,8 +2091,8 @@ describe("ScanResultsTable route filler header summary", () => {
       SellLocationID: core.SellLocationID,
       Volume: 5,
       UnitsToBuy: 1,
-      ProfitPerUnit: -1,
-      TotalProfit: -1,
+      ProfitPerUnit: 400,
+      TotalProfit: 400,
     });
     const noFill = makeRow({
       TypeID: 5003,
