@@ -216,6 +216,12 @@ function measureCalc<T>(name: string, run: () => T): T {
   return result;
 }
 
+function normalizeDecisionLensForRoute(
+  lens: DecisionLensPreset | "custom",
+): RouteDecisionLens {
+  return lens === "custom" ? "recommended" : lens;
+}
+
 type HiddenFlipEntry = {
   key: string;
   mode: HiddenMode;
@@ -3241,7 +3247,7 @@ export function ScanResultsTable({
     [suppressionTelemetry, topRoutePickCandidates],
   );
 
-  const previousLensRef = useRef<DecisionLensPreset>("recommended");
+  const previousLensRef = useRef<DecisionLensPreset | "custom">("recommended");
   useEffect(() => {
     previousLensRef.current = decisionLens;
   }, [decisionLens]);
@@ -3299,9 +3305,9 @@ export function ScanResultsTable({
                 (summary.routeRiskUnstableHistoryCount ?? 0) +
                 (summary.routeRiskThinFillCount ?? 0),
               staleVerificationPenalty:
-                routeVerificationByKey[routeKey]?.status === "Invalid" ? 12 : 0,
+                routeVerificationByKey[routeKey]?.status === "Abort" ? 12 : 0,
             },
-            decisionLens as RouteDecisionLens,
+            normalizeDecisionLensForRoute(decisionLens),
           );
         }
         return out;
@@ -3341,8 +3347,8 @@ export function ScanResultsTable({
             (summary.routeRiskUnstableHistoryCount ?? 0) +
             (summary.routeRiskThinFillCount ?? 0),
         },
-        previousLensRef.current as RouteDecisionLens,
-        decisionLens as RouteDecisionLens,
+        normalizeDecisionLensForRoute(previousLensRef.current),
+        normalizeDecisionLensForRoute(decisionLens),
       );
     }
     return out;
