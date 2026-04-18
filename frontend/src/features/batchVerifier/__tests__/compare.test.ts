@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildReasonText,
   classifyRow,
+  computeAggregateStats,
   compareManifestToExport,
+  getFinalVerdict,
 } from "@/features/batchVerifier/compare";
 import type { ExportItem, ManifestItem } from "@/features/batchVerifier/parsing";
 
@@ -162,6 +164,52 @@ describe("compareManifestToExport", () => {
     expect(result.summary.extraIskRequiredVsPlan).toBe(300);
     expect(result.summary.estimatedProfitLost).toBe(700);
     expect(result.summary.alertingRowsCount).toBe(0);
+  });
+
+  it("computes aggregate totals and counts for mixed rows", () => {
+    const result = compareManifestToExport(
+      [
+        manifest({ name: "Safe", qty: 10, buyPer: 100, buyTotal: 1000, sellPer: 130 }),
+        manifest({ name: "Reduced", qty: 5, buyPer: 50, buyTotal: 250, sellPer: 70 }),
+        manifest({ name: "Missing", qty: 3, buyPer: 30, buyTotal: 90, sellPer: 40 }),
+      ],
+      [
+        exportRow({ name: "Safe", qty: 10, buyPer: 100, buyTotal: 1000 }),
+        exportRow({ name: "Reduced", qty: 5, buyPer: 55, buyTotal: 275 }),
+      ],
+      { thresholdMode: "sell_value_evaluate" },
+    );
+
+    expect(result.aggregate).toMatchObject({
+      lineCount: 3,
+      matchedLineCount: 2,
+      missingBuyLines: 1,
+      reducedEdgeLineCount: 1,
+      totalPlannedBuy: 1340,
+      totalMatchedBuy: 1275,
+      totalPlannedSell: 1770,
+      verdict: "abort",
+    });
+  });
+
+  it("handles verdict threshold boundaries", () => {
+    expect(getFinalVerdict({ missingBuyLines: 0, reducedEdgeLineCount: 0 })).toBe("good");
+    expect(getFinalVerdict({ missingBuyLines: 0, reducedEdgeLineCount: 1 })).toBe("reduced_edge");
+    expect(getFinalVerdict({ missingBuyLines: 1, reducedEdgeLineCount: 0 })).toBe("abort");
+    expect(getFinalVerdict({ missingBuyLines: 1, reducedEdgeLineCount: 5 })).toBe("abort");
+  });
+
+  it("marks reduced edge when buy-per increases but stays within threshold", () => {
+    const rows = compareManifestToExport(
+      [manifest({ name: "Edge", qty: 2, buyPer: 100, buyTotal: 200, sellPer: 130 })],
+      [exportRow({ name: "Edge", qty: 2, buyPer: 101, buyTotal: 202 })],
+      { thresholdMode: "sell_value_evaluate" },
+    ).rows;
+
+    const aggregate = computeAggregateStats(rows);
+    expect(aggregate.reducedEdgeLineCount).toBe(1);
+    expect(aggregate.missingBuyLines).toBe(0);
+    expect(aggregate.verdict).toBe("reduced_edge");
   });
 
   it("marks row alert metadata when threshold is crossed", () => {

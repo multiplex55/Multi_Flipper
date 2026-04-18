@@ -1,4 +1,4 @@
-import type { ComparisonResult, ComparisonRow } from "@/features/batchVerifier/compare";
+import type { ComparisonResult, ComparisonRow, FinalVerdict } from "@/features/batchVerifier/compare";
 
 const DISALLOWED_STATES: ComparisonRow["state"][] = [
   "do_not_buy",
@@ -11,6 +11,35 @@ export type SummaryReportOptions = {
   modeLabel: string;
   locale?: string;
 };
+
+export function formatSummaryTotal(value: number | undefined, locale = "en-US"): string {
+  if (typeof value !== "number" || Number.isNaN(value)) return "0";
+  return value.toLocaleString(locale, { maximumFractionDigits: 2 });
+}
+
+type VerdictMeta = {
+  label: "Good" | "Reduced edge" | "Abort";
+  className: string;
+};
+
+const VERDICT_META: Record<FinalVerdict, VerdictMeta> = {
+  good: {
+    label: "Good",
+    className: "bg-emerald-950 text-emerald-200 border border-emerald-700",
+  },
+  reduced_edge: {
+    label: "Reduced edge",
+    className: "bg-amber-950 text-amber-200 border border-amber-700",
+  },
+  abort: {
+    label: "Abort",
+    className: "bg-rose-950 text-rose-200 border border-rose-700",
+  },
+};
+
+export function getVerdictPresentation(verdict: FinalVerdict): VerdictMeta {
+  return VERDICT_META[verdict];
+}
 
 export function formatDecisionReason(row: Pick<ComparisonRow, "state" | "exportItem" | "manifestItem" | "allowedBuyPer">): string {
   if (row.state === "do_not_buy") {

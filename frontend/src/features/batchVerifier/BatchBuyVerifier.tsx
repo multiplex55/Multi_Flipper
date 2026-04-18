@@ -5,7 +5,12 @@ import {
   type ComparisonOptions,
   type ComparisonResult,
 } from "@/features/batchVerifier/compare";
-import { formatDoNotBuyList, formatSummaryReport } from "@/features/batchVerifier/formatting";
+import {
+  formatDoNotBuyList,
+  formatSummaryReport,
+  formatSummaryTotal,
+  getVerdictPresentation,
+} from "@/features/batchVerifier/formatting";
 import {
   parseBatchManifest,
   parseExportOrder,
@@ -179,6 +184,23 @@ export function BatchBuyVerifier({ initialManifestText }: BatchBuyVerifierProps)
     [result],
   );
   const doNotBuyText = useMemo(() => (result ? formatDoNotBuyList(result.comparison) : ""), [result]);
+  const doNotBuyLinesText = useMemo(() => {
+    if (!result) return "";
+    const blocked = result.comparison.rows.filter((row) => row.state === "do_not_buy");
+    if (blocked.length === 0) return "No do-not-buy lines.";
+    return blocked.map((row) => `${row.name} — ${row.reason}`).join("\n");
+  }, [result]);
+  const changedLinesText = useMemo(() => {
+    if (!result) return "";
+    const changed = result.comparison.rows.filter(
+      (row) =>
+        row.state !== "safe" ||
+        (typeof row.buyPerDelta === "number" && row.buyPerDelta !== 0) ||
+        (typeof row.qtyDelta === "number" && row.qtyDelta !== 0),
+    );
+    if (changed.length === 0) return "No changed lines.";
+    return changed.map((row) => `${row.name} — ${row.reason}`).join("\n");
+  }, [result]);
 
   const slippageValue = useMemo(() => {
     if (slippageValueInput.trim() === "") return Number.NaN;
@@ -284,6 +306,29 @@ export function BatchBuyVerifier({ initialManifestText }: BatchBuyVerifierProps)
     const ok = await copyToClipboard(doNotBuyText);
     setCopyStatus(ok ? "Do not buy list copied." : "Copy failed.");
   };
+
+  const handleCopyChangedLines = async () => {
+    if (!result) return;
+    const ok = await copyToClipboard(changedLinesText);
+    setCopyStatus(ok ? "Changed lines copied." : "Copy failed.");
+  };
+
+  const handleCopyDoNotBuyLines = async () => {
+    if (!result) return;
+    const ok = await copyToClipboard(doNotBuyLinesText);
+    setCopyStatus(ok ? "Do-not-buy lines copied." : "Copy failed.");
+  };
+
+  const hasChangedLines = Boolean(
+    result &&
+      result.comparison.rows.some(
+        (row) =>
+          row.state !== "safe" ||
+          (typeof row.buyPerDelta === "number" && row.buyPerDelta !== 0) ||
+          (typeof row.qtyDelta === "number" && row.qtyDelta !== 0),
+      ),
+  );
+  const hasDoNotBuyLines = Boolean(result && result.comparison.rows.some((row) => row.state === "do_not_buy"));
 
   return (
     <div className="text-eve-text" style={{ display: "grid", gap: 16 }}>
@@ -439,6 +484,62 @@ export function BatchBuyVerifier({ initialManifestText }: BatchBuyVerifierProps)
         <div style={{ display: "grid", gap: 12 }}>
           <section aria-label="Evaluation summary" data-testid="evaluation-summary-section" style={sectionStyle}>
             <h3 style={{ margin: 0 }}>Summary ({result.modeLabel})</h3>
+            <div
+              style={{
+                marginTop: 12,
+                display: "grid",
+                gap: 8,
+                gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              }}
+            >
+              <div>
+                <div className="text-eve-dim">Line count</div>
+                <strong data-testid="summary-line-count">{result.comparison.aggregate.lineCount}</strong>
+              </div>
+              <div>
+                <div className="text-eve-dim">Total planned / matched buy</div>
+                <strong data-testid="summary-total-buy">
+                  {formatSummaryTotal(result.comparison.aggregate.totalPlannedBuy)} /{" "}
+                  {formatSummaryTotal(result.comparison.aggregate.totalMatchedBuy)} ISK
+                </strong>
+              </div>
+              <div>
+                <div className="text-eve-dim">Missing buy lines</div>
+                <strong data-testid="summary-missing-lines">{result.comparison.aggregate.missingBuyLines}</strong>
+              </div>
+              <div>
+                <div className="text-eve-dim">Total planned sell</div>
+                <strong data-testid="summary-total-sell">
+                  {formatSummaryTotal(result.comparison.aggregate.totalPlannedSell)} ISK
+                </strong>
+              </div>
+              <div>
+                <div className="text-eve-dim">Reduced-edge lines</div>
+                <strong data-testid="summary-reduced-edge">{result.comparison.aggregate.reducedEdgeLineCount}</strong>
+              </div>
+              <div>
+                <div className="text-eve-dim">Final verdict</div>
+                {(() => {
+                  const verdictMeta = getVerdictPresentation(result.comparison.aggregate.verdict);
+                  return (
+                    <span
+                      data-testid="summary-verdict-badge"
+                      className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${verdictMeta.className}`}
+                    >
+                      {verdictMeta.label}
+                    </span>
+                  );
+                })()}
+              </div>
+            </div>
+            <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button type="button" onClick={handleCopyChangedLines} disabled={!hasChangedLines}>
+                Copy Changed Lines
+              </button>
+              <button type="button" onClick={handleCopyDoNotBuyLines} disabled={!hasDoNotBuyLines}>
+                Copy Do-Not-Buy Lines
+              </button>
+            </div>
             {result.comparison.summary.alertingRowsCount > 0 ? (
               <div
                 role="alert"

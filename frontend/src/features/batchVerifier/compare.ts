@@ -52,6 +52,20 @@ export type ComparisonResult = {
   unexpected: ComparisonRow[];
   review?: ComparisonRow[];
   summary: ComparisonSummary;
+  aggregate: NormalizedAggregateStats;
+};
+
+export type FinalVerdict = "good" | "reduced_edge" | "abort";
+
+export type NormalizedAggregateStats = {
+  lineCount: number;
+  matchedLineCount: number;
+  missingBuyLines: number;
+  reducedEdgeLineCount: number;
+  totalPlannedBuy: number;
+  totalMatchedBuy: number;
+  totalPlannedSell: number;
+  verdict: FinalVerdict;
 };
 
 function getAllowedBuyPer(manifestItem: ManifestItem, options: ComparisonOptions): number | undefined {
@@ -278,5 +292,74 @@ export function compareManifestToExport(
     unexpected,
     review: options.includeReview === false || reviewRows.length === 0 ? undefined : reviewRows,
     summary: computeSummary(rows, options),
+    aggregate: computeAggregateStats(rows),
+  };
+}
+
+function safeManifestBuyTotal(item: ManifestItem): number {
+  if (typeof item.buyTotal === "number" && Number.isFinite(item.buyTotal)) return item.buyTotal;
+  return (item.buyPer ?? 0) * item.qty;
+}
+
+function safeManifestSellTotal(item: ManifestItem): number {
+  if (typeof item.sellTotal === "number" && Number.isFinite(item.sellTotal)) return item.sellTotal;
+  if (typeof item.sellPer === "number" && Number.isFinite(item.sellPer)) return item.sellPer * item.qty;
+  return 0;
+}
+
+export function getFinalVerdict(aggregate: Pick<NormalizedAggregateStats, "missingBuyLines" | "reducedEdgeLineCount">): FinalVerdict {
+  if (aggregate.missingBuyLines > 0) return "abort";
+  if (aggregate.reducedEdgeLineCount > 0) return "reduced_edge";
+  return "good";
+}
+
+export function computeAggregateStats(rows: ComparisonRow[]): NormalizedAggregateStats {
+  let lineCount = 0;
+  let matchedLineCount = 0;
+  let missingBuyLines = 0;
+  let reducedEdgeLineCount = 0;
+  let totalPlannedBuy = 0;
+  let totalMatchedBuy = 0;
+  let totalPlannedSell = 0;
+
+  for (const row of rows) {
+    if (row.manifestItem) {
+      lineCount += 1;
+      totalPlannedBuy += safeManifestBuyTotal(row.manifestItem);
+      totalPlannedSell += safeManifestSellTotal(row.manifestItem);
+    }
+
+    if (row.manifestItem && row.exportItem) {
+      matchedLineCount += 1;
+      totalMatchedBuy += row.exportItem.buyTotal;
+    }
+
+    if (row.state === "missing_from_export" || row.state === "do_not_buy") {
+      missingBuyLines += 1;
+    }
+
+    const hasReducedEdge = Boolean(
+      row.manifestItem &&
+        row.exportItem &&
+        row.state !== "do_not_buy" &&
+        typeof row.buyPerDelta === "number" &&
+        row.buyPerDelta > 0,
+    );
+    if (hasReducedEdge) {
+      reducedEdgeLineCount += 1;
+    }
+  }
+
+  const verdict = getFinalVerdict({ missingBuyLines, reducedEdgeLineCount });
+
+  return {
+    lineCount,
+    matchedLineCount,
+    missingBuyLines,
+    reducedEdgeLineCount,
+    totalPlannedBuy,
+    totalMatchedBuy,
+    totalPlannedSell,
+    verdict,
   };
 }
