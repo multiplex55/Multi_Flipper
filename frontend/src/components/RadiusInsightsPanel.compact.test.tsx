@@ -102,7 +102,7 @@ describe("RadiusInsightsPanel compact teaser", () => {
   });
 
   it("uses the CTA to open route workspace", () => {
-    const openRouteWorkbench = vi.fn();
+    const onOpenRouteFromInsights = vi.fn();
     render(
       <I18nProvider>
         <RadiusInsightsPanel
@@ -110,12 +110,55 @@ describe("RadiusInsightsPanel compact teaser", () => {
           actionQueue={queue}
           loopOpportunities={loops}
           compactTeaser
-          openRouteWorkbench={openRouteWorkbench}
+          openRouteWorkbench={vi.fn()}
+          onOpenRouteFromInsights={onOpenRouteFromInsights}
         />
       </I18nProvider>,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Open Route Workspace" }));
-    expect(openRouteWorkbench).toHaveBeenCalledWith("30000142:30002187", "summary");
+    expect(onOpenRouteFromInsights).toHaveBeenCalledWith(
+      "30000142:30002187",
+      "workbench",
+    );
+  });
+
+  it("shows action buttons for each pick and sends matching route keys", () => {
+    const onOpenRouteFromInsights = vi.fn();
+    render(
+      <I18nProvider>
+        <RadiusInsightsPanel
+          topRoutePicks={makePicks()}
+          actionQueue={queue}
+          loopOpportunities={loops}
+          compactTeaser
+          openRouteWorkbench={vi.fn()}
+          onOpenRouteFromInsights={onOpenRouteFromInsights}
+        />
+      </I18nProvider>,
+    );
+
+    const rowButtons = screen.getAllByRole("button", { name: "Open in Build Batch" });
+    expect(rowButtons).toHaveLength(3);
+
+    fireEvent.click(rowButtons[0]);
+    fireEvent.click(rowButtons[1]);
+    fireEvent.click(rowButtons[2]);
+
+    expect(onOpenRouteFromInsights).toHaveBeenNthCalledWith(
+      1,
+      "30000142:30002187",
+      "workbench",
+    );
+    expect(onOpenRouteFromInsights).toHaveBeenNthCalledWith(
+      2,
+      "30002187:30002510",
+      "workbench",
+    );
+    expect(onOpenRouteFromInsights).toHaveBeenNthCalledWith(
+      3,
+      "30000142:30004999",
+      "workbench",
+    );
   });
 });

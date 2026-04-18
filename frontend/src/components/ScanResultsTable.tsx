@@ -5813,6 +5813,29 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
           actionQueue={actionQueue}
           loopOpportunities={showLoopPanel ? effectiveLoopOpportunities : []}
           openRouteWorkbench={openRouteWorkbench}
+          onOpenInRoute={onOpenInRoute}
+          onOpenInRouteWorkbench={(routeKey) => {
+            if (onOpenInRouteWorkbench) {
+              onOpenInRouteWorkbench(routeKey);
+              return;
+            }
+            onOpenInRoute?.(routeKey);
+          }}
+          onOpenRouteFromInsights={(routeKey, targetMode = "workbench") => {
+            if (targetMode === "workbench") {
+              if (onOpenInRouteWorkbench) {
+                onOpenInRouteWorkbench(routeKey);
+                return;
+              }
+              onOpenInRoute?.(routeKey);
+              return;
+            }
+            if (onOpenInRoute) {
+              onOpenInRoute(routeKey);
+              return;
+            }
+            onOpenInRouteWorkbench?.(routeKey);
+          }}
           compactTeaser
           compactDashboard={compactDashboard}
         />
