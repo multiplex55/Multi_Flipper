@@ -1,0 +1,1787 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ScanResultsTable default view mode > starts in rows mode for Radius row-first config even when route mode was persisted 1`] = `
+<DocumentFragment>
+  <div
+    class="relative flex-1 flex flex-col min-h-0"
+    data-filter-stage-counts="{"session_hard_ignores":1,"endpoint_hard_rules":1,"column_filters":1,"tracked_visibility_mode":1,"route_safety_filter":1,"hidden_row_toggle":1,"route_badge_filter":1}"
+  >
+    <div
+      class="shrink-0 px-2 py-1.5"
+    >
+      <div
+        class="flex flex-wrap items-center gap-2 text-xs"
+      >
+        <div
+          class="flex items-center gap-2 text-eve-dim"
+        >
+          Found 1 deals
+        </div>
+        <div
+          class="flex-1"
+        />
+        <label
+          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] cursor-pointer"
+        >
+          <input
+            class="accent-eve-accent"
+            type="checkbox"
+          />
+          <span>
+            Group by item
+          </span>
+        </label>
+        <button
+          aria-controls="scan-results-advanced-toolbar"
+          aria-expanded="false"
+          class="px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] hover:border-eve-accent/50 hover:text-eve-accent transition-colors"
+          title="Toggle advanced controls"
+          type="button"
+        >
+          Advanced ▸
+        </button>
+        <button
+          aria-pressed="false"
+          class="px-2 py-0.5 rounded-sm border text-[11px] transition-colors border-eve-border/60 bg-eve-dark/40 text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent"
+          title="Compact dashboard layout"
+          type="button"
+        >
+          Compact Dashboard
+        </button>
+        <button
+          class="px-2 py-0.5 rounded-sm text-xs font-medium transition-colors cursor-pointer text-eve-dim hover:text-eve-text border border-eve-border hover:border-eve-border-light"
+          title="Column setup"
+        >
+          Columns
+        </button>
+        <button
+          class="px-2 py-0.5 rounded-sm text-xs font-medium transition-colors cursor-pointer bg-eve-accent/20 text-eve-accent border border-eve-accent/30"
+          title="Clear filters"
+        >
+          ⊞
+        </button>
+        <button
+          class="px-2 py-0.5 rounded-sm text-xs font-medium transition-colors cursor-pointer text-eve-dim hover:text-eve-text border border-eve-border hover:border-eve-border-light"
+          title="Compact rows"
+        >
+          ⊟
+        </button>
+        <button
+          class="px-2 py-0.5 rounded-sm text-xs font-medium transition-colors cursor-pointer text-eve-dim hover:text-eve-text border border-eve-border hover:border-eve-border-light"
+          title="Export CSV"
+        >
+          CSV
+        </button>
+        <button
+          class="px-2 py-0.5 rounded-sm text-xs font-medium transition-colors cursor-pointer text-eve-dim hover:text-eve-text border border-eve-border hover:border-eve-border-light"
+          title="Copy table"
+        >
+          ⎘
+        </button>
+      </div>
+      <div
+        class="mt-1 text-[11px] text-eve-dim/80"
+      >
+        Use Advanced for endpoint preferences, tracked visibility, and cache controls.
+      </div>
+    </div>
+    <div
+      class="flex-1 min-h-0 flex flex-col border border-eve-border rounded-sm overflow-auto table-scroll-container"
+    >
+      <table
+        class="w-full text-sm"
+      >
+        <thead
+          class="sticky top-0 z-10"
+        >
+          <tr
+            class="bg-eve-dark border-b border-eve-border"
+          >
+            <th
+              class="w-8 px-1 py-2 text-center"
+            >
+              <input
+                class="accent-eve-accent cursor-pointer"
+                type="checkbox"
+              />
+            </th>
+            <th
+              class="w-8 px-1 py-2"
+            />
+            <th
+              class="min-w-[180px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Item"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Item
+              </span>
+            </th>
+            <th
+              class="min-w-[120px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Best Ask (L1)"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Best Ask (L1)
+              </span>
+            </th>
+            <th
+              class="min-w-[90px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="L1 Ask Qty"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                L1 Ask Qty
+              </span>
+            </th>
+            <th
+              class="min-w-[120px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Avg Buy Fill"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Avg Buy Fill
+              </span>
+            </th>
+            <th
+              class="min-w-[60px] w-[70px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Route: Recent route danger signal based on gank activity in the last hour. Why it matters: Transport losses can wipe out many successful flips. Good vs risky: Green/low-risk routes preferred; yellow/red requires stronger profit premium."
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Route
+                <span
+                  class="text-eve-dim/70 normal-case text-[10px]"
+                >
+                  ?
+                </span>
+              </span>
+            </th>
+            <th
+              class="min-w-[150px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Buy Station"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Buy Station
+              </span>
+            </th>
+            <th
+              class="min-w-[120px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Best Bid (L1)"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Best Bid (L1)
+              </span>
+            </th>
+            <th
+              class="min-w-[90px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="L1 Bid Qty"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                L1 Bid Qty
+              </span>
+            </th>
+            <th
+              class="min-w-[120px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Avg Sell Fill"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Avg Sell Fill
+              </span>
+            </th>
+            <th
+              class="min-w-[150px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Sell Station"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Sell Station
+              </span>
+            </th>
+            <th
+              class="min-w-[80px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Margin %"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Margin %
+              </span>
+            </th>
+            <th
+              class="min-w-[90px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="ISK/m³"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                ISK/m³
+              </span>
+            </th>
+            <th
+              class="min-w-[80px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Buy Qty"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Buy Qty
+              </span>
+            </th>
+            <th
+              class="min-w-[80px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Fillable Qty"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Fillable Qty
+              </span>
+            </th>
+            <th
+              class="min-w-[70px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Can Fill"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Can Fill
+              </span>
+            </th>
+            <th
+              class="min-w-[80px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Book Depth Qty"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Book Depth Qty
+              </span>
+            </th>
+            <th
+              class="min-w-[120px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Real Profit"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Real Profit
+              </span>
+            </th>
+            <th
+              class="min-w-[120px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Real ISK/Jump: Realized profit estimate divided by max(1, total route jumps). Why it matters: Measures travel efficiency and opportunity cost of your pilot time. Good vs risky: Higher is better for active hauling; low values can still work if very safe and scalable."
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Real ISK/Jump
+                <span
+                  class="text-eve-dim/70 normal-case text-[10px]"
+                >
+                  ?
+                </span>
+              </span>
+            </th>
+            <th
+              class="min-w-[120px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors text-eve-accent"
+              title="Daily ISK/Jump: Estimated daily profit potential normalized by route jumps. Why it matters: Balances route effort with repeatable daily earning power. Good vs risky: Consistently positive and materially above your fallback routes or station alternatives."
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Daily ISK/Jump
+                <span
+                  class="text-eve-dim/70 normal-case text-[10px]"
+                >
+                  ?
+                </span>
+              </span>
+              <span
+                class="ml-1"
+              >
+                ▼
+              </span>
+            </th>
+            <th
+              class="min-w-[135px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Real ISK/m³/j: Real profit normalized by cargo volume and jump count. Why it matters: Shows how efficiently a route uses limited cargo space while traveling. Good vs risky: Higher is better; especially useful when hauling capacity is your constraint."
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Real ISK/m³/j
+                <span
+                  class="text-eve-dim/70 normal-case text-[10px]"
+                >
+                  ?
+                </span>
+              </span>
+            </th>
+            <th
+              class="min-w-[110px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Turnover Days: Approximate capital lock-up in days: capital required divided by daily profit. Why it matters: Long turnover ties up ISK and reduces compounding speed. Good vs risky: Commonly under 7-14 days for active strategies; over ~30 days is often too slow/risky."
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Turnover Days
+                <span
+                  class="text-eve-dim/70 normal-case text-[10px]"
+                >
+                  ?
+                </span>
+              </span>
+            </th>
+            <th
+              class="min-w-[120px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Slippage Cost: Estimated ISK lost to depth traversal on buy and sell execution at shown size. Why it matters: Directly eats realized profit and can invalidate tight-margin trades. Good vs risky: Low relative to Real Profit (ideally single-digit % of projected profit)."
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Slippage Cost
+                <span
+                  class="text-eve-dim/70 normal-case text-[10px]"
+                >
+                  ?
+                </span>
+              </span>
+            </th>
+            <th
+              class="min-w-[110px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Exec Q: Composite 0-100 score from fill ratio, slippage burden, depth support, and history/risk flags. Why it matters: Summarizes how likely the quoted trade is to execute close to expectations. Good vs risky: 80-100 strong, 60-79 workable with caution, below 60 higher execution risk."
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Exec Q
+                <span
+                  class="text-eve-dim/70 normal-case text-[10px]"
+                >
+                  ?
+                </span>
+              </span>
+            </th>
+            <th
+              class="min-w-[115px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Exit Overhang: Estimated days for destination demand to absorb visible target-side sell supply. Why it matters: High overhang suggests you may wait longer to exit at expected prices. Good vs risky: Lower is better; under ~3-7 days is usually healthier than double-digit overhang."
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Exit Overhang
+                <span
+                  class="text-eve-dim/70 normal-case text-[10px]"
+                >
+                  ?
+                </span>
+              </span>
+            </th>
+            <th
+              class="min-w-[110px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="BE Buffer: Adverse move tolerance before expected profit drops to zero. Why it matters: Represents resilience to sudden price moves and fee/slippage surprises. Good vs risky: Higher is safer; <2-3% is fragile, 5%+ generally more robust."
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                BE Buffer
+                <span
+                  class="text-eve-dim/70 normal-case text-[10px]"
+                >
+                  ?
+                </span>
+              </span>
+            </th>
+            <th
+              class="min-w-[120px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Top-book Profit"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Top-book Profit
+              </span>
+            </th>
+            <th
+              class="min-w-[90px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Batch #"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Batch #
+              </span>
+            </th>
+            <th
+              class="min-w-[120px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Batch Profit"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Batch Profit
+              </span>
+            </th>
+            <th
+              class="min-w-[130px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Batch Capital"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Batch Capital
+              </span>
+            </th>
+            <th
+              class="min-w-[130px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Batch ISK/Jump"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Batch ISK/Jump
+              </span>
+            </th>
+            <th
+              class="min-w-[110px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Batch #"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Batch #
+              </span>
+            </th>
+            <th
+              class="min-w-[130px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Batch Profit"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Batch Profit
+              </span>
+            </th>
+            <th
+              class="min-w-[145px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Batch Capital"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Batch Capital
+              </span>
+            </th>
+            <th
+              class="min-w-[120px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Volume m³"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Volume m³
+              </span>
+            </th>
+            <th
+              class="min-w-[120px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Can Fill"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Can Fill
+              </span>
+            </th>
+            <th
+              class="min-w-[140px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Real ISK/Jump"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Real ISK/Jump
+              </span>
+            </th>
+            <th
+              class="min-w-[145px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Daily ISK/Jump"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Daily ISK/Jump
+              </span>
+            </th>
+            <th
+              class="min-w-[145px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Daily Profit"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Daily Profit
+              </span>
+            </th>
+            <th
+              class="min-w-[170px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Real ISK/m³/j"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Real ISK/m³/j
+              </span>
+            </th>
+            <th
+              class="min-w-[160px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="ROI %"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                ROI %
+              </span>
+            </th>
+            <th
+              class="min-w-[145px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Weighted Slippage %"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Weighted Slippage %
+              </span>
+            </th>
+            <th
+              class="min-w-[150px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Exec Q"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Exec Q
+              </span>
+            </th>
+            <th
+              class="min-w-[130px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Turnover Days"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Turnover Days
+              </span>
+            </th>
+            <th
+              class="min-w-[150px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Exit Overhang"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Exit Overhang
+              </span>
+            </th>
+            <th
+              class="min-w-[150px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="BE Buffer"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                BE Buffer
+              </span>
+            </th>
+            <th
+              class="min-w-[100px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Score"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Score
+              </span>
+            </th>
+            <th
+              class="min-w-[100px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Expected profit"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Expected profit
+              </span>
+            </th>
+            <th
+              class="min-w-[110px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="ISK/Jump"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                ISK/Jump
+              </span>
+            </th>
+            <th
+              class="min-w-[80px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Jumps to Buy Station"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Jumps to Buy Station
+              </span>
+            </th>
+            <th
+              class="min-w-[60px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Jumps"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Jumps
+              </span>
+            </th>
+            <th
+              class="min-w-[80px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Daily Vol"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Daily Vol
+              </span>
+            </th>
+            <th
+              class="min-w-[90px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="S2B/Day: Estimated daily volume sold into destination buy orders (sell-to-buy flow). Why it matters: Higher flow indicates faster potential exits and better liquidity. Good vs risky: Consistently above your planned daily unload size; very low values imply slow exits."
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                S2B/Day
+                <span
+                  class="text-eve-dim/70 normal-case text-[10px]"
+                >
+                  ?
+                </span>
+              </span>
+            </th>
+            <th
+              class="min-w-[90px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="BfS/Day: Estimated daily volume bought from source sell orders (buy-from-sell flow). Why it matters: Signals how naturally the source side replenishes at tradable prices. Good vs risky: Stable, non-trivial flow that supports your repeat buy cadence."
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                BfS/Day
+                <span
+                  class="text-eve-dim/70 normal-case text-[10px]"
+                >
+                  ?
+                </span>
+              </span>
+            </th>
+            <th
+              class="min-w-[90px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="S2B/BfS: Flow balance ratio between destination exit flow and source entry flow. Why it matters: Helps detect one-sided markets where either sourcing or exiting dominates. Good vs risky: Around ~0.7-1.5 is often balanced; extreme values can indicate instability or data skew."
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                S2B/BfS
+                <span
+                  class="text-eve-dim/70 normal-case text-[10px]"
+                >
+                  ?
+                </span>
+              </span>
+            </th>
+            <th
+              class="min-w-[110px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Daily Profit"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Daily Profit
+              </span>
+            </th>
+            <th
+              class="min-w-[70px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Trend %"
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Trend %
+              </span>
+            </th>
+            <th
+              class="min-w-[70px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Buy Comp."
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Buy Comp.
+              </span>
+            </th>
+            <th
+              class="min-w-[70px] px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors "
+              title="Sell Comp."
+            >
+              <span
+                class="inline-flex items-center gap-1"
+              >
+                Sell Comp.
+              </span>
+            </th>
+          </tr>
+          <tr
+            class="bg-eve-dark/80 border-b border-eve-border"
+          >
+            <th
+              class="w-8"
+            />
+            <th
+              class="w-8"
+            />
+            <th
+              class="min-w-[180px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="Filter..."
+                title="Item"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[120px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Best Ask (L1)"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[90px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="L1 Ask Qty"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[120px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Avg Buy Fill"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[60px] w-[70px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="Filter..."
+                title="Route: Recent route danger signal based on gank activity in the last hour. Why it matters: Transport losses can wipe out many successful flips. Good vs risky: Green/low-risk routes preferred; yellow/red requires stronger profit premium."
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[150px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="Filter..."
+                title="Buy Station"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[120px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Best Bid (L1)"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[90px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="L1 Bid Qty"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[120px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Avg Sell Fill"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[150px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="Filter..."
+                title="Sell Station"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[80px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Margin %"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[90px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="ISK/m³"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[80px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Buy Qty"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[80px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Fillable Qty"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[70px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="Filter..."
+                title="Can Fill"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[80px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Book Depth Qty"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[120px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Real Profit"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[120px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Real ISK/Jump: Realized profit estimate divided by max(1, total route jumps). Why it matters: Measures travel efficiency and opportunity cost of your pilot time. Good vs risky: Higher is better for active hauling; low values can still work if very safe and scalable."
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[120px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Daily ISK/Jump: Estimated daily profit potential normalized by route jumps. Why it matters: Balances route effort with repeatable daily earning power. Good vs risky: Consistently positive and materially above your fallback routes or station alternatives."
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[135px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Real ISK/m³/j: Real profit normalized by cargo volume and jump count. Why it matters: Shows how efficiently a route uses limited cargo space while traveling. Good vs risky: Higher is better; especially useful when hauling capacity is your constraint."
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[110px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Turnover Days: Approximate capital lock-up in days: capital required divided by daily profit. Why it matters: Long turnover ties up ISK and reduces compounding speed. Good vs risky: Commonly under 7-14 days for active strategies; over ~30 days is often too slow/risky."
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[120px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Slippage Cost: Estimated ISK lost to depth traversal on buy and sell execution at shown size. Why it matters: Directly eats realized profit and can invalidate tight-margin trades. Good vs risky: Low relative to Real Profit (ideally single-digit % of projected profit)."
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[110px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Exec Q: Composite 0-100 score from fill ratio, slippage burden, depth support, and history/risk flags. Why it matters: Summarizes how likely the quoted trade is to execute close to expectations. Good vs risky: 80-100 strong, 60-79 workable with caution, below 60 higher execution risk."
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[115px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Exit Overhang: Estimated days for destination demand to absorb visible target-side sell supply. Why it matters: High overhang suggests you may wait longer to exit at expected prices. Good vs risky: Lower is better; under ~3-7 days is usually healthier than double-digit overhang."
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[110px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="BE Buffer: Adverse move tolerance before expected profit drops to zero. Why it matters: Represents resilience to sudden price moves and fee/slippage surprises. Good vs risky: Higher is safer; <2-3% is fragile, 5%+ generally more robust."
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[120px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Top-book Profit"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[90px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Batch #"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[120px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Batch Profit"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[130px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Batch Capital"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[130px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Batch ISK/Jump"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[110px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Batch #"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[130px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Batch Profit"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[145px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Batch Capital"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[120px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Volume m³"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[120px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Can Fill"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[140px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Real ISK/Jump"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[145px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Daily ISK/Jump"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[145px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Daily Profit"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[170px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Real ISK/m³/j"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[160px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="ROI %"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[145px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Weighted Slippage %"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[150px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Exec Q"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[130px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Turnover Days"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[150px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Exit Overhang"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[150px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="BE Buffer"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[100px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Score"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[100px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Expected profit"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[110px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="ISK/Jump"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[80px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Jumps to Buy Station"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[60px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Jumps"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[80px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Daily Vol"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[90px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="S2B/Day: Estimated daily volume sold into destination buy orders (sell-to-buy flow). Why it matters: Higher flow indicates faster potential exits and better liquidity. Good vs risky: Consistently above your planned daily unload size; very low values imply slow exits."
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[90px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="BfS/Day: Estimated daily volume bought from source sell orders (buy-from-sell flow). Why it matters: Signals how naturally the source side replenishes at tradable prices. Good vs risky: Stable, non-trivial flow that supports your repeat buy cadence."
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[90px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="S2B/BfS: Flow balance ratio between destination exit flow and source entry flow. Why it matters: Helps detect one-sided markets where either sourcing or exiting dominates. Good vs risky: Around ~0.7-1.5 is often balanced; extreme values can indicate instability or data skew."
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[110px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Daily Profit"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[70px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Trend %"
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[70px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Buy Comp."
+                type="text"
+                value=""
+              />
+            </th>
+            <th
+              class="min-w-[70px] px-1 py-1"
+            >
+              <input
+                class="w-full px-2 py-0.5 bg-eve-input border border-eve-border rounded-sm text-eve-text text-xs font-mono placeholder:text-eve-dim/50 focus:outline-none focus:border-eve-accent/50 transition-colors"
+                placeholder="e.g. >100"
+                title="Sell Comp."
+                type="text"
+                value=""
+              />
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            class="border-b border-eve-border/50 hover:bg-eve-accent/5 transition-colors cursor-pointer  bg-eve-panel "
+            data-applied-rules="buy_hub_penalty"
+            data-endpoint-excluded-reasons=""
+            data-endpoint-score-delta="-12"
+            data-filter-reason-codes=""
+            data-row-id="1"
+          >
+            <td
+              class="w-8 px-1 text-center py-1.5"
+            >
+              <input
+                class="accent-eve-accent cursor-pointer"
+                type="checkbox"
+              />
+            </td>
+            <td
+              class="w-8 px-1 text-center py-1.5"
+            >
+              <button
+                class="text-xs cursor-pointer transition-opacity opacity-30 hover:opacity-70"
+                title="Pin"
+              >
+                📌
+              </button>
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[180px]  text-eve-text"
+            >
+              <div
+                class="flex items-center gap-1.5 min-w-0"
+              >
+                <img
+                  alt=""
+                  class="w-4 h-4 shrink-0 rounded-sm"
+                  height="16"
+                  src="https://images.evetech.net/types/101/icon?size=32"
+                  width="16"
+                />
+                <span
+                  class="truncate"
+                >
+                  Item 101
+                </span>
+                <span
+                  aria-hidden="true"
+                  class="shrink-0 text-eve-dim/40"
+                  title="Not tracked"
+                >
+                  ★
+                </span>
+              </div>
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[120px] truncate text-eve-accent font-mono"
+            >
+              100
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[90px] truncate text-eve-accent font-mono"
+            >
+              —
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[120px] truncate text-eve-accent font-mono"
+            >
+              —
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[60px] w-[70px] truncate text-eve-text"
+            >
+              <span
+                class="text-eve-dim/50 text-[10px] animate-pulse"
+              >
+                ·
+              </span>
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[150px] truncate text-eve-text"
+            >
+              <span
+                class="truncate"
+              >
+                Jita IV - Moon 4
+              </span>
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[120px] truncate text-eve-accent font-mono"
+            >
+              125
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[90px] truncate text-eve-accent font-mono"
+            >
+              —
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[120px] truncate text-eve-accent font-mono"
+            >
+              —
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[150px] truncate text-eve-text"
+            >
+              Amarr VIII (Oris) - Emperor Family Academy
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[80px] truncate text-eve-accent font-mono"
+            >
+              25.0%
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[90px] truncate text-eve-accent font-mono"
+            >
+              25
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[80px] truncate text-eve-accent font-mono"
+            >
+              10
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[80px] truncate text-eve-accent font-mono"
+            />
+            <td
+              class="px-3 py-1.5 min-w-[70px] truncate text-eve-text"
+            >
+              —
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[80px] truncate text-eve-accent font-mono"
+            >
+              10
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[120px] truncate text-eve-accent font-mono"
+            >
+              —
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[120px] truncate text-eve-accent font-mono"
+            >
+              0
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[120px] truncate text-eve-accent font-mono"
+            >
+              50
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[135px] truncate text-eve-accent font-mono"
+            >
+              0/m³j
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[110px] truncate text-eve-accent font-mono"
+            >
+              —
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[120px] truncate text-eve-accent font-mono"
+            >
+              0
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[110px] truncate text-eve-accent font-mono"
+            >
+              54.9
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[115px] truncate text-eve-accent font-mono"
+            >
+              0.0
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[110px] truncate text-eve-accent font-mono"
+            >
+              20.00%
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[120px] truncate text-eve-accent font-mono"
+            >
+              250
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[90px] truncate text-eve-accent font-mono"
+            >
+              1
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[120px] truncate text-eve-accent font-mono"
+            >
+              250
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[130px] truncate text-eve-accent font-mono"
+            >
+              1 K
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[130px] truncate text-eve-accent font-mono"
+            >
+              —
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[110px] truncate text-eve-accent font-mono"
+            >
+              1
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[130px] truncate text-eve-accent font-mono"
+            >
+              250
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[145px] truncate text-eve-accent font-mono"
+            >
+              1 K
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[120px] truncate text-eve-accent font-mono"
+            >
+              10 m³
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[120px] truncate text-eve-accent font-mono"
+            >
+              —
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[140px] truncate text-eve-accent font-mono"
+            >
+              —
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[145px] truncate text-eve-accent font-mono"
+            >
+              —
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[145px] truncate text-eve-accent font-mono"
+            >
+              50
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[170px] truncate text-eve-accent font-mono"
+            >
+              —
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[160px] truncate text-eve-accent font-mono"
+            >
+              5.00%
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[145px] truncate text-eve-accent font-mono"
+            >
+              —
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[150px] truncate text-eve-accent font-mono"
+            >
+              54.9
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[130px] truncate text-eve-accent font-mono"
+            >
+              —
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[150px] truncate text-eve-accent font-mono"
+            >
+              —
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[150px] truncate text-eve-accent font-mono"
+            >
+              20.00%
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[100px] truncate text-eve-accent font-mono"
+            >
+              <button
+                aria-label="Why this score?"
+                class="inline-flex items-center justify-center min-w-[44px] px-1.5 py-0.5 rounded-sm bg-eve-accent/15 border border-eve-accent/35 text-eve-accent font-mono hover:border-eve-accent/60"
+                type="button"
+              >
+                38.1
+              </button>
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[100px] truncate text-eve-accent font-mono"
+            >
+              —
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[110px] truncate text-eve-accent font-mono"
+            >
+              20
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[80px] truncate text-eve-accent font-mono"
+            >
+              0
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[60px] truncate text-eve-accent font-mono"
+            >
+              0
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[80px] truncate text-eve-accent font-mono"
+            >
+              1,000
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[90px] truncate text-eve-accent font-mono"
+            >
+              500
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[90px] truncate text-eve-accent font-mono"
+            >
+              500
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[90px] truncate text-eve-accent font-mono"
+            >
+              1.00
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[110px] truncate text-eve-accent font-mono"
+            >
+              50
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[70px] truncate text-eve-accent font-mono"
+            >
+              +0.0%
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[70px] truncate text-eve-accent font-mono"
+            >
+              0
+            </td>
+            <td
+              class="px-3 py-1.5 min-w-[70px] truncate text-eve-accent font-mono"
+            >
+              0
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div
+      class="shrink-0 flex items-center gap-6 px-3 py-1.5 border-t border-eve-border text-xs"
+    >
+      <span
+        class="text-eve-dim"
+      >
+        Real Profit: 
+        <span
+          class="text-eve-accent font-mono font-semibold"
+        >
+          250
+        </span>
+      </span>
+      <span
+        class="text-eve-dim"
+      >
+        Avg margin: 
+        <span
+          class="text-eve-accent font-mono font-semibold"
+        >
+          25.0%
+        </span>
+      </span>
+    </div>
+  </div>
+</DocumentFragment>
+`;
