@@ -4,6 +4,8 @@ import { useI18n } from "@/lib/i18n";
 import type { ActionQueueItem, TopRoutePicks } from "@/lib/radiusMetrics";
 import type { LoopOpportunity } from "@/lib/loopPlanner";
 import { LoopOpportunitiesPanel } from "./LoopOpportunitiesPanel";
+import { ExplanationPopoverShell } from "@/components/decision/ExplanationPopoverShell";
+import type { RouteDecisionExplanation } from "@/lib/routeExplanation";
 
 const INSIGHTS_VISIBLE_STORAGE_KEY = "eve-radius-insights-visible:v1";
 const INSIGHTS_TAB_STORAGE_KEY = "eve-radius-insights-tab:v1";
@@ -28,6 +30,8 @@ type RadiusInsightsPanelProps = {
   activeRouteLabel?: string | null;
   defaultExpanded?: boolean;
   compactDashboard?: boolean;
+  routeExplanationByKey?: Record<string, RouteDecisionExplanation>
+  lensDeltaByRouteKey?: Record<string, string>
 };
 
 function actionLabel(action: ActionQueueItem["action"]): string {
@@ -81,6 +85,8 @@ export function RadiusInsightsPanel({
   activeRouteLabel = null,
   defaultExpanded = false,
   compactDashboard = false,
+  routeExplanationByKey = {},
+  lensDeltaByRouteKey = {},
 }: RadiusInsightsPanelProps) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState<boolean>(() =>
@@ -220,18 +226,27 @@ export function RadiusInsightsPanel({
                               <span className="text-eve-dim">{t("topPickCargoUse")}:</span>
                               <span className="text-right">{pick.cargoUsePercent.toFixed(1)}%</span>
                             </div>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                openRouteWorkbench(pick.routeKey, "summary", {
-                                  intentLabel,
-                                  batchEntryMode,
-                                })
-                              }
-                              className="mt-2 px-2 py-0.5 rounded-sm border border-eve-accent/60 text-eve-accent hover:bg-eve-accent/10 transition-colors text-[11px]"
-                            >
-                              {t("topPickJumpToGroup")}
-                            </button>
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  openRouteWorkbench(pick.routeKey, "summary", {
+                                    intentLabel,
+                                    batchEntryMode,
+                                  })
+                                }
+                                className="px-2 py-0.5 rounded-sm border border-eve-accent/60 text-eve-accent hover:bg-eve-accent/10 transition-colors text-[11px]"
+                              >
+                                {t("topPickJumpToGroup")}
+                              </button>
+                              {routeExplanationByKey[pick.routeKey] && (
+                                <ExplanationPopoverShell label="Why this route?">
+                                  <div className="text-eve-accent font-mono mb-1">Score {routeExplanationByKey[pick.routeKey].totalScore.toFixed(1)}</div>
+                                  <div className="text-eve-dim mb-1">{routeExplanationByKey[pick.routeKey].summary}</div>
+                                  {lensDeltaByRouteKey[pick.routeKey] && <div className="text-[10px] text-indigo-200">{lensDeltaByRouteKey[pick.routeKey]}</div>}
+                                </ExplanationPopoverShell>
+                              )}
+                            </div>
                           </>
                         ) : (
                           <div className="mt-1 text-[11px] text-eve-dim">—</div>
@@ -272,6 +287,16 @@ export function RadiusInsightsPanel({
                               </span>
                             </div>
                             <div className="mt-1 flex flex-wrap gap-1">
+                              {routeExplanationByKey[item.routeKey] && (
+                                <ExplanationPopoverShell label="Why this route?">
+                                  <div className="text-eve-accent font-mono mb-1">
+                                    Score {routeExplanationByKey[item.routeKey].totalScore.toFixed(1)}
+                                  </div>
+                                  <div className="text-eve-dim mb-1">
+                                    {routeExplanationByKey[item.routeKey].summary}
+                                  </div>
+                                </ExplanationPopoverShell>
+                              )}
                               {item.reasons.map((reason) => (
                                 <span
                                   key={`${item.routeKey}-reason-${reason}`}

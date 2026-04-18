@@ -28,6 +28,9 @@ import {
 } from "@/lib/opportunityScore";
 import { OpportunityScoreDetails } from "./OpportunityScorePopover";
 import { mapContractRowToPinnedOpportunity } from "@/lib/pinnedOpportunityMapper";
+import { ExplanationPopoverShell } from "@/components/decision/ExplanationPopoverShell";
+import { FilterAuditChips } from "@/components/decision/FilterAuditChips";
+import { saveCandidatePattern } from "@/lib/savedCandidatePatterns";
 
 type SyntheticSortKey = "OpportunityScore";
 type SortKey = keyof ContractResult | SyntheticSortKey;
@@ -563,6 +566,18 @@ export function ContractResultsTable({
       displaySorted.length;
     return { totalProfit, totalExpected, avgMargin, count: displaySorted.length };
   }, [displaySorted]);
+  const recommendedRow = displaySorted[0] ?? null;
+  const recommendedExplanation = useMemo(
+    () =>
+      recommendedRow
+        ? scoreContractResult(recommendedRow, opportunityProfile, displayScoreContext)
+        : null,
+    [displayScoreContext, opportunityProfile, recommendedRow],
+  );
+  const activeFilterCount = useMemo(
+    () => Object.values(filters).filter((value) => value.trim().length > 0).length,
+    [filters],
+  );
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -878,6 +893,37 @@ export function ContractResultsTable({
             CSV
           </button>
         )}
+      </div>
+
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+        <FilterAuditChips
+          chips={[
+            { label: "Rows", value: displaySorted.length },
+            { label: "Active filters", value: activeFilterCount },
+            { label: "Hidden", value: hiddenCounts.total },
+          ]}
+        />
+        <div className="inline-flex items-center gap-1">
+          {recommendedExplanation && (
+            <ExplanationPopoverShell label="Why this recommendation?">
+              <OpportunityScoreDetails explanation={recommendedExplanation} />
+            </ExplanationPopoverShell>
+          )}
+          <button
+            type="button"
+            className="text-[11px] px-1.5 py-0.5 rounded border border-eve-border/70 text-eve-dim hover:text-eve-accent hover:border-eve-accent/60"
+            onClick={() =>
+              saveCandidatePattern({
+                label: "contracts-current",
+                tab: "contracts",
+                query: JSON.stringify(filters),
+                pinned: true,
+              })
+            }
+          >
+            Save/Pin pattern
+          </button>
+        </div>
       </div>
 
       {/* Table */}

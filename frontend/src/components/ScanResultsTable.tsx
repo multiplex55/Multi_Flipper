@@ -110,6 +110,13 @@ import {
 } from "@/lib/endpointPreferences";
 import { RadiusInsightsPanel } from "./RadiusInsightsPanel";
 import {
+  buildRouteDecisionExplanation,
+  explainLensDelta,
+  type RouteDecisionExplanation,
+  type RouteDecisionLens,
+} from "@/lib/routeExplanation";
+import { ExplanationPopoverShell } from "@/components/decision/ExplanationPopoverShell";
+import {
   verifyRouteManifestAgainstRows,
   type RouteVerificationResult,
 } from "@/lib/routeManifestVerification";
@@ -148,6 +155,7 @@ const ENDPOINT_PREFS_STORAGE_KEY = "eve-radius-endpoint-preferences:v1";
 const ADVANCED_TOOLBAR_VISIBLE_STORAGE_KEY =
   "eve-radius-advanced-toolbar-visible:v1";
 const COMPACT_DASHBOARD_STORAGE_KEY = "eve-radius-compact-dashboard:v1";
+const PERFORMANCE_LOG_THRESHOLD_MS = 8;
 
 type SyntheticSortKey =
   | "RouteSafety"
@@ -197,6 +205,16 @@ type DecisionLensPreset =
   | "cargo"
   | "safest"
   | "capital_efficient";
+
+function measureCalc<T>(name: string, run: () => T): T {
+  const start = performance.now();
+  const result = run();
+  const duration = performance.now() - start;
+  if (import.meta.env.DEV && duration >= PERFORMANCE_LOG_THRESHOLD_MS) {
+    console.debug(`[ScanResultsTable][perf] ${name}: ${duration.toFixed(2)}ms`);
+  }
+  return result;
+}
 
 type HiddenFlipEntry = {
   key: string;
@@ -3031,7 +3049,8 @@ export function ScanResultsTable({
   }, [datasetRows]);
 
   const routeScoreSummaryByRoute = useMemo<Record<string, RouteScoreSummary>>(
-    () => {
+    () =>
+      measureCalc("routeScoreSummaryByRoute", () => {
       if (!isRouteGrouped) return {};
       const out: Record<string, RouteScoreSummary> = {};
       for (const group of routeGroups) {
@@ -3091,7 +3110,7 @@ export function ScanResultsTable({
         };
       }
       return out;
-    },
+      }),
     [
       batchMetricsByRoute,
       displayScoreContext,
@@ -3104,6 +3123,7 @@ export function ScanResultsTable({
   );
 
   const topRoutePickCandidates = useMemo(() => {
+    return measureCalc("topRoutePickCandidates", () => {
     const labelByRoute = new Map<string, string>();
     const endpointDeltaByRoute = new Map<string, number>();
     const endpointRuleHitsByRoute = new Map<string, number>();
@@ -3172,6 +3192,7 @@ export function ScanResultsTable({
       });
     }
     return candidates;
+    });
   }, [
     batchMetricsByRoute,
     datasetRows,
@@ -3219,6 +3240,120 @@ export function ScanResultsTable({
       }).slice(0, 6),
     [suppressionTelemetry, topRoutePickCandidates],
   );
+
+  const previousLensRef = useRef<DecisionLensPreset>("recommended");
+  useEffect(() => {
+    previousLensRef.current = decisionLens;
+  }, [decisionLens]);
+
+  const explanationRouteKeys = useMemo(() => {
+    const keys = new Set<string>();
+    const routeGroupTotalPages = Math.max(
+      1,
+      Math.ceil(filteredRouteGroups.length / GROUP_CONTAINER_PAGE_SIZE),
+    );
+    const safeRouteGroupPage = Math.min(routeGroupPage, routeGroupTotalPages - 1);
+    const visibleRouteGroups = filteredRouteGroups.slice(
+      safeRouteGroupPage * GROUP_CONTAINER_PAGE_SIZE,
+      (safeRouteGroupPage + 1) * GROUP_CONTAINER_PAGE_SIZE,
+    );
+    for (const group of visibleRouteGroups) {
+      if (!expandedRouteGroups.has(group.key)) continue;
+      keys.add(group.key);
+    }
+    const picks = [
+      topRoutePicks.bestRecommendedRoutePack,
+      topRoutePicks.bestQuickSingleRoute,
+      topRoutePicks.bestSafeFillerRoute,
+    ];
+    for (const pick of picks) {
+      if (pick?.routeKey) keys.add(pick.routeKey);
+    }
+    if (activeRouteGroupKey) keys.add(activeRouteGroupKey);
+    return keys;
+  }, [activeRouteGroupKey, expandedRouteGroups, filteredRouteGroups, routeGroupPage, topRoutePicks]);
+
+  const routeExplanationByKey = useMemo<Record<string, RouteDecisionExplanation>>(
+    () =>
+      measureCalc("routeExplanationByKey", () => {
+        const out: Record<string, RouteDecisionExplanation> = {};
+        for (const routeKey of explanationRouteKeys) {
+          const summary = batchMetricsByRoute[routeKey];
+          if (!summary) continue;
+          const candidate = topRoutePickCandidates.find((entry) => entry.routeKey === routeKey);
+          out[routeKey] = buildRouteDecisionExplanation(
+            {
+              routeKey,
+              routeLabel: routeGroupByKey[routeKey]?.label ?? candidate?.routeLabel ?? routeKey,
+              recommendationScore: routeScoreSummaryByRoute[routeKey]?.routeRecommendationScore ?? candidate?.recommendationScore ?? 0,
+              dailyIskPerJump: summary.routeDailyIskPerJump ?? candidate?.dailyIskPerJump ?? 0,
+              totalProfit: summary.routeTotalProfit ?? candidate?.totalProfit ?? 0,
+              confidenceScore: calcRouteConfidence(routeAggregateMetricsByRoute[routeKey]).score,
+              executionQuality: summary.routeWeakestExecutionQuality ?? 0,
+              weightedSlippagePct: summary.routeWeightedSlippagePct ?? 0,
+              turnoverDays: summary.routeTurnoverDays ?? null,
+              cargoUsePercent: summary.routeCapacityUsedPercent ?? null,
+              riskCount:
+                (summary.routeRiskSpikeCount ?? 0) +
+                (summary.routeRiskNoHistoryCount ?? 0) +
+                (summary.routeRiskUnstableHistoryCount ?? 0) +
+                (summary.routeRiskThinFillCount ?? 0),
+              staleVerificationPenalty:
+                routeVerificationByKey[routeKey]?.status === "Invalid" ? 12 : 0,
+            },
+            decisionLens as RouteDecisionLens,
+          );
+        }
+        return out;
+      }),
+    [
+      batchMetricsByRoute,
+      decisionLens,
+      explanationRouteKeys,
+      routeAggregateMetricsByRoute,
+      routeGroupByKey,
+      routeScoreSummaryByRoute,
+      routeVerificationByKey,
+      topRoutePickCandidates,
+    ],
+  );
+
+  const routeLensDeltaByKey = useMemo<Record<string, string>>(() => {
+    const out: Record<string, string> = {};
+    for (const routeKey of Object.keys(routeExplanationByKey)) {
+      const summary = batchMetricsByRoute[routeKey];
+      if (!summary) continue;
+      out[routeKey] = explainLensDelta(
+        {
+          routeKey,
+          routeLabel: routeGroupByKey[routeKey]?.label ?? routeKey,
+          recommendationScore: routeScoreSummaryByRoute[routeKey]?.routeRecommendationScore ?? 0,
+          dailyIskPerJump: summary.routeDailyIskPerJump ?? 0,
+          totalProfit: summary.routeTotalProfit ?? 0,
+          confidenceScore: calcRouteConfidence(routeAggregateMetricsByRoute[routeKey]).score,
+          executionQuality: summary.routeWeakestExecutionQuality ?? 0,
+          weightedSlippagePct: summary.routeWeightedSlippagePct ?? 0,
+          turnoverDays: summary.routeTurnoverDays ?? null,
+          cargoUsePercent: summary.routeCapacityUsedPercent ?? null,
+          riskCount:
+            (summary.routeRiskSpikeCount ?? 0) +
+            (summary.routeRiskNoHistoryCount ?? 0) +
+            (summary.routeRiskUnstableHistoryCount ?? 0) +
+            (summary.routeRiskThinFillCount ?? 0),
+        },
+        previousLensRef.current as RouteDecisionLens,
+        decisionLens as RouteDecisionLens,
+      );
+    }
+    return out;
+  }, [
+    batchMetricsByRoute,
+    decisionLens,
+    routeAggregateMetricsByRoute,
+    routeExplanationByKey,
+    routeGroupByKey,
+    routeScoreSummaryByRoute,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -3428,6 +3563,7 @@ export function ScanResultsTable({
   );
 
   const renderRows = useMemo(() => {
+    return measureCalc("renderRows", () => {
     if (isRegionGrouped) {
       const rows: IndexedRow[] = [];
       for (const group of pagedRegionGroups) {
@@ -3464,6 +3600,7 @@ export function ScanResultsTable({
       rows.push(...group.rows.slice(1, limit));
     }
     return rows;
+    });
   }, [
     effectiveCollapsedRegionGroups,
     expandedItemGroups,
@@ -5720,6 +5857,8 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
         <RadiusInsightsPanel
           topRoutePicks={topRoutePicks}
           actionQueue={actionQueue}
+          routeExplanationByKey={routeExplanationByKey}
+          lensDeltaByRouteKey={routeLensDeltaByKey}
           loopOpportunities={loopOpportunities ?? []}
           suppressionSummary={
             suppressionTelemetry.softSessionFiltered > 0 ||
@@ -6493,6 +6632,22 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                                     >
                                       {savedRoutePackByKey[group.key] ? "Pinned" : "Pin"}
                                     </button>
+                                    {routeExplanationByKey[group.key] && (
+                                      <ExplanationPopoverShell label="Why this route?">
+                                        <div className="text-eve-accent font-mono mb-1">
+                                          Score {routeExplanationByKey[group.key].totalScore.toFixed(1)}
+                                        </div>
+                                        <div className="text-eve-dim mb-1">
+                                          {routeExplanationByKey[group.key].summary}
+                                        </div>
+                                        <div className="text-[10px] text-indigo-200">
+                                          {routeLensDeltaByKey[group.key]}
+                                        </div>
+                                        {routeExplanationByKey[group.key].warnings.map((warning) => (
+                                          <div key={warning} className="text-[10px] text-amber-200">{warning}</div>
+                                        ))}
+                                      </ExplanationPopoverShell>
+                                    )}
                                   </div>
                                 </div>
                               </td>
