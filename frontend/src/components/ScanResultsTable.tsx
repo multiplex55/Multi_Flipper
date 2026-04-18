@@ -3447,12 +3447,16 @@ export function ScanResultsTable({
     const scopeRows = selectedRows.length > 0 ? selectedRows : [selectedOneLegAnchor];
     return scopeRows.filter((row) => sameLegKey(row) === sameLegKey(selectedOneLegAnchor));
   }, [selectedIds, selectedOneLegAnchor, selectionScopeRows]);
+  const datasetFlipRows = useMemo(
+    () => datasetRows.map((entry) => entry.row),
+    [datasetRows],
+  );
   const oneLegSuggestions = useMemo(() => {
     if (!selectedOneLegAnchor || !oneLegModeEnabled) {
       return { sameLeg: [], sameOriginOrDestination: [], nextBestTrade: [] };
     }
     return buildOneLegSuggestions({
-      rows: datasetRows,
+      rows: datasetFlipRows,
       anchor: selectedOneLegAnchor,
       cargoLimit,
       profile: opportunityProfile,
@@ -3460,7 +3464,7 @@ export function ScanResultsTable({
     });
   }, [
     cargoLimit,
-    datasetRows,
+    datasetFlipRows,
     displayScoreContext,
     oneLegModeEnabled,
     opportunityProfile,
@@ -3471,11 +3475,11 @@ export function ScanResultsTable({
       return { remainingCapacityM3: 0, candidates: [] };
     }
     return buildOneLegFillers({
-      rows: datasetRows,
+      rows: datasetFlipRows,
       anchor: selectedOneLegAnchor,
       cargoLimit,
     });
-  }, [cargoLimit, datasetRows, oneLegModeEnabled, selectedOneLegAnchor]);
+  }, [cargoLimit, datasetFlipRows, oneLegModeEnabled, selectedOneLegAnchor]);
 
   useEffect(() => {
     try {
