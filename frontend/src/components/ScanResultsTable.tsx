@@ -1659,6 +1659,7 @@ export function ScanResultsTable({
   const showRouteWorkbench = featureConfig.showRouteWorkbench;
   const showSavedRoutes = featureConfig.showSavedRoutes;
   const showLoopPanel = featureConfig.showLoopPanel;
+  const isRadiusMode = tradeStateTab === "radius";
   const effectiveRouteViewMode =
     allowRouteGrouping && routeViewMode === "route" ? "route" : "rows";
   const isItemGrouped =
@@ -4828,36 +4829,6 @@ export function ScanResultsTable({
             {!compactDashboard && watchlistIds.size > 0 && (
               <span className="text-emerald-300">★ Tracked: {watchlistIds.size}</span>
             )}
-            {selectedIds.size > 0 && (
-              <>
-                <span className="text-eve-accent">{t("selected", { count: selectedIds.size })}</span>
-                {selectedRouteDerivation && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => onOpenInRoute?.(selectedRouteDerivation.routeKey)}
-                      className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
-                    >
-                      Open in Route
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onOpenInRouteWorkbench?.(selectedRouteDerivation.routeKey)}
-                      className="rounded-sm border border-eve-accent/60 px-1.5 py-0.5 text-[10px] text-eve-accent hover:bg-eve-accent/10"
-                    >
-                      Open in Route Workbench
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onSendToRouteQueue?.(selectedRouteDerivation.routeKey)}
-                      className="rounded-sm border border-indigo-400/50 px-1.5 py-0.5 text-[10px] text-indigo-200 hover:bg-indigo-500/10"
-                    >
-                      Send to Route Queue
-                    </button>
-                  </>
-                )}
-              </>
-            )}
           </div>
 
           <div className="flex-1" />
@@ -4954,31 +4925,70 @@ export function ScanResultsTable({
             </>
           )}
 
-          <ToolbarBtn
-            label={t("columnsButton")}
-            title={t("columnsPanelTitle")}
-            active={showColumnPanel}
-            onClick={() => setShowColumnPanel((v) => !v)}
-          />
-          <ToolbarBtn
-            label="⊞"
-            title={showFilters ? t("clearFilters") : t("filterPlaceholder")}
-            active={showFilters}
-            onClick={() => setShowFilters((v) => !v)}
-          />
-          {hasActiveFilters && <ToolbarBtn label="✕" title={t("clearFilters")} onClick={clearFilters} />}
-          {results.length > 0 && (
-            <>
+          <div data-testid="radius-toolbar-primary-controls" className="flex flex-wrap items-center gap-1">
+            <ToolbarBtn
+              label={t("columnsButton")}
+              title={t("columnsPanelTitle")}
+              active={showColumnPanel}
+              onClick={() => setShowColumnPanel((v) => !v)}
+            />
+            <ToolbarBtn
+              label="⊞"
+              title={showFilters ? t("clearFilters") : t("filterPlaceholder")}
+              active={showFilters}
+              onClick={() => setShowFilters((v) => !v)}
+            />
+            {hasActiveFilters && <ToolbarBtn label="✕" title={t("clearFilters")} onClick={clearFilters} />}
+            {results.length > 0 && (
               <ToolbarBtn
                 label={compactRows ? "⊞" : "⊟"}
                 title={compactRows ? t("comfyRows") : t("compactRows")}
                 active={compactRows}
                 onClick={() => setCompactRows((v) => !v)}
               />
-              <ToolbarBtn label="CSV" title={t("exportCSV")} onClick={exportCSV} />
-              <ToolbarBtn label="⎘" title={t("copyTable")} onClick={copyTable} />
-            </>
-          )}
+            )}
+          </div>
+          <div data-testid="radius-toolbar-secondary-actions" className="flex flex-wrap items-center gap-1">
+            {selectedIds.size > 0 && <span className="text-eve-accent">{t("selected", { count: selectedIds.size })}</span>}
+            {selectedRouteDerivation && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => onOpenInRoute?.(selectedRouteDerivation.routeKey)}
+                  className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
+                >
+                  Open in Route
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onOpenInRouteWorkbench?.(selectedRouteDerivation.routeKey)}
+                  className="rounded-sm border border-eve-accent/60 px-1.5 py-0.5 text-[10px] text-eve-accent hover:bg-eve-accent/10"
+                >
+                  Open in Route Workbench
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSendToRouteQueue?.(selectedRouteDerivation.routeKey)}
+                  className="rounded-sm border border-indigo-400/50 px-1.5 py-0.5 text-[10px] text-indigo-200 hover:bg-indigo-500/10"
+                >
+                  Send to Route Queue
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={() => onOpenPriceValidation?.("")}
+              className="rounded-sm border border-eve-accent/50 px-1.5 py-0.5 text-[10px] text-eve-accent hover:bg-eve-accent/10"
+            >
+              Verifier
+            </button>
+            {results.length > 0 && (
+              <>
+                <ToolbarBtn label="CSV" title={t("exportCSV")} onClick={exportCSV} />
+                <ToolbarBtn label="⎘" title={t("copyTable")} onClick={copyTable} />
+              </>
+            )}
+          </div>
         </div>
         {!compactDashboard && results.length > 0 && !scanning && (
           <div className="mt-1 text-[11px] text-eve-dim/80">
@@ -5214,7 +5224,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               })}
             </div>
 
-            {!isRegionGrouped && (
+            {!isRegionGrouped && !isRadiusMode && (
               <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
                 <span className="text-eve-dim px-1">{t("decisionLensTitle")}</span>
                 {(effectiveRouteViewMode === "route"
@@ -5645,7 +5655,18 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
         </div>
       )}
 
-      {!isRegionGrouped && showRouteInsights && (
+      {!isRegionGrouped && isRadiusMode && (
+        <RadiusInsightsPanel
+          topRoutePicks={topRoutePicks}
+          actionQueue={actionQueue}
+          loopOpportunities={showLoopPanel ? effectiveLoopOpportunities : []}
+          openRouteWorkbench={openRouteWorkbench}
+          compactTeaser
+          compactDashboard={compactDashboard}
+        />
+      )}
+
+      {!isRegionGrouped && showRouteInsights && !isRadiusMode && (
         <RadiusInsightsPanel
           topRoutePicks={topRoutePicks}
           actionQueue={actionQueue}
@@ -5674,7 +5695,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
         />
       )}
 
-      {!isRegionGrouped && showSavedRoutes && (
+      {!isRegionGrouped && showSavedRoutes && !isRadiusMode && (
         <SavedRoutePacksPanel
           packs={savedRoutePacks}
           onOpen={openSavedRoutePack}
