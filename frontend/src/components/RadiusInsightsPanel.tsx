@@ -33,6 +33,7 @@ type RadiusInsightsPanelProps = {
   activeRouteLabel?: string | null;
   defaultExpanded?: boolean;
   compactDashboard?: boolean;
+  compactTeaser?: boolean;
   routeExplanationByKey?: Record<string, RouteDecisionExplanation>
   lensDeltaByRouteKey?: Record<string, string>
 };
@@ -91,6 +92,7 @@ export function RadiusInsightsPanel({
   activeRouteLabel = null,
   defaultExpanded = false,
   compactDashboard = false,
+  compactTeaser = false,
   routeExplanationByKey = {},
   lensDeltaByRouteKey = {},
 }: RadiusInsightsPanelProps) {
@@ -144,6 +146,46 @@ export function RadiusInsightsPanel({
       // ignore storage errors
     }
   };
+
+  if (compactTeaser) {
+    return (
+      <div className={`shrink-0 px-2 ${compactDashboard ? "pb-1" : "pb-2"}`}>
+        <section className={`border border-eve-border rounded-sm bg-eve-dark/40 ${compactDashboard ? "p-1.5" : "p-2"}`}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-[11px] uppercase tracking-wider text-eve-dim">Radius route insights</h3>
+            <button
+              type="button"
+              onClick={() => openRouteWorkbench(topRoutePicks.bestRecommendedRoutePack?.routeKey ?? "", "summary")}
+              disabled={!topRoutePicks.bestRecommendedRoutePack}
+              className="px-2 py-0.5 rounded-sm border border-eve-accent/60 text-[11px] text-eve-accent hover:bg-eve-accent/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Open Route Workspace
+            </button>
+          </div>
+          <div className="mt-2 grid grid-cols-1 gap-1.5 text-[11px]">
+            {picks
+              .filter(([, pick]) => !!pick)
+              .slice(0, 3)
+              .map(([titleKey, pick]) => (
+                <div
+                  key={titleKey}
+                  className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-2 py-1 flex items-center justify-between gap-2"
+                >
+                  <span className="text-eve-dim">{t(titleKey)}</span>
+                  <span className="truncate text-eve-text">{pick?.routeLabel}</span>
+                </div>
+              ))}
+            <div className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-2 py-1 text-eve-dim">
+              Route queue: <span className="text-eve-text">{actionQueue.length}</span>
+            </div>
+            <div className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-2 py-1 text-eve-dim">
+              Loop candidates: <span className="text-eve-text">{loopOpportunities.length}</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className={`shrink-0 px-2 ${compactDashboard ? "pb-1" : "pb-2"}`}>
