@@ -80,6 +80,10 @@ import {
   createEmptyRadiusScanSession,
   createRadiusScanSession,
 } from "@/lib/radiusScanSession";
+import type {
+  RouteHandoffContext,
+  RouteHandoffLegContext,
+} from "@/lib/routeHandoff";
 
 type Tab =
   | "radius"
@@ -714,6 +718,11 @@ function App() {
     useState<RouteWorkspaceMode>("discover");
   const [routeWorkspaceSource, setRouteWorkspaceSource] = useState<"radius" | "finder">("radius");
   const [routeQueueKeys, setRouteQueueKeys] = useState<string[]>([]);
+  const [pendingRouteContext, setPendingRouteContext] =
+    useState<RouteHandoffContext | null>(null);
+  const [pendingRadiusManifest, setPendingRadiusManifest] = useState("");
+  const [pendingSelectedLeg, setPendingSelectedLeg] =
+    useState<RouteHandoffLegContext | null>(null);
   const [bannedTypeIDs, setBannedTypeIDs] = useState<number[]>([]);
   const [bannedStationIDs, setBannedStationIDs] = useState<number[]>([]);
   const [sessionStationFilters, setSessionStationFilters] =
@@ -775,6 +784,9 @@ function App() {
     setActiveRadiusRouteKey(null);
     setRouteWorkspaceMode("discover");
     setRouteWorkspaceSource("radius");
+    setPendingRouteContext(null);
+    setPendingRadiusManifest("");
+    setPendingSelectedLeg(null);
   }, []);
   const openRouteWorkspaceFromRadius = useCallback(
     (routeKey: string, mode: RouteWorkspaceMode) => {
@@ -794,6 +806,22 @@ function App() {
       openRouteWorkspaceFromRadius(routeKey, "discover");
     },
     [openRouteWorkspaceFromRadius],
+  );
+  const handleRouteHandoffFromScanner = useCallback(
+    (
+      context: RouteHandoffContext,
+      manifestText: string,
+      selectedLeg: RouteHandoffLegContext | null,
+    ) => {
+      setPendingRouteContext(context);
+      setPendingRadiusManifest(manifestText);
+      setPendingSelectedLeg(selectedLeg);
+      setActiveRadiusRouteKey(context.routeKey);
+      setRouteWorkspaceMode("finder");
+      setRouteWorkspaceSource("radius");
+      setTab("route");
+    },
+    [setTab],
   );
 
   const abortRef = useRef<AbortController | null>(null);
@@ -2402,6 +2430,7 @@ const handleScanAndRefresh = useCallback(async () => {
                   openRouteWorkspaceFromRadius(routeKey, "workbench")
                 }
                 onSendToRouteQueue={sendRouteToQueueFromRadius}
+                onRouteHandoff={handleRouteHandoffFromScanner}
                 featureConfig={RADIUS_SCAN_RESULTS_FEATURE_CONFIG}
               />
             </div>
@@ -2555,6 +2584,9 @@ const handleScanAndRefresh = useCallback(async () => {
                 }}
                 workspaceSource={routeWorkspaceSource}
                 routeQueueKeys={routeQueueKeys}
+                pendingRouteContext={pendingRouteContext}
+                pendingRadiusManifest={pendingRadiusManifest}
+                pendingSelectedLeg={pendingSelectedLeg}
               />
             </div>
             <div

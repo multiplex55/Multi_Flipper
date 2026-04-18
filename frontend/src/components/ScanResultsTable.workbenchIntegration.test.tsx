@@ -59,7 +59,7 @@ function makeRow(overrides: Partial<FlipResult> = {}): FlipResult {
   };
 }
 
-function renderTable() {
+function renderTable(onRouteHandoff?: (...args: unknown[]) => void) {
   return render(
     <I18nProvider>
       <ToastProvider>
@@ -68,6 +68,7 @@ function renderTable() {
           scanning={false}
           progress=""
           tradeStateTab="radius"
+          onRouteHandoff={onRouteHandoff as any}
         />
       </ToastProvider>
     </I18nProvider>,
@@ -92,10 +93,54 @@ describe("ScanResultsTable workbench integration", () => {
     expect(panel).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId("route-workbench-action-pin"));
-    fireEvent.click(screen.getByRole("button", { name: /Open Jita → Amarr summary/i }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: /Open route workbench summary for Jita → Amarr/i,
+      }),
+    );
     expect(screen.getByTestId("route-workbench-panel:loc:60003760->loc:60008494")).toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole("button", { name: /jump to group/i })[0]);
-    expect(screen.getByTestId("route-workbench-panel:loc:60003760->loc:60008494")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: /Open route workbench verification for Jita → Amarr/i,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("emits structured payload for each route handoff action", async () => {
+    const onRouteHandoff = vi.fn();
+    renderTable(onRouteHandoff);
+
+    fireEvent.click(screen.getByRole("button", { name: "Row view" }));
+    const checkboxes = await screen.findAllByRole("checkbox");
+    fireEvent.click(checkboxes[1]!);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Open in Route Planner" }),
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Open in Route Validation" }),
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Open in Cargo Plan" }));
+
+    expect(onRouteHandoff).toHaveBeenCalledTimes(3);
+    expect(onRouteHandoff.mock.calls[0][0]).toMatchObject({
+      source: "scanner",
+      preferredEntryAction: "planner",
+      routeKey: "loc:60003760->loc:60008494",
+    });
+    expect(onRouteHandoff.mock.calls[1][0]).toMatchObject({
+      preferredEntryAction: "validation",
+    });
+    expect(onRouteHandoff.mock.calls[2][0]).toMatchObject({
+      preferredEntryAction: "cargo",
+    });
+    expect(onRouteHandoff.mock.calls[0][1]).toContain("Scanner Route Handoff");
+    expect(onRouteHandoff.mock.calls[0][2]).toMatchObject({
+      buyLocationID: 60003760,
+      sellLocationID: 60008494,
+      buySystemName: "Jita",
+      sellSystemName: "Amarr",
+    });
   });
 });

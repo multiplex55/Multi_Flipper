@@ -34,6 +34,11 @@ import {
   buildOrderedRouteManifestFromRouteResult,
   formatOrderedRouteManifestText,
 } from "@/lib/batchManifestFormat";
+import type {
+  RouteHandoffContext,
+  RouteHandoffEntryAction,
+  RouteHandoffLegContext,
+} from "@/lib/routeHandoff";
 
 type SortKey = "hops" | "profit" | "jumps" | "ppj";
 type SortDir = "asc" | "desc";
@@ -44,6 +49,9 @@ interface Props {
   /** Results loaded externally (e.g. from history) */
   loadedResults?: RouteResult[] | null;
   isLoggedIn?: boolean;
+  pendingRouteContext?: RouteHandoffContext | null;
+  pendingRadiusManifest?: string;
+  pendingSelectedLeg?: RouteHandoffLegContext | null;
 }
 
 function formatISK(v: number): string {
@@ -62,6 +70,9 @@ export function RouteBuilder({
   onChange,
   loadedResults,
   isLoggedIn = false,
+  pendingRouteContext = null,
+  pendingRadiusManifest = "",
+  pendingSelectedLeg = null,
 }: Props) {
   const { t } = useI18n();
   const [minHops, setMinHops] = useState<number | "">(
@@ -155,6 +166,9 @@ export function RouteBuilder({
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [plannerInitialAction, setPlannerInitialAction] =
     useState<RoutePlannerAction | null>(null);
+  const plannerBtnRef = useRef<HTMLButtonElement | null>(null);
+  const validationBtnRef = useRef<HTMLButtonElement | null>(null);
+  const cargoBtnRef = useRef<HTMLButtonElement | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("profit");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const abortRef = useRef<AbortController | null>(null);
@@ -265,6 +279,77 @@ export function RouteBuilder({
       setSortDir("desc");
     }
   };
+
+  const mapHandoffAction = useCallback(
+    (action: RouteHandoffEntryAction): RoutePlannerAction => {
+      if (action === "validation") return "validate_route_prices";
+      if (action === "cargo") return "build_cargo_plan";
+      return "expand_route";
+    },
+    [],
+  );
+
+  const buildRouteFromHandoffLeg = useCallback((leg: RouteHandoffLegContext): RouteResult => {
+    return {
+      Hops: [
+        {
+          SystemName: leg.buySystemName,
+          StationName: leg.buyStationName,
+          SystemID: leg.buySystemID,
+          DestSystemName: leg.sellSystemName,
+          DestStationName: leg.sellStationName,
+          DestSystemID: leg.sellSystemID,
+          TypeName: "Scanner handoff",
+          TypeID: 0,
+          BuyPrice: 0,
+          SellPrice: 0,
+          Units: 0,
+          Profit: 0,
+          Jumps: leg.totalJumps,
+          RegionID: 0,
+          modeled_qty: 0,
+          buy_remaining: 0,
+          sell_remaining: 0,
+          effective_buy: 0,
+          effective_sell: 0,
+        },
+      ],
+      TotalProfit: 0,
+      TotalJumps: leg.totalJumps,
+      ProfitPerJump: leg.profitPerJump,
+      HopCount: 1,
+      TargetSystemName: leg.sellSystemName,
+      TargetJumps: leg.totalJumps,
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!pendingRouteContext || !pendingSelectedLeg) return;
+    const boundedMin = Math.max(1, Math.min(25, pendingSelectedLeg.totalJumps || 1));
+    const boundedMax = Math.max(
+      boundedMin,
+      Math.max(2, Math.min(25, pendingSelectedLeg.totalJumps || 2)),
+    );
+    setTargetSystemName(pendingSelectedLeg.sellSystemName);
+    setMinHops(boundedMin);
+    setMaxHops(boundedMax);
+    setMinISKPerJump(Math.max(0, Math.round(pendingSelectedLeg.profitPerJump || 0)));
+    applyRouteParams({
+      route_target_system_name: pendingSelectedLeg.sellSystemName,
+      route_min_hops: boundedMin,
+      route_max_hops: boundedMax,
+      route_min_isk_per_jump: Math.max(
+        0,
+        Math.round(pendingSelectedLeg.profitPerJump || 0),
+      ),
+    });
+    if (import.meta.env.DEV) {
+      console.debug("[RouteBuilder] scanner handoff prefill", {
+        routeKey: pendingRouteContext.routeKey,
+        preferredEntryAction: pendingRouteContext.preferredEntryAction,
+      });
+    }
+  }, [applyRouteParams, pendingRouteContext, pendingSelectedLeg]);
 
   const sortedResults = useMemo(() => {
     if (results.length === 0) return results;
@@ -393,6 +478,29 @@ export function RouteBuilder({
     }),
     [allowEmptyHops, maxHops, minHops, minISKPerJump, params, targetSystemName],
   );
+
+  useEffect(() => {
+    if (!pendingRouteContext) return;
+    const action = pendingRouteContext.preferredEntryAction;
+    const focusMap: Record<RouteHandoffEntryAction, HTMLButtonElement | null> = {
+      planner: plannerBtnRef.current,
+      validation: validationBtnRef.current,
+      cargo: cargoBtnRef.current,
+    };
+    focusMap[action]?.focus();
+    if (!pendingSelectedLeg) return;
+    setPlannerSelection(
+      buildPlannerSelection(buildRouteFromHandoffLeg(pendingSelectedLeg)),
+    );
+    setPlannerInitialAction(mapHandoffAction(action));
+    setPlannerOpen(true);
+  }, [
+    buildPlannerSelection,
+    buildRouteFromHandoffLeg,
+    mapHandoffAction,
+    pendingRouteContext,
+    pendingSelectedLeg,
+  ]);
 
   const handleOpenRoutePlanner = useCallback(
     (route: RouteResult, action: RoutePlannerAction) => {
@@ -529,6 +637,78 @@ export function RouteBuilder({
           {results.length > 0 && (
             <div className="mt-2 text-xs text-eve-dim">
               {t("routeFound", { count: results.length })}
+            </div>
+          )}
+          {pendingRouteContext && (
+            <div
+              className="mt-2 rounded-sm border border-indigo-400/50 bg-indigo-500/10 p-2 text-xs"
+              data-testid="route-builder-scanner-handoff"
+            >
+              <div className="text-indigo-100">
+                Scanner handoff ready: {pendingRouteContext.routeLabel}
+              </div>
+              <div className="mt-1 flex flex-wrap gap-1">
+                <button
+                  ref={plannerBtnRef}
+                  type="button"
+                  className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
+                  onClick={() => {
+                    if (!pendingSelectedLeg) return;
+                    setPlannerSelection(
+                      buildPlannerSelection(buildRouteFromHandoffLeg(pendingSelectedLeg)),
+                    );
+                    setPlannerInitialAction("expand_route");
+                    setPlannerOpen(true);
+                  }}
+                  data-testid="route-handoff-action-planner"
+                >
+                  Open planner
+                </button>
+                <button
+                  ref={validationBtnRef}
+                  type="button"
+                  className="rounded-sm border border-eve-accent/60 px-1.5 py-0.5 text-[10px] text-eve-accent hover:bg-eve-accent/10"
+                  onClick={() => {
+                    if (!pendingSelectedLeg) return;
+                    setPlannerSelection(
+                      buildPlannerSelection(buildRouteFromHandoffLeg(pendingSelectedLeg)),
+                    );
+                    setPlannerInitialAction("validate_route_prices");
+                    setPlannerOpen(true);
+                  }}
+                  data-testid="route-handoff-action-validation"
+                >
+                  Open validation
+                </button>
+                <button
+                  ref={cargoBtnRef}
+                  type="button"
+                  className="rounded-sm border border-indigo-400/50 px-1.5 py-0.5 text-[10px] text-indigo-200 hover:bg-indigo-500/10"
+                  onClick={() => {
+                    if (!pendingSelectedLeg) return;
+                    setPlannerSelection(
+                      buildPlannerSelection(buildRouteFromHandoffLeg(pendingSelectedLeg)),
+                    );
+                    setPlannerInitialAction("build_cargo_plan");
+                    setPlannerOpen(true);
+                  }}
+                  data-testid="route-handoff-action-cargo"
+                >
+                  Open cargo
+                </button>
+                {pendingRadiusManifest ? (
+                  <button
+                    type="button"
+                    className="rounded-sm border border-purple-400/50 px-1.5 py-0.5 text-[10px] text-purple-200 hover:bg-purple-500/10"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(pendingRadiusManifest);
+                    }}
+                    data-testid="route-handoff-copy-manifest"
+                  >
+                    Copy handoff manifest
+                  </button>
+                ) : null}
+              </div>
             </div>
           )}
         </TabSettingsPanel>
