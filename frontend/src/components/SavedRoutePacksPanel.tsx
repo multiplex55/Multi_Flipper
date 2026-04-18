@@ -1,5 +1,6 @@
 import type { SavedRoutePack } from "@/lib/types";
 import { formatISK } from "@/lib/format";
+import { RouteWorkbenchPanel } from "@/components/RouteWorkbenchPanel";
 
 interface SavedRoutePacksPanelProps {
   packs: SavedRoutePack[];
@@ -7,6 +8,10 @@ interface SavedRoutePacksPanelProps {
   onVerify: (pack: SavedRoutePack) => void;
   onCopy: (pack: SavedRoutePack) => void;
   onRemove: (pack: SavedRoutePack) => void;
+  onMarkBought: (pack: SavedRoutePack, lineKey: string, qty: number) => void;
+  onMarkSold: (pack: SavedRoutePack, lineKey: string, qty: number) => void;
+  onMarkSkipped: (pack: SavedRoutePack, lineKey: string, reason: string) => void;
+  onResetLine: (pack: SavedRoutePack, lineKey: string) => void;
 }
 
 function verificationAge(lastVerifiedAt: string | null): string {
@@ -26,6 +31,10 @@ export function SavedRoutePacksPanel({
   onVerify,
   onCopy,
   onRemove,
+  onMarkBought,
+  onMarkSold,
+  onMarkSkipped,
+  onResetLine,
 }: SavedRoutePacksPanelProps) {
   return (
     <div className="border border-eve-border rounded-sm p-2 mb-2 bg-eve-panel/40" data-testid="saved-route-packs-panel">
@@ -47,7 +56,7 @@ export function SavedRoutePacksPanel({
             </thead>
             <tbody>
               {packs.map((pack) => (
-                <tr key={pack.routeKey} className="border-b border-eve-border/40 last:border-b-0">
+                <tr key={pack.routeKey} className="border-b border-eve-border/40 last:border-b-0 align-top">
                   <td className="py-1 pr-2 text-eve-text">{pack.routeLabel}</td>
                   <td className="py-1 pr-2">{pack.status}</td>
                   <td className="py-1 pr-2 font-mono">{formatISK(pack.summarySnapshot.routeTotalProfit)}</td>
@@ -60,6 +69,13 @@ export function SavedRoutePacksPanel({
                       <button type="button" onClick={() => onCopy(pack)} className="border border-eve-border/60 px-1.5 py-0.5 rounded-sm">Copy</button>
                       <button type="button" onClick={() => onRemove(pack)} className="border border-rose-500/50 text-rose-200 px-1.5 py-0.5 rounded-sm">Remove</button>
                     </div>
+                    <RouteWorkbenchPanel
+                      pack={pack}
+                      onMarkBought={(lineKey, qty) => onMarkBought(pack, lineKey, qty)}
+                      onMarkSold={(lineKey, qty) => onMarkSold(pack, lineKey, qty)}
+                      onMarkSkipped={(lineKey, reason) => onMarkSkipped(pack, lineKey, reason)}
+                      onResetLine={(lineKey) => onResetLine(pack, lineKey)}
+                    />
                   </td>
                 </tr>
               ))}

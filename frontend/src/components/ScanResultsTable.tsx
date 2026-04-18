@@ -114,6 +114,12 @@ import {
   removeSavedRoutePack,
   upsertSavedRoutePack,
 } from "@/lib/savedRoutePacks";
+import {
+  markLineBought,
+  markLineSkipped,
+  markLineSold,
+  resetLineState,
+} from "@/lib/savedRouteExecution";
 import { buildSavedRoutePack } from "@/lib/routePackBuilder";
 import { SavedRoutePacksPanel } from "@/components/SavedRoutePacksPanel";
 
@@ -3829,6 +3835,18 @@ export function ScanResultsTable({
     [addToast, t],
   );
 
+  const updateSavedPackExecution = useCallback(
+    (routeKey: string, update: (pack: SavedRoutePack) => SavedRoutePack) => {
+      setSavedRoutePacks((prev) => {
+        const target = prev.find((item) => item.routeKey === routeKey);
+        if (!target) return prev;
+        const nextPack = update(target);
+        return upsertSavedRoutePack(nextPack);
+      });
+    },
+    [],
+  );
+
   const saveRoutePack = useCallback(
     (routeKey: string) => {
       const routeGroup = routeGroupByKey[routeKey];
@@ -5631,6 +5649,42 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
           onRemove={(pack) => {
             setSavedRoutePacks(removeSavedRoutePack(pack.routeKey));
           }}
+          onMarkBought={(pack, lineKey, qty) => {
+            const line = pack.lines[lineKey];
+            if (!line) return;
+            updateSavedPackExecution(pack.routeKey, (current) =>
+              markLineBought(
+                current,
+                pack.routeKey,
+                lineKey,
+                qty,
+                qty * line.plannedBuyPrice,
+              ),
+            );
+          }}
+          onMarkSold={(pack, lineKey, qty) => {
+            const line = pack.lines[lineKey];
+            if (!line) return;
+            updateSavedPackExecution(pack.routeKey, (current) =>
+              markLineSold(
+                current,
+                pack.routeKey,
+                lineKey,
+                qty,
+                qty * line.plannedSellPrice,
+              ),
+            );
+          }}
+          onMarkSkipped={(pack, lineKey, reason) =>
+            updateSavedPackExecution(pack.routeKey, (current) =>
+              markLineSkipped(current, pack.routeKey, lineKey, reason),
+            )
+          }
+          onResetLine={(pack, lineKey) =>
+            updateSavedPackExecution(pack.routeKey, (current) =>
+              resetLineState(current, pack.routeKey, lineKey),
+            )
+          }
         />
       )}
 
