@@ -135,6 +135,7 @@ describe("endpointPreferences", () => {
     expect(evaluated.excluded).toBe(false);
     expect(evaluated.appliedRules).toContain("sell_structure_bonus");
   });
+
   it("disabled mode returns neutral output regardless of row and profile", () => {
     const profile = {
       ...DEFAULT_ENDPOINT_PREFERENCE_PROFILE,
@@ -230,4 +231,39 @@ describe("endpointPreferences", () => {
     expect(hideEval).toEqual(rankOnlyEval);
   });
 
+  it.each([
+    {
+      name: "positive delta from non-hub to hub route",
+      row: { ...baseRow, BuySystemName: "Perimeter", SellSystemName: "Jita" },
+      expectedSign: 1,
+    },
+    {
+      name: "negative delta from hub buy and deadhead",
+      row: { ...baseRow, BuySystemName: "Jita", SellSystemName: "Perimeter" },
+      expectedSign: -1,
+    },
+    {
+      name: "zero delta from neutral preset",
+      row: { ...baseRow, BuySystemName: "Perimeter", SellSystemName: "Amarr" },
+      useNeutral: true,
+      expectedSign: 0,
+    },
+  ])("table-driven score delta scenario: $name", ({ row, expectedSign, useNeutral }) => {
+    const profile = useNeutral
+      ? ENDPOINT_PREFERENCE_PRESETS.neutral
+      : ENDPOINT_PREFERENCE_PRESETS.safe_arbitrage;
+
+    const evaluated = evaluateEndpointPreferences(
+      row,
+      profile,
+      ["Jita", "Amarr"],
+      EndpointPreferenceApplicationMode.RankOnly,
+    );
+
+    if (expectedSign === 0) {
+      expect(evaluated.scoreDelta).toBe(0);
+      return;
+    }
+    expect(Math.sign(evaluated.scoreDelta)).toBe(expectedSign);
+  });
 });
