@@ -199,6 +199,9 @@ export const en = {
     orderingModeSmartDescription: "Apply priority layers before the selected column sort.",
     orderingModeColumnOnlyLabel: "Column only",
     orderingModeColumnOnlyDescription: "Sort strictly by selected column and direction.",
+    resetImplicitOrderingLabel: "Reset implicit ordering",
+    resetImplicitOrderingHelp:
+      "Reset smart ordering layers (endpoint preferences, tracked-first, and pins-first) while preserving explicit filters and column sort.",
     orderingStackLabel: "Ordering Stack",
     orderingStackModeSmart: "Order: Smart",
     orderingStackModeColumnOnly: "Order: Column only",
