@@ -28,10 +28,14 @@ import { CharacterPopup } from "./components/CharacterPopup";
 import { TopActionButtons } from "./components/TopActionButtons";
 import { RadiusColumnGuideModal } from "./components/RadiusColumnGuideModal";
 import {
+  addPinnedOpportunity,
   applyAppUpdate,
   getUpdateCheckStatus,
   getConfig,
+  listPinnedOpportunities,
+  removePinnedOpportunity,
   skipAppUpdateForSession,
+  subscribePinnedOpportunityChanges,
   updateConfig,
   scan,
   scanMultiRegion,
@@ -76,6 +80,8 @@ import {
   filterStationTrades,
   type SessionStationFilters,
 } from "@/lib/banlistFilters";
+import { mapRegionalRowToPinnedOpportunity } from "@/lib/pinnedOpportunityMapper";
+import { RegionalDayTraderTable } from "@/components/RegionalDayTraderTable";
 import {
   createEmptyRadiusScanSession,
   createRadiusScanSession,
@@ -700,6 +706,16 @@ function App() {
 
   const [radiusResults, setRadiusResults] = useState<FlipResult[]>([]);
   const [regionResults, setRegionResults] = useState<FlipResult[]>([]);
+  const [regionHubResults, setRegionHubResults] = useState<RegionalDayTradeHub[]>([]);
+  const [regionHubSummary, setRegionHubSummary] = useState<{
+    count: number;
+    targetRegionName: string;
+    periodDays: number;
+  } | null>(null);
+  const [regionViewMode, setRegionViewMode] = useState<"items" | "hubs">("items");
+  const [regionHubSystemFilter, setRegionHubSystemFilter] = useState<number | null>(null);
+  const [regionSourceLockSystemID, setRegionSourceLockSystemID] = useState<number | null>(null);
+  const [regionPinnedHubSystemIDs, setRegionPinnedHubSystemIDs] = useState<Set<number>>(new Set());
   const [contractResults, setContractResults] = useState<ContractResult[]>([]);
   const [radiusCacheMeta, setRadiusCacheMeta] =
     useState<StationCacheMeta | null>(null);
@@ -857,6 +873,27 @@ function App() {
     void refreshBanlistFilters();
   }, [refreshBanlistFilters]);
 
+  const reloadRegionPinnedHubSystemIDs = useCallback(() => {
+    listPinnedOpportunities("regional_day")
+      .then((rows) => {
+        const next = new Set<number>();
+        for (const row of rows) {
+          const sourceSystemID = toInt(row.buy_system_id, 0);
+          if (sourceSystemID > 0) next.add(sourceSystemID);
+        }
+        setRegionPinnedHubSystemIDs(next);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    reloadRegionPinnedHubSystemIDs();
+    return subscribePinnedOpportunityChanges((detail) => {
+      if (detail.tab && detail.tab !== "regional_day") return;
+      reloadRegionPinnedHubSystemIDs();
+    });
+  }, [reloadRegionPinnedHubSystemIDs]);
+
   const openExternalURL = useCallback(async (url: string) => {
     const { runtime, isTauri, isWails } = getDesktopRuntimeFlags();
     if (isWails) {
@@ -874,6 +911,50 @@ function App() {
     }
     window.open(url, "_blank", "noopener,noreferrer");
   }, []);
+
+  const visibleRegionResults = useMemo(() => {
+    if (!regionHubSystemFilter || regionHubSystemFilter <= 0) return regionResults;
+    return regionResults.filter((row) => row.BuySystemID === regionHubSystemFilter);
+  }, [regionHubSystemFilter, regionResults]);
+
+  const handleOpenItemsAtHub = useCallback((hub: RegionalDayTradeHub) => {
+    setRegionHubSystemFilter(hub.source_system_id);
+    setRegionViewMode("items");
+  }, []);
+
+  const handleSetRegionSourceLock = useCallback((hub: RegionalDayTradeHub) => {
+    setParams((prev) => ({ ...prev, system_name: hub.source_system_name }));
+    setRegionSourceLockSystemID(hub.source_system_id);
+    addToast(`Source lock set to ${hub.source_system_name}`, "success");
+  }, [addToast]);
+
+  const handleCopyRegionHubSummary = useCallback(async (hub: RegionalDayTradeHub) => {
+    const text = `${hub.source_system_name} (${hub.source_region_name}) · items ${hub.item_count} · period ${formatISK(hub.target_period_profit)} · now ${formatISK(hub.target_now_profit)}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      addToast("Hub summary copied", "success");
+    } catch {
+      addToast("Copy failed", "error", 2500);
+    }
+  }, [addToast]);
+
+  const handleToggleRegionPinHub = useCallback(async (hub: RegionalDayTradeHub) => {
+    const firstItem = hub.items[0];
+    if (!firstItem) {
+      addToast("No hub items available to pin", "error", 2500);
+      return;
+    }
+    const mapped = mapRegionalRowToPinnedOpportunity(firstItem);
+    const key = mapped.opportunity_key;
+    const pinned = regionPinnedHubSystemIDs.has(hub.source_system_id);
+    try {
+      if (pinned) await removePinnedOpportunity(key);
+      else await addPinnedOpportunity(mapped);
+      reloadRegionPinnedHubSystemIDs();
+    } catch {
+      addToast("Pin action failed", "error", 2500);
+    }
+  }, [addToast, regionPinnedHubSystemIDs, reloadRegionPinnedHubSystemIDs]);
 
   const [contractScanCompleted, setContractScanCompleted] = useState(false);
   const contractFilterHints = useMemo(() => {
@@ -1523,7 +1604,7 @@ const radiusParams =
         await triggerDesktopAlerts(results);
       } else if (currentTab === "region") {
         let meta: StationCacheMeta | undefined;
-const rows = await scanRegionalDayTrader(
+const response = await scanRegionalDayTrader(
   scanParams,
   setProgress,
   controller.signal,
@@ -1532,10 +1613,13 @@ const rows = await scanRegionalDayTrader(
   },
 );
         const normalizedRows = filterFlipResults(
-          normalizeRegionalResults(rows as unknown[]),
+          normalizeRegionalResults(response.rows as unknown[]),
           bannedTypeIDs,
           bannedStationIDs,
         );
+        setRegionHubResults(Array.isArray(response.hubs) ? response.hubs : []);
+        setRegionHubSummary(response.summary);
+        setRegionHubSystemFilter(null);
         // Persist region scan results to localStorage for cross-session restore
         try {
           localStorage.setItem(
@@ -2501,35 +2585,81 @@ const handleScanAndRefresh = useCallback(async () => {
                     </button>
                   </div>
                 )}
-              <ScanResultsTable
-                results={regionResults}
-                scanning={scanning && tab === "region"}
-                progress={tab === "region" ? progress : ""}
-                cacheMeta={regionCacheMeta}
-                tradeStateTab="region"
-                salesTaxPercent={params.sales_tax_percent}
-                brokerFeePercent={params.broker_fee_percent}
-                splitTradeFees={params.split_trade_fees}
-                buyBrokerFeePercent={params.buy_broker_fee_percent}
-                sellBrokerFeePercent={params.sell_broker_fee_percent}
-                buySalesTaxPercent={params.buy_sales_tax_percent}
-                sellSalesTaxPercent={params.sell_sales_tax_percent}
-                isLoggedIn={authStatus.logged_in}
-                showRegions
-                columnProfile="region_eveguru"
-                cargoLimit={params.cargo_capacity}
-                originSystemName={params.system_name}
-                minRouteSecurity={params.min_route_security}
-                includeStructures={params.include_structures}
-                routeMaxJumps={params.route_max_hops}
-                maxDetourJumpsPerNode={params.max_detour_jumps_per_node}
-                allowLowsec={(params.min_route_security ?? 0.45) < 0.45}
-                allowNullsec={(params.min_route_security ?? 0.45) <= 0}
-                allowWormhole={false}
-                onOpenPriceValidation={openVerifierFromManifest}
-                strategyScore={strategyScore}
-                featureConfig={REGION_SCAN_RESULTS_FEATURE_CONFIG}
-              />
+              <div className="shrink-0 flex items-center gap-2 px-2 py-1 border-b border-eve-border/20">
+                <button
+                  type="button"
+                  className={`px-2 py-0.5 text-xs rounded-sm border ${regionViewMode === "items" ? "border-eve-accent text-eve-accent" : "border-eve-border text-eve-dim"}`}
+                  onClick={() => setRegionViewMode("items")}
+                >
+                  Items
+                </button>
+                <button
+                  type="button"
+                  className={`px-2 py-0.5 text-xs rounded-sm border ${regionViewMode === "hubs" ? "border-eve-accent text-eve-accent" : "border-eve-border text-eve-dim"}`}
+                  onClick={() => setRegionViewMode("hubs")}
+                >
+                  Hubs
+                </button>
+                {regionHubSystemFilter && (
+                  <button
+                    type="button"
+                    className="ml-2 px-2 py-0.5 text-xs rounded-sm border border-eve-border text-eve-dim hover:text-eve-text"
+                    onClick={() => setRegionHubSystemFilter(null)}
+                  >
+                    Clear hub filter
+                  </button>
+                )}
+                {regionSourceLockSystemID && (
+                  <span className="text-[11px] text-eve-dim ml-auto">Source lock active</span>
+                )}
+              </div>
+              {regionViewMode === "items" ? (
+                <ScanResultsTable
+                  results={visibleRegionResults}
+                  scanning={scanning && tab === "region"}
+                  progress={tab === "region" ? progress : ""}
+                  cacheMeta={regionCacheMeta}
+                  tradeStateTab="region"
+                  salesTaxPercent={params.sales_tax_percent}
+                  brokerFeePercent={params.broker_fee_percent}
+                  splitTradeFees={params.split_trade_fees}
+                  buyBrokerFeePercent={params.buy_broker_fee_percent}
+                  sellBrokerFeePercent={params.sell_broker_fee_percent}
+                  buySalesTaxPercent={params.buy_sales_tax_percent}
+                  sellSalesTaxPercent={params.sell_sales_tax_percent}
+                  isLoggedIn={authStatus.logged_in}
+                  showRegions
+                  columnProfile="region_eveguru"
+                  cargoLimit={params.cargo_capacity}
+                  originSystemName={params.system_name}
+                  minRouteSecurity={params.min_route_security}
+                  includeStructures={params.include_structures}
+                  routeMaxJumps={params.route_max_hops}
+                  maxDetourJumpsPerNode={params.max_detour_jumps_per_node}
+                  allowLowsec={(params.min_route_security ?? 0.45) < 0.45}
+                  allowNullsec={(params.min_route_security ?? 0.45) <= 0}
+                  allowWormhole={false}
+                  onOpenPriceValidation={openVerifierFromManifest}
+                  strategyScore={strategyScore}
+                  featureConfig={REGION_SCAN_RESULTS_FEATURE_CONFIG}
+                />
+              ) : (
+                <RegionalDayTraderTable
+                  hubs={regionHubResults}
+                  scanning={scanning && tab === "region"}
+                  progress={tab === "region" ? progress : ""}
+                  cacheMeta={regionCacheMeta}
+                  totalItems={regionHubSummary?.count}
+                  targetRegionName={regionHubSummary?.targetRegionName}
+                  periodDays={regionHubSummary?.periodDays}
+                  pinnedHubSystemIDs={regionPinnedHubSystemIDs}
+                  sourceLockSystemID={regionSourceLockSystemID}
+                  onOpenItemsAtHub={handleOpenItemsAtHub}
+                  onSetSourceLock={handleSetRegionSourceLock}
+                  onCopySummary={handleCopyRegionHubSummary}
+                  onTogglePinHub={handleToggleRegionPinHub}
+                />
+              )}
             </div>
             <div
               className={`flex-1 min-h-0 flex flex-col ${tab === "contracts" ? "" : "hidden"}`}

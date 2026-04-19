@@ -85,6 +85,47 @@ func TestHandleSetConfig_StrategyScorePatchRoundTripAndClamp(t *testing.T) {
 	}
 }
 
+func TestBuildRegionalDayResultPayload_IncludesDataAndHubs(t *testing.T) {
+	rows := []engine.FlipResult{
+		{TypeID: 34, TypeName: "Tritanium"},
+	}
+	hubs := []engine.RegionalDayTradeHub{
+		{
+			SourceSystemID:   30000142,
+			SourceSystemName: "Jita",
+			ItemCount:        1,
+			Items: []engine.RegionalDayTradeItem{
+				{TypeID: 34, TypeName: "Tritanium"},
+			},
+		},
+	}
+
+	payload := buildRegionalDayResultPayload(
+		rows,
+		hubs,
+		123,
+		stationCacheMeta{},
+		"The Forge",
+		14,
+	)
+
+	if payload["data"] == nil {
+		t.Fatalf("expected result payload to include data")
+	}
+	if payload["hubs"] == nil {
+		t.Fatalf("expected result payload to include hubs")
+	}
+	if got := payload["count"].(int); got != len(rows) {
+		t.Fatalf("count = %d, want %d", got, len(rows))
+	}
+	if got := payload["target_region_name"].(string); got != "The Forge" {
+		t.Fatalf("target_region_name = %q, want %q", got, "The Forge")
+	}
+	if got := payload["period_days"].(int); got != 14 {
+		t.Fatalf("period_days = %d, want 14", got)
+	}
+}
+
 func TestReadBodyWithLimit(t *testing.T) {
 	t.Parallel()
 

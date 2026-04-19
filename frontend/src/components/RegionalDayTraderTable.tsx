@@ -1,15 +1,7 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useMemo, useState } from "react";
 import type { RegionalDayTradeHub, RegionalDayTradeItem, StationCacheMeta } from "@/lib/types";
 import { formatISK, formatISKFull, formatMargin } from "@/lib/format";
 import { EmptyState } from "./EmptyState";
-import {
-  addPinnedOpportunity,
-  listPinnedOpportunities,
-  removePinnedOpportunity,
-  subscribePinnedOpportunityChanges,
-} from "@/lib/api";
-import { mapRegionalRowToPinnedOpportunity } from "@/lib/pinnedOpportunityMapper";
-import { useGlobalToast } from "./Toast";
 
 interface Props {
   hubs: RegionalDayTradeHub[];
@@ -19,6 +11,12 @@ interface Props {
   totalItems?: number;
   targetRegionName?: string;
   periodDays?: number;
+  pinnedHubSystemIDs?: Set<number>;
+  sourceLockSystemID?: number | null;
+  onOpenItemsAtHub?: (hub: RegionalDayTradeHub) => void;
+  onSetSourceLock?: (hub: RegionalDayTradeHub) => void;
+  onCopySummary?: (hub: RegionalDayTradeHub) => void;
+  onTogglePinHub?: (hub: RegionalDayTradeHub) => void;
 }
 
 // ─── Sanity signals ──────────────────────────────────────────────────────────
@@ -351,44 +349,13 @@ export function RegionalDayTraderTable({
   totalItems = 0,
   targetRegionName = "",
   periodDays = 14,
+  pinnedHubSystemIDs,
+  sourceLockSystemID = null,
+  onOpenItemsAtHub,
+  onSetSourceLock,
+  onCopySummary,
+  onTogglePinHub,
 }: Props) {
-  const { addToast } = useGlobalToast();
-  const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
-  const reloadPinnedKeys = useCallback(() => {
-    listPinnedOpportunities("regional_day")
-      .then((rows) => setPinnedKeys(new Set(rows.map((row) => row.opportunity_key))))
-      .catch(() => {});
-  }, []);
-  useEffect(() => {
-    reloadPinnedKeys();
-    return subscribePinnedOpportunityChanges((detail) => {
-      if (detail.tab && detail.tab !== "regional_day") return;
-      if (import.meta.env.DEV) {
-        console.debug("[RegionalDayTraderTable] pin state refresh", detail);
-      }
-      reloadPinnedKeys();
-    });
-  }, [reloadPinnedKeys]);
-  const togglePinned = useCallback((row: RegionalDayTradeItem) => {
-    const mapped = mapRegionalRowToPinnedOpportunity(row);
-    const key = mapped.opportunity_key;
-    const removing = pinnedKeys.has(key);
-    setPinnedKeys((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-    (removing ? removePinnedOpportunity(key) : addPinnedOpportunity(mapped)).catch(() => {
-      setPinnedKeys((prev) => {
-        const next = new Set(prev);
-        if (removing) next.add(key);
-        else next.delete(key);
-        return next;
-      });
-      addToast("Operation failed", "error", 2500);
-    });
-  }, [addToast, pinnedKeys]);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>("period_profit");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -512,8 +479,22 @@ export function RegionalDayTraderTable({
                     <td className="px-2 py-1.5 text-eve-text truncate">
                       <span className="text-eve-accent mr-1">{isOpen ? "▼" : "►"}</span>
                       {hub.source_system_name}
+                      {sourceLockSystemID != null && sourceLockSystemID === hub.source_system_id && (
+                        <span className="ml-1 text-[10px] text-eve-accent">LOCK</span>
+                      )}
                     </td>
-                    <td className="px-2 py-1.5 text-center text-eve-dim">—</td>
+                    <td className="px-2 py-1.5 text-center">
+                      <button
+                        type="button"
+                        aria-label="Pin hub"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onTogglePinHub?.(hub);
+                        }}
+                      >
+                        {pinnedHubSystemIDs?.has(hub.source_system_id) ? "📌" : "📍"}
+                      </button>
+                    </td>
                     <td className="px-2 py-1.5 text-right">{hub.security.toFixed(1)}</td>
                     <td className="px-2 py-1.5 text-right">{hub.purchase_units.toLocaleString()}</td>
                     <td className="px-2 py-1.5 text-right">{hub.source_units.toLocaleString()}</td>
@@ -534,7 +515,13 @@ export function RegionalDayTraderTable({
                     <td className="px-2 py-1.5 text-right text-eve-dim">—</td>
                     <td className="px-2 py-1.5 text-right text-eve-dim">—</td>
                     <td className="px-2 py-1.5 text-right">{hub.item_count.toLocaleString()}</td>
-                    <td className="px-2 py-1.5 text-eve-dim">Mixed</td>
+                    <td className="px-2 py-1.5 text-eve-dim">
+                      <div className="flex items-center gap-1">
+                        <button type="button" onClick={(e) => { e.stopPropagation(); onOpenItemsAtHub?.(hub); }} className="text-[10px] px-1 rounded border border-eve-border/50">Items</button>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); onSetSourceLock?.(hub); }} className="text-[10px] px-1 rounded border border-eve-border/50">Lock</button>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); onCopySummary?.(hub); }} className="text-[10px] px-1 rounded border border-eve-border/50">Copy</button>
+                      </div>
+                    </td>
                   </tr>
 
                   {isOpen &&
@@ -561,16 +548,7 @@ export function RegionalDayTraderTable({
                             </span>
                           </td>
                           <td className="px-2 py-1.5 text-center">
-                            <button
-                              type="button"
-                              aria-label={pinnedKeys.has(mapRegionalRowToPinnedOpportunity(item).opportunity_key) ? "Unpin row" : "Pin row"}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                togglePinned(item);
-                              }}
-                            >
-                              📌
-                            </button>
+                            <span className="text-eve-dim">•</span>
                           </td>
                           <td className="px-2 py-1.5 text-right">{hub.security.toFixed(1)}</td>
                           <td className="px-2 py-1.5 text-right">{item.purchase_units.toLocaleString()}</td>

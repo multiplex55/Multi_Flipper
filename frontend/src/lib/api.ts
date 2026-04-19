@@ -40,6 +40,7 @@ import type {
   PLEXDashboard,
   PortfolioPnL,
   PortfolioOptimization,
+  RegionalDayTradeHub,
   RegionOpportunities,
   RouteResult,
   ScanParams,
@@ -172,6 +173,16 @@ type NdjsonGenericMessage<T> =
   | { type: "progress"; message: string }
   | { type: "result"; data: T[]; count?: number; scan_id?: number; cache_meta?: StationCacheMeta }
   | { type: "error"; message: string };
+
+export interface RegionalDayScanResponse {
+  rows: FlipResult[];
+  hubs: RegionalDayTradeHub[];
+  summary: {
+    count: number;
+    targetRegionName: string;
+    periodDays: number;
+  };
+}
 
 function normalizeRouteHop(hop: RouteResult["Hops"][number]): RouteResult["Hops"][number] {
   const units = Number.isFinite(hop.Units) ? hop.Units : 0;
@@ -409,9 +420,14 @@ export async function scanRegionalDayTrader(
   onProgress: (msg: string) => void,
   signal?: AbortSignal,
   onMeta?: (meta: StationCacheMeta | undefined) => void,
-  onSummary?: (summary: { count: number; targetRegionName: string; periodDays: number }) => void,
-): Promise<FlipResult[]> {
-  return streamNdjson<FlipResult>(
+): Promise<RegionalDayScanResponse> {
+  let hubs: RegionalDayTradeHub[] = [];
+  let summary = {
+    count: 0,
+    targetRegionName: "",
+    periodDays: 14,
+  };
+  const rows = await streamNdjson<FlipResult>(
     `${BASE}/api/scan/regional-day`,
     params,
     onProgress,
@@ -420,17 +436,21 @@ export async function scanRegionalDayTrader(
     (msg) => {
       onMeta?.(msg.cache_meta);
       const raw = msg as {
+        data?: FlipResult[];
+        hubs?: RegionalDayTradeHub[];
         count?: number;
         target_region_name?: string;
         period_days?: number;
       };
-      onSummary?.({
+      hubs = Array.isArray(raw.hubs) ? raw.hubs : [];
+      summary = {
         count: raw.count ?? 0,
         targetRegionName: raw.target_region_name ?? "",
         periodDays: raw.period_days ?? 14,
-      });
+      };
     },
   );
+  return { rows: rows ?? [], hubs, summary };
 }
 
 export async function scanContracts(
