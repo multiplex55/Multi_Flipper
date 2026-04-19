@@ -5,6 +5,7 @@ import {
   compareScanRows,
   type CompareScanRowsOptions,
   type IndexedOrderingRow,
+  type SmartOrderingSignals,
 } from "@/components/scanResultsOrdering";
 
 function makeRow(overrides: Partial<FlipResult> = {}): FlipResult {
@@ -45,8 +46,9 @@ function makeIndexed(
   id: number,
   sourceIndex: number,
   row: FlipResult,
+  endpointScoreDelta = 0,
 ): IndexedOrderingRow {
-  return { id, sourceIndex, row, endpointPreferences: { scoreDelta: 0 } };
+  return { id, sourceIndex, row, endpointPreferences: { scoreDelta: endpointScoreDelta } };
 }
 
 function baseOptions(
@@ -65,113 +67,102 @@ function baseOptions(
   };
 }
 
-describe("scanResultsOrdering comparator", () => {
-  it("preserves smart layered behavior before column sorting", () => {
-    const pinned = makeIndexed(1, 0, makeRow({ TypeID: 1, TypeName: "Pinned" }));
-    const tracked = makeIndexed(2, 1, makeRow({ TypeID: 2, TypeName: "Tracked" }));
-    const deprioritized = makeIndexed(
-      3,
-      2,
-      makeRow({ TypeID: 3, TypeName: "Deprioritized" }),
-    );
-    const endpointBoost = makeIndexed(
-      4,
-      3,
-      makeRow({ TypeID: 4, TypeName: "Endpoint" }),
-    );
-
-    const signalsById = new Map<number, ReturnType<CompareScanRowsOptions<string>["getSmartSignals"]>>([
-      [1, { isPinned: true, isTracked: false, isSessionDeprioritized: false, endpointScoreDelta: 0 }],
-      [2, { isPinned: false, isTracked: true, isSessionDeprioritized: false, endpointScoreDelta: 0 }],
-      [3, { isPinned: false, isTracked: false, isSessionDeprioritized: true, endpointScoreDelta: 100 }],
-      [4, { isPinned: false, isTracked: false, isSessionDeprioritized: false, endpointScoreDelta: 5 }],
-    ]);
-
-    const options = baseOptions((item) => signalsById.get(item.id)!);
-    const sorted = [deprioritized, endpointBoost, tracked, pinned].sort((a, b) =>
-      compareScanRows(a, b, options),
-    );
-
-    expect(sorted.map((item) => item.id)).toEqual([1, 2, 4, 3]);
-  });
-
-  it("orders by selected column in column-only mode and uses stable tie-breaker", () => {
-    const first = makeIndexed(10, 0, makeRow({ TypeID: 700, TypeName: "Gamma", RealProfit: 100 }));
-    const second = makeIndexed(11, 1, makeRow({ TypeID: 700, TypeName: "Gamma", RealProfit: 100 }));
-    const high = makeIndexed(12, 2, makeRow({ TypeID: 710, TypeName: "High", RealProfit: 300 }));
-
-    const options = {
-      ...baseOptions(() => {
-        throw new Error("smart signals should not be read in column-only mode");
-      }),
-      orderingMode: "column_only" as const,
-    };
-
-    const sorted = [second, high, first].sort((a, b) => compareScanRows(a, b, options));
-
-    expect(sorted.map((item) => item.id)).toEqual([12, 10, 11]);
-  });
-
-  it("applies pinsFirst only in smart mode", () => {
-    const pinned = makeIndexed(21, 0, makeRow({ TypeID: 21, RealProfit: 100 }));
-    const unpinned = makeIndexed(22, 1, makeRow({ TypeID: 22, RealProfit: 300 }));
-    const signals = (item: IndexedOrderingRow) => ({
-      isPinned: item.id === 21,
+function sortIds(
+  rows: IndexedOrderingRow[],
+  signalsById: Map<number, SmartOrderingSignals>,
+  optionsOverride: Partial<CompareScanRowsOptions<string>> = {},
+): number[] {
+  const options: CompareScanRowsOptions<string> = {
+    ...baseOptions((item) => signalsById.get(item.id) ?? {
+      isPinned: false,
       isTracked: false,
       isSessionDeprioritized: false,
       endpointScoreDelta: 0,
-    });
+    }),
+    ...optionsOverride,
+  };
+  return [...rows].sort((a, b) => compareScanRows(a, b, options)).map((item) => item.id);
+}
 
-    const smartSorted = [unpinned, pinned].sort((a, b) =>
-      compareScanRows(a, b, { ...baseOptions(signals), pinsFirst: true }),
-    );
-    expect(smartSorted.map((item) => item.id)).toEqual([21, 22]);
+describe("scanResultsOrdering comparator", () => {
+  it.each([
+    {
+      name: "pinned outranks tracked and endpoint deltas in smart mode",
+      expected: [1, 2, 4, 3],
+    },
+    {
+      name: "session-deprioritized sinks even with very large endpoint boost",
+      expected: [1, 2, 4, 3],
+    },
+  ])("smart stacked ordering: $name", ({ expected }) => {
+    const pinned = makeIndexed(1, 0, makeRow({ TypeID: 1, TypeName: "Pinned", RealProfit: 10 }));
+    const tracked = makeIndexed(2, 1, makeRow({ TypeID: 2, TypeName: "Tracked", RealProfit: 20 }));
+    const deprioritized = makeIndexed(3, 2, makeRow({ TypeID: 3, TypeName: "Dep", RealProfit: 300 }));
+    const endpointBoost = makeIndexed(4, 3, makeRow({ TypeID: 4, TypeName: "Endpoint", RealProfit: 50 }));
 
-    const columnOnlySorted = [unpinned, pinned].sort((a, b) =>
-      compareScanRows(a, b, {
-        ...baseOptions(signals),
+    const signalsById = new Map<number, SmartOrderingSignals>([
+      [1, { isPinned: true, isTracked: false, isSessionDeprioritized: false, endpointScoreDelta: 0 }],
+      [2, { isPinned: false, isTracked: true, isSessionDeprioritized: false, endpointScoreDelta: 0 }],
+      [3, { isPinned: false, isTracked: false, isSessionDeprioritized: true, endpointScoreDelta: 999 }],
+      [4, { isPinned: false, isTracked: false, isSessionDeprioritized: false, endpointScoreDelta: 5 }],
+    ]);
+
+    expect(sortIds([deprioritized, endpointBoost, tracked, pinned], signalsById)).toEqual(expected);
+  });
+
+  it.each([
+    { caseName: "positive endpoint delta", leftDelta: 4, rightDelta: -2, expected: [101, 102] },
+    { caseName: "negative endpoint delta", leftDelta: -3, rightDelta: 8, expected: [102, 101] },
+    { caseName: "zero endpoint tie falls back to active column", leftDelta: 0, rightDelta: 0, expected: [102, 101] },
+  ])("smart mode endpoint delta comparator: $caseName", ({ leftDelta, rightDelta, expected }) => {
+    const left = makeIndexed(101, 0, makeRow({ TypeID: 1001, RealProfit: 30 }));
+    const right = makeIndexed(102, 1, makeRow({ TypeID: 1002, RealProfit: 300 }));
+    const signalsById = new Map<number, SmartOrderingSignals>([
+      [101, { isPinned: false, isTracked: false, isSessionDeprioritized: false, endpointScoreDelta: leftDelta }],
+      [102, { isPinned: false, isTracked: false, isSessionDeprioritized: false, endpointScoreDelta: rightDelta }],
+    ]);
+
+    expect(sortIds([left, right], signalsById)).toEqual(expected);
+  });
+
+  it("orders by selected column in column-only mode and ignores hidden smart ranks", () => {
+    const lowProfitPinned = makeIndexed(10, 0, makeRow({ TypeID: 700, TypeName: "Low", RealProfit: 10 }));
+    const highProfitUnpinned = makeIndexed(11, 1, makeRow({ TypeID: 710, TypeName: "High", RealProfit: 500 }));
+    const signals = new Map<number, SmartOrderingSignals>([
+      [10, { isPinned: true, isTracked: true, isSessionDeprioritized: false, endpointScoreDelta: 5_000 }],
+      [11, { isPinned: false, isTracked: false, isSessionDeprioritized: true, endpointScoreDelta: -500 }],
+    ]);
+
+    expect(
+      sortIds([lowProfitPinned, highProfitUnpinned], signals, {
         orderingMode: "column_only",
         pinsFirst: true,
+        trackedFirst: true,
       }),
-    );
-    expect(columnOnlySorted.map((item) => item.id)).toEqual([22, 21]);
+    ).toEqual([11, 10]);
   });
 
-  it("has deterministic stable ordering for equal values", () => {
+  it("has deterministic stable ordering for equal sort values", () => {
     const alpha = makeIndexed(31, 2, makeRow({ TypeID: 99, TypeName: "Alpha", RealProfit: 100 }));
     const beta = makeIndexed(32, 1, makeRow({ TypeID: 99, TypeName: "Alpha", RealProfit: 100 }));
+    const gamma = makeIndexed(33, 4, makeRow({ TypeID: 99, TypeName: "Alpha", RealProfit: 100 }));
 
-    const sorted = [alpha, beta].sort((a, b) => compareRowsStable(a, b));
+    const sorted = [gamma, beta, alpha].sort((a, b) => compareRowsStable(a, b));
 
-    expect(sorted.map((item) => item.id)).toEqual([31, 32]);
+    expect(sorted.map((item) => item.id)).toEqual([31, 32, 33]);
   });
 
-  it("uses raw column ordering in reset-equivalent settings", () => {
-    const endpointBoostedLowProfit = makeIndexed(
-      41,
-      0,
-      makeRow({ TypeID: 41, TypeName: "Low", RealProfit: 50 }),
-    );
-    const plainHighProfit = makeIndexed(
-      42,
-      1,
-      makeRow({ TypeID: 42, TypeName: "High", RealProfit: 400 }),
-    );
-    const options = {
-      ...baseOptions((item) => ({
-        isPinned: item.id === 41,
-        isTracked: item.id === 41,
-        isSessionDeprioritized: false,
-        endpointScoreDelta: item.id === 41 ? 10_000 : 0,
-      })),
-      orderingMode: "column_only" as const,
-      pinsFirst: false,
-      trackedFirst: false,
-    };
+  it("uses stable tie-breakers in column-only mode for equal sort values", () => {
+    const first = makeIndexed(50, 3, makeRow({ TypeID: 500, TypeName: "Tie", RealProfit: 200 }));
+    const second = makeIndexed(51, 1, makeRow({ TypeID: 500, TypeName: "Tie", RealProfit: 200 }));
+    const third = makeIndexed(52, 2, makeRow({ TypeID: 500, TypeName: "Tie", RealProfit: 200 }));
 
-    const sorted = [endpointBoostedLowProfit, plainHighProfit].sort((a, b) =>
-      compareScanRows(a, b, options),
+    const ordered = sortIds(
+      [first, second, third],
+      new Map(),
+      { orderingMode: "column_only", pinsFirst: false, trackedFirst: false },
     );
-    expect(sorted.map((item) => item.id)).toEqual([42, 41]);
+
+    expect(ordered).toEqual([50, 51, 52]);
   });
 });
