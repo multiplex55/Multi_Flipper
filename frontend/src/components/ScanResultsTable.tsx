@@ -7949,6 +7949,88 @@ function RouteSafetyCell({
   );
 }
 
+function EndpointDebugDetails({
+  endpointPreferenceMeta,
+  tFn,
+}: {
+  endpointPreferenceMeta: {
+    appliedRules: string[];
+    scoreDelta: number;
+    excluded: boolean;
+    excludedReasons: string[];
+  };
+  tFn: (key: TranslationKey, vars?: Record<string, string | number>) => string;
+}) {
+  const [open, setOpen] = useState(false);
+  const hasRules = endpointPreferenceMeta.appliedRules.length > 0;
+  const hasExcludedReasons = endpointPreferenceMeta.excludedReasons.length > 0;
+
+  return (
+    <span
+      className="relative shrink-0"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+          setOpen(false);
+        }
+      }}
+      data-testid="endpoint-debug-details"
+    >
+      <button
+        type="button"
+        className="inline-flex items-center px-1 py-px rounded-[2px] border border-cyan-300/40 bg-cyan-500/10 text-cyan-200 text-[9px] leading-none font-medium uppercase tracking-normal hover:border-cyan-300/75 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-300/70"
+        title={tFn("endpointDebugTriggerTitle")}
+        aria-label={tFn("endpointDebugTriggerAriaLabel")}
+        aria-expanded={open}
+      >
+        {tFn("endpointDebugTriggerBadge")}
+      </button>
+      {open && (
+        <span
+          className="absolute z-20 left-0 top-[calc(100%+4px)] min-w-[240px] max-w-[340px] rounded border border-eve-border/80 bg-eve-dark/95 p-2 shadow-xl text-[10px] normal-case text-eve-text"
+          role="tooltip"
+        >
+          <span className="block font-semibold text-eve-accent mb-1">
+            {tFn("endpointDebugTitle")}
+          </span>
+          <span className="block">
+            {tFn("endpointDebugScoreDeltaLabel")}:{" "}
+            <span data-testid="endpoint-debug-score-delta">
+              {endpointPreferenceMeta.scoreDelta}
+            </span>
+          </span>
+          <span className="block">
+            {tFn("endpointDebugAppliedRulesLabel")}:{" "}
+            <span data-testid="endpoint-debug-applied-rules">
+              {hasRules
+                ? endpointPreferenceMeta.appliedRules.join(", ")
+                : tFn("endpointDebugNone")}
+            </span>
+          </span>
+          <span className="block">
+            {tFn("endpointDebugExcludedStateLabel")}:{" "}
+            <span data-testid="endpoint-debug-excluded-state">
+              {endpointPreferenceMeta.excluded
+                ? tFn("endpointDebugExcludedStateExcluded")
+                : tFn("endpointDebugExcludedStateNotExcluded")}
+            </span>
+          </span>
+          <span className="block">
+            {tFn("endpointDebugExcludedReasonsLabel")}:{" "}
+            <span data-testid="endpoint-debug-excluded-reasons">
+              {hasExcludedReasons
+                ? endpointPreferenceMeta.excludedReasons.join(", ")
+                : tFn("endpointDebugNone")}
+            </span>
+          </span>
+        </span>
+      )}
+    </span>
+  );
+}
+
 const DataRow = memo(
   function DataRow({
     ir,
@@ -8064,6 +8146,12 @@ const DataRow = memo(
                   <span className="shrink-0 inline-flex items-center px-1 py-px rounded-[2px] border border-emerald-300/35 bg-emerald-400/10 text-emerald-200 text-[9px] leading-none font-medium uppercase tracking-normal">
                     Tracked
                   </span>
+                )}
+                {endpointPreferenceMeta && (
+                  <EndpointDebugDetails
+                    endpointPreferenceMeta={endpointPreferenceMeta}
+                    tFn={tFn}
+                  />
                 )}
                 {/* Price-spike warning: now-profit > 0 but period-profit < 0 means temp spike */}
                 {hasDestinationPriceSpike(ir.row) && (

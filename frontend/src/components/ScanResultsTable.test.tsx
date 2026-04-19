@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { I18nProvider } from "@/lib/i18n";
@@ -2356,5 +2356,148 @@ describe("ScanResultsTable filter audit chips and stage counts", () => {
       expect(counts.hidden_row_toggle).toBe(1);
       expect(counts.route_badge_filter).toBe(1);
     });
+  });
+});
+
+describe("ScanResultsTable endpoint debug row details", () => {
+  const ENDPOINT_PREFS_STORAGE_KEY = "eve-radius-endpoint-preferences:v1";
+
+  afterEach(() => {
+    cleanup();
+    localStorage.removeItem(ENDPOINT_PREFS_STORAGE_KEY);
+  });
+
+  function openEndpointDebugForType(typeName: string) {
+    fireEvent.click(screen.getByRole("button", { name: "Row view" }));
+    const typeCell = screen.getByText(typeName);
+    const row = typeCell.closest("tr");
+    expect(row).not.toBeNull();
+    const trigger = within(row as HTMLElement).getByRole("button", {
+      name: "Endpoint debug details",
+    });
+    fireEvent.mouseEnter(trigger);
+    return { row: row as HTMLElement, trigger };
+  }
+
+  it("renders endpoint detail metadata for rank-only rows with delta and rules", async () => {
+    localStorage.setItem(
+      ENDPOINT_PREFS_STORAGE_KEY,
+      JSON.stringify({
+        mode: "rank_only",
+        profile: {
+          nonHubBuyBonus: 6,
+          routeDirectionBonus: 5,
+        },
+      }),
+    );
+    renderTable({
+      scanning: false,
+      results: [
+        makeRow({
+          TypeID: 9401,
+          TypeName: "Endpoint Rank Detail",
+          BuySystemName: "Perimeter",
+          SellSystemName: "Jita",
+        }),
+      ],
+    });
+
+    const { trigger } = openEndpointDebugForType("Endpoint Rank Detail");
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("endpoint-debug-score-delta")).toHaveTextContent("11");
+    expect(screen.getByTestId("endpoint-debug-applied-rules")).toHaveTextContent(
+      "non_hub_buy_bonus, route_direction_bonus",
+    );
+  });
+
+  it("shows excluded reasons in debug details when row remains visible in rank-only mode", () => {
+    localStorage.setItem(
+      ENDPOINT_PREFS_STORAGE_KEY,
+      JSON.stringify({
+        mode: "rank_only",
+        profile: {
+          requireSellStructure: true,
+        },
+      }),
+    );
+    renderTable({
+      scanning: false,
+      results: [
+        makeRow({
+          TypeID: 9402,
+          TypeName: "Endpoint Excluded Reason Detail",
+          SellLocationID: 70000005,
+          SellStation: "Amarr Trade Station",
+          SellSystemName: "Amarr",
+        }),
+      ],
+    });
+
+    openEndpointDebugForType("Endpoint Excluded Reason Detail");
+    expect(screen.getByTestId("endpoint-debug-excluded-state")).toHaveTextContent(
+      "Included",
+    );
+    expect(screen.getByTestId("endpoint-debug-excluded-reasons")).toHaveTextContent(
+      "hard_require_sell_structure",
+    );
+  });
+
+  it("shows neutral endpoint metadata output for disabled mode", () => {
+    localStorage.setItem(
+      ENDPOINT_PREFS_STORAGE_KEY,
+      JSON.stringify({
+        mode: "disabled",
+        profile: {
+          buyHubPenalty: -12,
+        },
+      }),
+    );
+    renderTable({
+      scanning: false,
+      results: [
+        makeRow({
+          TypeID: 9403,
+          TypeName: "Endpoint Neutral Detail",
+          BuySystemName: "Jita",
+        }),
+      ],
+    });
+
+    openEndpointDebugForType("Endpoint Neutral Detail");
+    expect(screen.getByTestId("endpoint-debug-score-delta")).toHaveTextContent("0");
+    expect(screen.getByTestId("endpoint-debug-applied-rules")).toHaveTextContent("none");
+    expect(screen.getByTestId("endpoint-debug-excluded-reasons")).toHaveTextContent("none");
+  });
+
+  it("supports hover and keyboard focus interactions for debug details trigger", () => {
+    renderTable({
+      scanning: false,
+      results: [
+        makeRow({
+          TypeID: 9404,
+          TypeName: "Endpoint Interaction Detail",
+        }),
+      ],
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Row view" }));
+    const typeCell = screen.getByText("Endpoint Interaction Detail");
+    const row = typeCell.closest("tr");
+    expect(row).not.toBeNull();
+    const debugContainer = within(row as HTMLElement).getByTestId("endpoint-debug-details");
+    const trigger = within(row as HTMLElement).getByRole("button", {
+      name: "Endpoint debug details",
+    });
+
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    fireEvent.mouseEnter(debugContainer);
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+    fireEvent.mouseLeave(debugContainer);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+    fireEvent.focus(trigger);
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+    fireEvent.blur(trigger);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
   });
 });
