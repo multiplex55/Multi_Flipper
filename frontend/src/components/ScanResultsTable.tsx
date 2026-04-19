@@ -5080,6 +5080,41 @@ export function ScanResultsTable({
     ],
   );
 
+  const activeSortLabel = useMemo(() => {
+    const activeColumn = columnDefs.find((col) => col.key === sortKey);
+    return activeColumn ? t(activeColumn.labelKey) : String(sortKey);
+  }, [columnDefs, sortKey, t]);
+
+  const activeOrderingReasons = useMemo(() => {
+    const reasons: string[] = [];
+    reasons.push(
+      `${activeSortLabel} ${sortDir === "asc" ? t("sortDirectionAsc") : t("sortDirectionDesc")}`,
+    );
+    if (orderingMode === "smart") {
+      reasons.unshift(t("orderingStackModeSmart"));
+      if (pinsFirst) reasons.push(t("pinsFirstLabel"));
+      if (trackedFirst) reasons.push(t("orderingStackTrackedFirst"));
+      if ((sessionStationFilters?.deprioritizedStationIds.size ?? 0) > 0) {
+        reasons.push(t("orderingStackSessionDeprioritized"));
+      }
+      if (endpointPreferenceMode !== EndpointPreferenceApplicationMode.Disabled) {
+        reasons.push(t("orderingStackEndpointRank"));
+      }
+    } else {
+      reasons.unshift(t("orderingStackModeColumnOnly"));
+    }
+    return reasons;
+  }, [
+    activeSortLabel,
+    sortDir,
+    orderingMode,
+    pinsFirst,
+    trackedFirst,
+    sessionStationFilters,
+    endpointPreferenceMode,
+    t,
+  ]);
+
   // ── Render ──
   return (
       <div
@@ -5551,9 +5586,6 @@ export function ScanResultsTable({
               </>
             )}
 
-            <button type="button" onClick={() => setShowHiddenRows((v) => !v)} title={t("showHidden")} className={`px-2 py-0.5 rounded-sm border text-[13px] transition-colors ${showHiddenRows ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10" : "border-eve-border/60 text-eve-text/50 bg-eve-dark/40 hover:border-eve-accent/40 hover:text-eve-accent/70"}`}>
-              {showHiddenRows ? "Hide hidden" : "Show hidden"}
-            </button>
             <div ref={cachePanelRootRef} className="relative">
               <button
                 type="button"
@@ -5592,103 +5624,134 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                 </div>
               )}
             </div>
-
-            <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
-              {(["all", "green", "yellow", "red"] as const).map((lvl) => {
-                const active = routeSafetyFilter === lvl;
-                return (
-                  <button key={lvl} type="button" onClick={() => setRouteSafetyFilter(lvl)} className={`px-1.5 py-0.5 border-r last:border-r-0 border-eve-border/40 flex items-center transition-colors ${active ? "bg-eve-accent/15 text-eve-accent border-eve-accent/40" : "text-eve-dim hover:text-eve-text"}`} title={`Route safety: ${lvl}`}>
-                    {lvl === "all" ? "Route: All" : lvl.charAt(0).toUpperCase() + lvl.slice(1)}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
-              {(
-                [
-                  ["all", t("urgencyFilterAll")],
-                  ["stable", t("urgencyStable")],
-                  ["aging", t("urgencyAging")],
-                  ["fragile", t("urgencyFragile")],
-                ] as const
-              ).map(([mode, label]) => {
-                const active = urgencyFilter === mode;
-                return (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setUrgencyFilter(mode)}
-                    className={`px-1.5 py-0.5 border-r last:border-r-0 border-eve-border/40 flex items-center transition-colors ${active ? "bg-eve-accent/15 text-eve-accent border-eve-accent/40" : "text-eve-dim hover:text-eve-text"}`}
-                    title={t("urgencyFilterHint")}
-                    data-testid={`urgency-filter-chip:${mode}`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setSortKey("UrgencyScore");
-                setSortDir("desc");
-              }}
-              className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
-                sortKey === "UrgencyScore"
-                  ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent"
-                  : "border-eve-border/60 text-eve-dim bg-eve-dark/40 hover:border-eve-accent/40 hover:text-eve-accent/70"
-              }`}
-              title={t("urgencySortHint")}
-              data-testid="urgency-sort-button"
+            <div
+              role="group"
+              aria-label={t("filteringControlsGroupLabel")}
+              className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/30 text-[11px]"
             >
-              {t("urgencySortLabel")}
-            </button>
-            <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
-              <span className="text-eve-dim px-1">{t("orderingModeLabel")}</span>
-              {([
-                ["smart", t("orderingModeSmartLabel"), t("orderingModeSmartDescription")],
-                [
-                  "column_only",
-                  t("orderingModeColumnOnlyLabel"),
-                  t("orderingModeColumnOnlyDescription"),
-                ],
-              ] as const).map(([mode, label, description]) => {
-                const active = orderingMode === mode;
-                return (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setOrderingMode(mode)}
-                    className={`px-1.5 py-0.5 rounded-sm border transition-colors ${
-                      active
-                        ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent"
-                        : "border-eve-border/50 text-eve-dim hover:text-eve-text"
-                    }`}
-                    title={description}
-                    data-testid={`ordering-mode-toggle:${mode}`}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-              <label
-                className={`ml-1 inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 ${
-                  orderingMode === "smart"
-                    ? "border-eve-border/50 text-eve-dim hover:text-eve-text"
-                    : "border-eve-border/30 text-eve-dim/50"
+              <span className="text-eve-dim px-1">{t("filteringControlsGroupLabel")}</span>
+              <button type="button" onClick={() => setShowHiddenRows((v) => !v)} title={t("showHidden")} className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${showHiddenRows ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10" : "border-eve-border/60 text-eve-text/50 bg-eve-dark/40 hover:border-eve-accent/40 hover:text-eve-accent/70"}`}>
+                {showHiddenRows ? "Hide hidden" : "Show hidden"}
+              </button>
+              <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
+                {(["all", "green", "yellow", "red"] as const).map((lvl) => {
+                  const active = routeSafetyFilter === lvl;
+                  return (
+                    <button key={lvl} type="button" onClick={() => setRouteSafetyFilter(lvl)} className={`px-1.5 py-0.5 border-r last:border-r-0 border-eve-border/40 flex items-center transition-colors ${active ? "bg-eve-accent/15 text-eve-accent border-eve-accent/40" : "text-eve-dim hover:text-eve-text"}`} title={`Route safety: ${lvl}`}>
+                      {lvl === "all" ? "Route: All" : lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
+                {(
+                  [
+                    ["all", t("urgencyFilterAll")],
+                    ["stable", t("urgencyStable")],
+                    ["aging", t("urgencyAging")],
+                    ["fragile", t("urgencyFragile")],
+                  ] as const
+                ).map(([mode, label]) => {
+                  const active = urgencyFilter === mode;
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setUrgencyFilter(mode)}
+                      className={`px-1.5 py-0.5 border-r last:border-r-0 border-eve-border/40 flex items-center transition-colors ${active ? "bg-eve-accent/15 text-eve-accent border-eve-accent/40" : "text-eve-dim hover:text-eve-text"}`}
+                      title={t("urgencyFilterHint")}
+                      data-testid={`urgency-filter-chip:${mode}`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div
+              role="group"
+              aria-label={t("rankingOrderingControlsGroupLabel")}
+              className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/30 text-[11px]"
+            >
+              <span className="text-eve-dim px-1">{t("rankingOrderingControlsGroupLabel")}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSortKey("UrgencyScore");
+                  setSortDir("desc");
+                }}
+                className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
+                  sortKey === "UrgencyScore"
+                    ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent"
+                    : "border-eve-border/60 text-eve-dim bg-eve-dark/40 hover:border-eve-accent/40 hover:text-eve-accent/70"
                 }`}
-                title={t("pinsFirstHelp")}
+                title={t("urgencySortHint")}
+                data-testid="urgency-sort-button"
               >
-                <input
-                  type="checkbox"
-                  checked={pinsFirst}
-                  onChange={(e) => setPinsFirst(e.target.checked)}
-                  className="accent-eve-accent"
-                  disabled={orderingMode !== "smart"}
-                  data-testid="pins-first-toggle"
-                />
-                <span>{t("pinsFirstLabel")}</span>
-              </label>
+                {t("urgencySortLabel")}
+              </button>
+              <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
+                <span className="text-eve-dim px-1">{t("orderingModeLabel")}</span>
+                {([
+                  ["smart", t("orderingModeSmartLabel"), t("orderingModeSmartDescription")],
+                  [
+                    "column_only",
+                    t("orderingModeColumnOnlyLabel"),
+                    t("orderingModeColumnOnlyDescription"),
+                  ],
+                ] as const).map(([mode, label, description]) => {
+                  const active = orderingMode === mode;
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setOrderingMode(mode)}
+                      className={`px-1.5 py-0.5 rounded-sm border transition-colors ${
+                        active
+                          ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent"
+                          : "border-eve-border/50 text-eve-dim hover:text-eve-text"
+                      }`}
+                      title={description}
+                      data-testid={`ordering-mode-toggle:${mode}`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+                <label
+                  className={`ml-1 inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 ${
+                    orderingMode === "smart"
+                      ? "border-eve-border/50 text-eve-dim hover:text-eve-text"
+                      : "border-eve-border/30 text-eve-dim/50"
+                  }`}
+                  title={t("pinsFirstHelp")}
+                >
+                  <input
+                    type="checkbox"
+                    checked={pinsFirst}
+                    onChange={(e) => setPinsFirst(e.target.checked)}
+                    className="accent-eve-accent"
+                    disabled={orderingMode !== "smart"}
+                    data-testid="pins-first-toggle"
+                  />
+                  <span>{t("pinsFirstLabel")}</span>
+                </label>
+              </div>
+              <div
+                className="inline-flex items-center gap-1 rounded-sm border border-eve-border/60 bg-eve-dark/40 px-1.5 py-0.5"
+                data-testid="ordering-stack"
+              >
+                <span className="text-eve-dim">{t("orderingStackLabel")}:</span>
+                {activeOrderingReasons.map((reason) => (
+                  <span
+                    key={reason}
+                    className="rounded-sm border border-eve-border/50 px-1 py-0.5 text-eve-text/90"
+                    data-testid={`ordering-stack-chip:${reason}`}
+                  >
+                    {reason}
+                  </span>
+                ))}
+              </div>
             </div>
 
             {!isRegionGrouped && !isRadiusMode && (
@@ -6399,9 +6462,11 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                   key={col.key}
                   onClick={() => toggleSort(col.key)}
                   title={
-                    col.tooltipKey
-                      ? `${t(col.labelKey)}: ${t(col.tooltipKey)}`
-                      : t(col.labelKey)
+                    `${col.tooltipKey ? `${t(col.labelKey)}: ${t(col.tooltipKey)}` : t(col.labelKey)}${
+                      orderingMode === "smart" && sortKey === col.key
+                        ? ` • ${t("smartOrderingSortHeaderTooltip")}`
+                        : ""
+                    }`
                   }
                   className={`${col.width} px-3 py-2 text-left text-[11px] uppercase tracking-wider text-eve-dim font-medium cursor-pointer select-none hover:text-eve-accent transition-colors ${sortKey === col.key ? "text-eve-accent" : ""}`}
                 >
