@@ -197,6 +197,9 @@ export const ru = {
     orderingModeSmartDescription: "Применять приоритетные слои перед сортировкой по колонке.",
     orderingModeColumnOnlyLabel: "Только колонка",
     orderingModeColumnOnlyDescription: "Сортировать только по выбранной колонке и направлению.",
+    resetImplicitOrderingLabel: "Сбросить неявное ранжирование",
+    resetImplicitOrderingHelp:
+      "Сбросить слои умного порядка (эндпоинты, tracked-first и pins-first), сохранив явные фильтры и сортировку по колонке.",
     orderingStackLabel: "Стек порядка",
     orderingStackModeSmart: "Порядок: Умный",
     orderingStackModeColumnOnly: "Порядок: Только колонка",

@@ -145,4 +145,33 @@ describe("scanResultsOrdering comparator", () => {
 
     expect(sorted.map((item) => item.id)).toEqual([31, 32]);
   });
+
+  it("uses raw column ordering in reset-equivalent settings", () => {
+    const endpointBoostedLowProfit = makeIndexed(
+      41,
+      0,
+      makeRow({ TypeID: 41, TypeName: "Low", RealProfit: 50 }),
+    );
+    const plainHighProfit = makeIndexed(
+      42,
+      1,
+      makeRow({ TypeID: 42, TypeName: "High", RealProfit: 400 }),
+    );
+    const options = {
+      ...baseOptions((item) => ({
+        isPinned: item.id === 41,
+        isTracked: item.id === 41,
+        isSessionDeprioritized: false,
+        endpointScoreDelta: item.id === 41 ? 10_000 : 0,
+      })),
+      orderingMode: "column_only" as const,
+      pinsFirst: false,
+      trackedFirst: false,
+    };
+
+    const sorted = [endpointBoostedLowProfit, plainHighProfit].sort((a, b) =>
+      compareScanRows(a, b, options),
+    );
+    expect(sorted.map((item) => item.id)).toEqual([42, 41]);
+  });
 });

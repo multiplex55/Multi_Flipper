@@ -3804,6 +3804,12 @@ export function ScanResultsTable({
   const clearFilters = useCallback(() => {
     setFilters({});
   }, []);
+  const resetImplicitOrdering = useCallback(() => {
+    setOrderingMode("column_only");
+    setEndpointPreferenceMode(EndpointPreferenceApplicationMode.Disabled);
+    setTrackedFirst(false);
+    setPinsFirst(false);
+  }, []);
   const applyDecisionLens = useCallback(
     (preset: DecisionLensPreset) => {
       const rowModeMapping: Record<
@@ -5736,6 +5742,15 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                   />
                   <span>{t("pinsFirstLabel")}</span>
                 </label>
+                <button
+                  type="button"
+                  onClick={resetImplicitOrdering}
+                  className="ml-1 px-1.5 py-0.5 rounded-sm border border-eve-border/60 text-eve-dim hover:text-eve-text hover:border-eve-accent/50 transition-colors"
+                  title={t("resetImplicitOrderingHelp")}
+                  data-testid="reset-implicit-ordering-button"
+                >
+                  {t("resetImplicitOrderingLabel")}
+                </button>
               </div>
               <div
                 className="inline-flex items-center gap-1 rounded-sm border border-eve-border/60 bg-eve-dark/40 px-1.5 py-0.5"

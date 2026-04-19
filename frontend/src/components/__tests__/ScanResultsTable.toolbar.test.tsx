@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@/lib/i18n";
 import { ToastProvider } from "@/components/Toast";
@@ -191,6 +191,84 @@ describe("ScanResultsTable advanced toolbar", () => {
     expect(
       screen.queryByTitle(/Smart ordering layers .* this column sort/i),
     ).not.toBeInTheDocument();
+  });
+
+  it("resets only implicit-ordering controls when requested", () => {
+    renderTable([
+      makeRow({
+        TypeID: 201,
+        TypeName: "Hub constrained",
+        BuySystemName: "Jita",
+        BuyLocationID: 60003760,
+      }),
+      makeRow({
+        TypeID: 202,
+        TypeName: "Structure sell",
+        BuySystemName: "Perimeter",
+        SellLocationID: 1_000_000_000_123,
+        SellStation: "Perimeter Keepstar",
+      }),
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /tracked ▸/i }));
+    fireEvent.click(screen.getByLabelText("Tracked first"));
+    fireEvent.click(screen.getByRole("button", { name: /endpoint prefs ▸/i }));
+    const endpointPanel = screen.getByRole("dialog", {
+      name: /endpoint preferences/i,
+    });
+    fireEvent.change(within(endpointPanel).getByDisplayValue("Rank-only"), {
+      target: { value: "hide" },
+    });
+    fireEvent.change(within(endpointPanel).getByTitle("Sell endpoint type selector"), {
+      target: { value: "structure" },
+    });
+    fireEvent.click(screen.getByTestId("pins-first-toggle"));
+
+    fireEvent.click(screen.getByTestId("reset-implicit-ordering-button"));
+
+    expect(screen.getByTestId("ordering-mode-toggle:column_only")).toHaveClass(
+      "border-eve-accent/70",
+    );
+    expect(screen.queryByText("Tracked first")).not.toBeInTheDocument();
+    expect(screen.getByTestId("pins-first-toggle")).not.toBeChecked();
+    expect(
+      within(endpointPanel).getByDisplayValue("Disabled"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Hub constrained")).toBeInTheDocument();
+    expect(screen.getByText("Structure sell")).toBeInTheDocument();
+  });
+
+  it("preserves explicit filters and active sort when implicit ordering is reset", () => {
+    renderTable([makeRow(), makeRow({ TypeID: 102, TypeName: "Item 102", RealProfit: 800 })]);
+    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
+
+    fireEvent.click(screen.getByTestId("urgency-sort-button"));
+    fireEvent.click(screen.getByTestId("urgency-filter-chip:aging"));
+    fireEvent.click(screen.getByTitle("Route safety: red"));
+    const realProfitInput = screen
+      .getAllByTitle("Real Profit")
+      .find((el) => el.tagName.toLowerCase() === "input");
+    if (!realProfitInput) {
+      throw new Error("Real Profit filter input not found");
+    }
+    fireEvent.change(realProfitInput, { target: { value: ">300" } });
+
+    expect(screen.getByTestId("active-filter-chip:route-safety")).toBeInTheDocument();
+    expect(screen.getByTestId("active-filter-chip:urgency-filter")).toBeInTheDocument();
+    expect(screen.getByText("Showing 1 of 2")).toBeInTheDocument();
+    expect(screen.getByTestId("urgency-sort-button")).toHaveClass(
+      "border-eve-accent/70",
+    );
+
+    fireEvent.click(screen.getByTestId("reset-implicit-ordering-button"));
+
+    expect(screen.getByTestId("active-filter-chip:route-safety")).toBeInTheDocument();
+    expect(screen.getByTestId("active-filter-chip:urgency-filter")).toBeInTheDocument();
+    expect(screen.getByText("Showing 1 of 2")).toBeInTheDocument();
+    expect(screen.getByTestId("urgency-sort-button")).toHaveClass(
+      "border-eve-accent/70",
+    );
   });
 
   it("exposes accessible grouping labels for filtering and ranking controls", () => {
