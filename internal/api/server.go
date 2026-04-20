@@ -2889,15 +2889,7 @@ func (s *Server) handleScanRegionalDay(w http.ResponseWriter, r *http.Request) {
 	}
 	go s.processWatchlistAlerts(userID, userCfg, alertRows, scanIDPtr)
 
-	line, marshalErr := json.Marshal(map[string]interface{}{
-		"type":               "result",
-		"data":               dayRows,
-		"count":              len(dayRows),
-		"scan_id":            scanID,
-		"cache_meta":         cacheMeta,
-		"target_region_name": targetRegionName,
-		"period_days":        periodDays,
-	})
+	line, marshalErr := json.Marshal(buildRegionalDayResultPayload(dayRows, hubs, scanID, cacheMeta, targetRegionName, periodDays))
 	if marshalErr != nil {
 		log.Printf("[API] ScanRegionalDay JSON marshal error: %v", marshalErr)
 		errLine, _ := json.Marshal(map[string]string{"type": "error", "message": "JSON: " + marshalErr.Error()})
@@ -2907,6 +2899,26 @@ func (s *Server) handleScanRegionalDay(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprintf(w, "%s\n", line)
 	flusher.Flush()
+}
+
+func buildRegionalDayResultPayload(
+	dayRows []engine.FlipResult,
+	hubs []engine.RegionalDayTradeHub,
+	scanID int64,
+	cacheMeta stationCacheMeta,
+	targetRegionName string,
+	periodDays int,
+) map[string]interface{} {
+	return map[string]interface{}{
+		"type":               "result",
+		"data":               dayRows,
+		"hubs":               hubs,
+		"count":              len(dayRows),
+		"scan_id":            scanID,
+		"cache_meta":         cacheMeta,
+		"target_region_name": targetRegionName,
+		"period_days":        periodDays,
+	}
 }
 
 func (s *Server) loadRegionalInventorySnapshot(

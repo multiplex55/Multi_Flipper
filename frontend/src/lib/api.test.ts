@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { batchCreateRoute, getConfig, normalizeRouteResults, updateConfig } from "@/lib/api";
+import { batchCreateRoute, getConfig, normalizeRouteResults, scanRegionalDayTrader, updateConfig } from "@/lib/api";
 import type { AppConfig, BatchCreateRouteRequest, BatchCreateRouteResponse, RouteResult } from "@/lib/types";
 
 function makeRequest(overrides: Partial<BatchCreateRouteRequest> = {}): BatchCreateRouteRequest {
@@ -244,5 +244,68 @@ describe("normalizeRouteResults", () => {
     expect(hop.effective_sell).toBe(6);
     expect(hop.buy_station_name).toBe("Jita");
     expect(hop.sell_station_name).toBe("Amarr");
+  });
+});
+
+describe("scanRegionalDayTrader", () => {
+  it("parses result payload with data and hubs", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const payload = [
+      JSON.stringify({ type: "progress", message: "loading" }),
+      JSON.stringify({
+        type: "result",
+        data: [{ TypeID: 34, TypeName: "Tritanium" }],
+        hubs: [{ source_system_id: 30000142, source_system_name: "Jita", items: [] }],
+        count: 1,
+        target_region_name: "The Forge",
+        period_days: 14,
+      }),
+    ].join("\n");
+    fetchMock.mockResolvedValue({
+      ok: true,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(payload));
+          controller.close();
+        },
+      }),
+    } satisfies Partial<Response>);
+
+    const result = await scanRegionalDayTrader({ system_name: "Jita" } as never, vi.fn());
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.hubs).toHaveLength(1);
+    expect(result.summary).toEqual({
+      count: 1,
+      targetRegionName: "The Forge",
+      periodDays: 14,
+    });
+  });
+
+  it("defaults hubs to [] for backward-compatible payloads", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const payload = JSON.stringify({
+      type: "result",
+      data: [{ TypeID: 34, TypeName: "Tritanium" }],
+      count: 1,
+      target_region_name: "The Forge",
+      period_days: 7,
+    });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(payload));
+          controller.close();
+        },
+      }),
+    } satisfies Partial<Response>);
+
+    const result = await scanRegionalDayTrader({ system_name: "Jita" } as never, vi.fn());
+    expect(result.rows).toHaveLength(1);
+    expect(result.hubs).toEqual([]);
+    expect(result.summary.periodDays).toBe(7);
   });
 });
