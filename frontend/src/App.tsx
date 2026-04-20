@@ -82,6 +82,8 @@ import {
 } from "@/lib/banlistFilters";
 import { mapRegionalRowToPinnedOpportunity } from "@/lib/pinnedOpportunityMapper";
 import { RegionalDayTraderTable } from "@/components/RegionalDayTraderTable";
+import { RegionalCorridorTable } from "@/components/RegionalCorridorTable";
+import { aggregateRegionalTradeCorridors } from "@/lib/regionalCorridors";
 import {
   createEmptyRadiusScanSession,
   createRadiusScanSession,
@@ -712,7 +714,7 @@ function App() {
     targetRegionName: string;
     periodDays: number;
   } | null>(null);
-  const [regionViewMode, setRegionViewMode] = useState<"items" | "hubs">("items");
+  const [regionViewMode, setRegionViewMode] = useState<"items" | "hubs" | "corridors">("items");
   const [regionHubSystemFilter, setRegionHubSystemFilter] = useState<number | null>(null);
   const [regionSourceLockSystemID, setRegionSourceLockSystemID] = useState<number | null>(null);
   const [regionPinnedHubSystemIDs, setRegionPinnedHubSystemIDs] = useState<Set<number>>(new Set());
@@ -916,6 +918,10 @@ function App() {
     if (!regionHubSystemFilter || regionHubSystemFilter <= 0) return regionResults;
     return regionResults.filter((row) => row.BuySystemID === regionHubSystemFilter);
   }, [regionHubSystemFilter, regionResults]);
+  const regionCorridors = useMemo(
+    () => aggregateRegionalTradeCorridors(regionHubResults),
+    [regionHubResults],
+  );
 
   const handleOpenItemsAtHub = useCallback((hub: RegionalDayTradeHub) => {
     setRegionHubSystemFilter(hub.source_system_id);
@@ -933,6 +939,47 @@ function App() {
     try {
       await navigator.clipboard.writeText(text);
       addToast("Hub summary copied", "success");
+    } catch {
+      addToast("Copy failed", "error", 2500);
+    }
+  }, [addToast]);
+
+  const handleOpenLaneItemsAtCorridor = useCallback((corridor: {
+    source_system_id: number;
+  }) => {
+    setRegionHubSystemFilter(corridor.source_system_id);
+    setRegionViewMode("items");
+  }, []);
+
+  const handleOpenCorridorInRoute = useCallback((corridor: {
+    source_system_name: string;
+    target_system_name: string;
+  }) => {
+    setParams((prev) => ({
+      ...prev,
+      system_name: corridor.source_system_name,
+      route_target_system_name: corridor.target_system_name,
+    }));
+    setTab("route");
+    addToast(
+      `Route seeded: ${corridor.source_system_name} → ${corridor.target_system_name}`,
+      "success",
+    );
+  }, [addToast, setTab]);
+
+  const handleCopyRegionCorridorSummary = useCallback(async (corridor: {
+    source_system_name: string;
+    target_system_name: string;
+    item_count: number;
+    target_period_profit: number;
+    target_now_profit: number;
+    weighted_jumps: number;
+    best_item_name: string;
+  }) => {
+    const text = `${corridor.source_system_name} → ${corridor.target_system_name} · items ${corridor.item_count} · period ${formatISK(corridor.target_period_profit)} · now ${formatISK(corridor.target_now_profit)} · weighted jumps ${corridor.weighted_jumps.toFixed(2)} · best ${corridor.best_item_name}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      addToast("Corridor summary copied", "success");
     } catch {
       addToast("Copy failed", "error", 2500);
     }
@@ -2600,6 +2647,13 @@ const handleScanAndRefresh = useCallback(async () => {
                 >
                   Hubs
                 </button>
+                <button
+                  type="button"
+                  className={`px-2 py-0.5 text-xs rounded-sm border ${regionViewMode === "corridors" ? "border-eve-accent text-eve-accent" : "border-eve-border text-eve-dim"}`}
+                  onClick={() => setRegionViewMode("corridors")}
+                >
+                  Corridors
+                </button>
                 {regionHubSystemFilter && (
                   <button
                     type="button"
@@ -2643,7 +2697,7 @@ const handleScanAndRefresh = useCallback(async () => {
                   strategyScore={strategyScore}
                   featureConfig={REGION_SCAN_RESULTS_FEATURE_CONFIG}
                 />
-              ) : (
+              ) : regionViewMode === "hubs" ? (
                 <RegionalDayTraderTable
                   hubs={regionHubResults}
                   scanning={scanning && tab === "region"}
@@ -2658,6 +2712,15 @@ const handleScanAndRefresh = useCallback(async () => {
                   onSetSourceLock={handleSetRegionSourceLock}
                   onCopySummary={handleCopyRegionHubSummary}
                   onTogglePinHub={handleToggleRegionPinHub}
+                />
+              ) : (
+                <RegionalCorridorTable
+                  corridors={regionCorridors}
+                  scanning={scanning && tab === "region"}
+                  progress={tab === "region" ? progress : ""}
+                  onOpenLaneItems={handleOpenLaneItemsAtCorridor}
+                  onOpenInRoute={handleOpenCorridorInRoute}
+                  onCopySummary={handleCopyRegionCorridorSummary}
                 />
               )}
             </div>
