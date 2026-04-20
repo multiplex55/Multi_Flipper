@@ -1222,6 +1222,117 @@ func TestExtractLastNAvgPrices_SanitizesNaN(t *testing.T) {
 	}
 }
 
+func TestComputeRegionalHubStagingScore_MonotonicForDistanceAtEqualProfit(t *testing.T) {
+	base := RegionalDayTradeHub{
+		ItemCount:          6,
+		TargetPeriodProfit: 36_000_000,
+		TargetDemandPerDay: 120,
+		CapitalRequired:    60_000_000,
+		ShippingCost:       1_000_000,
+	}
+	closer := base
+	closer.SourceJumpsFromCurrent = 2
+	closer.SourceJumpsFromHome = 3
+
+	farther := base
+	farther.SourceJumpsFromCurrent = 9
+	farther.SourceJumpsFromHome = 8
+
+	closeScore := ComputeRegionalHubStagingScore(&closer)
+	farScore := ComputeRegionalHubStagingScore(&farther)
+	if closeScore <= farScore {
+		t.Fatalf("expected closer hub to score higher: close=%.4f far=%.4f", closeScore, farScore)
+	}
+}
+
+func TestBuildRegionalDayTrader_AggregatesDestinationStats(t *testing.T) {
+	scanner := &Scanner{
+		SDE: &sde.Data{
+			Systems: map[int32]*sde.SolarSystem{
+				1: {ID: 1, Name: "Src", RegionID: 10, Security: 0.8},
+				2: {ID: 2, Name: "Dst-A", RegionID: 20, Security: 0.9},
+				3: {ID: 3, Name: "Dst-B", RegionID: 20, Security: 0.9},
+			},
+			Regions: map[int32]*sde.Region{
+				10: {ID: 10, Name: "Source"},
+				20: {ID: 20, Name: "Target"},
+			},
+		},
+	}
+
+	flips := []FlipResult{
+		{
+			TypeID:          101,
+			TypeName:        "Item A",
+			Volume:          1,
+			BuyPrice:        100,
+			SellPrice:       210,
+			BuySystemID:     1,
+			BuySystemName:   "Src",
+			BuyRegionID:     10,
+			BuyRegionName:   "Source",
+			SellSystemID:    2,
+			SellSystemName:  "Dst-A",
+			SellRegionID:    20,
+			SellRegionName:  "Target",
+			UnitsToBuy:      10,
+			SellOrderRemain: 100,
+			SellJumps:       2,
+		},
+		{
+			TypeID:          102,
+			TypeName:        "Item B",
+			Volume:          1,
+			BuyPrice:        100,
+			SellPrice:       230,
+			BuySystemID:     1,
+			BuySystemName:   "Src",
+			BuyRegionID:     10,
+			BuyRegionName:   "Source",
+			SellSystemID:    3,
+			SellSystemName:  "Dst-B",
+			SellRegionID:    20,
+			SellRegionName:  "Target",
+			UnitsToBuy:      10,
+			SellOrderRemain: 100,
+			SellJumps:       2,
+		},
+		{
+			TypeID:          103,
+			TypeName:        "Item C",
+			Volume:          1,
+			BuyPrice:        100,
+			SellPrice:       240,
+			BuySystemID:     1,
+			BuySystemName:   "Src",
+			BuyRegionID:     10,
+			BuyRegionName:   "Source",
+			SellSystemID:    3,
+			SellSystemName:  "Dst-B",
+			SellRegionID:    20,
+			SellRegionName:  "Target",
+			UnitsToBuy:      5,
+			SellOrderRemain: 100,
+			SellJumps:       2,
+		},
+	}
+
+	hubs, _, _, _ := scanner.BuildRegionalDayTrader(ScanParams{}, flips, nil, nil)
+	if len(hubs) != 1 {
+		t.Fatalf("hub count = %d, want 1", len(hubs))
+	}
+	hub := hubs[0]
+	if hub.DestinationsCount != 2 {
+		t.Fatalf("destinations_count = %d, want 2", hub.DestinationsCount)
+	}
+	if hub.BestDestinationSystemName != "Dst-B" {
+		t.Fatalf("best destination = %q, want Dst-B", hub.BestDestinationSystemName)
+	}
+	if hub.BestDestinationProfit <= 0 {
+		t.Fatalf("best destination profit = %.2f, want > 0", hub.BestDestinationProfit)
+	}
+}
+
 // ── CategoryIDs filter ───────────────────────────────────────────────────────
 
 func TestBuildRegionalDayTrader_CategoryFilterExcludes(t *testing.T) {

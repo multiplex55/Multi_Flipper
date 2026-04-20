@@ -308,4 +308,75 @@ describe("scanRegionalDayTrader", () => {
     expect(result.hubs).toEqual([]);
     expect(result.summary.periodDays).toBe(7);
   });
+
+  it("keeps parsing hubs when new optional hub fields are present or missing", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const payload = JSON.stringify({
+      type: "result",
+      data: [{ TypeID: 34, TypeName: "Tritanium" }],
+      hubs: [
+        {
+          source_system_id: 30000142,
+          source_system_name: "Jita",
+          source_region_id: 10000002,
+          source_region_name: "The Forge",
+          security: 0.9,
+          purchase_units: 10,
+          source_units: 10,
+          target_demand_per_day: 5,
+          target_supply_units: 20,
+          target_dos: 4,
+          assets: 0,
+          active_orders: 0,
+          target_now_profit: 100,
+          target_period_profit: 120,
+          capital_required: 1000,
+          shipping_cost: 20,
+          item_count: 1,
+          items: [],
+          source_jumps_from_current: 2,
+          staging_score: 88.2,
+          destinations_count: 3,
+          best_destination_system_name: "Amarr",
+          best_destination_profit: 90,
+        },
+        {
+          source_system_id: 30002187,
+          source_system_name: "Amarr",
+          source_region_id: 10000043,
+          source_region_name: "Domain",
+          security: 0.8,
+          purchase_units: 5,
+          source_units: 5,
+          target_demand_per_day: 2,
+          target_supply_units: 10,
+          target_dos: 5,
+          assets: 0,
+          active_orders: 0,
+          target_now_profit: 80,
+          target_period_profit: 95,
+          capital_required: 800,
+          shipping_cost: 10,
+          item_count: 1,
+          items: [],
+        },
+      ],
+      count: 2,
+    });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(payload));
+          controller.close();
+        },
+      }),
+    } satisfies Partial<Response>);
+
+    const result = await scanRegionalDayTrader({ system_name: "Jita" } as never, vi.fn());
+    expect(result.hubs).toHaveLength(2);
+    expect(result.hubs[0].staging_score).toBe(88.2);
+    expect(result.hubs[1].staging_score).toBeUndefined();
+  });
 });

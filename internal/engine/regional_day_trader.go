@@ -56,24 +56,30 @@ type RegionalDayTradeItem struct {
 }
 
 type RegionalDayTradeHub struct {
-	SourceSystemID     int32                  `json:"source_system_id"`
-	SourceSystemName   string                 `json:"source_system_name"`
-	SourceRegionID     int32                  `json:"source_region_id"`
-	SourceRegionName   string                 `json:"source_region_name"`
-	Security           float64                `json:"security"`
-	PurchaseUnits      int64                  `json:"purchase_units"`
-	SourceUnits        int64                  `json:"source_units"`
-	TargetDemandPerDay float64                `json:"target_demand_per_day"`
-	TargetSupplyUnits  int64                  `json:"target_supply_units"`
-	TargetDOS          float64                `json:"target_dos"`
-	Assets             int64                  `json:"assets"`
-	ActiveOrders       int64                  `json:"active_orders"`
-	TargetNowProfit    float64                `json:"target_now_profit"`
-	TargetPeriodProfit float64                `json:"target_period_profit"`
-	CapitalRequired    float64                `json:"capital_required"`
-	ShippingCost       float64                `json:"shipping_cost"`
-	ItemCount          int                    `json:"item_count"`
-	Items              []RegionalDayTradeItem `json:"items"`
+	SourceSystemID            int32                  `json:"source_system_id"`
+	SourceSystemName          string                 `json:"source_system_name"`
+	SourceRegionID            int32                  `json:"source_region_id"`
+	SourceRegionName          string                 `json:"source_region_name"`
+	SourceJumpsFromCurrent    int                    `json:"source_jumps_from_current"`
+	SourceJumpsFromHome       int                    `json:"source_jumps_from_home"`
+	Security                  float64                `json:"security"`
+	PurchaseUnits             int64                  `json:"purchase_units"`
+	SourceUnits               int64                  `json:"source_units"`
+	TargetDemandPerDay        float64                `json:"target_demand_per_day"`
+	TargetSupplyUnits         int64                  `json:"target_supply_units"`
+	TargetDOS                 float64                `json:"target_dos"`
+	Assets                    int64                  `json:"assets"`
+	ActiveOrders              int64                  `json:"active_orders"`
+	TargetNowProfit           float64                `json:"target_now_profit"`
+	TargetPeriodProfit        float64                `json:"target_period_profit"`
+	CapitalRequired           float64                `json:"capital_required"`
+	ShippingCost              float64                `json:"shipping_cost"`
+	StagingScore              float64                `json:"staging_score"`
+	DestinationsCount         int                    `json:"destinations_count"`
+	BestDestinationSystemName string                 `json:"best_destination_system_name"`
+	BestDestinationProfit     float64                `json:"best_destination_profit"`
+	ItemCount                 int                    `json:"item_count"`
+	Items                     []RegionalDayTradeItem `json:"items"`
 }
 
 type RegionalInventorySnapshot struct {
@@ -92,6 +98,42 @@ type regionalHistoryStats struct {
 type regionalHistoryKey struct {
 	regionID int32
 	typeID   int32
+}
+
+type destinationStats struct {
+	profitBySystem map[int32]float64
+	nameBySystem   map[int32]string
+}
+
+const (
+	stagingWeightItemCount            = 2.0
+	stagingWeightPeriodProfitMillions = 12.0
+	stagingWeightDemandPerDayHundreds = 10.0
+	stagingWeightCapitalEfficiency    = 38.0
+	stagingPenaltyJumpFromCurrent     = 3.5
+	stagingPenaltyJumpFromHome        = 2.0
+	stagingPenaltyShippingPerMillion  = 2.5
+)
+
+func ComputeRegionalHubStagingScore(hub *RegionalDayTradeHub) float64 {
+	if hub == nil {
+		return 0
+	}
+	capitalEfficiency := 0.0
+	if hub.CapitalRequired > 0 {
+		capitalEfficiency = hub.TargetPeriodProfit / hub.CapitalRequired
+	}
+	// Deterministic blended score for "where should I stage next":
+	// signal = depth + absolute period alpha + demand + capital efficiency.
+	// penalty = travel jumps and shipping burden.
+	score := (float64(hub.ItemCount) * stagingWeightItemCount) +
+		((hub.TargetPeriodProfit / 1_000_000.0) * stagingWeightPeriodProfitMillions) +
+		((hub.TargetDemandPerDay / 100.0) * stagingWeightDemandPerDayHundreds) +
+		(capitalEfficiency * stagingWeightCapitalEfficiency) -
+		(float64(max(0, hub.SourceJumpsFromCurrent)) * stagingPenaltyJumpFromCurrent) -
+		(float64(max(0, hub.SourceJumpsFromHome)) * stagingPenaltyJumpFromHome) -
+		((hub.ShippingCost / 1_000_000.0) * stagingPenaltyShippingPerMillion)
+	return sanitizeFloat(score)
 }
 
 func regionalPeriodDays(params ScanParams) int {
@@ -250,6 +292,7 @@ func (s *Scanner) BuildRegionalDayTrader(
 	}
 
 	hubMap := make(map[int32]*RegionalDayTradeHub)
+	hubDestinationStats := make(map[int32]*destinationStats)
 	// Weighted hub DOS accumulator: use ISK-at-risk (capital required) as weight
 	// so heterogeneous item units do not distort aggregate DOS.
 	hubDOSWeighted := make(map[int32]float64)
@@ -580,6 +623,18 @@ func (s *Scanner) BuildRegionalDayTrader(
 		}
 		hubDOSWeighted[row.BuySystemID] += item.TargetDOS * dosWeight
 		hubDOSWeight[row.BuySystemID] += dosWeight
+		destStats := hubDestinationStats[row.BuySystemID]
+		if destStats == nil {
+			destStats = &destinationStats{
+				profitBySystem: make(map[int32]float64),
+				nameBySystem:   make(map[int32]string),
+			}
+			hubDestinationStats[row.BuySystemID] = destStats
+		}
+		destStats.profitBySystem[row.SellSystemID] += item.TargetPeriodProfit
+		if _, hasName := destStats.nameBySystem[row.SellSystemID]; !hasName {
+			destStats.nameBySystem[row.SellSystemID] = item.TargetSystemName
+		}
 		totalItems++
 	}
 
@@ -590,6 +645,22 @@ func (s *Scanner) BuildRegionalDayTrader(
 		} else if hub.TargetDemandPerDay > 0 {
 			hub.TargetDOS = sanitizeFloat(float64(hub.TargetSupplyUnits) / hub.TargetDemandPerDay)
 		}
+		if destStats := hubDestinationStats[hub.SourceSystemID]; destStats != nil {
+			hub.DestinationsCount = len(destStats.profitBySystem)
+			bestSystemID := int32(0)
+			bestProfit := -math.MaxFloat64
+			for systemID, profit := range destStats.profitBySystem {
+				if profit > bestProfit {
+					bestProfit = profit
+					bestSystemID = systemID
+				}
+			}
+			if bestSystemID > 0 {
+				hub.BestDestinationSystemName = destStats.nameBySystem[bestSystemID]
+				hub.BestDestinationProfit = sanitizeFloat(bestProfit)
+			}
+		}
+		hub.StagingScore = ComputeRegionalHubStagingScore(hub)
 		sort.Slice(hub.Items, func(i, j int) bool {
 			if hub.Items[i].TargetPeriodProfit == hub.Items[j].TargetPeriodProfit {
 				return hub.Items[i].TargetNowProfit > hub.Items[j].TargetNowProfit

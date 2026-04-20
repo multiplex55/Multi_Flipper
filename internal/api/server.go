@@ -2833,6 +2833,8 @@ func (s *Server) handleScanRegionalDay(w http.ResponseWriter, r *http.Request) {
 		sendProgress,
 	)
 	hubs, totalItems, targetRegionName, periodDays := scanner.BuildRegionalDayTrader(params, results, inventory, sendProgress)
+	currentSystemID, _ := s.tryCharacterCurrentSystemID(userID)
+	s.enrichRegionalHubLocationContext(params.CurrentSystemID, currentSystemID, hubs)
 	dayRows := engine.FlattenRegionalDayHubs(hubs)
 	dayRows = filterFlipResultsByBanlist(dayRows, banned)
 
@@ -2899,6 +2901,53 @@ func (s *Server) handleScanRegionalDay(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprintf(w, "%s\n", line)
 	flusher.Flush()
+}
+
+func (s *Server) tryCharacterCurrentSystemID(userID string) (int32, bool) {
+	if strings.TrimSpace(userID) == "" || s.sessions == nil || s.esi == nil || s.sso == nil {
+		return 0, false
+	}
+	sessions, err := s.authSessionsForScope(userID, 0, false, false)
+	if err != nil || len(sessions) == 0 || sessions[0] == nil {
+		return 0, false
+	}
+	sess := sessions[0]
+	token, err := s.sessions.EnsureValidTokenForUserCharacter(s.sso, userID, sess.CharacterID)
+	if err != nil || strings.TrimSpace(token) == "" {
+		return 0, false
+	}
+	location, err := s.esi.GetCharacterLocation(sess.CharacterID, token)
+	if err != nil || location.SolarSystemID <= 0 {
+		return 0, false
+	}
+	return location.SolarSystemID, true
+}
+
+func (s *Server) enrichRegionalHubLocationContext(homeSystemID int32, currentSystemID int32, hubs []engine.RegionalDayTradeHub) {
+	if len(hubs) == 0 {
+		return
+	}
+	s.mu.RLock()
+	sdeData := s.sdeData
+	s.mu.RUnlock()
+	if sdeData == nil || sdeData.Universe == nil {
+		return
+	}
+	jumpsBetween := func(fromSystemID, toSystemID int32) int {
+		if fromSystemID <= 0 || toSystemID <= 0 {
+			return 0
+		}
+		jumps := sdeData.Universe.ShortestPath(fromSystemID, toSystemID)
+		if jumps < 0 {
+			return 0
+		}
+		return jumps
+	}
+	for i := range hubs {
+		hubs[i].SourceJumpsFromHome = jumpsBetween(homeSystemID, hubs[i].SourceSystemID)
+		hubs[i].SourceJumpsFromCurrent = jumpsBetween(currentSystemID, hubs[i].SourceSystemID)
+		hubs[i].StagingScore = engine.ComputeRegionalHubStagingScore(&hubs[i])
+	}
 }
 
 func buildRegionalDayResultPayload(
