@@ -63,7 +63,13 @@ type SortKey =
   | "target_period_price"
   | "jumps"
   | "item_volume"
-  | "item_count";
+  | "item_count"
+  | "source_jumps_from_current"
+  | "staging_score"
+  | "destinations_count"
+  | "best_destination";
+
+type SortPreset = "staging_then_profit" | "period_profit";
 
 type SortDir = "asc" | "desc";
 
@@ -82,6 +88,10 @@ function hubSortVal(hub: RegionalDayTradeHub, key: SortKey): number | string {
     case "capital": return hub.capital_required;
     case "shipping": return hub.shipping_cost;
     case "item_count": return hub.item_count;
+    case "source_jumps_from_current": return hub.source_jumps_from_current ?? Number.MAX_SAFE_INTEGER;
+    case "staging_score": return hub.staging_score ?? 0;
+    case "destinations_count": return hub.destinations_count ?? 0;
+    case "best_destination": return hub.best_destination_profit ?? 0;
     default: return 0;
   }
 }
@@ -357,11 +367,13 @@ export function RegionalDayTraderTable({
   onTogglePinHub,
 }: Props) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
-  const [sortKey, setSortKey] = useState<SortKey>("period_profit");
+  const [sortPreset, setSortPreset] = useState<SortPreset>("staging_then_profit");
+  const [sortKey, setSortKey] = useState<SortKey>("staging_score");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [detail, setDetail] = useState<{ item: RegionalDayTradeItem; hubSecurity: number } | null>(null);
 
   const handleSort = useCallback((key: SortKey) => {
+    setSortPreset("period_profit");
     setSortKey((prev) => {
       if (prev === key) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
       else setSortDir("desc");
@@ -370,6 +382,14 @@ export function RegionalDayTraderTable({
   }, []);
 
   const sortedHubs = useMemo(() => {
+    const sortByPreset = (left: RegionalDayTradeHub, right: RegionalDayTradeHub): number => {
+      if (sortPreset === "staging_then_profit") {
+        const byStaging = cmp(hubSortVal(left, "staging_score"), hubSortVal(right, "staging_score"), "desc");
+        if (byStaging !== 0) return byStaging;
+        return cmp(hubSortVal(left, "period_profit"), hubSortVal(right, "period_profit"), "desc");
+      }
+      return cmp(hubSortVal(left, sortKey), hubSortVal(right, sortKey), sortDir);
+    };
     return [...hubs]
       .map((hub) => ({
         ...hub,
@@ -377,8 +397,8 @@ export function RegionalDayTraderTable({
           cmp(itemSortVal(a, sortKey), itemSortVal(b, sortKey), sortDir)
         ),
       }))
-      .sort((a, b) => cmp(hubSortVal(a, sortKey), hubSortVal(b, sortKey), sortDir));
-  }, [hubs, sortKey, sortDir]);
+      .sort(sortByPreset);
+  }, [hubs, sortPreset, sortKey, sortDir]);
 
   const totals = useMemo(() => {
     let nowProfit = 0, periodProfit = 0, capital = 0;
@@ -413,6 +433,28 @@ export function RegionalDayTraderTable({
           <span>NOW {formatISK(totals.nowProfit)}</span>
           <span>PERIOD {formatISK(totals.periodProfit)}</span>
           <span>CAP {formatISK(totals.capital)}</span>
+          <label className="inline-flex items-center gap-1 text-[10px]">
+            <span>Sort</span>
+            <select
+              aria-label="Hub sort preset"
+              className="bg-eve-dark border border-eve-border/60 rounded-sm px-1 py-0.5 text-eve-text"
+              value={sortPreset}
+              onChange={(e) => {
+                const next = e.target.value as SortPreset;
+                setSortPreset(next);
+                if (next === "staging_then_profit") {
+                  setSortKey("staging_score");
+                  setSortDir("desc");
+                } else {
+                  setSortKey("period_profit");
+                  setSortDir("desc");
+                }
+              }}
+            >
+              <option value="staging_then_profit">Staging score → Period profit</option>
+              <option value="period_profit">Period profit</option>
+            </select>
+          </label>
           <button
             onClick={() => exportCSV(hubs)}
             className="px-2 py-0.5 rounded-sm border border-eve-border/60 text-eve-dim hover:text-eve-accent hover:border-eve-accent/40 transition-colors text-[10px]"
@@ -449,6 +491,10 @@ export function RegionalDayTraderTable({
               <SortTh label="Margin Period" sortKey="margin_period"    className="w-[100px]" {...thProps} />
               <SortTh label="Capital"      sortKey="capital"           className="w-[105px]" {...thProps} />
               <SortTh label="Shipping"     sortKey="shipping"          className="w-[95px]"  {...thProps} />
+              <SortTh label="Jumps Current" sortKey="source_jumps_from_current" className="w-[90px]" {...thProps} />
+              <SortTh label="Staging Score" sortKey="staging_score" className="w-[95px]" {...thProps} />
+              <SortTh label="Destinations" sortKey="destinations_count" className="w-[90px]" {...thProps} />
+              <SortTh label="Best Destination" sortKey="best_destination" className="w-[170px]" {...thProps} />
               <SortTh label="Jumps"        sortKey="jumps"             className="w-[60px]"  {...thProps} />
               <SortTh label="Vol m³"       sortKey="item_volume"       className="w-[70px]"  {...thProps} />
               <SortTh label="Items"        sortKey="item_count"        className="w-[60px]"  {...thProps} />
@@ -512,6 +558,12 @@ export function RegionalDayTraderTable({
                     <td className="px-2 py-1.5 text-right text-eve-dim">—</td>
                     <td className="px-2 py-1.5 text-right">{formatISK(hub.capital_required)}</td>
                     <td className="px-2 py-1.5 text-right">{formatISK(hub.shipping_cost)}</td>
+                    <td className="px-2 py-1.5 text-right">{(hub.source_jumps_from_current ?? 0).toLocaleString()}</td>
+                    <td className="px-2 py-1.5 text-right">{(hub.staging_score ?? 0).toFixed(2)}</td>
+                    <td className="px-2 py-1.5 text-right">{(hub.destinations_count ?? 0).toLocaleString()}</td>
+                    <td className="px-2 py-1.5 text-right">
+                      {hub.best_destination_system_name ? `${hub.best_destination_system_name} (${formatISK(hub.best_destination_profit ?? 0)})` : "—"}
+                    </td>
                     <td className="px-2 py-1.5 text-right text-eve-dim">—</td>
                     <td className="px-2 py-1.5 text-right text-eve-dim">—</td>
                     <td className="px-2 py-1.5 text-right">{hub.item_count.toLocaleString()}</td>
@@ -569,6 +621,10 @@ export function RegionalDayTraderTable({
                           <td className="px-2 py-1.5 text-right">{formatMargin(item.margin_period)}</td>
                           <td className="px-2 py-1.5 text-right">{formatISK(item.capital_required)}</td>
                           <td className="px-2 py-1.5 text-right">{formatISK(item.shipping_cost)}</td>
+                          <td className="px-2 py-1.5 text-right text-eve-dim">—</td>
+                          <td className="px-2 py-1.5 text-right text-eve-dim">—</td>
+                          <td className="px-2 py-1.5 text-right text-eve-dim">—</td>
+                          <td className="px-2 py-1.5 text-right text-eve-dim">—</td>
                           <td className="px-2 py-1.5 text-right">{item.jumps}</td>
                           <td className="px-2 py-1.5 text-right">{item.item_volume.toFixed(2)}</td>
                           <td className="px-2 py-1.5 text-right">1</td>

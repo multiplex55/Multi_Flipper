@@ -134,6 +134,8 @@ export interface RegionalDayTradeHub {
   source_system_name: string;
   source_region_id: number;
   source_region_name: string;
+  source_jumps_from_current?: number;
+  source_jumps_from_home?: number;
   security: number;
   purchase_units: number;
   source_units: number;
@@ -146,6 +148,10 @@ export interface RegionalDayTradeHub {
   target_period_profit: number;
   capital_required: number;
   shipping_cost: number;
+  staging_score?: number;
+  destinations_count?: number;
+  best_destination_system_name?: string;
+  best_destination_profit?: number;
   item_count: number;
   items: RegionalDayTradeItem[];
 }
