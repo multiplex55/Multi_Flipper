@@ -878,7 +878,7 @@ function App() {
       .then((rows) => {
         const next = new Set<number>();
         for (const row of rows) {
-          const sourceSystemID = toInt(row.buy_system_id, 0);
+          const sourceSystemID = toInt(row.payload?.buy_system_id, 0);
           if (sourceSystemID > 0) next.add(sourceSystemID);
         }
         setRegionPinnedHubSystemIDs(next);
