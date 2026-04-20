@@ -83,7 +83,12 @@ import {
 import { mapRegionalRowToPinnedOpportunity } from "@/lib/pinnedOpportunityMapper";
 import { RegionalDayTraderTable } from "@/components/RegionalDayTraderTable";
 import { RegionalCorridorTable } from "@/components/RegionalCorridorTable";
+import { RegionalBuyHubTable } from "@/components/RegionalBuyHubTable";
+import { RegionalSellSinkTable } from "@/components/RegionalSellSinkTable";
+import { RadiusHubSummaryPanel } from "@/components/RadiusHubSummaryPanel";
 import { aggregateRegionalTradeCorridors } from "@/lib/regionalCorridors";
+import { buildBuyHubSummaries, buildSellSinkSummaries } from "@/lib/regionalConcentration";
+import { buildRadiusHubSummaries, type RadiusHubSummary } from "@/lib/radiusHubSummaries";
 import {
   createEmptyRadiusScanSession,
   createRadiusScanSession,
@@ -714,7 +719,7 @@ function App() {
     targetRegionName: string;
     periodDays: number;
   } | null>(null);
-  const [regionViewMode, setRegionViewMode] = useState<"items" | "hubs" | "corridors">("items");
+  const [regionViewMode, setRegionViewMode] = useState<"items" | "hubs" | "buy" | "sell" | "corridors">("items");
   const [regionHubSystemFilter, setRegionHubSystemFilter] = useState<number | null>(null);
   const [regionSourceLockSystemID, setRegionSourceLockSystemID] = useState<number | null>(null);
   const [regionPinnedHubSystemIDs, setRegionPinnedHubSystemIDs] = useState<Set<number>>(new Set());
@@ -922,6 +927,18 @@ function App() {
     () => aggregateRegionalTradeCorridors(regionHubResults),
     [regionHubResults],
   );
+  const regionalBuyHubSummaries = useMemo(
+    () => buildBuyHubSummaries(regionHubResults),
+    [regionHubResults],
+  );
+  const regionalSellSinkSummaries = useMemo(
+    () => buildSellSinkSummaries(regionHubResults),
+    [regionHubResults],
+  );
+  const radiusHubSummaries = useMemo(
+    () => buildRadiusHubSummaries(radiusResults),
+    [radiusResults],
+  );
 
   const handleOpenItemsAtHub = useCallback((hub: RegionalDayTradeHub) => {
     setRegionHubSystemFilter(hub.source_system_id);
@@ -942,6 +959,81 @@ function App() {
     } catch {
       addToast("Copy failed", "error", 2500);
     }
+  }, [addToast]);
+
+  const handleOpenBuySummaryRows = useCallback((hub: { source_system_id: number }) => {
+    setRegionHubSystemFilter(hub.source_system_id);
+    setRegionViewMode("items");
+  }, []);
+
+  const handleSetBuySummarySourceLock = useCallback((hub: { source_system_id: number; source_system_name: string }) => {
+    setParams((prev) => ({ ...prev, system_name: hub.source_system_name }));
+    setRegionSourceLockSystemID(hub.source_system_id);
+    addToast(`Source lock set to ${hub.source_system_name}`, "success");
+  }, [addToast]);
+
+  const handleCopyBuySummary = useCallback(async (hub: {
+    source_system_name: string;
+    source_region_name: string;
+    item_count: number;
+    target_period_profit: number;
+    avg_jumps: number;
+  }) => {
+    const text = `${hub.source_system_name} (${hub.source_region_name}) · items ${hub.item_count} · period ${formatISK(hub.target_period_profit)} · avg jumps ${hub.avg_jumps.toFixed(2)}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      addToast("Buy hub summary copied", "success");
+    } catch {
+      addToast("Copy failed", "error", 2500);
+    }
+  }, [addToast]);
+
+  const handleOpenSellSummaryRows = useCallback((_sink: { target_system_id: number }) => {
+    setRegionHubSystemFilter(null);
+    setRegionViewMode("items");
+  }, []);
+
+  const handleSetSourceLockFromSellSink = useCallback((sink: { top_sources: Array<{ source_system_id: number; source_system_name: string }> }) => {
+    const topSource = sink.top_sources[0];
+    if (!topSource) return;
+    setParams((prev) => ({ ...prev, system_name: topSource.source_system_name }));
+    setRegionSourceLockSystemID(topSource.source_system_id);
+    addToast(`Source lock set to ${topSource.source_system_name}`, "success");
+  }, [addToast]);
+
+  const handleCopySellSummary = useCallback(async (sink: {
+    target_system_name: string;
+    target_region_name: string;
+    item_count: number;
+    target_period_profit: number;
+    avg_jumps: number;
+  }) => {
+    const text = `${sink.target_system_name} (${sink.target_region_name}) · items ${sink.item_count} · period ${formatISK(sink.target_period_profit)} · avg jumps ${sink.avg_jumps.toFixed(2)}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      addToast("Sell sink summary copied", "success");
+    } catch {
+      addToast("Copy failed", "error", 2500);
+    }
+  }, [addToast]);
+
+  const handleOpenRadiusHubRows = useCallback((hub: RadiusHubSummary, side: "buy" | "sell") => {
+    if (side === "buy") {
+      setParams((prev) => ({ ...prev, system_name: hub.system_name }));
+    } else {
+      setParams((prev) => ({ ...prev, target_market_system: hub.system_name }));
+    }
+    addToast(`Set ${side} context to ${hub.system_name}`, "success");
+  }, [addToast]);
+
+  const handleSetRadiusHubLock = useCallback((hub: RadiusHubSummary, side: "buy" | "sell") => {
+    if (side === "buy") {
+      setParams((prev) => ({ ...prev, system_name: hub.system_name }));
+      addToast(`Buy lock set to ${hub.system_name}`, "success");
+      return;
+    }
+    setParams((prev) => ({ ...prev, target_market_system: hub.system_name }));
+    addToast(`Sell lock set to ${hub.system_name}`, "success");
   }, [addToast]);
 
   const handleOpenLaneItemsAtCorridor = useCallback((corridor: {
@@ -2525,6 +2617,12 @@ const handleScanAndRefresh = useCallback(async () => {
                   </button>
                 </div>
               )}
+              <RadiusHubSummaryPanel
+                buyHubs={radiusHubSummaries.buyHubs}
+                sellHubs={radiusHubSummaries.sellHubs}
+                onOpenHubRows={handleOpenRadiusHubRows}
+                onSetHubLock={handleSetRadiusHubLock}
+              />
               <ScanResultsTable
                 results={radiusResults}
                 scanning={scanning && tab === "radius"}
@@ -2649,6 +2747,20 @@ const handleScanAndRefresh = useCallback(async () => {
                 </button>
                 <button
                   type="button"
+                  className={`px-2 py-0.5 text-xs rounded-sm border ${regionViewMode === "buy" ? "border-eve-accent text-eve-accent" : "border-eve-border text-eve-dim"}`}
+                  onClick={() => setRegionViewMode("buy")}
+                >
+                  Buy
+                </button>
+                <button
+                  type="button"
+                  className={`px-2 py-0.5 text-xs rounded-sm border ${regionViewMode === "sell" ? "border-eve-accent text-eve-accent" : "border-eve-border text-eve-dim"}`}
+                  onClick={() => setRegionViewMode("sell")}
+                >
+                  Sell
+                </button>
+                <button
+                  type="button"
                   className={`px-2 py-0.5 text-xs rounded-sm border ${regionViewMode === "corridors" ? "border-eve-accent text-eve-accent" : "border-eve-border text-eve-dim"}`}
                   onClick={() => setRegionViewMode("corridors")}
                 >
@@ -2712,6 +2824,25 @@ const handleScanAndRefresh = useCallback(async () => {
                   onSetSourceLock={handleSetRegionSourceLock}
                   onCopySummary={handleCopyRegionHubSummary}
                   onTogglePinHub={handleToggleRegionPinHub}
+                />
+              ) : regionViewMode === "buy" ? (
+                <RegionalBuyHubTable
+                  hubs={regionalBuyHubSummaries}
+                  scanning={scanning && tab === "region"}
+                  progress={tab === "region" ? progress : ""}
+                  sourceLockSystemID={regionSourceLockSystemID}
+                  onOpenItemsAtHub={handleOpenBuySummaryRows}
+                  onSetSourceLock={handleSetBuySummarySourceLock}
+                  onCopySummary={handleCopyBuySummary}
+                />
+              ) : regionViewMode === "sell" ? (
+                <RegionalSellSinkTable
+                  sinks={regionalSellSinkSummaries}
+                  scanning={scanning && tab === "region"}
+                  progress={tab === "region" ? progress : ""}
+                  onOpenItemsAtSink={handleOpenSellSummaryRows}
+                  onSetSourceLockFromSink={handleSetSourceLockFromSellSink}
+                  onCopySummary={handleCopySellSummary}
                 />
               ) : (
                 <RegionalCorridorTable
