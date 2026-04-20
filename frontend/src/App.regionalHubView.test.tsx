@@ -54,6 +54,13 @@ vi.mock("@/components/ScanResultsTable", () => ({
   ),
 }));
 vi.mock("@/components/RegionalDayTraderTable", () => ({ RegionalDayTraderTable: ({ hubs, onOpenItemsAtHub }: { hubs: Array<{ source_system_name: string }>; onOpenItemsAtHub?: (hub: never) => void }) => <div><div data-testid="region-hubs-table">hubs:{hubs.length}</div><button onClick={() => onOpenItemsAtHub?.(hubs[0] as never)}>open-hub-items</button></div> }));
+vi.mock("@/components/RegionalCorridorTable", () => ({
+  RegionalCorridorTable: ({ corridors }: { corridors: Array<{ source_system_name: string; target_system_name: string }> }) => (
+    <div data-testid="region-corridors-table">
+      {corridors.map((corridor) => `${corridor.source_system_name}->${corridor.target_system_name}`).join(",")}
+    </div>
+  ),
+}));
 vi.mock("@/components/ContractResultsTable", () => ({ ContractResultsTable: () => null }));
 vi.mock("@/components/RadiusRouteWorkspace", () => ({ RadiusRouteWorkspace: () => null }));
 vi.mock("@/components/WatchlistTab", () => ({ WatchlistTab: () => null }));
@@ -105,5 +112,14 @@ describe("App regional hubs view", () => {
     fireEvent.click(screen.getByRole("button", { name: "open-hub-items" }));
 
     expect(await screen.findByTestId("region-items-table")).toBeInTheDocument();
+  });
+
+  it("shows corridors subview and passes aggregated lanes", async () => {
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "scan" }));
+    await waitFor(() => expect(mockScanRegionalDayTrader).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: "Corridors" }));
+    expect(await screen.findByTestId("region-corridors-table")).toHaveTextContent("Jita->Amarr");
   });
 });

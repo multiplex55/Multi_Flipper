@@ -156,6 +156,26 @@ export interface RegionalDayTradeHub {
   items: RegionalDayTradeItem[];
 }
 
+
+export interface RegionalTradeCorridor {
+  key: string;
+  source_system_id: number;
+  source_system_name: string;
+  target_system_id: number;
+  target_system_name: string;
+  item_count: number;
+  purchase_units: number;
+  capital_required: number;
+  target_now_profit: number;
+  target_period_profit: number;
+  weighted_jumps: number;
+  best_item_type_id: number;
+  best_item_name: string;
+  best_item_period_profit: number;
+  best_item_now_profit: number;
+  items: RegionalDayTradeItem[];
+}
+
 export interface ContractResult {
   ContractID: number;
   Title: string;
