@@ -157,6 +157,49 @@ export interface RegionalDayTradeHub {
 }
 
 
+
+export interface RegionalBuyHubSummary {
+  source_system_id: number;
+  source_system_name: string;
+  source_region_id: number;
+  source_region_name: string;
+  item_count: number;
+  route_count: number;
+  purchase_units: number;
+  capital_required: number;
+  target_period_profit: number;
+  avg_jumps: number;
+  top_destinations: Array<{
+    target_system_id: number;
+    target_system_name: string;
+    route_count: number;
+    purchase_units: number;
+    capital_required: number;
+    target_period_profit: number;
+  }>;
+}
+
+export interface RegionalSellSinkSummary {
+  target_system_id: number;
+  target_system_name: string;
+  target_region_id: number;
+  target_region_name: string;
+  item_count: number;
+  route_count: number;
+  purchase_units: number;
+  capital_required: number;
+  target_period_profit: number;
+  avg_jumps: number;
+  top_sources: Array<{
+    source_system_id: number;
+    source_system_name: string;
+    route_count: number;
+    purchase_units: number;
+    capital_required: number;
+    target_period_profit: number;
+  }>;
+}
+
 export interface RegionalTradeCorridor {
   key: string;
   source_system_id: number;
