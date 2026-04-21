@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { formatISK } from "@/lib/format";
 import type { RadiusHubSummary } from "@/lib/radiusHubSummaries";
 
@@ -14,6 +15,9 @@ export function RadiusHubSummaryPanel({
   onOpenHubRows,
   onSetHubLock,
 }: Props) {
+  const [isBuyExpanded, setIsBuyExpanded] = useState(true);
+  const [isSellExpanded, setIsSellExpanded] = useState(true);
+
   const topBuyHubs = buyHubs.slice(0, 5);
   const topSellHubs = sellHubs.slice(0, 5);
 
@@ -43,12 +47,30 @@ export function RadiusHubSummaryPanel({
   return (
     <div className="shrink-0 border-b border-eve-border/20 px-2 py-2 grid grid-cols-1 lg:grid-cols-2 gap-2">
       <section>
-        <h3 className="text-xs uppercase tracking-wide text-eve-accent mb-1">Top buy hubs</h3>
-        {renderRows(topBuyHubs, "buy")}
+        <button
+          type="button"
+          className="mb-1 flex w-full items-center justify-between text-xs uppercase tracking-wide text-eve-accent"
+          aria-expanded={isBuyExpanded}
+          aria-controls="radius-buy-hubs"
+          onClick={() => setIsBuyExpanded((prev) => !prev)}
+        >
+          <span>Top buy hubs</span>
+          <span aria-hidden="true">{isBuyExpanded ? "▾" : "▸"}</span>
+        </button>
+        {isBuyExpanded ? <div id="radius-buy-hubs">{renderRows(topBuyHubs, "buy")}</div> : null}
       </section>
       <section>
-        <h3 className="text-xs uppercase tracking-wide text-eve-accent mb-1">Top sell hubs</h3>
-        {renderRows(topSellHubs, "sell")}
+        <button
+          type="button"
+          className="mb-1 flex w-full items-center justify-between text-xs uppercase tracking-wide text-eve-accent"
+          aria-expanded={isSellExpanded}
+          aria-controls="radius-sell-hubs"
+          onClick={() => setIsSellExpanded((prev) => !prev)}
+        >
+          <span>Top sell hubs</span>
+          <span aria-hidden="true">{isSellExpanded ? "▾" : "▸"}</span>
+        </button>
+        {isSellExpanded ? <div id="radius-sell-hubs">{renderRows(topSellHubs, "sell")}</div> : null}
       </section>
     </div>
   );
