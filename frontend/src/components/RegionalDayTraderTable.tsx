@@ -1,5 +1,10 @@
 import { Fragment, useCallback, useMemo, useState } from "react";
-import type { RegionalDayTradeHub, RegionalDayTradeItem, StationCacheMeta } from "@/lib/types";
+import type {
+  RegionalDayTradeHub,
+  RegionalDayTradeItem,
+  RegionalHubTrendDelta,
+  StationCacheMeta,
+} from "@/lib/types";
 import { formatISK, formatISKFull, formatMargin } from "@/lib/format";
 import { EmptyState } from "./EmptyState";
 
@@ -13,6 +18,7 @@ interface Props {
   periodDays?: number;
   pinnedHubSystemIDs?: Set<number>;
   sourceLockSystemID?: number | null;
+  trendBySourceSystemID?: Record<number, RegionalHubTrendDelta>;
   onOpenItemsAtHub?: (hub: RegionalDayTradeHub) => void;
   onSetSourceLock?: (hub: RegionalDayTradeHub) => void;
   onCopySummary?: (hub: RegionalDayTradeHub) => void;
@@ -361,6 +367,7 @@ export function RegionalDayTraderTable({
   periodDays = 14,
   pinnedHubSystemIDs,
   sourceLockSystemID = null,
+  trendBySourceSystemID,
   onOpenItemsAtHub,
   onSetSourceLock,
   onCopySummary,
@@ -504,6 +511,7 @@ export function RegionalDayTraderTable({
           <tbody>
             {sortedHubs.map((hub) => {
               const isOpen = expanded.has(hub.source_system_id);
+              const trend = trendBySourceSystemID?.[hub.source_system_id];
               const hubROINow = hub.capital_required + hub.shipping_cost > 0
                 ? hub.target_now_profit / (hub.capital_required + hub.shipping_cost) * 100 : 0;
               const hubROIPeriod = hub.capital_required + hub.shipping_cost > 0
@@ -525,6 +533,13 @@ export function RegionalDayTraderTable({
                     <td className="px-2 py-1.5 text-eve-text truncate">
                       <span className="text-eve-accent mr-1">{isOpen ? "▼" : "►"}</span>
                       {hub.source_system_name}
+                      {trend && (
+                        <span className="ml-2 text-[10px] text-eve-dim">
+                          Δi {trend.item_count_delta >= 0 ? "+" : ""}{trend.item_count_delta}
+                          {" · "}
+                          Δp {trend.target_period_profit_delta >= 0 ? "+" : ""}{formatISK(trend.target_period_profit_delta)}
+                        </span>
+                      )}
                       {sourceLockSystemID != null && sourceLockSystemID === hub.source_system_id && (
                         <span className="ml-1 text-[10px] text-eve-accent">LOCK</span>
                       )}

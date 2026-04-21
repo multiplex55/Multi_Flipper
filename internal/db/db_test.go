@@ -573,6 +573,63 @@ func TestDB_GetRegionalDayResults_SkipsLegacyHubPayload(t *testing.T) {
 	}
 }
 
+func TestDB_RegionalHubSnapshots_InsertAndPair(t *testing.T) {
+	d := openTestDB(t)
+	defer d.Close()
+
+	scan1 := d.InsertHistory("region", "Jita", 1, 100)
+	if scan1 <= 0 {
+		t.Fatal("InsertHistory scan1 failed")
+	}
+	d.InsertRegionalHubSnapshots(scan1, []engine.RegionalDayTradeHub{
+		{
+			SourceSystemID:     30000142,
+			SourceSystemName:   "Jita",
+			ItemCount:          4,
+			TargetPeriodProfit: 1_000_000,
+			CapitalRequired:    5_000_000,
+			TargetDemandPerDay: 20,
+			Items: []engine.RegionalDayTradeItem{
+				{TypeName: "Tritanium", TargetPeriodProfit: 600_000},
+				{TypeName: "Pyerite", TargetPeriodProfit: 400_000},
+			},
+		},
+	})
+
+	scan2 := d.InsertHistory("region", "Jita", 1, 100)
+	if scan2 <= 0 {
+		t.Fatal("InsertHistory scan2 failed")
+	}
+	d.InsertRegionalHubSnapshots(scan2, []engine.RegionalDayTradeHub{
+		{
+			SourceSystemID:     30000142,
+			SourceSystemName:   "Jita",
+			ItemCount:          6,
+			TargetPeriodProfit: 1_600_000,
+			CapitalRequired:    6_000_000,
+			TargetDemandPerDay: 28,
+			Items: []engine.RegionalDayTradeItem{
+				{TypeName: "Mexallon", TargetPeriodProfit: 900_000},
+				{TypeName: "Tritanium", TargetPeriodProfit: 700_000},
+			},
+		},
+	})
+
+	latest, prior, ok := d.GetRegionalHubSnapshotPair(scan2, 30000142)
+	if !ok {
+		t.Fatal("GetRegionalHubSnapshotPair returned no data")
+	}
+	if latest.ItemCount != 6 || latest.TargetPeriodProfit != 1_600_000 {
+		t.Fatalf("latest snapshot mismatch: %+v", latest)
+	}
+	if prior == nil || prior.ItemCount != 4 || prior.TargetPeriodProfit != 1_000_000 {
+		t.Fatalf("prior snapshot mismatch: %+v", prior)
+	}
+	if latest.TopItemSummary != "Mexallon, Tritanium" {
+		t.Fatalf("top_item_summary = %q, want %q", latest.TopItemSummary, "Mexallon, Tritanium")
+	}
+}
+
 func TestDB_DemandRegionRoundTrip(t *testing.T) {
 	d := openTestDB(t)
 	defer d.Close()

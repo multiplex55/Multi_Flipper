@@ -156,6 +156,32 @@ export interface RegionalDayTradeHub {
   items: RegionalDayTradeItem[];
 }
 
+export interface RegionalHubTrendSnapshot {
+  scan_timestamp: string;
+  source_system_id: number;
+  source_system_name: string;
+  item_count: number;
+  target_period_profit: number;
+  capital_required: number;
+  demand_per_day: number;
+  top_item_summary: string;
+}
+
+export interface RegionalHubTrendDelta {
+  item_count_delta: number;
+  target_period_profit_delta: number;
+  demand_per_day_delta: number;
+  new_top_items: string[];
+  removed_top_items: string[];
+}
+
+export interface RegionalHubTrend {
+  source_system_id: number;
+  latest_snapshot: RegionalHubTrendSnapshot;
+  prior_snapshot?: RegionalHubTrendSnapshot;
+  delta: RegionalHubTrendDelta;
+}
+
 
 
 export interface RegionalBuyHubSummary {

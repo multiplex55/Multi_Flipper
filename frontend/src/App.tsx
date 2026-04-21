@@ -65,6 +65,7 @@ import type {
   FlipResult,
   RegionalDayTradeHub,
   RegionalDayTradeItem,
+  RegionalHubTrend,
   RouteResult,
   ScanParams,
   StrategyScoreConfig,
@@ -88,6 +89,7 @@ import { RegionalBuyHubTable } from "@/components/RegionalBuyHubTable";
 import { RegionalSellSinkTable } from "@/components/RegionalSellSinkTable";
 import { RadiusHubSummaryPanel } from "@/components/RadiusHubSummaryPanel";
 import { StagingAdvisorPanel } from "@/components/StagingAdvisorPanel";
+import { HubTrendTable } from "@/components/HubTrendTable";
 import { aggregateRegionalTradeCorridors } from "@/lib/regionalCorridors";
 import { buildBuyHubSummaries, buildSellSinkSummaries } from "@/lib/regionalConcentration";
 import { buildRadiusHubSummaries, type RadiusHubSummary } from "@/lib/radiusHubSummaries";
@@ -726,12 +728,13 @@ function App() {
   const [radiusResults, setRadiusResults] = useState<FlipResult[]>([]);
   const [regionResults, setRegionResults] = useState<FlipResult[]>([]);
   const [regionHubResults, setRegionHubResults] = useState<RegionalDayTradeHub[]>([]);
+  const [regionHubTrends, setRegionHubTrends] = useState<RegionalHubTrend[]>([]);
   const [regionHubSummary, setRegionHubSummary] = useState<{
     count: number;
     targetRegionName: string;
     periodDays: number;
   } | null>(null);
-  const [regionViewMode, setRegionViewMode] = useState<"items" | "hubs" | "buy" | "sell" | "corridors" | "staging">("items");
+  const [regionViewMode, setRegionViewMode] = useState<"items" | "hubs" | "buy" | "sell" | "corridors" | "trends" | "staging">("items");
   const [regionHubSystemFilter, setRegionHubSystemFilter] = useState<number | null>(null);
   const [regionSourceLockSystemID, setRegionSourceLockSystemID] = useState<number | null>(null);
   const [regionPinnedHubSystemIDs, setRegionPinnedHubSystemIDs] = useState<Set<number>>(new Set());
@@ -949,6 +952,13 @@ function App() {
   const regionalSellSinkSummaries = useMemo(
     () => buildSellSinkSummaries(regionHubResults),
     [regionHubResults],
+  );
+  const regionalTrendBySourceSystemID = useMemo(
+    () =>
+      Object.fromEntries(
+        regionHubTrends.map((trend) => [trend.source_system_id, trend.delta]),
+      ),
+    [regionHubTrends],
   );
   const radiusHubSummaries = useMemo(
     () => buildRadiusHubSummaries(radiusResults),
@@ -1856,20 +1866,21 @@ const radiusParams =
         await triggerDesktopAlerts(results);
       } else if (currentTab === "region") {
         let meta: StationCacheMeta | undefined;
-const response = await scanRegionalDayTrader(
-  scanParams,
-  setProgress,
-  controller.signal,
-  (m) => {
-    meta = m;
-  },
-);
+        const response = await scanRegionalDayTrader(
+          scanParams,
+          setProgress,
+          controller.signal,
+          (m) => {
+            meta = m;
+          },
+        );
         const normalizedRows = filterFlipResults(
           normalizeRegionalResults(response.rows as unknown[]),
           bannedTypeIDs,
           bannedStationIDs,
         );
         setRegionHubResults(Array.isArray(response.hubs) ? response.hubs : []);
+        setRegionHubTrends(Array.isArray(response.trends) ? response.trends : []);
         setRegionHubSummary(response.summary);
         setRegionHubSystemFilter(null);
         // Persist region scan results to localStorage for cross-session restore
@@ -2881,6 +2892,13 @@ const handleScanAndRefresh = useCallback(async () => {
                 </button>
                 <button
                   type="button"
+                  className={`px-2 py-0.5 text-xs rounded-sm border ${regionViewMode === "trends" ? "border-eve-accent text-eve-accent" : "border-eve-border text-eve-dim"}`}
+                  onClick={() => setRegionViewMode("trends")}
+                >
+                  Trends
+                </button>
+                <button
+                  type="button"
                   className={`px-2 py-0.5 text-xs rounded-sm border ${regionViewMode === "staging" ? "border-eve-accent text-eve-accent" : "border-eve-border text-eve-dim"}`}
                   onClick={() => setRegionViewMode("staging")}
                 >
@@ -2944,6 +2962,7 @@ const handleScanAndRefresh = useCallback(async () => {
                   onSetSourceLock={handleSetRegionSourceLock}
                   onCopySummary={handleCopyRegionHubSummary}
                   onTogglePinHub={handleToggleRegionPinHub}
+                  trendBySourceSystemID={regionalTrendBySourceSystemID}
                 />
               ) : regionViewMode === "buy" ? (
                 <RegionalBuyHubTable
@@ -2972,6 +2991,12 @@ const handleScanAndRefresh = useCallback(async () => {
                   onOpenLaneItems={handleOpenLaneItemsAtCorridor}
                   onOpenInRoute={handleOpenCorridorInRoute}
                   onCopySummary={handleCopyRegionCorridorSummary}
+                />
+              ) : regionViewMode === "trends" ? (
+                <HubTrendTable
+                  trends={regionHubTrends}
+                  scanning={scanning && tab === "region"}
+                  progress={tab === "region" ? progress : ""}
                 />
               ) : (
                 <StagingAdvisorPanel
