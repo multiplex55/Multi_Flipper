@@ -98,6 +98,10 @@ import {
   createEmptyRadiusScanSession,
   createRadiusScanSession,
 } from "@/lib/radiusScanSession";
+import {
+  filterRadiusResultsByHub,
+  type RadiusHubFilter,
+} from "@/lib/radiusHubFilter";
 import type {
   RouteHandoffContext,
   RouteHandoffLegContext,
@@ -726,6 +730,7 @@ function App() {
   const { esiAvailable } = useEsiStatus();
 
   const [radiusResults, setRadiusResults] = useState<FlipResult[]>([]);
+  const [radiusHubFilter, setRadiusHubFilter] = useState<RadiusHubFilter | null>(null);
   const [regionResults, setRegionResults] = useState<FlipResult[]>([]);
   const [regionHubResults, setRegionHubResults] = useState<RegionalDayTradeHub[]>([]);
   const [regionHubTrends, setRegionHubTrends] = useState<RegionalHubTrend[]>([]);
@@ -818,6 +823,7 @@ function App() {
   );
   const clearRadiusScanSession = useCallback(() => {
     setRadiusResults([]);
+    setRadiusHubFilter(null);
     setRadiusCacheMeta(null);
     setRadiusScanSession(createEmptyRadiusScanSession());
     setRouteQueueKeys([]);
@@ -941,6 +947,10 @@ function App() {
     if (!regionHubSystemFilter || regionHubSystemFilter <= 0) return regionResults;
     return regionResults.filter((row) => row.BuySystemID === regionHubSystemFilter);
   }, [regionHubSystemFilter, regionResults]);
+  const visibleRadiusResults = useMemo(
+    () => filterRadiusResultsByHub(radiusResults, radiusHubFilter),
+    [radiusHubFilter, radiusResults],
+  );
   const regionCorridors = useMemo(
     () => aggregateRegionalTradeCorridors(regionHubResults),
     [regionHubResults],
@@ -1112,12 +1122,13 @@ function App() {
   }, [addToast]);
 
   const handleOpenRadiusHubRows = useCallback((hub: RadiusHubSummary, side: "buy" | "sell") => {
+    setRadiusHubFilter({ side, systemId: hub.system_id });
     if (side === "buy") {
       setParams((prev) => ({ ...prev, system_name: hub.system_name }));
     } else {
       setParams((prev) => ({ ...prev, target_market_system: hub.system_name }));
     }
-    addToast(`Set ${side} context to ${hub.system_name}`, "success");
+    addToast(`Opened ${side} rows for ${hub.system_name}`, "success");
   }, [addToast]);
 
   const handleSetRadiusHubLock = useCallback((hub: RadiusHubSummary, side: "buy" | "sell") => {
@@ -2732,6 +2743,15 @@ const handleScanAndRefresh = useCallback(async () => {
                       active
                     </span>
                   )}
+                  {radiusHubFilter && radiusHubFilter.systemId ? (
+                    <button
+                      type="button"
+                      className="px-2 py-0.5 rounded-sm border border-eve-border text-eve-dim hover:text-eve-text"
+                      onClick={() => setRadiusHubFilter(null)}
+                    >
+                      Clear hub filter ({radiusHubFilter.side === "buy" ? "Buy" : "Sell"})
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={clearRadiusScanSession}
@@ -2748,7 +2768,7 @@ const handleScanAndRefresh = useCallback(async () => {
                 onSetHubLock={handleSetRadiusHubLock}
               />
               <ScanResultsTable
-                results={radiusResults}
+                results={visibleRadiusResults}
                 scanning={scanning && tab === "radius"}
                 progress={tab === "radius" ? progress : ""}
                 cacheMeta={radiusCacheMeta}
