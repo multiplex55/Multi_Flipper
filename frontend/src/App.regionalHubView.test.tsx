@@ -37,7 +37,7 @@ vi.mock("@/lib/api", () => ({
   getBanlistItems: vi.fn(async () => []),
   getBannedStations: vi.fn(async () => []),
   rebootStationCache: vi.fn(async () => ({ ok: true, cleared: 1 })),
-  getCharacterLocation: (...args: unknown[]) => mockGetCharacterLocation(...args),
+  getCharacterLocation: mockGetCharacterLocation,
 }));
 
 vi.mock("@/lib/useAuth", () => ({ useAuth: () => ({ authStatus: { logged_in: true, character_id: 777, character_name: "Main", characters: [{ character_id: 777, character_name: "Main", active: true }] }, loginPolling: false, handleLogin: vi.fn(), handleLogout: vi.fn(), handleSelectCharacter: vi.fn(async () => ({})), handleDeleteCharacter: vi.fn(async () => ({})), refreshAuthStatus: vi.fn(async () => ({})) }) }));
