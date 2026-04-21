@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "@/App";
 
-const { mockGetConfig, mockScanRegionalDayTrader } = vi.hoisted(() => ({
+const { mockGetConfig, mockScanRegionalDayTrader, mockGetCharacterLocation } = vi.hoisted(() => ({
   mockGetConfig: vi.fn(async () => ({ system_name: "Jita", target_market_system: "Jita" })),
   mockScanRegionalDayTrader: vi.fn(async () => ({
     rows: [
@@ -15,6 +15,7 @@ const { mockGetConfig, mockScanRegionalDayTrader } = vi.hoisted(() => ({
     ],
     summary: { count: 1, targetRegionName: "The Forge", periodDays: 14 },
   })),
+  mockGetCharacterLocation: vi.fn(async () => ({ solar_system_id: 30000142, solar_system_name: "Jita" })),
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -36,10 +37,10 @@ vi.mock("@/lib/api", () => ({
   getBanlistItems: vi.fn(async () => []),
   getBannedStations: vi.fn(async () => []),
   rebootStationCache: vi.fn(async () => ({ ok: true, cleared: 1 })),
-  getCharacterLocation: vi.fn(async () => null),
+  getCharacterLocation: (...args: unknown[]) => mockGetCharacterLocation(...args),
 }));
 
-vi.mock("@/lib/useAuth", () => ({ useAuth: () => ({ authStatus: { logged_in: false, characters: [] }, loginPolling: false, handleLogin: vi.fn(), handleLogout: vi.fn(), handleSelectCharacter: vi.fn(async () => ({})), handleDeleteCharacter: vi.fn(async () => ({})), refreshAuthStatus: vi.fn(async () => ({})) }) }));
+vi.mock("@/lib/useAuth", () => ({ useAuth: () => ({ authStatus: { logged_in: true, character_id: 777, character_name: "Main", characters: [{ character_id: 777, character_name: "Main", active: true }] }, loginPolling: false, handleLogin: vi.fn(), handleLogout: vi.fn(), handleSelectCharacter: vi.fn(async () => ({})), handleDeleteCharacter: vi.fn(async () => ({})), refreshAuthStatus: vi.fn(async () => ({})) }) }));
 vi.mock("@/lib/useVersionCheck", () => ({ useVersionCheck: () => ({ appVersion: "test", latestVersion: "test", hasUpdate: false, dismissedForSession: false, autoUpdateSupported: false, platform: "web", releaseURL: "" }) }));
 vi.mock("@/lib/useEsiStatus", () => ({ useEsiStatus: () => ({ esiAvailable: true }) }));
 vi.mock("@/lib/useKeyboardShortcuts", () => ({ useKeyboardShortcuts: vi.fn() }));
@@ -58,6 +59,13 @@ vi.mock("@/components/RegionalCorridorTable", () => ({
   RegionalCorridorTable: ({ corridors }: { corridors: Array<{ source_system_name: string; target_system_name: string }> }) => (
     <div data-testid="region-corridors-table">
       {corridors.map((corridor) => `${corridor.source_system_name}->${corridor.target_system_name}`).join(",")}
+    </div>
+  ),
+}));
+vi.mock("@/components/StagingAdvisorPanel", () => ({
+  StagingAdvisorPanel: ({ recommendations }: { recommendations: Array<{ character_name: string; recommended_system_name: string }> }) => (
+    <div data-testid="region-staging-panel">
+      {recommendations.map((rec) => `${rec.character_name}:${rec.recommended_system_name}`).join(",")}
     </div>
   ),
 }));
@@ -121,5 +129,15 @@ describe("App regional hubs view", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Corridors" }));
     expect(await screen.findByTestId("region-corridors-table")).toHaveTextContent("Jita->Amarr");
+  });
+
+  it("produces staging recommendations in regional staging subview", async () => {
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "scan" }));
+    await waitFor(() => expect(mockScanRegionalDayTrader).toHaveBeenCalled());
+    await waitFor(() => expect(mockGetCharacterLocation).toHaveBeenCalledWith(777));
+
+    fireEvent.click(screen.getByRole("button", { name: "Staging" }));
+    expect(await screen.findByTestId("region-staging-panel")).toHaveTextContent("Main:Jita");
   });
 });

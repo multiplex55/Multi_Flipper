@@ -219,6 +219,38 @@ export interface RegionalTradeCorridor {
   items: RegionalDayTradeItem[];
 }
 
+export type CharacterStagingRole =
+  | "hub_trader"
+  | "corridor_runner"
+  | "short_haul";
+
+export interface CharacterStagingRecommendation {
+  character_id: number;
+  character_name: string;
+  current_system_id: number;
+  current_system_name: string;
+  recommended_system_id: number;
+  recommended_system_name: string;
+  recommended_role: CharacterStagingRole;
+  jumps: number;
+  staging_score: number;
+  role_fit_score: number;
+  total_score: number;
+  reason_summary: string;
+  top_metrics: {
+    destinations_count: number;
+    best_destination_system_name?: string;
+    corridor_count: number;
+    corridor_profit: number;
+  };
+  top_corridor?: {
+    source_system_id: number;
+    source_system_name: string;
+    target_system_id: number;
+    target_system_name: string;
+  };
+}
+
 export interface ContractResult {
   ContractID: number;
   Title: string;
