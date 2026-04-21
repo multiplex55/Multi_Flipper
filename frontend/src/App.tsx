@@ -60,6 +60,7 @@ import {
   saveCharacterFeeSnapshot,
 } from "./lib/characterFeePrefs";
 import type {
+  CharacterStagingRecommendation,
   ContractResult,
   FlipResult,
   RegionalDayTradeHub,
@@ -86,9 +87,11 @@ import { RegionalCorridorTable } from "@/components/RegionalCorridorTable";
 import { RegionalBuyHubTable } from "@/components/RegionalBuyHubTable";
 import { RegionalSellSinkTable } from "@/components/RegionalSellSinkTable";
 import { RadiusHubSummaryPanel } from "@/components/RadiusHubSummaryPanel";
+import { StagingAdvisorPanel } from "@/components/StagingAdvisorPanel";
 import { aggregateRegionalTradeCorridors } from "@/lib/regionalCorridors";
 import { buildBuyHubSummaries, buildSellSinkSummaries } from "@/lib/regionalConcentration";
 import { buildRadiusHubSummaries, type RadiusHubSummary } from "@/lib/radiusHubSummaries";
+import { buildCharacterStagingRecommendations } from "@/lib/stagingAdvisor";
 import {
   createEmptyRadiusScanSession,
   createRadiusScanSession,
@@ -698,8 +701,17 @@ function App() {
   const activeCharacterId = authStatus.logged_in
     ? (authStatus.character_id ?? null)
     : null;
+  const authCharacters = authStatus.logged_in ? authStatus.characters ?? [] : [];
+  const authCharacterSignature = useMemo(
+    () =>
+      authCharacters
+        .map((character) => `${character.character_id}:${character.character_name}`)
+        .sort()
+        .join("|"),
+    [authCharacters],
+  );
   const characterCount =
-    authStatus.characters?.length ?? (authStatus.logged_in ? 1 : 0);
+    authCharacters.length > 0 ? authCharacters.length : (authStatus.logged_in ? 1 : 0);
   const {
     appVersion,
     latestVersion,
@@ -719,10 +731,12 @@ function App() {
     targetRegionName: string;
     periodDays: number;
   } | null>(null);
-  const [regionViewMode, setRegionViewMode] = useState<"items" | "hubs" | "buy" | "sell" | "corridors">("items");
+  const [regionViewMode, setRegionViewMode] = useState<"items" | "hubs" | "buy" | "sell" | "corridors" | "staging">("items");
   const [regionHubSystemFilter, setRegionHubSystemFilter] = useState<number | null>(null);
   const [regionSourceLockSystemID, setRegionSourceLockSystemID] = useState<number | null>(null);
   const [regionPinnedHubSystemIDs, setRegionPinnedHubSystemIDs] = useState<Set<number>>(new Set());
+  const [stagingRecommendations, setStagingRecommendations] = useState<CharacterStagingRecommendation[]>([]);
+  const [stagingAdvisorLoading, setStagingAdvisorLoading] = useState(false);
   const [contractResults, setContractResults] = useState<ContractResult[]>([]);
   const [radiusCacheMeta, setRadiusCacheMeta] =
     useState<StationCacheMeta | null>(null);
@@ -848,6 +862,7 @@ function App() {
   );
 
   const abortRef = useRef<AbortController | null>(null);
+  const locationCacheRef = useRef<Map<string, Awaited<ReturnType<typeof getCharacterLocation>> | null>>(new Map());
   const desktopAlertCooldownRef = useRef<Map<string, number>>(new Map());
   const radiusAutoRefreshSignatureRef = useRef<string>("");
   const radiusAutoRefreshLastRunRef = useRef<number>(0);
@@ -939,6 +954,75 @@ function App() {
     () => buildRadiusHubSummaries(radiusResults),
     [radiusResults],
   );
+  const regionalScanKey = useMemo(
+    () =>
+      regionHubResults
+        .map((hub) => `${hub.source_system_id}:${hub.staging_score ?? 0}:${hub.item_count}`)
+        .join("|"),
+    [regionHubResults],
+  );
+
+  useEffect(() => {
+    const characters = authStatus.logged_in ? authStatus.characters ?? [] : [];
+    if (!authStatus.logged_in || characters.length === 0 || regionHubResults.length === 0) {
+      setStagingRecommendations([]);
+      setStagingAdvisorLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setStagingAdvisorLoading(true);
+    void (async () => {
+      const characterLocations = await Promise.all(
+        characters.map(async (character) => {
+          const cacheKey = `${regionalScanKey}:${character.character_id}`;
+          if (locationCacheRef.current.has(cacheKey)) {
+            const cached = locationCacheRef.current.get(cacheKey);
+            if (!cached) return null;
+            return {
+              character_id: character.character_id,
+              character_name: character.character_name,
+              solar_system_id: cached.solar_system_id,
+              solar_system_name: cached.solar_system_name,
+            };
+          }
+          try {
+            const location = await getCharacterLocation(character.character_id);
+            locationCacheRef.current.set(cacheKey, location ?? null);
+            if (!location) return null;
+            return {
+              character_id: character.character_id,
+              character_name: character.character_name,
+              solar_system_id: location.solar_system_id,
+              solar_system_name: location.solar_system_name,
+            };
+          } catch {
+            locationCacheRef.current.set(cacheKey, null);
+            return null;
+          }
+        }),
+      );
+
+      if (cancelled) return;
+      const next = buildCharacterStagingRecommendations({
+        characterLocations: characterLocations.filter((entry): entry is NonNullable<typeof entry> => Boolean(entry)),
+        hubs: regionHubResults,
+        corridors: regionCorridors,
+      });
+      setStagingRecommendations(next);
+      setStagingAdvisorLoading(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    authCharacterSignature,
+    authStatus.logged_in,
+    regionCorridors,
+    regionHubResults,
+    regionalScanKey,
+  ]);
 
   const handleOpenItemsAtHub = useCallback((hub: RegionalDayTradeHub) => {
     setRegionHubSystemFilter(hub.source_system_id);
@@ -1076,6 +1160,35 @@ function App() {
       addToast("Copy failed", "error", 2500);
     }
   }, [addToast]);
+
+  const handleOpenStagingHub = useCallback((recommendation: CharacterStagingRecommendation) => {
+    setRegionHubSystemFilter(recommendation.recommended_system_id);
+    setRegionViewMode("items");
+  }, []);
+
+  const handleSetStagingSourceLock = useCallback((recommendation: CharacterStagingRecommendation) => {
+    setParams((prev) => ({ ...prev, system_name: recommendation.recommended_system_name }));
+    setRegionSourceLockSystemID(recommendation.recommended_system_id);
+    addToast(`Source lock set to ${recommendation.recommended_system_name}`, "success");
+  }, [addToast]);
+
+  const handleOpenStagingRouteContext = useCallback((recommendation: CharacterStagingRecommendation) => {
+    if (recommendation.top_corridor) {
+      setParams((prev) => ({
+        ...prev,
+        system_name: recommendation.top_corridor?.source_system_name ?? recommendation.recommended_system_name,
+        route_target_system_name: recommendation.top_corridor?.target_system_name ?? prev.route_target_system_name,
+      }));
+      setTab("route");
+      addToast(
+        `Route seeded: ${recommendation.top_corridor.source_system_name} → ${recommendation.top_corridor.target_system_name}`,
+        "success",
+      );
+      return;
+    }
+    setRegionHubSystemFilter(recommendation.recommended_system_id);
+    setRegionViewMode("corridors");
+  }, [addToast, setTab]);
 
   const handleToggleRegionPinHub = useCallback(async (hub: RegionalDayTradeHub) => {
     const firstItem = hub.items[0];
@@ -2766,6 +2879,13 @@ const handleScanAndRefresh = useCallback(async () => {
                 >
                   Corridors
                 </button>
+                <button
+                  type="button"
+                  className={`px-2 py-0.5 text-xs rounded-sm border ${regionViewMode === "staging" ? "border-eve-accent text-eve-accent" : "border-eve-border text-eve-dim"}`}
+                  onClick={() => setRegionViewMode("staging")}
+                >
+                  Staging
+                </button>
                 {regionHubSystemFilter && (
                   <button
                     type="button"
@@ -2844,7 +2964,7 @@ const handleScanAndRefresh = useCallback(async () => {
                   onSetSourceLockFromSink={handleSetSourceLockFromSellSink}
                   onCopySummary={handleCopySellSummary}
                 />
-              ) : (
+              ) : regionViewMode === "corridors" ? (
                 <RegionalCorridorTable
                   corridors={regionCorridors}
                   scanning={scanning && tab === "region"}
@@ -2852,6 +2972,14 @@ const handleScanAndRefresh = useCallback(async () => {
                   onOpenLaneItems={handleOpenLaneItemsAtCorridor}
                   onOpenInRoute={handleOpenCorridorInRoute}
                   onCopySummary={handleCopyRegionCorridorSummary}
+                />
+              ) : (
+                <StagingAdvisorPanel
+                  recommendations={stagingRecommendations}
+                  loading={stagingAdvisorLoading}
+                  onOpenHub={handleOpenStagingHub}
+                  onSetSourceLock={handleSetStagingSourceLock}
+                  onOpenRouteContext={handleOpenStagingRouteContext}
                 />
               )}
             </div>
