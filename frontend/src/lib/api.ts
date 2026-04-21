@@ -41,6 +41,7 @@ import type {
   PortfolioPnL,
   PortfolioOptimization,
   RegionalDayTradeHub,
+  RegionalHubTrend,
   RegionOpportunities,
   RouteResult,
   ScanParams,
@@ -177,6 +178,7 @@ type NdjsonGenericMessage<T> =
 export interface RegionalDayScanResponse {
   rows: FlipResult[];
   hubs: RegionalDayTradeHub[];
+  trends: RegionalHubTrend[];
   summary: {
     count: number;
     targetRegionName: string;
@@ -422,6 +424,7 @@ export async function scanRegionalDayTrader(
   onMeta?: (meta: StationCacheMeta | undefined) => void,
 ): Promise<RegionalDayScanResponse> {
   let hubs: RegionalDayTradeHub[] = [];
+  let trends: RegionalHubTrend[] = [];
   let summary = {
     count: 0,
     targetRegionName: "",
@@ -438,11 +441,13 @@ export async function scanRegionalDayTrader(
       const raw = msg as {
         data?: FlipResult[];
         hubs?: RegionalDayTradeHub[];
+        trends?: RegionalHubTrend[];
         count?: number;
         target_region_name?: string;
         period_days?: number;
       };
       hubs = Array.isArray(raw.hubs) ? raw.hubs : [];
+      trends = Array.isArray(raw.trends) ? raw.trends : [];
       summary = {
         count: raw.count ?? 0,
         targetRegionName: raw.target_region_name ?? "",
@@ -450,7 +455,7 @@ export async function scanRegionalDayTrader(
       };
     },
   );
-  return { rows: rows ?? [], hubs, summary };
+  return { rows: rows ?? [], hubs, trends, summary };
 }
 
 export async function scanContracts(

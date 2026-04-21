@@ -103,6 +103,7 @@ func TestBuildRegionalDayResultPayload_IncludesDataAndHubs(t *testing.T) {
 	payload := buildRegionalDayResultPayload(
 		rows,
 		hubs,
+		nil,
 		123,
 		stationCacheMeta{},
 		"The Forge",
@@ -115,6 +116,9 @@ func TestBuildRegionalDayResultPayload_IncludesDataAndHubs(t *testing.T) {
 	if payload["hubs"] == nil {
 		t.Fatalf("expected result payload to include hubs")
 	}
+	if payload["trends"] == nil {
+		t.Fatalf("expected result payload to include trends")
+	}
 	if got := payload["count"].(int); got != len(rows) {
 		t.Fatalf("count = %d, want %d", got, len(rows))
 	}
@@ -123,6 +127,45 @@ func TestBuildRegionalDayResultPayload_IncludesDataAndHubs(t *testing.T) {
 	}
 	if got := payload["period_days"].(int); got != 14 {
 		t.Fatalf("period_days = %d, want 14", got)
+	}
+}
+
+func TestBuildRegionalDayResultPayload_IncludesTrendPayloadShape(t *testing.T) {
+	payload := buildRegionalDayResultPayload(
+		nil,
+		nil,
+		[]engine.RegionalHubTrend{
+			{
+				SourceSystemID: 30000142,
+				Latest: engine.RegionalHubTrendSnapshot{
+					ScanTimestamp:      "2026-04-21T10:00:00Z",
+					SourceSystemID:     30000142,
+					SourceSystemName:   "Jita",
+					ItemCount:          7,
+					TargetPeriodProfit: 1500,
+					DemandPerDay:       30,
+					TopItemSummary:     "Tritanium, Mexallon",
+				},
+				Delta: engine.RegionalHubTrendDelta{
+					ItemCountDelta:          2,
+					TargetPeriodProfitDelta: 500,
+					DemandPerDayDelta:       10,
+					NewTopItems:             []string{"Mexallon"},
+					RemovedTopItems:         []string{"Pyerite"},
+				},
+			},
+		},
+		99,
+		stationCacheMeta{},
+		"The Forge",
+		14,
+	)
+	trends, ok := payload["trends"].([]engine.RegionalHubTrend)
+	if !ok || len(trends) != 1 {
+		t.Fatalf("trends payload missing or wrong shape: %#v", payload["trends"])
+	}
+	if trends[0].Delta.ItemCountDelta != 2 || trends[0].Delta.TargetPeriodProfitDelta != 500 {
+		t.Fatalf("unexpected trend delta payload: %+v", trends[0].Delta)
 	}
 }
 

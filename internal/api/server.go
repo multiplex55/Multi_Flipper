@@ -2879,6 +2879,7 @@ func (s *Server) handleScanRegionalDay(w http.ResponseWriter, r *http.Request) {
 	scanID := s.db.InsertHistoryFull("region", req.SystemName, historyCount, topProfit, totalProfit, durationMs, req)
 	if scanID > 0 && len(dayRows) > 0 {
 		go s.db.InsertRegionalDayResults(scanID, dayRows)
+		go s.db.InsertRegionalHubSnapshots(scanID, hubs)
 		go s.updatePinnedSnapshotsForFlipResults(userID, db.PinnedTabRegionalDay, scanID, dayRows)
 	}
 	var scanIDPtr *int64
@@ -2891,7 +2892,8 @@ func (s *Server) handleScanRegionalDay(w http.ResponseWriter, r *http.Request) {
 	}
 	go s.processWatchlistAlerts(userID, userCfg, alertRows, scanIDPtr)
 
-	line, marshalErr := json.Marshal(buildRegionalDayResultPayload(dayRows, hubs, scanID, cacheMeta, targetRegionName, periodDays))
+	trends := s.buildRegionalHubTrends(scanID, hubs)
+	line, marshalErr := json.Marshal(buildRegionalDayResultPayload(dayRows, hubs, trends, scanID, cacheMeta, targetRegionName, periodDays))
 	if marshalErr != nil {
 		log.Printf("[API] ScanRegionalDay JSON marshal error: %v", marshalErr)
 		errLine, _ := json.Marshal(map[string]string{"type": "error", "message": "JSON: " + marshalErr.Error()})
@@ -2953,6 +2955,7 @@ func (s *Server) enrichRegionalHubLocationContext(homeSystemID int32, currentSys
 func buildRegionalDayResultPayload(
 	dayRows []engine.FlipResult,
 	hubs []engine.RegionalDayTradeHub,
+	trends []engine.RegionalHubTrend,
 	scanID int64,
 	cacheMeta stationCacheMeta,
 	targetRegionName string,
@@ -2962,12 +2965,33 @@ func buildRegionalDayResultPayload(
 		"type":               "result",
 		"data":               dayRows,
 		"hubs":               hubs,
+		"trends":             trends,
 		"count":              len(dayRows),
 		"scan_id":            scanID,
 		"cache_meta":         cacheMeta,
 		"target_region_name": targetRegionName,
 		"period_days":        periodDays,
 	}
+}
+
+func (s *Server) buildRegionalHubTrends(scanID int64, hubs []engine.RegionalDayTradeHub) []engine.RegionalHubTrend {
+	if scanID <= 0 || len(hubs) == 0 || s.db == nil {
+		return nil
+	}
+	out := make([]engine.RegionalHubTrend, 0, len(hubs))
+	for _, hub := range hubs {
+		latest, prior, ok := s.db.GetRegionalHubSnapshotPair(scanID, hub.SourceSystemID)
+		if !ok {
+			continue
+		}
+		out = append(out, engine.RegionalHubTrend{
+			SourceSystemID: hub.SourceSystemID,
+			Latest:         latest,
+			Prior:          prior,
+			Delta:          engine.ComputeRegionalHubTrendDelta(latest, prior),
+		})
+	}
+	return out
 }
 
 func (s *Server) loadRegionalInventorySnapshot(

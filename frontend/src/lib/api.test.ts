@@ -257,6 +257,28 @@ describe("scanRegionalDayTrader", () => {
         type: "result",
         data: [{ TypeID: 34, TypeName: "Tritanium" }],
         hubs: [{ source_system_id: 30000142, source_system_name: "Jita", items: [] }],
+        trends: [
+          {
+            source_system_id: 30000142,
+            latest_snapshot: {
+              scan_timestamp: "2026-04-21T10:00:00Z",
+              source_system_id: 30000142,
+              source_system_name: "Jita",
+              item_count: 7,
+              target_period_profit: 1200000,
+              capital_required: 5000000,
+              demand_per_day: 25,
+              top_item_summary: "Tritanium, Mexallon",
+            },
+            delta: {
+              item_count_delta: 2,
+              target_period_profit_delta: 400000,
+              demand_per_day_delta: 5,
+              new_top_items: ["Mexallon"],
+              removed_top_items: ["Pyerite"],
+            },
+          },
+        ],
         count: 1,
         target_region_name: "The Forge",
         period_days: 14,
@@ -276,6 +298,7 @@ describe("scanRegionalDayTrader", () => {
 
     expect(result.rows).toHaveLength(1);
     expect(result.hubs).toHaveLength(1);
+    expect(result.trends).toHaveLength(1);
     expect(result.summary).toEqual({
       count: 1,
       targetRegionName: "The Forge",
@@ -306,6 +329,7 @@ describe("scanRegionalDayTrader", () => {
     const result = await scanRegionalDayTrader({ system_name: "Jita" } as never, vi.fn());
     expect(result.rows).toHaveLength(1);
     expect(result.hubs).toEqual([]);
+    expect(result.trends).toEqual([]);
     expect(result.summary.periodDays).toBe(7);
   });
 

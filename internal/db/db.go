@@ -1348,6 +1348,32 @@ func (d *DB) migrate() error {
 		logger.Info("DB", "Applied migration v32 (watchlist priority tiers)")
 	}
 
+	if version < 33 {
+		_, err := d.sql.Exec(`
+			CREATE TABLE IF NOT EXISTS regional_hub_snapshots (
+				id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+				scan_id              INTEGER NOT NULL REFERENCES scan_history(id) ON DELETE CASCADE,
+				scan_timestamp       TEXT NOT NULL,
+				source_system_id     INTEGER NOT NULL,
+				source_system_name   TEXT NOT NULL DEFAULT '',
+				item_count           INTEGER NOT NULL DEFAULT 0,
+				target_period_profit REAL NOT NULL DEFAULT 0,
+				capital_required     REAL NOT NULL DEFAULT 0,
+				demand_per_day       REAL NOT NULL DEFAULT 0,
+				top_item_summary     TEXT NOT NULL DEFAULT '',
+				UNIQUE (scan_id, source_system_id)
+			);
+			CREATE INDEX IF NOT EXISTS idx_regional_hub_snapshots_scan ON regional_hub_snapshots(scan_id);
+			CREATE INDEX IF NOT EXISTS idx_regional_hub_snapshots_lookup ON regional_hub_snapshots(source_system_id, scan_timestamp DESC);
+
+			INSERT OR IGNORE INTO schema_version (version) VALUES (33);
+		`)
+		if err != nil {
+			return fmt.Errorf("migration v33: %w", err)
+		}
+		logger.Info("DB", "Applied migration v33 (regional hub snapshots)")
+	}
+
 	return nil
 }
 
