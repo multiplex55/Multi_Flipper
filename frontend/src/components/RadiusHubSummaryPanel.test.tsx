@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { RadiusHubSummaryPanel } from "@/components/RadiusHubSummaryPanel";
 import type { RadiusHubSummary } from "@/lib/radiusHubSummaries";
 
@@ -37,16 +37,70 @@ describe("RadiusHubSummaryPanel", () => {
   afterEach(() => {
     cleanup();
   });
-  it("renders buy and sell sections", () => {
+
+  it("renders section toggles and defaults to expanded", () => {
     render(<RadiusHubSummaryPanel buyHubs={buy} sellHubs={sell} />);
 
-    expect(screen.getByText("Top buy hubs")).toBeInTheDocument();
-    expect(screen.getByText("Top sell hubs")).toBeInTheDocument();
+    const buyToggle = screen.getByRole("button", { name: /top buy hubs/i });
+    const sellToggle = screen.getByRole("button", { name: /top sell hubs/i });
+
+    expect(buyToggle).toHaveAttribute("aria-expanded", "true");
+    expect(sellToggle).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("Jita 4-4")).toBeInTheDocument();
     expect(screen.getByText("Amarr VIII")).toBeInTheDocument();
   });
 
-  it("fires open/lock callbacks", () => {
+  it("collapses only buy rows when buy toggle is clicked", () => {
+    render(<RadiusHubSummaryPanel buyHubs={buy} sellHubs={sell} />);
+
+    const buyToggle = screen.getByRole("button", { name: /top buy hubs/i });
+    const sellToggle = screen.getByRole("button", { name: /top sell hubs/i });
+
+    fireEvent.click(buyToggle);
+
+    expect(buyToggle).toHaveAttribute("aria-expanded", "false");
+    expect(sellToggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.queryByText("Jita 4-4")).not.toBeInTheDocument();
+    expect(screen.getByText("Amarr VIII")).toBeInTheDocument();
+  });
+
+  it("collapses only sell rows when sell toggle is clicked", () => {
+    render(<RadiusHubSummaryPanel buyHubs={buy} sellHubs={sell} />);
+
+    const buyToggle = screen.getByRole("button", { name: /top buy hubs/i });
+    const sellToggle = screen.getByRole("button", { name: /top sell hubs/i });
+
+    fireEvent.click(sellToggle);
+
+    expect(sellToggle).toHaveAttribute("aria-expanded", "false");
+    expect(buyToggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.queryByText("Amarr VIII")).not.toBeInTheDocument();
+    expect(screen.getByText("Jita 4-4")).toBeInTheDocument();
+  });
+
+  it("re-expanding restores row content and action buttons", () => {
+    render(<RadiusHubSummaryPanel buyHubs={buy} sellHubs={sell} />);
+
+    const buyToggle = screen.getByRole("button", { name: /top buy hubs/i });
+
+    fireEvent.click(buyToggle);
+    expect(screen.queryByText("Jita 4-4")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Open rows" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Set lock" })).toHaveLength(1);
+
+    fireEvent.click(buyToggle);
+    expect(buyToggle).toHaveAttribute("aria-expanded", "true");
+
+    const buySection = document.getElementById("radius-buy-hubs");
+    expect(buySection).toBeTruthy();
+    if (buySection) {
+      expect(within(buySection).getByText("Jita 4-4")).toBeInTheDocument();
+      expect(within(buySection).getByRole("button", { name: "Open rows" })).toBeInTheDocument();
+      expect(within(buySection).getByRole("button", { name: "Set lock" })).toBeInTheDocument();
+    }
+  });
+
+  it("fires open/lock callbacks while expanded", () => {
     const onOpenHubRows = vi.fn();
     const onSetHubLock = vi.fn();
     render(
