@@ -4,6 +4,8 @@ import { I18nProvider } from "@/lib/i18n";
 import { RadiusInsightsPanel } from "@/components/RadiusInsightsPanel";
 import type { ActionQueueItem, TopRoutePicks } from "@/lib/radiusMetrics";
 import type { LoopOpportunity } from "@/lib/loopPlanner";
+import type { RadiusHubSummary } from "@/lib/radiusHubSummaries";
+import type { RadiusMajorHubMetrics } from "@/lib/radiusMajorHubInsights";
 
 function makePicks(): TopRoutePicks {
   return {
@@ -67,6 +69,44 @@ const loops: LoopOpportunity[] = [
     emptyJumpsAvoided: 1,
     deadheadRatio: 0,
     loopEfficiencyScore: 90,
+  },
+];
+
+const buyHubs: RadiusHubSummary[] = [
+  {
+    location_id: 60003760,
+    station_name: "Jita IV - Moon 4",
+    system_id: 30000142,
+    system_name: "Jita",
+    row_count: 4,
+    item_count: 3,
+    units: 200,
+    capital_required: 1_000_000,
+    period_profit: 300_000,
+    avg_jumps: 1,
+  },
+];
+
+const sellHubs: RadiusHubSummary[] = [
+  {
+    location_id: 60008494,
+    station_name: "Amarr VIII (Oris)",
+    system_id: 30002187,
+    system_name: "Amarr",
+    row_count: 3,
+    item_count: 2,
+    units: 150,
+    capital_required: 900_000,
+    period_profit: 250_000,
+    avg_jumps: 1,
+  },
+];
+
+const majorHubInsights: RadiusMajorHubMetrics[] = [
+  {
+    hub: { key: "jita", label: "Jita", systemName: "Jita", systemId: 30000142 },
+    buy: { rowCount: 4, distinctItems: 3, totalProfit: 300_000, totalCapital: 1_000_000 },
+    sell: { rowCount: 1, distinctItems: 1, totalProfit: 80_000, totalCapital: 250_000 },
   },
 ];
 
@@ -160,5 +200,41 @@ describe("RadiusInsightsPanel compact teaser", () => {
       "30000142:30004999",
     );
     expect(onOpenRouteFromInsights).not.toHaveBeenCalled();
+  });
+
+  it("renders hub sections collapsed by default, expands, and preserves callbacks", () => {
+    const onOpenHubRows = vi.fn();
+    const onSetHubLock = vi.fn();
+    render(
+      <I18nProvider>
+        <RadiusInsightsPanel
+          topRoutePicks={makePicks()}
+          actionQueue={queue}
+          loopOpportunities={loops}
+          compactTeaser
+          openRouteWorkbench={vi.fn()}
+          buyHubs={buyHubs}
+          sellHubs={sellHubs}
+          majorHubInsights={majorHubInsights}
+          onOpenHubRows={onOpenHubRows}
+          onSetHubLock={onSetHubLock}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.queryByText("Top Buy Hubs")).not.toBeInTheDocument();
+    expect(screen.queryByText("Major Trade Hubs")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Hub Activity" }));
+    expect(screen.getByText("Top Buy Hubs")).toBeInTheDocument();
+    expect(screen.getByText("Top Sell Hubs")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Open rows" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "Set lock" })[0]);
+    expect(onOpenHubRows).toHaveBeenCalled();
+    expect(onSetHubLock).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Major Trade Hubs" }));
+    expect(screen.getByText("Buy here:")).toBeInTheDocument();
+    expect(screen.getByText("Sell here:")).toBeInTheDocument();
   });
 });

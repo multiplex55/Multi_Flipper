@@ -3,6 +3,8 @@ import { formatISK } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import type { ActionQueueItem, TopRoutePicks } from "@/lib/radiusMetrics";
 import type { LoopOpportunity } from "@/lib/loopPlanner";
+import type { RadiusHubSummary } from "@/lib/radiusHubSummaries";
+import type { RadiusMajorHubMetrics } from "@/lib/radiusMajorHubInsights";
 import { LoopOpportunitiesPanel } from "./LoopOpportunitiesPanel";
 import { ExplanationPopoverShell } from "@/components/decision/ExplanationPopoverShell";
 import type { RouteDecisionExplanation } from "@/lib/routeExplanation";
@@ -39,6 +41,11 @@ type RadiusInsightsPanelProps = {
   defaultExpanded?: boolean;
   compactDashboard?: boolean;
   compactTeaser?: boolean;
+  buyHubs?: RadiusHubSummary[];
+  sellHubs?: RadiusHubSummary[];
+  onOpenHubRows?: (hub: RadiusHubSummary, side: "buy" | "sell") => void;
+  onSetHubLock?: (hub: RadiusHubSummary, side: "buy" | "sell") => void;
+  majorHubInsights?: RadiusMajorHubMetrics[];
   routeExplanationByKey?: Record<string, RouteDecisionExplanation>
   lensDeltaByRouteKey?: Record<string, string>
 };
@@ -100,6 +107,11 @@ export function RadiusInsightsPanel({
   defaultExpanded = false,
   compactDashboard = false,
   compactTeaser = false,
+  buyHubs = [],
+  sellHubs = [],
+  onOpenHubRows,
+  onSetHubLock,
+  majorHubInsights = [],
   routeExplanationByKey = {},
   lensDeltaByRouteKey = {},
 }: RadiusInsightsPanelProps) {
@@ -109,6 +121,8 @@ export function RadiusInsightsPanel({
   );
   const [activeTab, setActiveTab] = useState<InsightsTab>(() => loadTabState());
   const [showAllQueueItems, setShowAllQueueItems] = useState(false);
+  const [hubActivityExpanded, setHubActivityExpanded] = useState(false);
+  const [majorHubsExpanded, setMajorHubsExpanded] = useState(false);
 
   const picks = useMemo(
     () =>
@@ -187,6 +201,42 @@ export function RadiusInsightsPanel({
       openRouteWorkbench(routeKey, "summary");
     };
 
+    const renderHubRows = (hubs: RadiusHubSummary[], side: "buy" | "sell") => (
+      <div className="space-y-1">
+        {hubs.length === 0 ? (
+          <div className="text-[10px] text-eve-dim">No rows yet.</div>
+        ) : (
+          hubs.slice(0, 5).map((hub) => (
+            <div
+              key={`${side}-${hub.location_id}`}
+              className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-2 py-1"
+            >
+              <div className="text-[11px] text-eve-text truncate">{hub.station_name}</div>
+              <div className="text-[10px] text-eve-dim truncate">
+                {hub.system_name} · items {hub.item_count} · {formatISK(hub.period_profit)}
+              </div>
+              <div className="mt-1 flex flex-wrap gap-1">
+                <button
+                  type="button"
+                  onClick={() => onOpenHubRows?.(hub, side)}
+                  className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
+                >
+                  Open rows
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSetHubLock?.(hub, side)}
+                  className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
+                >
+                  Set lock
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    );
+
     return (
       <div className={`shrink-0 px-2 ${compactDashboard ? "pb-1" : "pb-2"}`}>
         <section className={`border border-eve-border rounded-sm bg-eve-dark/40 ${compactDashboard ? "p-1.5" : "p-2"}`}>
@@ -236,6 +286,118 @@ export function RadiusInsightsPanel({
             <div className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-2 py-1 text-eve-dim">
               Loop candidates: <span className="text-eve-text">{loopOpportunities.length}</span>
             </div>
+
+            <section className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-2 py-1">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between text-[11px] text-eve-accent"
+                aria-expanded={hubActivityExpanded}
+                onClick={() => setHubActivityExpanded((prev) => !prev)}
+              >
+                <span>Hub Activity</span>
+                <span aria-hidden="true">{hubActivityExpanded ? "▾" : "▸"}</span>
+              </button>
+              {hubActivityExpanded ? (
+                <div className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-2">
+                  <div>
+                    <div className="mb-1 text-[10px] uppercase tracking-wide text-eve-dim">
+                      Top Buy Hubs
+                    </div>
+                    {renderHubRows(buyHubs, "buy")}
+                  </div>
+                  <div>
+                    <div className="mb-1 text-[10px] uppercase tracking-wide text-eve-dim">
+                      Top Sell Hubs
+                    </div>
+                    {renderHubRows(sellHubs, "sell")}
+                  </div>
+                </div>
+              ) : null}
+            </section>
+
+            <section className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-2 py-1">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between text-[11px] text-eve-accent"
+                aria-expanded={majorHubsExpanded}
+                onClick={() => setMajorHubsExpanded((prev) => !prev)}
+              >
+                <span>Major Trade Hubs</span>
+                <span aria-hidden="true">{majorHubsExpanded ? "▾" : "▸"}</span>
+              </button>
+              {majorHubsExpanded ? (
+                <div className="mt-2 grid grid-cols-1 gap-1.5 md:grid-cols-2 xl:grid-cols-3">
+                  {majorHubInsights.map((entry) => (
+                    <article
+                      key={entry.hub.key}
+                      className="rounded-sm border border-eve-border/60 bg-eve-dark/40 px-2 py-1 text-[10px]"
+                    >
+                      <div className="mb-1 font-medium text-eve-text">{entry.hub.label}</div>
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                        <span className="text-eve-dim">Buy here:</span>
+                        <span className="text-right">{entry.buy.rowCount}</span>
+                        <span className="text-eve-dim">Sell here:</span>
+                        <span className="text-right">{entry.sell.rowCount}</span>
+                        <span className="text-eve-dim">Items:</span>
+                        <span className="text-right">{entry.buy.distinctItems + entry.sell.distinctItems}</span>
+                        <span className="text-eve-dim">Profit:</span>
+                        <span className="text-right text-green-300">
+                          {formatISK(entry.buy.totalProfit + entry.sell.totalProfit)}
+                        </span>
+                      </div>
+                      {(onOpenHubRows || onSetHubLock) && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {(() => {
+                            const buyHub = buyHubs.find((hub) => hub.system_id === entry.hub.systemId);
+                            const sellHub = sellHubs.find((hub) => hub.system_id === entry.hub.systemId);
+                            return (
+                              <>
+                                {buyHub ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenHubRows?.(buyHub, "buy")}
+                                      className="rounded-sm border border-eve-border/60 px-1 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
+                                    >
+                                      Open buy rows
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => onSetHubLock?.(buyHub, "buy")}
+                                      className="rounded-sm border border-eve-border/60 px-1 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
+                                    >
+                                      Buy lock
+                                    </button>
+                                  </>
+                                ) : null}
+                                {sellHub ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenHubRows?.(sellHub, "sell")}
+                                      className="rounded-sm border border-eve-border/60 px-1 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
+                                    >
+                                      Open sell rows
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => onSetHubLock?.(sellHub, "sell")}
+                                      className="rounded-sm border border-eve-border/60 px-1 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
+                                    >
+                                      Sell lock
+                                    </button>
+                                  </>
+                                ) : null}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              ) : null}
+            </section>
           </div>
         </section>
       </div>

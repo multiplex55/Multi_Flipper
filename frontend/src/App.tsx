@@ -87,7 +87,6 @@ import { RegionalDayTraderTable } from "@/components/RegionalDayTraderTable";
 import { RegionalCorridorTable } from "@/components/RegionalCorridorTable";
 import { RegionalBuyHubTable } from "@/components/RegionalBuyHubTable";
 import { RegionalSellSinkTable } from "@/components/RegionalSellSinkTable";
-import { RadiusHubSummaryPanel } from "@/components/RadiusHubSummaryPanel";
 import { StagingAdvisorPanel } from "@/components/StagingAdvisorPanel";
 import { HubTrendTable } from "@/components/HubTrendTable";
 import { aggregateRegionalTradeCorridors } from "@/lib/regionalCorridors";
@@ -2764,12 +2763,6 @@ const handleScanAndRefresh = useCallback(async () => {
                   </button>
                 </div>
               )}
-              <RadiusHubSummaryPanel
-                buyHubs={radiusHubSummaries.buyHubs}
-                sellHubs={radiusHubSummaries.sellHubs}
-                onOpenHubRows={handleOpenRadiusHubRows}
-                onSetHubLock={handleSetRadiusHubLock}
-              />
               <ScanResultsTable
                 results={visibleRadiusResults}
                 scanning={scanning && tab === "radius"}
@@ -2806,6 +2799,10 @@ const handleScanAndRefresh = useCallback(async () => {
                   openRouteWorkspaceFromRadius(routeKey, "workbench")
                 }
                 onSendToRouteQueue={sendRouteToQueueFromRadius}
+                buyHubs={radiusHubSummaries.buyHubs}
+                sellHubs={radiusHubSummaries.sellHubs}
+                onOpenHubRows={handleOpenRadiusHubRows}
+                onSetHubLock={handleSetRadiusHubLock}
                 onRouteHandoff={handleRouteHandoffFromScanner}
                 featureConfig={RADIUS_SCAN_RESULTS_FEATURE_CONFIG}
               />
