@@ -104,6 +104,8 @@ import {
   type EndpointPreferenceProfile,
 } from "@/lib/endpointPreferences";
 import { RadiusInsightsPanel } from "./RadiusInsightsPanel";
+import { buildRadiusMajorHubInsights } from "@/lib/radiusMajorHubInsights";
+import type { RadiusHubSummary } from "@/lib/radiusHubSummaries";
 import {
   buildRouteDecisionExplanation,
   explainLensDelta,
@@ -360,6 +362,10 @@ interface Props {
   onOpenInRoute?: (routeKey: string) => void;
   onOpenInRouteWorkbench?: (routeKey: string) => void;
   onSendToRouteQueue?: (routeKey: string) => void;
+  buyHubs?: RadiusHubSummary[];
+  sellHubs?: RadiusHubSummary[];
+  onOpenHubRows?: (hub: RadiusHubSummary, side: "buy" | "sell") => void;
+  onSetHubLock?: (hub: RadiusHubSummary, side: "buy" | "sell") => void;
   onRouteHandoff?: (
     context: RouteHandoffContext,
     manifestText: string,
@@ -1490,6 +1496,10 @@ export function ScanResultsTable({
   onOpenInRoute,
   onOpenInRouteWorkbench,
   onSendToRouteQueue,
+  buyHubs = [],
+  sellHubs = [],
+  onOpenHubRows,
+  onSetHubLock,
   onRouteHandoff,
   featureConfig = DEFAULT_SCAN_RESULTS_TABLE_FEATURE_CONFIG,
 }: Props) {
@@ -1504,6 +1514,10 @@ export function ScanResultsTable({
   );
   const effectiveLoopOpportunities =
     radiusScanSession?.loopOpportunities ?? loopOpportunities ?? [];
+  const majorHubInsights = useMemo(
+    () => buildRadiusMajorHubInsights(radiusScanSession?.results ?? results),
+    [radiusScanSession?.results, results],
+  );
 
   const allColumnDefs = useMemo(
     () => buildColumnDefs(showRegions, columnProfile),
@@ -6232,6 +6246,11 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
           }}
           compactTeaser
           compactDashboard={compactDashboard}
+          buyHubs={buyHubs}
+          sellHubs={sellHubs}
+          onOpenHubRows={onOpenHubRows}
+          onSetHubLock={onSetHubLock}
+          majorHubInsights={majorHubInsights}
         />
       )}
 
