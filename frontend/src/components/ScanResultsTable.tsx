@@ -5660,16 +5660,29 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               <button type="button" onClick={() => setShowHiddenRows((v) => !v)} title={t("showHidden")} className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${showHiddenRows ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10" : "border-eve-border/60 text-eve-text/50 bg-eve-dark/40 hover:border-eve-accent/40 hover:text-eve-accent/70"}`}>
                 {showHiddenRows ? "Hide hidden" : "Show hidden"}
               </button>
-              <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
-                {(["all", "green", "yellow", "red"] as const).map((lvl) => {
-                  const active = routeSafetyFilter === lvl;
-                  return (
-                    <button key={lvl} type="button" onClick={() => setRouteSafetyFilter(lvl)} className={`px-1.5 py-0.5 border-r last:border-r-0 border-eve-border/40 flex items-center transition-colors ${active ? "bg-eve-accent/15 text-eve-accent border-eve-accent/40" : "text-eve-dim hover:text-eve-text"}`} title={`Route safety: ${lvl}`}>
-                      {lvl === "all" ? "Route: All" : lvl.charAt(0).toUpperCase() + lvl.slice(1)}
-                    </button>
-                  );
-                })}
-              </div>
+              <label
+                htmlFor="route-safety-filter-select"
+                className="inline-flex items-center gap-1 rounded-sm border border-eve-border/60 bg-eve-dark/40 px-1.5 py-0.5 text-[11px]"
+              >
+                <span className="text-eve-dim">Route safety</span>
+                <select
+                  id="route-safety-filter-select"
+                  value={routeSafetyFilter}
+                  onChange={(e) =>
+                    setRouteSafetyFilter(
+                      e.target.value as "all" | "green" | "yellow" | "red",
+                    )
+                  }
+                  className="bg-eve-input border border-eve-border rounded-sm px-1 py-0.5 text-[11px]"
+                  title="Route safety filter selector"
+                  data-testid="route-safety-filter-select"
+                >
+                  <option value="all">Any</option>
+                  <option value="green">Green only</option>
+                  <option value="yellow">Yellow+</option>
+                  <option value="red">Red included</option>
+                </select>
+              </label>
               <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
                 {(
                   [
