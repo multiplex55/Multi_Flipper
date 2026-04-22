@@ -143,4 +143,20 @@ describe("ScanResultsTable workbench integration", () => {
       sellSystemName: "Amarr",
     });
   });
+
+  it("opens batch builder directly from compact insight CTA with seeded route rows", async () => {
+    renderTable();
+
+    fireEvent.click(
+      (await screen.findAllByRole("button", { name: "Open in Build Batch" }))[0],
+    );
+
+    expect(await screen.findByTestId("batch-builder-entry-context")).toHaveTextContent(
+      "Mode: core",
+    );
+    const copyManifestButtons = screen.getAllByRole("button", {
+      name: /Copy Manifest/i,
+    });
+    expect(copyManifestButtons.some((button) => !button.hasAttribute("disabled"))).toBe(true);
+  });
 });

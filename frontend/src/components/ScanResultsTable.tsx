@@ -6206,6 +6206,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
           actionQueue={actionQueue}
           loopOpportunities={showLoopPanel ? effectiveLoopOpportunities : []}
           openRouteWorkbench={openRouteWorkbench}
+          onOpenBatchBuilderForRoute={openBatchBuilderForRoute}
           onOpenInRoute={onOpenInRoute}
           onOpenInRouteWorkbench={(routeKey) => {
             if (onOpenInRouteWorkbench) {
@@ -6249,6 +6250,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               : undefined
           }
           openRouteWorkbench={openRouteWorkbench}
+          onOpenBatchBuilderForRoute={openBatchBuilderForRoute}
           onOpenInRoute={onOpenInRoute}
           onOpenInRouteWorkbench={(routeKey) => {
             onOpenInRouteWorkbench?.(routeKey);

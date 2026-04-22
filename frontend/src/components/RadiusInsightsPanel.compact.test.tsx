@@ -125,6 +125,7 @@ describe("RadiusInsightsPanel compact teaser", () => {
 
   it("shows action buttons for each pick and sends matching route keys", () => {
     const onOpenRouteFromInsights = vi.fn();
+    const onOpenBatchBuilderForRoute = vi.fn();
     render(
       <I18nProvider>
         <RadiusInsightsPanel
@@ -133,6 +134,7 @@ describe("RadiusInsightsPanel compact teaser", () => {
           loopOpportunities={loops}
           compactTeaser
           openRouteWorkbench={vi.fn()}
+          onOpenBatchBuilderForRoute={onOpenBatchBuilderForRoute}
           onOpenRouteFromInsights={onOpenRouteFromInsights}
         />
       </I18nProvider>,
@@ -145,20 +147,18 @@ describe("RadiusInsightsPanel compact teaser", () => {
     fireEvent.click(rowButtons[1]);
     fireEvent.click(rowButtons[2]);
 
-    expect(onOpenRouteFromInsights).toHaveBeenNthCalledWith(
+    expect(onOpenBatchBuilderForRoute).toHaveBeenNthCalledWith(
       1,
       "30000142:30002187",
-      "workbench",
     );
-    expect(onOpenRouteFromInsights).toHaveBeenNthCalledWith(
+    expect(onOpenBatchBuilderForRoute).toHaveBeenNthCalledWith(
       2,
       "30002187:30002510",
-      "workbench",
     );
-    expect(onOpenRouteFromInsights).toHaveBeenNthCalledWith(
+    expect(onOpenBatchBuilderForRoute).toHaveBeenNthCalledWith(
       3,
       "30000142:30004999",
-      "workbench",
     );
+    expect(onOpenRouteFromInsights).not.toHaveBeenCalled();
   });
 });

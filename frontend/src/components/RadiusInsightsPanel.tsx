@@ -27,6 +27,7 @@ type RadiusInsightsPanelProps = {
   ) => void;
   onOpenInRoute?: (routeKey: string) => void;
   onOpenInRouteWorkbench?: (routeKey: string) => void;
+  onOpenBatchBuilderForRoute?: (routeKey: string) => void;
   onOpenRouteFromInsights?: (
     routeKey: string,
     targetMode?: "discover" | "workbench",
@@ -90,6 +91,7 @@ export function RadiusInsightsPanel({
   openRouteWorkbench,
   onOpenInRoute,
   onOpenInRouteWorkbench,
+  onOpenBatchBuilderForRoute,
   onOpenRouteFromInsights,
   onSendToRouteQueue,
   activeRouteGroupKey = null,
@@ -220,7 +222,7 @@ export function RadiusInsightsPanel({
                   {pick && (
                     <button
                       type="button"
-                      onClick={() => openCompactRoute(pick.routeKey, "workbench")}
+                      onClick={() => onOpenBatchBuilderForRoute?.(pick.routeKey)}
                       className="mt-1 rounded-sm border border-eve-border/70 px-1.5 py-0.5 text-[10px] text-eve-accent hover:border-eve-accent/60 hover:bg-eve-accent/10"
                     >
                       Open in Build Batch

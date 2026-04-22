@@ -836,6 +836,9 @@ function App() {
   }, []);
   const openRouteWorkspaceFromRadius = useCallback(
     (routeKey: string, mode: RouteWorkspaceMode) => {
+      // Keep this handoff strictly for explicit Route workspace actions.
+      // Batch-builder CTAs should stay in the scanner context until Route workbench
+      // grows beyond its current placeholder state for batch operations.
       setActiveRadiusRouteKey(routeKey);
       setRouteWorkspaceMode(mode);
       setRouteWorkspaceSource("radius");
