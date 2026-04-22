@@ -87,6 +87,7 @@ describe("ScanResultsTable advanced toolbar", () => {
 
     expect(screen.getByRole("button", { name: /advanced ▸/i })).toBeInTheDocument();
     expect(screen.queryByTitle("Quick profile preset")).not.toBeInTheDocument();
+    expect(screen.queryByText("Route: All")).not.toBeInTheDocument();
     expect(screen.getByTitle("Export CSV")).toBeInTheDocument();
     expect(screen.getByTitle("Copy table")).toBeInTheDocument();
     expect(screen.getByTitle("Column setup")).toBeInTheDocument();
@@ -245,7 +246,9 @@ describe("ScanResultsTable advanced toolbar", () => {
 
     fireEvent.click(screen.getByTestId("urgency-sort-button"));
     fireEvent.click(screen.getByTestId("urgency-filter-chip:aging"));
-    fireEvent.click(screen.getByTitle("Route safety: red"));
+    fireEvent.change(screen.getByTestId("route-safety-filter-select"), {
+      target: { value: "red" },
+    });
     const realProfitInput = screen
       .getAllByTitle("Real Profit")
       .find((el) => el.tagName.toLowerCase() === "input");
@@ -269,6 +272,46 @@ describe("ScanResultsTable advanced toolbar", () => {
     expect(screen.getByTestId("urgency-sort-button")).toHaveClass(
       "border-eve-accent/70",
     );
+  });
+
+  it("exposes route safety selector in advanced filtering controls and updates filter state", () => {
+    renderTable([makeRow(), makeRow({ TypeID: 102, TypeName: "Item 102", BuySystemID: 30002187, SellSystemID: 30000142 })]);
+    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
+
+    const routeSafetySelect = screen.getByTestId(
+      "route-safety-filter-select",
+    ) as HTMLSelectElement;
+    expect(routeSafetySelect).toBeInTheDocument();
+    expect(routeSafetySelect.value).toBe("all");
+    expect(within(routeSafetySelect).getByRole("option", { name: "Any" })).toBeInTheDocument();
+    expect(within(routeSafetySelect).getByRole("option", { name: "Green only" })).toBeInTheDocument();
+    expect(within(routeSafetySelect).getByRole("option", { name: "Yellow+" })).toBeInTheDocument();
+    expect(within(routeSafetySelect).getByRole("option", { name: "Red included" })).toBeInTheDocument();
+
+    fireEvent.change(routeSafetySelect, { target: { value: "green" } });
+    expect(routeSafetySelect.value).toBe("green");
+    expect(screen.getByTestId("active-filter-chip:route-safety")).toHaveTextContent(
+      "Route safety: green",
+    );
+  });
+
+  it("shows and clears the route safety audit chip when selecting non-default then resetting", () => {
+    renderTable([makeRow(), makeRow({ TypeID: 102, TypeName: "Item 102", BuySystemID: 30002187, SellSystemID: 30000142 })]);
+    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
+
+    const routeSafetySelect = screen.getByTestId(
+      "route-safety-filter-select",
+    ) as HTMLSelectElement;
+
+    fireEvent.change(routeSafetySelect, { target: { value: "green" } });
+    const routeSafetyChip = screen.getByTestId("active-filter-chip:route-safety");
+    expect(routeSafetyChip).toHaveTextContent("Route safety: green");
+
+    fireEvent.click(routeSafetyChip);
+
+    expect(screen.queryByTestId("active-filter-chip:route-safety")).not.toBeInTheDocument();
+    expect(routeSafetySelect.value).toBe("all");
+    expect(screen.getByText("Found 2 deals")).toBeInTheDocument();
   });
 
   it("toggles urgency toolbar sort direction and updates directional label", () => {
