@@ -745,6 +745,13 @@ const baseColumnDefs: ColumnDef[] = [
     width: "min-w-[70px]",
     numeric: true,
   },
+  {
+    key: "UrgencyScore",
+    labelKey: "colUrgency",
+    width: "min-w-[90px]",
+    numeric: true,
+    tooltipKey: "colUrgencyHint",
+  },
 ];
 
 const regionColumnDefs: ColumnDef[] = [
@@ -5696,10 +5703,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               <span className="text-eve-dim px-1">{t("rankingOrderingControlsGroupLabel")}</span>
               <button
                 type="button"
-                onClick={() => {
-                  setSortKey("UrgencyScore");
-                  setSortDir("desc");
-                }}
+                onClick={() => toggleSort("UrgencyScore")}
                 className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
                   sortKey === "UrgencyScore"
                     ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent"
@@ -5708,7 +5712,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                 title={t("urgencySortHint")}
                 data-testid="urgency-sort-button"
               >
-                {t("urgencySortLabel")}
+                {`${t("colUrgency")} ${sortKey === "UrgencyScore" && sortDir === "asc" ? "↑" : "↓"}`}
               </button>
               <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
                 <span className="text-eve-dim px-1">{t("orderingModeLabel")}</span>

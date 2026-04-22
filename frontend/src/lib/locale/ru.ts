@@ -867,7 +867,8 @@ export const ru = {
     urgencyFragile: "Хрупко",
     urgencyFilterHint: "Фильтр строк по диапазону срочности.",
     urgencySortLabel: "Сорт. срочности",
-    urgencySortHint: "Сортировать строки по urgency score (по убыванию).",
+    urgencySortHint:
+      "Первый клик поднимает наверх быстро исчезающие возможности (Срочность ↓). Повторный клик — более спокойные варианты первыми (Срочность ↑).",
     selected: "Выбрано: {count}",
     totalProfit: "Сумма прибыли",
     avgMargin: "Средняя маржа",

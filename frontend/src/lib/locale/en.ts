@@ -869,7 +869,8 @@ export const en = {
     urgencyFragile: "Fragile",
     urgencyFilterHint: "Filter rows by urgency band.",
     urgencySortLabel: "Sort Urgency",
-    urgencySortHint: "Sort rows by urgency score (descending).",
+    urgencySortHint:
+      "First click ranks fast-disappearing opportunities first (Urgency ↓). Click again for calmer opportunities first (Urgency ↑).",
     selected: "Selected: {count}",
     totalProfit: "Total profit",
     avgMargin: "Avg margin",
