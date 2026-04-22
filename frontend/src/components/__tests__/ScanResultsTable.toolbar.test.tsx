@@ -271,6 +271,51 @@ describe("ScanResultsTable advanced toolbar", () => {
     );
   });
 
+  it("toggles urgency toolbar sort direction and updates directional label", () => {
+    renderTable([makeRow(), makeRow({ TypeID: 102, TypeName: "Item 102", RealProfit: 800 })]);
+    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
+
+    const urgencySortButton = screen.getByTestId("urgency-sort-button");
+    expect(urgencySortButton).toHaveTextContent("Urgency ↓");
+
+    fireEvent.click(urgencySortButton);
+    expect(urgencySortButton).toHaveTextContent("Urgency ↓");
+    expect(urgencySortButton).toHaveClass("border-eve-accent/70");
+
+    fireEvent.click(urgencySortButton);
+    expect(urgencySortButton).toHaveTextContent("Urgency ↑");
+
+    fireEvent.click(urgencySortButton);
+    expect(urgencySortButton).toHaveTextContent("Urgency ↓");
+  });
+
+  it("keeps urgency direction synchronized between column header and toolbar control", () => {
+    renderTable([makeRow(), makeRow({ TypeID: 102, TypeName: "Item 102", RealProfit: 800 })]);
+    fireEvent.click(screen.getByTitle("Column setup"));
+    fireEvent.click(screen.getByRole("button", { name: /show all/i }));
+    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
+
+    const urgencySortButton = screen.getByTestId("urgency-sort-button");
+    const urgencyHeader = screen
+      .getAllByRole("columnheader")
+      .find((el) => /urgency/i.test(el.textContent ?? ""));
+
+    expect(urgencyHeader).toBeTruthy();
+    expect(urgencySortButton).toHaveTextContent("Urgency ↓");
+
+    fireEvent.click(urgencyHeader!);
+    expect(urgencySortButton).toHaveTextContent("Urgency ↓");
+
+    fireEvent.click(urgencyHeader!);
+    expect(urgencySortButton).toHaveTextContent("Urgency ↑");
+
+    fireEvent.click(urgencySortButton);
+    expect(urgencySortButton).toHaveTextContent("Urgency ↓");
+
+    fireEvent.click(urgencySortButton);
+    expect(urgencySortButton).toHaveTextContent("Urgency ↑");
+  });
+
   it("exposes accessible grouping labels for filtering and ranking controls", () => {
     renderTable([makeRow()]);
     fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
