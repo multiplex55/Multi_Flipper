@@ -11,10 +11,14 @@ const { mockScan } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/api", () => ({
+  addPinnedOpportunity: vi.fn(async () => []),
   applyAppUpdate: vi.fn(),
   getUpdateCheckStatus: vi.fn(async () => ({ status: "idle" })),
   getConfig: vi.fn(async () => ({ system_name: "Jita", cargo_capacity: 12000 })),
+  listPinnedOpportunities: vi.fn(async () => []),
+  removePinnedOpportunity: vi.fn(async () => ({ status: "deleted" })),
   skipAppUpdateForSession: vi.fn(async () => ({})),
+  subscribePinnedOpportunityChanges: vi.fn(() => () => undefined),
   updateConfig: vi.fn(async () => ({})),
   scan: mockScan,
   scanMultiRegion: vi.fn(async () => []),
@@ -106,13 +110,14 @@ vi.mock("@/components/ScanResultsTable", () => ({
     tradeStateTab?: string;
     onOpenInRoute?: (routeKey: string) => void;
     onOpenInRouteWorkbench?: (routeKey: string) => void;
+    onOpenBatchBuilderForRoute?: (routeKey: string) => void;
     onSendToRouteQueue?: (routeKey: string) => void;
   }) => (
     <div>
       <div data-testid={`rows-${props.tradeStateTab ?? "unknown"}`}>{props.results.length}</div>
       <button type="button" onClick={() => props.onOpenInRouteWorkbench?.("route:jita-amarr")}>open-promoted-route</button>
       <button type="button" onClick={() => props.onOpenInRouteWorkbench?.("route:jita-amarr")}>open-route-workspace-cta</button>
-      <button type="button" onClick={() => props.onOpenInRouteWorkbench?.("route:jita-amarr")}>open-compact-insight-cta</button>
+      <button type="button" onClick={() => props.onOpenBatchBuilderForRoute?.("route:jita-amarr")}>open-compact-insight-cta</button>
       <button type="button" onClick={() => props.onOpenInRoute?.("route:jita-amarr")}>open-in-route</button>
       <button type="button" onClick={() => props.onSendToRouteQueue?.("route:jita-amarr")}>selected-row-batch-action</button>
     </div>
@@ -151,16 +156,15 @@ describe("App route workspace continuity", () => {
     expect(await screen.findByTestId("rows-radius")).toHaveTextContent("3");
   });
 
-  it("opens Route tab and workbench from compact insight CTA in Radius context", async () => {
+  it("keeps compact build-batch CTA independent from route workspace handoff", async () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole("button", { name: "scan" }));
     await waitFor(() => expect(screen.getByTestId("rows-radius")).toHaveTextContent("3"));
 
     fireEvent.click(screen.getAllByRole("button", { name: "open-compact-insight-cta" })[0]);
-
-    expect(await screen.findByTestId("route-workspace-workbench")).toBeInTheDocument();
-    expect(screen.getByText(/Selected route: Jita → Amarr/i)).toBeInTheDocument();
+    expect(screen.getByTestId("rows-radius")).toHaveTextContent("3");
+    expect(screen.queryByTestId("route-workspace-workbench")).not.toBeInTheDocument();
   });
 
   it("keeps Open Route Workspace CTA active in Radius context", async () => {
