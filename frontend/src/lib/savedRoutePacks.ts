@@ -77,6 +77,13 @@ function normalizeSavedRoutePack(value: unknown): SavedRoutePack | null {
     verificationSnapshot: pack.verificationSnapshot
       ? {
           ...pack.verificationSnapshot,
+          recommendation:
+            pack.verificationSnapshot.recommendation === "proceed" ||
+            pack.verificationSnapshot.recommendation === "proceed_reduced" ||
+            pack.verificationSnapshot.recommendation === "reprice_rebuild" ||
+            pack.verificationSnapshot.recommendation === "abort"
+              ? pack.verificationSnapshot.recommendation
+              : undefined,
           checkedAt: String(
             pack.verificationSnapshot.checkedAt ??
               pack.verificationSnapshot.verifiedAt ??

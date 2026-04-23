@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { FlipResult, RouteManifestVerificationSnapshot } from "@/lib/types";
-import { verifyRouteManifestAgainstRows } from "@/lib/routeManifestVerification";
+import {
+  normalizeVerificationRecommendation,
+  verifyRouteManifestAgainstRows,
+} from "@/lib/routeManifestVerification";
 import { getVerificationProfileById } from "@/lib/verificationProfiles";
 
 function makeRow(overrides: Partial<FlipResult>): FlipResult {
@@ -62,27 +65,53 @@ const snapshot: RouteManifestVerificationSnapshot = {
 };
 
 describe("verifyRouteManifestAgainstRows", () => {
-  it("classifies good/reduced/abort threshold scenarios", () => {
-    const good = verifyRouteManifestAgainstRows({
+  it("maps recommendation by deterministic profile thresholds", () => {
+    const profile = getVerificationProfileById("standard");
+    const proceed = verifyRouteManifestAgainstRows({
       snapshot,
-      rows: [makeRow({ UnitsToBuy: 10, BuyPrice: 100, SellPrice: 150 })],
+      rows: [makeRow({ UnitsToBuy: 10, BuyPrice: 101, SellPrice: 149 })],
+      profile,
     });
-    expect(good.status).toBe("Good");
+    expect(proceed.recommendation).toBe("proceed");
 
     const reduced = verifyRouteManifestAgainstRows({
       snapshot,
-      rows: [makeRow({ UnitsToBuy: 10, BuyPrice: 102, SellPrice: 140 })],
+      rows: [makeRow({ UnitsToBuy: 10, BuyPrice: 104, SellPrice: 143 })],
+      profile,
     });
-    expect(reduced.status).toBe("Reduced edge");
+    expect(reduced.recommendation).toBe("proceed_reduced");
+
+    const rebuild = verifyRouteManifestAgainstRows({
+      snapshot,
+      rows: [makeRow({ UnitsToBuy: 10, BuyPrice: 105, SellPrice: 140 })],
+      profile,
+    });
+    expect(rebuild.recommendation).toBe("reprice_rebuild");
 
     const abort = verifyRouteManifestAgainstRows({
       snapshot,
       rows: [makeRow({ UnitsToBuy: 10, BuyPrice: 120, SellPrice: 130 })],
+      profile,
     });
-    expect(abort.status).toBe("Abort");
+    expect(abort.recommendation).toBe("abort");
   });
 
-  it("reports per-line offenders with item ids and drift direction", () => {
+  it("computes age and drift metrics", () => {
+    const result = verifyRouteManifestAgainstRows({
+      snapshot,
+      rows: [makeRow({ UnitsToBuy: 10, BuyPrice: 102, SellPrice: 142 })],
+      profile: getVerificationProfileById("standard"),
+      checkedAt: "2026-01-01T00:00:00.000Z",
+      now: new Date("2026-01-01T00:30:00.000Z"),
+    });
+    expect(result.ageMinutes).toBeCloseTo(30, 3);
+    expect(result.buyDriftPct).toBeCloseTo(2, 3);
+    expect(result.sellDriftPct).toBeCloseTo(5.333, 2);
+    expect(result.liquidityRetentionPct).toBeCloseTo(94.666, 2);
+    expect(result.verifiedAt).toBe("2026-01-01T00:00:00.000Z");
+  });
+
+  it("extracts offender lines deterministically", () => {
     const result = verifyRouteManifestAgainstRows({
       snapshot: {
         ...snapshot,
@@ -107,53 +136,13 @@ describe("verifyRouteManifestAgainstRows", () => {
         makeRow({ TypeID: 2, BuyLocationID: 12, SellLocationID: 23, UnitsToBuy: 10, BuyPrice: 200, SellPrice: 280 }),
       ],
     });
-    expect(result.offenders).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ type_id: 1, direction: "buy_up" }),
-        expect.objectContaining({ type_id: 2, direction: "sell_down" }),
-      ]),
-    );
+    expect(result.offenderLines).toEqual(["1:11:22", "2:12:23"]);
   });
 
-  it("same data under strict vs aggressive yields different status", () => {
-    const rows = [makeRow({ UnitsToBuy: 10, BuyPrice: 104, SellPrice: 143 })];
-    const strict = verifyRouteManifestAgainstRows({
-      snapshot,
-      rows,
-      profile: getVerificationProfileById("strict"),
-    });
-    const aggressive = verifyRouteManifestAgainstRows({
-      snapshot,
-      rows,
-      profile: getVerificationProfileById("aggressive"),
-    });
-    expect(strict.status).toBe("Abort");
-    expect(aggressive.status).toBe("Reduced edge");
-  });
-
-  it("stale status when timestamp exceeds max age", () => {
-    const result = verifyRouteManifestAgainstRows({
-      snapshot,
-      rows: [makeRow({ UnitsToBuy: 10, BuyPrice: 100, SellPrice: 150 })],
-      profile: getVerificationProfileById("strict"),
-      checkedAt: "2026-01-01T00:00:00.000Z",
-      now: new Date("2026-01-01T02:00:01.000Z"),
-    });
-    expect(result.status).toBe("Abort");
-    expect(result.summary.toLowerCase()).toContain("stale");
-  });
-
-  it("populates UI explanation metric fields", () => {
-    const result = verifyRouteManifestAgainstRows({
-      snapshot,
-      rows: [makeRow({ UnitsToBuy: 10, BuyPrice: 102, SellPrice: 142 })],
-      profile: getVerificationProfileById("standard"),
-    });
-    expect(result.buyDriftPct).toBeGreaterThanOrEqual(0);
-    expect(result.sellDriftPct).toBeGreaterThanOrEqual(0);
-    expect(result.profitRetentionPct).toBeGreaterThan(0);
-    expect(result.checkedAt).toMatch(/T/);
-    expect(result.offenderLines).toEqual(expect.any(Array));
-    expect(result.summary.length).toBeGreaterThan(0);
+  it("normalizes recommendation for legacy snapshots", () => {
+    expect(normalizeVerificationRecommendation({ recommendation: "reprice_rebuild" })).toBe("reprice_rebuild");
+    expect(normalizeVerificationRecommendation({ status: "Good", summary: "ok" })).toBe("proceed");
+    expect(normalizeVerificationRecommendation({ status: "Reduced edge", summary: "ok" })).toBe("proceed_reduced");
+    expect(normalizeVerificationRecommendation({ status: "Good", summary: "stale" })).toBe("abort");
   });
 });

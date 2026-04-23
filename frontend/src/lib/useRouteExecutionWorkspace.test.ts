@@ -84,7 +84,7 @@ describe("useRouteExecutionWorkspace", () => {
     act(() => result.current.openRoute(pack.routeKey, "workbench"));
     expect(result.current.activeRouteKey).toBe(pack.routeKey);
     expect(result.current.activeMode).toBe("workbench");
-    act(() => result.current.verifyRoute(pack.routeKey, { result: { status: "Good", expected_profit_isk: 20, min_acceptable_profit_isk: 10, current_profit_isk: 20, offenders: [], buyDriftPct: 0, sellDriftPct: 0, profitRetentionPct: 100, offenderLines: [], checkedAt: new Date().toISOString(), summary: "ok" } }));
+    act(() => result.current.verifyRoute(pack.routeKey, { result: { status: "Good", recommendation: "proceed", expected_profit_isk: 20, min_acceptable_profit_isk: 10, current_profit_isk: 20, offenders: [], buyDriftPct: 0, sellDriftPct: 0, profitRetentionPct: 100, liquidityRetentionPct: 100, offenderLines: [], ageMinutes: 0, verifiedAt: new Date().toISOString(), checkedAt: new Date().toISOString(), summary: "ok" } }));
     expect(result.current.activeMode).toBe("validate");
     act(() => result.current.selectPack(pack.routeKey));
     expect(result.current.activeMode).toBe("workbench");
