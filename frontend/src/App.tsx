@@ -105,6 +105,7 @@ import type {
   RouteHandoffContext,
   RouteHandoffLegContext,
 } from "@/lib/routeHandoff";
+import { useRouteExecutionWorkspace } from "@/lib/useRouteExecutionWorkspace";
 
 type Tab =
   | "radius"
@@ -771,6 +772,7 @@ function App() {
   const [bannedStationIDs, setBannedStationIDs] = useState<number[]>([]);
   const [sessionStationFilters, setSessionStationFilters] =
     useState<SessionStationFilters>(() => createSessionStationFilters());
+  const routeWorkspace = useRouteExecutionWorkspace();
 
   const [scanning, setScanning] = useState(false);
   const [scanAndRefreshing, setScanAndRefreshing] = useState(false);
@@ -829,10 +831,12 @@ function App() {
     setActiveRadiusRouteKey(null);
     setRouteWorkspaceMode("discover");
     setRouteWorkspaceSource("radius");
+    routeWorkspace.selectPack(null);
+    routeWorkspace.setMode("finder");
     setPendingRouteContext(null);
     setPendingRadiusManifest("");
     setPendingSelectedLeg(null);
-  }, []);
+  }, [routeWorkspace]);
   const openRouteWorkspaceFromRadius = useCallback(
     (routeKey: string, mode: RouteWorkspaceMode) => {
       // Keep this handoff strictly for explicit Route workspace actions.
@@ -841,9 +845,12 @@ function App() {
       setActiveRadiusRouteKey(routeKey);
       setRouteWorkspaceMode(mode);
       setRouteWorkspaceSource("radius");
+      if (mode === "workbench" || mode === "finder" || mode === "validate") {
+        routeWorkspace.openRoute(routeKey, mode);
+      }
       setTab("route");
     },
-    [setTab],
+    [routeWorkspace, setTab],
   );
   const sendRouteToQueueFromRadius = useCallback(
     (routeKey: string) => {
@@ -867,9 +874,10 @@ function App() {
       setActiveRadiusRouteKey(context.routeKey);
       setRouteWorkspaceMode("finder");
       setRouteWorkspaceSource("radius");
+      routeWorkspace.openRoute(context.routeKey, "finder");
       setTab("route");
     },
-    [setTab],
+    [routeWorkspace, setTab],
   );
 
   const abortRef = useRef<AbortController | null>(null);
@@ -2805,6 +2813,7 @@ const handleScanAndRefresh = useCallback(async () => {
                 onSetHubLock={handleSetRadiusHubLock}
                 onRouteHandoff={handleRouteHandoffFromScanner}
                 featureConfig={RADIUS_SCAN_RESULTS_FEATURE_CONFIG}
+                routeWorkspace={routeWorkspace}
               />
             </div>
             <div
@@ -2965,8 +2974,9 @@ const handleScanAndRefresh = useCallback(async () => {
                   allowWormhole={false}
                   onOpenPriceValidation={openVerifierFromManifest}
                   strategyScore={strategyScore}
-                  featureConfig={REGION_SCAN_RESULTS_FEATURE_CONFIG}
-                />
+                featureConfig={REGION_SCAN_RESULTS_FEATURE_CONFIG}
+                routeWorkspace={routeWorkspace}
+              />
               ) : regionViewMode === "hubs" ? (
                 <RegionalDayTraderTable
                   hubs={regionHubResults}
@@ -3084,6 +3094,7 @@ const handleScanAndRefresh = useCallback(async () => {
                 pendingRouteContext={pendingRouteContext}
                 pendingRadiusManifest={pendingRadiusManifest}
                 pendingSelectedLeg={pendingSelectedLeg}
+                routeWorkspace={routeWorkspace}
               />
             </div>
             <div

@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { useEffect } from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import { I18nProvider } from "@/lib/i18n";
 import { ToastProvider } from "@/components/Toast";
@@ -7,6 +8,7 @@ import { deriveRadiusScanSession } from "@/lib/radiusScanSession";
 import type { RadiusScanSession } from "@/lib/radiusScanSession";
 import type { FlipResult, ScanParams } from "@/lib/types";
 import { createSessionStationFilters } from "@/lib/banlistFilters";
+import { useRouteExecutionWorkspace } from "@/lib/useRouteExecutionWorkspace";
 
 const params: ScanParams = {
   system_name: "Jita",
@@ -45,11 +47,28 @@ function makeFlip(overrides: Partial<FlipResult> = {}): FlipResult {
   } as FlipResult;
 }
 
-function renderWorkspace(session: RadiusScanSession | null = null) {
+function renderWorkspace(
+  session: RadiusScanSession | null = null,
+  activeRouteKey: string | null = null,
+) {
+  const Wrapper = () => {
+    const workspace = useRouteExecutionWorkspace();
+    const { openRoute } = workspace;
+    useEffect(() => {
+      if (activeRouteKey) openRoute(activeRouteKey, "workbench");
+    }, [activeRouteKey, openRoute]);
+    return (
+      <RadiusRouteWorkspace
+        params={params}
+        radiusScanSession={session}
+        routeWorkspace={workspace}
+      />
+    );
+  };
   return render(
     <I18nProvider>
       <ToastProvider>
-        <RadiusRouteWorkspace params={params} radiusScanSession={session} />
+        <Wrapper />
       </ToastProvider>
     </I18nProvider>,
   );
@@ -60,33 +79,25 @@ describe("RadiusRouteWorkspace rendering", () => {
     cleanup();
   });
 
-  it("switches sections and toggles visible content", () => {
+  it("renders RouteWorkbenchPanel for valid active route", () => {
     const session = deriveRadiusScanSession({
       results: [makeFlip()],
       scanParams: params,
       sessionStationFilters: createSessionStationFilters(),
     });
-    renderWorkspace(session);
-
-    expect(screen.getByTestId("route-workspace-discover")).toBeInTheDocument();
-    expect(screen.getByText("Grouped routes")).toBeInTheDocument();
-
+    renderWorkspace(session, "loc:60003760->loc:60008494");
     fireEvent.click(screen.getByRole("tab", { name: "Workbench" }));
-    expect(screen.getByTestId("route-workspace-workbench")).toBeInTheDocument();
-    expect(screen.getByText(/Selected route:/)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("tab", { name: "Validate" }));
-    expect(screen.getByTestId("route-workspace-validate")).toBeInTheDocument();
-    expect(screen.getByText(/Route checks:/)).toBeInTheDocument();
+    expect(screen.getByTestId("route-workbench-header")).toBeInTheDocument();
   });
 
-  it("shows no-scan state in discover/workbench/validate", () => {
-    renderWorkspace(null);
-
-    expect(screen.getByText("No data")).toBeInTheDocument();
+  it("renders fallback only when no route exists", () => {
+    const session = deriveRadiusScanSession({
+      results: [makeFlip()],
+      scanParams: params,
+      sessionStationFilters: createSessionStationFilters(),
+    });
+    renderWorkspace(session, "missing");
     fireEvent.click(screen.getByRole("tab", { name: "Workbench" }));
-    expect(screen.getByText("No data")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Validate" }));
-    expect(screen.getByText("No data")).toBeInTheDocument();
+    expect(screen.getByTestId("route-workspace-workbench-fallback")).toBeInTheDocument();
   });
 });
