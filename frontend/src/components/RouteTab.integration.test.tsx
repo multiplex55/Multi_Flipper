@@ -1,9 +1,12 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@/lib/i18n";
 import { ToastProvider } from "@/components/Toast";
 import { RadiusRouteWorkspace } from "@/components/RadiusRouteWorkspace";
-import type { RouteResult, ScanParams } from "@/lib/types";
+import { deriveRadiusScanSession } from "@/lib/radiusScanSession";
+import { createSessionStationFilters } from "@/lib/banlistFilters";
+import type { FlipResult, RouteResult, ScanParams } from "@/lib/types";
 
 vi.mock("@/lib/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
@@ -52,23 +55,64 @@ const loadedResults: RouteResult[] = [
   },
 ];
 
+const baseFlip = {
+  TypeID: 34,
+  TypeName: "Tritanium",
+  BuySystemID: 30000142,
+  BuySystemName: "Jita",
+  SellSystemID: 30002187,
+  SellSystemName: "Amarr",
+  BuyStation: "Jita IV",
+  SellStation: "Amarr VIII",
+  BuyLocationID: 60003760,
+  SellLocationID: 60008494,
+  BuyPrice: 5,
+  SellPrice: 7,
+  ExpectedBuyPrice: 5,
+  ExpectedSellPrice: 7,
+  ProfitPerUnit: 2,
+  UnitsToBuy: 1000,
+  FilledQty: 1000,
+  DailyVolume: 10000,
+  DailyProfit: 2000000,
+  TotalJumps: 9,
+  Volume: 0.01,
+} as FlipResult;
+
+function renderWorkspace(props: Partial<ComponentProps<typeof RadiusRouteWorkspace>> = {}) {
+  const session = deriveRadiusScanSession({
+    results: [baseFlip],
+    scanParams: params,
+    sessionStationFilters: createSessionStationFilters(),
+  });
+  return render(
+    <I18nProvider>
+      <ToastProvider>
+        <RadiusRouteWorkspace
+          params={params}
+          routeLoadedResults={loadedResults}
+          radiusScanSession={session}
+          {...props}
+        />
+      </ToastProvider>
+    </I18nProvider>,
+  );
+}
+
 describe("RouteTab integration", () => {
-  it("keeps Finder wired to RouteBuilder route search flow", async () => {
-    render(
-      <I18nProvider>
-        <ToastProvider>
-          <RadiusRouteWorkspace
-            params={params}
-            routeLoadedResults={loadedResults}
-            radiusScanSession={null}
-          />
-        </ToastProvider>
-      </I18nProvider>,
-    );
-
-    fireEvent.click(screen.getByRole("tab", { name: "Finder" }));
-
+  it("defaults to Finder when there is no handoff and no selected route context", async () => {
+    renderWorkspace({ radiusScanSession: null });
     expect(await screen.findByText("Route Settings")).toBeInTheDocument();
-    expect(await screen.findByTestId("route-result-row-0")).toHaveTextContent("Jita");
+  });
+
+  it("opens Workbench by default when route is opened from Radius", async () => {
+    renderWorkspace({ workspaceSource: "radius", activeRouteKey: "loc:60003760->loc:60008494" });
+    expect(await screen.findByTestId("route-workbench-header")).toBeInTheDocument();
+  });
+
+  it("opens Validate when explicit validate intent is provided", async () => {
+    renderWorkspace({ handoffIntent: "open-validate", activeRouteKey: "loc:60003760->loc:60008494" });
+    expect(await screen.findByTestId("route-workspace-validate")).toBeInTheDocument();
+    expect(await screen.findByText(/Route checks:/)).toBeInTheDocument();
   });
 });

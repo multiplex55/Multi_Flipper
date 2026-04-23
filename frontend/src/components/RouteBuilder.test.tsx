@@ -367,6 +367,7 @@ describe("RouteBuilder planner interactions", () => {
       routeKey: "loc:60003760->loc:60008494",
       routeLabel: "Jita → Amarr",
       preferredEntryAction: "planner",
+      intent: "open-workbench",
       legContexts: [],
     };
     const selectedLeg: RouteHandoffLegContext = {
@@ -395,6 +396,7 @@ describe("RouteBuilder planner interactions", () => {
       routeKey: "loc:60003760->loc:60008494",
       routeLabel: "Jita → Amarr",
       preferredEntryAction: "validation",
+      intent: "open-validate",
       legContexts: [],
     };
     const selectedLeg: RouteHandoffLegContext = {

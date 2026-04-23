@@ -127,13 +127,16 @@ describe("ScanResultsTable workbench integration", () => {
     expect(onRouteHandoff.mock.calls[0][0]).toMatchObject({
       source: "scanner",
       preferredEntryAction: "planner",
+      intent: "open-workbench",
       routeKey: "loc:60003760->loc:60008494",
     });
     expect(onRouteHandoff.mock.calls[1][0]).toMatchObject({
       preferredEntryAction: "validation",
+      intent: "open-validate",
     });
     expect(onRouteHandoff.mock.calls[2][0]).toMatchObject({
       preferredEntryAction: "cargo",
+      intent: "finder",
     });
     expect(onRouteHandoff.mock.calls[0][1]).toContain("Scanner Route Handoff");
     expect(onRouteHandoff.mock.calls[0][2]).toMatchObject({

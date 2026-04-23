@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RouteBuilder } from "@/components/RouteBuilder";
 import { EmptyState } from "@/components/EmptyState";
 import { RouteWorkbenchPanel } from "@/components/RouteWorkbenchPanel";
@@ -12,6 +12,14 @@ import { formatISK } from "@/lib/format";
 import type { RouteExecutionWorkspace } from "@/lib/useRouteExecutionWorkspace";
 import { buildSavedRoutePack } from "@/lib/routePackBuilder";
 import { routeGroupKey } from "@/lib/batchMetrics";
+import {
+  clearPersistedRouteWorkspaceMode,
+  loadPersistedRouteWorkspaceMode,
+  persistRouteWorkspaceMode,
+  resolveRouteWorkspaceMode,
+  canUseModeInCurrentContext,
+} from "@/lib/routeWorkspaceModeResolver";
+import type { RouteWorkspaceIntent } from "@/lib/routeHandoff";
 
 export type RadiusRouteWorkspaceTab = "discover" | "workbench" | "finder" | "validate";
 
@@ -29,6 +37,7 @@ type RadiusRouteWorkspaceProps = {
   workspaceSource?: "radius" | "finder";
   routeQueueKeys?: string[];
   pendingRouteContext?: RouteHandoffContext | null;
+  handoffIntent?: RouteWorkspaceIntent | null;
   pendingRadiusManifest?: string;
   pendingSelectedLeg?: RouteHandoffLegContext | null;
   routeWorkspace?: RouteExecutionWorkspace;
@@ -69,13 +78,24 @@ export function RadiusRouteWorkspace({
   workspaceSource = "radius",
   routeQueueKeys = [],
   pendingRouteContext = null,
+  handoffIntent = null,
   pendingRadiusManifest = "",
   pendingSelectedLeg = null,
   routeWorkspace,
   onOpenBatchBuilderForRoute,
 }: RadiusRouteWorkspaceProps) {
-  const [uncontrolledActiveTab, setUncontrolledActiveTab] =
-    useState<RadiusRouteWorkspaceTab>("discover");
+  const hasActiveRouteContext = Boolean(routeWorkspace?.activeRouteKey ?? activeRouteKey);
+  const hasSavedPack = Boolean(routeWorkspace && routeWorkspace.savedRoutePacks.length > 0);
+  const persistedMode = useMemo(() => loadPersistedRouteWorkspaceMode(), []);
+  const [uncontrolledActiveTab, setUncontrolledActiveTab] = useState<RadiusRouteWorkspaceTab>(() =>
+    resolveRouteWorkspaceMode({
+      explicitIntent: handoffIntent,
+      openedFromRadiusOrSavedRoute: workspaceSource === "radius" && hasActiveRouteContext,
+      hasActiveRoute: hasActiveRouteContext,
+      hasSelectedOrSavedPack: hasActiveRouteContext || hasSavedPack,
+      persistedMode,
+    }),
+  );
   const activeTab = workspaceMode ?? uncontrolledActiveTab;
   const setActiveTab = (next: RadiusRouteWorkspaceTab) => {
     onWorkspaceModeChange?.(next);
@@ -84,6 +104,23 @@ export function RadiusRouteWorkspace({
       routeWorkspace?.setMode(next);
     }
   };
+  useEffect(() => {
+    if (activeTab === "discover") return;
+    if (canUseModeInCurrentContext(activeTab, hasActiveRouteContext)) return;
+    setActiveTab("finder");
+  }, [activeTab, hasActiveRouteContext]);
+
+  useEffect(() => {
+    if (activeTab === "discover") return;
+    if (!canUseModeInCurrentContext(activeTab, hasActiveRouteContext)) {
+      clearPersistedRouteWorkspaceMode();
+      return;
+    }
+    persistRouteWorkspaceMode({
+      mode: activeTab,
+      hadActiveRouteAtPersistTime: hasActiveRouteContext,
+    });
+  }, [activeTab, hasActiveRouteContext]);
 
   const tabs: Array<{ id: RadiusRouteWorkspaceTab; label: string; hint: string }> = [
     { id: "discover", label: "Discover", hint: "Grouped routes, top picks, queue, loops" },

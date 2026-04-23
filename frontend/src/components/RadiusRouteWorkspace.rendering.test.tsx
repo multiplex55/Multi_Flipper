@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useEffect } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { I18nProvider } from "@/lib/i18n";
 import { ToastProvider } from "@/components/Toast";
 import { RadiusRouteWorkspace } from "@/components/RadiusRouteWorkspace";
@@ -9,6 +9,7 @@ import type { RadiusScanSession } from "@/lib/radiusScanSession";
 import type { FlipResult, ScanParams } from "@/lib/types";
 import { createSessionStationFilters } from "@/lib/banlistFilters";
 import { useRouteExecutionWorkspace } from "@/lib/useRouteExecutionWorkspace";
+import { ROUTE_WORKSPACE_MODE_STORAGE_KEY } from "@/lib/routeWorkspaceModeResolver";
 
 const params: ScanParams = {
   system_name: "Jita",
@@ -75,29 +76,48 @@ function renderWorkspace(
 }
 
 describe("RadiusRouteWorkspace rendering", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
   afterEach(() => {
     cleanup();
   });
 
-  it("renders RouteWorkbenchPanel for valid active route", () => {
+  it("falls back from stale persisted workbench mode to Finder", async () => {
+    localStorage.setItem(
+      ROUTE_WORKSPACE_MODE_STORAGE_KEY,
+      JSON.stringify({
+        mode: "workbench",
+        hadActiveRouteAtPersistTime: true,
+        persistedAt: Date.now(),
+      }),
+    );
+
+    renderWorkspace(null, null);
+
+    expect(await screen.findByText("Route Settings")).toBeInTheDocument();
+    expect(screen.queryByTestId("route-workspace-workbench")).not.toBeInTheDocument();
+  });
+
+  it("persists only meaningful modes with route guard metadata", async () => {
     const session = deriveRadiusScanSession({
       results: [makeFlip()],
       scanParams: params,
       sessionStationFilters: createSessionStationFilters(),
     });
     renderWorkspace(session, "loc:60003760->loc:60008494");
-    fireEvent.click(screen.getByRole("tab", { name: "Workbench" }));
-    expect(screen.getByTestId("route-workbench-header")).toBeInTheDocument();
-  });
 
-  it("renders fallback only when no route exists", () => {
-    const session = deriveRadiusScanSession({
-      results: [makeFlip()],
-      scanParams: params,
-      sessionStationFilters: createSessionStationFilters(),
-    });
-    renderWorkspace(session, "missing");
+    const beforeDiscover = localStorage.getItem(ROUTE_WORKSPACE_MODE_STORAGE_KEY);
+    fireEvent.click(screen.getByRole("tab", { name: "Discover" }));
+    expect(localStorage.getItem(ROUTE_WORKSPACE_MODE_STORAGE_KEY)).toBe(beforeDiscover);
+
     fireEvent.click(screen.getByRole("tab", { name: "Workbench" }));
-    expect(screen.getByTestId("route-workspace-workbench-fallback")).toBeInTheDocument();
+    const persisted = JSON.parse(
+      localStorage.getItem(ROUTE_WORKSPACE_MODE_STORAGE_KEY) ?? "{}",
+    ) as { mode?: string; hadActiveRouteAtPersistTime?: boolean };
+
+    expect(persisted.mode).toBe("workbench");
+    expect(persisted.hadActiveRouteAtPersistTime).toBe(true);
   });
 });
