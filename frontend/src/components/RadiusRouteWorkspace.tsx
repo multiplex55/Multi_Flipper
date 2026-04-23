@@ -20,6 +20,9 @@ import {
   canUseModeInCurrentContext,
 } from "@/lib/routeWorkspaceModeResolver";
 import type { RouteWorkspaceIntent } from "@/lib/routeHandoff";
+import { verificationProfiles } from "@/lib/verificationProfiles";
+import type { VerificationRecommendation } from "@/lib/verificationProfiles";
+import { normalizeVerificationRecommendation } from "@/lib/routeManifestVerification";
 
 export type RadiusRouteWorkspaceTab = "discover" | "workbench" | "finder" | "validate";
 
@@ -42,6 +45,10 @@ type RadiusRouteWorkspaceProps = {
   pendingSelectedLeg?: RouteHandoffLegContext | null;
   routeWorkspace?: RouteExecutionWorkspace;
   onOpenBatchBuilderForRoute?: (routeKey: string) => void;
+  onValidateVerifyNow?: (input: { scope: "active_route" | "saved_pack" | "queue"; routeKey: string | null }) => void;
+  onValidateProfileSwitch?: (input: { scope: "active_route" | "saved_pack" | "queue"; routeKey: string | null; profileId: string }) => void;
+  onValidateRebuildFromLiveRows?: (input: { scope: "active_route" | "saved_pack" | "queue"; routeKey: string | null }) => void;
+  onValidateOpenOffenders?: (input: { scope: "active_route" | "saved_pack" | "queue"; routeKey: string | null; offenderLines: string[] }) => void;
 };
 
 function EmptySessionState({
@@ -83,6 +90,10 @@ export function RadiusRouteWorkspace({
   pendingSelectedLeg = null,
   routeWorkspace,
   onOpenBatchBuilderForRoute,
+  onValidateVerifyNow,
+  onValidateProfileSwitch,
+  onValidateRebuildFromLiveRows,
+  onValidateOpenOffenders,
 }: RadiusRouteWorkspaceProps) {
   const hasActiveRouteContext = Boolean(routeWorkspace?.activeRouteKey ?? activeRouteKey);
   const hasSavedPack = Boolean(routeWorkspace && routeWorkspace.savedRoutePacks.length > 0);
@@ -189,6 +200,28 @@ export function RadiusRouteWorkspace({
   }, [effectiveActiveRouteKey, resolvedActiveRoute?.routeLabel, routeRowsByKey, routeWorkspace]);
   const showMissingRouteNotice =
     !!effectiveActiveRouteKey && !resolvedActiveRoute && !!radiusScanSession?.hasScan;
+  const [validateScope, setValidateScope] = useState<"active_route" | "saved_pack" | "queue">("active_route");
+  const [profileSelectionByRoute, setProfileSelectionByRoute] = useState<Record<string, string>>({});
+
+  const savedPack = routeWorkspace?.selectedPack ?? routeWorkspace?.savedRoutePacks[0] ?? null;
+  const queueRouteKey = routeQueueKeys[0] ?? null;
+  const queuePack = queueRouteKey ? routeWorkspace?.getPackByRouteKey(queueRouteKey) ?? null : null;
+  const validateTarget = validateScope === "active_route"
+    ? { routeKey: effectiveActiveRouteKey ?? null, pack: activePack }
+    : validateScope === "saved_pack"
+      ? { routeKey: savedPack?.routeKey ?? null, pack: savedPack }
+      : { routeKey: queueRouteKey, pack: queuePack };
+  const verification = validateTarget.pack?.verificationSnapshot ?? null;
+  const selectedProfileId = (validateTarget.routeKey && profileSelectionByRoute[validateTarget.routeKey])
+    ?? (validateTarget.routeKey ? routeWorkspace?.getVerificationProfileId(validateTarget.routeKey) : undefined)
+    ?? validateTarget.pack?.verificationProfileId
+    ?? "standard";
+  const recommendationLabelById: Record<VerificationRecommendation, string> = {
+    proceed: "Proceed",
+    proceed_reduced: "Proceed reduced",
+    reprice_rebuild: "Reprice + rebuild",
+    abort: "Abort",
+  };
 
   const renderSessionState = () => (
     <EmptySessionState
@@ -352,11 +385,88 @@ export function RadiusRouteWorkspace({
               renderSessionState()
             ) : (
               <>
-                <div className="rounded-sm border border-eve-border/60 bg-eve-panel/40 p-2 text-eve-dim">
-                  Route checks: {(routeInsights?.routeSummaries.length ?? 0) > 0 ? "ready" : "no route groups"}
-                </div>
-                <div className="rounded-sm border border-eve-border/60 bg-eve-panel/40 p-2 text-eve-dim">
-                  Batch checks: {(routeInsights?.actionQueue.length ?? 0) > 0 ? "queue available" : "empty queue"}
+                <div className="rounded-sm border border-eve-border/60 bg-eve-panel/40 p-2 text-eve-dim space-y-2" data-testid="validate-panel-container">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-eve-text">Validation scope</span>
+                    <select
+                      aria-label="Validation scope"
+                      value={validateScope}
+                      onChange={(event) => setValidateScope(event.target.value as "active_route" | "saved_pack" | "queue")}
+                      className="rounded-sm border border-eve-border/60 bg-eve-dark px-1 py-0.5"
+                    >
+                      <option value="active_route">Active route</option>
+                      <option value="saved_pack">Saved pack</option>
+                      <option value="queue">Queue</option>
+                    </select>
+                    <span data-testid="validate-scope-route-key">{validateTarget.routeKey ?? "no route selected"}</span>
+                  </div>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-2" data-testid="validate-metrics">
+                    <div>Status: <span className="text-eve-text">{verification?.status ?? "Unverified"}</span></div>
+                    <div>Age: <span className="text-eve-text">{typeof verification?.checkedAt === "string" ? `${Math.max(0, (Date.now() - new Date(verification.checkedAt).getTime()) / 60_000).toFixed(1)}m` : "n/a"}</span></div>
+                    <div>Profit retained: <span className="text-eve-text">{verification?.profitRetentionPct?.toFixed(1) ?? "0.0"}%</span></div>
+                    <div>Liquidity retained: <span className="text-eve-text">{verification ? Math.max(0, 100 - verification.sellDriftPct).toFixed(1) : "0.0"}%</span></div>
+                    <div>Buy drift: <span className="text-eve-text">{verification?.buyDriftPct?.toFixed(1) ?? "0.0"}%</span></div>
+                    <div>Sell drift: <span className="text-eve-text">{verification?.sellDriftPct?.toFixed(1) ?? "0.0"}%</span></div>
+                    <div>Offender lines: <span className="text-eve-text">{verification?.offenderLines.length ?? 0}</span></div>
+                    <div>Recommendation: <span className="text-eve-text">{recommendationLabelById[normalizeVerificationRecommendation({ recommendation: verification?.recommendation, status: verification?.status, summary: verification?.summary })]}</span></div>
+                  </div>
+                  <div className="flex flex-wrap gap-2" data-testid="validate-quick-actions">
+                    <button
+                      type="button"
+                      className="rounded-sm border border-eve-border/60 px-1 py-0.5"
+                      onClick={() => onValidateVerifyNow?.({ scope: validateScope, routeKey: validateTarget.routeKey })}
+                    >
+                      Verify now
+                    </button>
+                    <label className="inline-flex items-center gap-1">
+                      <span>Profile</span>
+                      <select
+                        aria-label="Validate profile"
+                        value={selectedProfileId}
+                        className="rounded-sm border border-eve-border/60 bg-eve-dark px-1 py-0.5"
+                        onChange={(event) => {
+                          const next = event.target.value;
+                          if (validateTarget.routeKey) {
+                            setProfileSelectionByRoute((prev) => ({ ...prev, [validateTarget.routeKey!]: next }));
+                          }
+                          onValidateProfileSwitch?.({
+                            scope: validateScope,
+                            routeKey: validateTarget.routeKey,
+                            profileId: next,
+                          });
+                        }}
+                      >
+                        {verificationProfiles.map((profile) => (
+                          <option key={profile.id} value={profile.id}>{profile.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      className="rounded-sm border border-eve-border/60 px-1 py-0.5"
+                      onClick={() => onValidateRebuildFromLiveRows?.({ scope: validateScope, routeKey: validateTarget.routeKey })}
+                    >
+                      Rebuild from live rows
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-sm border border-eve-border/60 px-1 py-0.5"
+                      onClick={() => {
+                        const offenderLines = verification?.offenderLines ?? [];
+                        if (validateTarget.routeKey) {
+                          routeWorkspace?.selectPack(validateTarget.routeKey);
+                        }
+                        setActiveTab("workbench");
+                        onValidateOpenOffenders?.({
+                          scope: validateScope,
+                          routeKey: validateTarget.routeKey,
+                          offenderLines,
+                        });
+                      }}
+                    >
+                      Open offender lines
+                    </button>
+                  </div>
                 </div>
               </>
             )}

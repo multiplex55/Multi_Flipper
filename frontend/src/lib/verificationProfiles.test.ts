@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_VERIFICATION_PROFILE_ID,
+  getVerificationDecisionThresholds,
   getVerificationFreshness,
   getVerificationProfileById,
   verificationProfiles,
@@ -16,6 +17,28 @@ describe("verificationProfiles", () => {
 
     const fallback = getVerificationProfileById("missing-id");
     expect(fallback.id).toBe(DEFAULT_VERIFICATION_PROFILE_ID);
+  });
+
+  it("profile constraints and threshold invariants", () => {
+    for (const profile of verificationProfiles) {
+      expect(profile.maxBuyDriftPct).toBeGreaterThan(0);
+      expect(profile.maxSellDriftPct).toBeGreaterThan(0);
+      expect(profile.minProfitRetentionPct).toBeGreaterThanOrEqual(0);
+
+      const thresholds = getVerificationDecisionThresholds(profile);
+      expect(thresholds.proceedMinProfitRetentionPct).toBeGreaterThanOrEqual(
+        thresholds.proceedReducedMinProfitRetentionPct,
+      );
+      expect(thresholds.proceedReducedMinProfitRetentionPct).toBeGreaterThanOrEqual(
+        thresholds.repriceRebuildMinProfitRetentionPct,
+      );
+      expect(thresholds.proceedMaxBuyDriftPct).toBeLessThanOrEqual(
+        thresholds.repriceRebuildMaxBuyDriftPct,
+      );
+      expect(thresholds.proceedMaxSellDriftPct).toBeLessThanOrEqual(
+        thresholds.repriceRebuildMaxSellDriftPct,
+      );
+    }
   });
 
   it("freshness boundary cases", () => {

@@ -51,6 +51,7 @@ describe("routePackBuilder", () => {
     };
     const verification: RouteVerificationResult = {
       status: "Good",
+      recommendation: "proceed",
       current_profit_isk: 55,
       expected_profit_isk: 50,
       min_acceptable_profit_isk: 30,
@@ -58,7 +59,10 @@ describe("routePackBuilder", () => {
       buyDriftPct: 1,
       sellDriftPct: 1,
       profitRetentionPct: 110,
+      liquidityRetentionPct: 110,
       offenderLines: [],
+      ageMinutes: 0,
+      verifiedAt: "2026-01-01T00:00:00.000Z",
       checkedAt: "2026-01-01T00:00:00.000Z",
       summary: "All good",
     };

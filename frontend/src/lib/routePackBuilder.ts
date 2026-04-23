@@ -89,6 +89,7 @@ function buildVerificationSnapshot(
   if (!verificationResult) return null;
   return {
     status: verificationResult.status,
+    recommendation: verificationResult.recommendation,
     currentProfitIsk: verificationResult.current_profit_isk,
     minAcceptableProfitIsk: verificationResult.min_acceptable_profit_isk,
     verifiedAt: nowIso ?? new Date().toISOString(),

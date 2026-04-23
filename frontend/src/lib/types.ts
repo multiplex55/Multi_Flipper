@@ -644,6 +644,7 @@ export type SavedRoutePackVerificationStatus = "Good" | "Reduced edge" | "Abort"
 
 export interface SavedRoutePackVerificationSnapshot {
   status: SavedRoutePackVerificationStatus;
+  recommendation?: "proceed" | "proceed_reduced" | "reprice_rebuild" | "abort";
   currentProfitIsk: number;
   minAcceptableProfitIsk: number;
   verifiedAt: string;

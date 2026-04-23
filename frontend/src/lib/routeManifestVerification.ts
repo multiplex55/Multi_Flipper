@@ -4,7 +4,9 @@ import type {
   RouteManifestVerificationSnapshot,
 } from "@/lib/types";
 import {
+  getVerificationDecisionThresholds,
   getVerificationProfileById,
+  type VerificationRecommendation,
   type VerificationProfile,
 } from "@/lib/verificationProfiles";
 
@@ -21,6 +23,7 @@ export type RouteVerificationOffender = {
 
 export type RouteVerificationResult = {
   status: RouteVerificationStatus;
+  recommendation: VerificationRecommendation;
   expected_profit_isk: number;
   min_acceptable_profit_isk: number;
   current_profit_isk: number;
@@ -28,10 +31,58 @@ export type RouteVerificationResult = {
   buyDriftPct: number;
   sellDriftPct: number;
   profitRetentionPct: number;
+  liquidityRetentionPct: number;
   offenderLines: string[];
+  ageMinutes: number;
+  verifiedAt: string;
   checkedAt: string;
   summary: string;
 };
+
+function deriveRecommendation(input: {
+  status: RouteVerificationStatus;
+  profile: VerificationProfile;
+  buyDriftPct: number;
+  sellDriftPct: number;
+  profitRetentionPct: number;
+}): VerificationRecommendation {
+  if (input.status === "Abort") return "abort";
+  const thresholds = getVerificationDecisionThresholds(input.profile);
+  if (
+    input.profitRetentionPct >= thresholds.proceedMinProfitRetentionPct &&
+    input.buyDriftPct <= thresholds.proceedMaxBuyDriftPct &&
+    input.sellDriftPct <= thresholds.proceedMaxSellDriftPct
+  ) {
+    return "proceed";
+  }
+  if (
+    input.profitRetentionPct >= thresholds.proceedReducedMinProfitRetentionPct &&
+    input.buyDriftPct <= thresholds.repriceRebuildMaxBuyDriftPct &&
+    input.sellDriftPct <= thresholds.repriceRebuildMaxSellDriftPct
+  ) {
+    return "proceed_reduced";
+  }
+  if (
+    input.profitRetentionPct >= thresholds.repriceRebuildMinProfitRetentionPct &&
+    (input.buyDriftPct > thresholds.proceedMaxBuyDriftPct ||
+      input.sellDriftPct > thresholds.proceedMaxSellDriftPct)
+  ) {
+    return "reprice_rebuild";
+  }
+  return "abort";
+}
+
+export function normalizeVerificationRecommendation(input: {
+  recommendation?: VerificationRecommendation | null;
+  status?: RouteVerificationStatus | null;
+  summary?: string | null;
+}): VerificationRecommendation {
+  if (input.recommendation) return input.recommendation;
+  if (input.summary?.toLowerCase().includes("stale")) return "abort";
+  if (input.status === "Good") return "proceed";
+  if (input.status === "Reduced edge") return "proceed_reduced";
+  return "abort";
+}
 
 function percentUp(expected: number, current: number): number {
   if (!(expected > 0)) return current > 0 ? 100 : 0;
@@ -73,6 +124,7 @@ export function verifyRouteManifestAgainstRows(input: {
   let severeDrift = false;
   let maxBuyDrift = 0;
   let maxSellDrift = 0;
+  let currentSellTotal = 0;
 
   for (const expected of input.snapshot.lines) {
     const matched = rowByKey.get(expected.line_ref);
@@ -91,6 +143,7 @@ export function verifyRouteManifestAgainstRows(input: {
         safeNumber(matched.SellPrice) * safeNumber(matched.UnitsToBuy),
     );
     currentProfit += currentSell - currentBuy;
+    currentSellTotal += currentSell;
 
     const buyDrift = percentUp(expected.expected_buy_isk, currentBuy);
     const sellDrift = percentDown(expected.expected_sell_isk, currentSell);
@@ -133,6 +186,13 @@ export function verifyRouteManifestAgainstRows(input: {
       : currentProfit > 0
         ? 100
         : 0;
+  const liquidityRetentionPct =
+    input.snapshot.expected_sell_isk > 0
+      ? (currentSellTotal / input.snapshot.expected_sell_isk) * 100
+      : currentSellTotal > 0
+        ? 100
+        : 0;
+  const ageMinutes = Math.max(0, (now.getTime() - checkedAt.getTime()) / 60_000);
   let status: RouteVerificationStatus = "Good";
   if (currentProfit < minAcceptableProfit || severeDrift || staleByAge) {
     status = "Abort";
@@ -142,6 +202,13 @@ export function verifyRouteManifestAgainstRows(input: {
   ) {
     status = "Reduced edge";
   }
+  const recommendation = deriveRecommendation({
+    status,
+    profile,
+    buyDriftPct: maxBuyDrift,
+    sellDriftPct: maxSellDrift,
+    profitRetentionPct,
+  });
 
   const summary = staleByAge
     ? `Stale market check (${profile.name}): age exceeded ${profile.maxAgeMinutes}m max.`
@@ -149,6 +216,7 @@ export function verifyRouteManifestAgainstRows(input: {
 
   return {
     status,
+    recommendation,
     expected_profit_isk: input.snapshot.expected_profit_isk,
     min_acceptable_profit_isk: minAcceptableProfit,
     current_profit_isk: currentProfit,
@@ -156,7 +224,10 @@ export function verifyRouteManifestAgainstRows(input: {
     buyDriftPct: maxBuyDrift,
     sellDriftPct: maxSellDrift,
     profitRetentionPct,
+    liquidityRetentionPct,
     offenderLines: Array.from(offenderLineSet).sort((a, b) => a.localeCompare(b)),
+    ageMinutes,
+    verifiedAt: checkedAt.toISOString(),
     checkedAt: checkedAt.toISOString(),
     summary,
   };
