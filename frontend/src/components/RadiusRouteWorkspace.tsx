@@ -1,13 +1,17 @@
 import { useMemo, useState } from "react";
 import { RouteBuilder } from "@/components/RouteBuilder";
 import { EmptyState } from "@/components/EmptyState";
+import { RouteWorkbenchPanel } from "@/components/RouteWorkbenchPanel";
 import type {
   RouteHandoffContext,
   RouteHandoffLegContext,
 } from "@/lib/routeHandoff";
 import type { RadiusScanSession } from "@/lib/radiusScanSession";
-import type { RouteResult, ScanParams } from "@/lib/types";
+import type { FlipResult, RouteResult, ScanParams, SavedRoutePack } from "@/lib/types";
 import { formatISK } from "@/lib/format";
+import type { RouteExecutionWorkspace } from "@/lib/useRouteExecutionWorkspace";
+import { buildSavedRoutePack } from "@/lib/routePackBuilder";
+import { routeGroupKey } from "@/lib/batchMetrics";
 
 export type RadiusRouteWorkspaceTab = "discover" | "workbench" | "finder" | "validate";
 
@@ -27,6 +31,8 @@ type RadiusRouteWorkspaceProps = {
   pendingRouteContext?: RouteHandoffContext | null;
   pendingRadiusManifest?: string;
   pendingSelectedLeg?: RouteHandoffLegContext | null;
+  routeWorkspace?: RouteExecutionWorkspace;
+  onOpenBatchBuilderForRoute?: (routeKey: string) => void;
 };
 
 function EmptySessionState({
@@ -65,6 +71,8 @@ export function RadiusRouteWorkspace({
   pendingRouteContext = null,
   pendingRadiusManifest = "",
   pendingSelectedLeg = null,
+  routeWorkspace,
+  onOpenBatchBuilderForRoute,
 }: RadiusRouteWorkspaceProps) {
   const [uncontrolledActiveTab, setUncontrolledActiveTab] =
     useState<RadiusRouteWorkspaceTab>("discover");
@@ -72,6 +80,9 @@ export function RadiusRouteWorkspace({
   const setActiveTab = (next: RadiusRouteWorkspaceTab) => {
     onWorkspaceModeChange?.(next);
     if (!workspaceMode) setUncontrolledActiveTab(next);
+    if (next === "workbench" || next === "finder" || next === "validate") {
+      routeWorkspace?.setMode(next);
+    }
   };
 
   const tabs: Array<{ id: RadiusRouteWorkspaceTab; label: string; hint: string }> = [
@@ -103,11 +114,44 @@ export function RadiusRouteWorkspace({
       ),
     [routeInsights],
   );
-  const resolvedActiveRoute = activeRouteKey
-    ? routeSummaryByKey.get(activeRouteKey) ?? null
+  const effectiveActiveRouteKey = routeWorkspace?.activeRouteKey ?? activeRouteKey;
+  const resolvedActiveRoute = effectiveActiveRouteKey
+    ? routeSummaryByKey.get(effectiveActiveRouteKey) ?? null
     : null;
+  const routeRowsByKey = useMemo(() => {
+    const out = new Map<string, FlipResult[]>();
+    for (const row of radiusScanSession?.results ?? []) {
+      const key = routeGroupKey(row);
+      const entries = out.get(key) ?? [];
+      entries.push(row);
+      out.set(key, entries);
+    }
+    return out;
+  }, [radiusScanSession?.results]);
+  const activePack: SavedRoutePack | null = useMemo(() => {
+    const routeKey = routeWorkspace?.activeRouteKey ?? effectiveActiveRouteKey;
+    if (!routeKey) return null;
+    const savedPack = routeWorkspace?.getPackByRouteKey(routeKey) ?? null;
+    if (savedPack) return savedPack;
+    const rows = routeRowsByKey.get(routeKey);
+    const anchor = rows?.[0];
+    if (!rows || !anchor) return null;
+    return buildSavedRoutePack({
+      routeKey,
+      routeLabel: resolvedActiveRoute?.routeLabel ?? routeKey,
+      anchorRow: anchor,
+      routeRows: rows,
+      selectedRows: rows,
+      entryMode: "core",
+      launchIntent: "radius-workspace",
+      summary: null,
+      routeSafetyRank: null,
+      verificationProfileId:
+        routeWorkspace?.getVerificationProfileId(routeKey) ?? "standard",
+    });
+  }, [effectiveActiveRouteKey, resolvedActiveRoute?.routeLabel, routeRowsByKey, routeWorkspace]);
   const showMissingRouteNotice =
-    !!activeRouteKey && !resolvedActiveRoute && !!radiusScanSession?.hasScan;
+    !!effectiveActiveRouteKey && !resolvedActiveRoute && !!radiusScanSession?.hasScan;
 
   const renderSessionState = () => (
     <EmptySessionState
@@ -202,20 +246,49 @@ export function RadiusRouteWorkspace({
               renderSessionState()
             ) : (
               <>
-                <div className="text-eve-dim">
-                  Selected route: {resolvedActiveRoute?.routeLabel ?? activeRouteKey ?? "None"}
-                </div>
-                {showMissingRouteNotice && (
-                  <div
-                    className="rounded-sm border border-amber-500/50 bg-amber-900/20 p-2 text-amber-200"
-                    data-testid="route-workspace-stale-key-notice"
-                  >
-                    Selected route key is missing from the current scan map. Re-open from Radius to refresh.
+                {activePack ? (
+                  <RouteWorkbenchPanel
+                    pack={activePack}
+                    mode="summary"
+                    activeSection="summary"
+                    isPinned={Boolean(routeWorkspace?.getPackByRouteKey(activePack.routeKey))}
+                    verificationProfileId={routeWorkspace?.getVerificationProfileId(activePack.routeKey) ?? "standard"}
+                    onVerificationProfileChange={() => undefined}
+                    onVerifyNow={() => routeWorkspace?.setMode("validate")}
+                    onMarkBought={(lineKey, qty) => {
+                      const line = activePack.lines[lineKey];
+                      if (!line) return;
+                      routeWorkspace?.markBought(activePack.routeKey, lineKey, qty, qty * line.plannedBuyPrice);
+                    }}
+                    onMarkSold={(lineKey, qty) => {
+                      const line = activePack.lines[lineKey];
+                      if (!line) return;
+                      routeWorkspace?.markSold(activePack.routeKey, lineKey, qty, qty * line.plannedSellPrice);
+                    }}
+                    onMarkSkipped={(lineKey, reason) => routeWorkspace?.markSkipped(activePack.routeKey, lineKey, reason)}
+                    onResetLine={(lineKey) => routeWorkspace?.resetExecution(activePack.routeKey, lineKey)}
+                    onCopySummary={() => routeWorkspace?.copySummary(activePack.routeKey)}
+                    onCopyManifest={() => routeWorkspace?.copyManifest(activePack.routeKey)}
+                    onTogglePin={() => {
+                      if (routeWorkspace?.getPackByRouteKey(activePack.routeKey)) {
+                        routeWorkspace.removePack(activePack.routeKey);
+                        return;
+                      }
+                      routeWorkspace?.upsertPack(activePack);
+                    }}
+                    onOpenBatchBuilder={() => {
+                      routeWorkspace?.openBatchBuilder(activePack.routeKey);
+                      onOpenBatchBuilderForRoute?.(activePack.routeKey);
+                    }}
+                    onScrollToTable={() => undefined}
+                  />
+                ) : (
+                  <div className="text-eve-dim" data-testid="route-workspace-workbench-fallback">
+                    {showMissingRouteNotice
+                      ? "Selected route key is missing from the current scan map."
+                      : "No active route selected."}
                   </div>
                 )}
-                <div className="text-eve-dim">Saved routes: 0 (workspace migration placeholder)</div>
-                <div className="text-eve-dim">Execution state: idle</div>
-                <div className="text-eve-dim">Filler options: {(routeInsights?.actionQueue ?? []).filter((q) => q.action === "filler").length}</div>
                 <div className="text-eve-dim">Source: {workspaceSource}</div>
               </>
             )}

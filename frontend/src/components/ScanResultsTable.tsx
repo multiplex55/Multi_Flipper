@@ -119,16 +119,7 @@ import {
 } from "@/lib/routeManifestVerification";
 import {
   formatSavedRoutePackExport,
-  loadSavedRoutePacks,
-  removeSavedRoutePack,
-  upsertSavedRoutePack,
 } from "@/lib/savedRoutePacks";
-import {
-  markLineBought,
-  markLineSkipped,
-  markLineSold,
-  resetLineState,
-} from "@/lib/savedRouteExecution";
 import { buildSavedRoutePack } from "@/lib/routePackBuilder";
 import { SavedRoutePacksPanel } from "@/components/SavedRoutePacksPanel";
 import { RouteWorkbenchPanel, type RouteWorkbenchMode, type RouteWorkbenchSectionId } from "./RouteWorkbenchPanel";
@@ -166,6 +157,7 @@ import {
   type OrderingMode,
   type SortDir,
 } from "@/components/scanResultsOrdering";
+import type { RouteExecutionWorkspace } from "@/lib/useRouteExecutionWorkspace";
 
 export const calcRouteConfidence = calcRouteConfidenceFromInsights;
 
@@ -372,6 +364,7 @@ interface Props {
     selectedLeg: RouteHandoffLegContext | null,
   ) => void;
   featureConfig?: ScanResultsTableFeatureConfig;
+  routeWorkspace?: RouteExecutionWorkspace;
 }
 
 type ColumnDef = {
@@ -1509,6 +1502,7 @@ export function ScanResultsTable({
   onSetHubLock,
   onRouteHandoff,
   featureConfig = DEFAULT_SCAN_RESULTS_TABLE_FEATURE_CONFIG,
+  routeWorkspace,
 }: Props) {
   const { t } = useI18n();
   const emptyReason: EmptyReason = scanCompletedWithZero
@@ -1566,9 +1560,7 @@ export function ScanResultsTable({
   const [hiddenColumns, setHiddenColumns] = useState<Set<SortKey>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
-  const [savedRoutePacks, setSavedRoutePacks] = useState<SavedRoutePack[]>(() =>
-    loadSavedRoutePacks(),
-  );
+  const savedRoutePacks = routeWorkspace?.savedRoutePacks ?? [];
   const [page, setPage] = useState(0);
   const [routeGroupPage, setRouteGroupPage] = useState(0);
   const [regionGroupPage, setRegionGroupPage] = useState(0);
@@ -3947,20 +3939,9 @@ export function ScanResultsTable({
     [addToast, t],
   );
 
-  const updateSavedPackExecution = useCallback(
-    (routeKey: string, update: (pack: SavedRoutePack) => SavedRoutePack) => {
-      setSavedRoutePacks((prev) => {
-        const target = prev.find((item) => item.routeKey === routeKey);
-        if (!target) return prev;
-        const nextPack = update(target);
-        return upsertSavedRoutePack(nextPack);
-      });
-    },
-    [],
-  );
-
   const saveRoutePack = useCallback(
     (routeKey: string) => {
+      if (!routeWorkspace) return;
       const routeGroup = routeGroupByKey[routeKey];
       const anchor = routeAnchorRowByKey[routeKey];
       if (!routeGroup || !anchor) return;
@@ -3985,8 +3966,7 @@ export function ScanResultsTable({
         verificationResult: verificationResult ?? null,
         verificationProfileId,
       });
-      const next = upsertSavedRoutePack(pack);
-      setSavedRoutePacks(next);
+      routeWorkspace.upsertPack(pack);
       addToast("Route saved", "success", 2000);
     },
     [
@@ -4000,21 +3980,22 @@ export function ScanResultsTable({
       routeManifestByKey,
       routeVerificationByKey,
       routeVerificationProfileByKey,
+      routeWorkspace,
       savedRoutePackByKey,
     ],
   );
 
   const toggleSavedRoutePack = useCallback(
     (routeKey: string) => {
+      if (!routeWorkspace) return;
       if (savedRoutePackByKey[routeKey]) {
-        const next = removeSavedRoutePack(routeKey);
-        setSavedRoutePacks(next);
+        routeWorkspace.removePack(routeKey);
         addToast("Route removed", "success", 2000);
         return;
       }
       saveRoutePack(routeKey);
     },
-    [addToast, saveRoutePack, savedRoutePackByKey],
+    [addToast, routeWorkspace, saveRoutePack, savedRoutePackByKey],
   );
 
   const copySavedRoutePack = useCallback(
@@ -4698,8 +4679,9 @@ export function ScanResultsTable({
       setActiveSavedRoutePackRouteKey(savedRoutePackByKey[routeKey] ? routeKey : null);
       setActiveSavedRoutePackRef(getWorkbenchPackForRoute(routeKey));
       scrollToRouteGroup(routeKey);
+      routeWorkspace?.openRoute(routeKey, "workbench");
     },
-    [getWorkbenchPackForRoute, savedRoutePackByKey, scrollToRouteGroup],
+    [getWorkbenchPackForRoute, routeWorkspace, savedRoutePackByKey, scrollToRouteGroup],
   );
 
   const selectedRouteDerivation = useMemo(() => {
@@ -4839,27 +4821,30 @@ export function ScanResultsTable({
             ? "warning"
             : "success",
       );
-      setSavedRoutePacks((prev) => {
-        if (!savedRoutePackByKey[routeKey]) return prev;
-        const routeGroup = routeGroupByKey[routeKey];
-        const anchor = routeAnchorRowByKey[routeKey];
-        if (!routeGroup || !anchor) return prev;
-        const rebuilt = buildSavedRoutePack({
-          existingPack: savedRoutePackByKey[routeKey],
-          routeKey,
-          routeLabel: routeGroup.label,
-          anchorRow: anchor,
-          routeRows: routeGroup.rows.map((item) => item.row),
-          selectedRows: routeGroup.rows.map((item) => item.row),
-          entryMode: savedRoutePackByKey[routeKey].entryMode,
-          launchIntent: savedRoutePackByKey[routeKey].launchIntent,
-          summary: batchMetricsByRoute[routeKey] ?? null,
-          routeSafetyRank: routeAggregateMetricsByRoute[routeKey]?.routeSafetyRank ?? null,
-          manifestSnapshot: routeManifestByKey[routeKey] ?? null,
-          verificationResult: result,
-          verificationProfileId: resolvedProfileId,
-        });
-        return upsertSavedRoutePack(rebuilt);
+      routeWorkspace?.verifyRoute(routeKey, {
+        profileId: resolvedProfileId,
+        result,
+        rebuildPack: (existingPack) => {
+          if (!existingPack) return null;
+          const routeGroup = routeGroupByKey[routeKey];
+          const anchor = routeAnchorRowByKey[routeKey];
+          if (!routeGroup || !anchor) return null;
+          return buildSavedRoutePack({
+            existingPack,
+            routeKey,
+            routeLabel: routeGroup.label,
+            anchorRow: anchor,
+            routeRows: routeGroup.rows.map((item) => item.row),
+            selectedRows: routeGroup.rows.map((item) => item.row),
+            entryMode: existingPack.entryMode,
+            launchIntent: existingPack.launchIntent,
+            summary: batchMetricsByRoute[routeKey] ?? null,
+            routeSafetyRank: routeAggregateMetricsByRoute[routeKey]?.routeSafetyRank ?? null,
+            manifestSnapshot: routeManifestByKey[routeKey] ?? null,
+            verificationResult: result,
+            verificationProfileId: resolvedProfileId,
+          });
+        },
       });
     },
     [
@@ -4870,6 +4855,7 @@ export function ScanResultsTable({
       routeGroupByKey,
       routeManifestByKey,
       routeVerificationProfileByKey,
+      routeWorkspace,
       savedRoutePackByKey,
     ],
   );
@@ -6291,6 +6277,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
           onOpenInRouteWorkbench={(routeKey) => {
             onOpenInRouteWorkbench?.(routeKey);
             openRouteWorkbench(routeKey, "summary");
+            routeWorkspace?.openRoute(routeKey, "workbench");
           }}
           onSendToRouteQueue={onSendToRouteQueue}
           activeRouteGroupKey={activeRouteGroupKey}
@@ -6318,51 +6305,41 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               ...prev,
               [pack.routeKey]: profileId,
             }));
-            updateSavedPackExecution(pack.routeKey, (current) => ({
-              ...current,
+            routeWorkspace?.upsertPack({
+              ...pack,
               verificationProfileId: profileId,
               updatedAt: new Date().toISOString(),
-            }));
+            });
           }}
           onCopy={(pack) => copyText(formatSavedRoutePackExport(pack))}
           onRemove={(pack) => {
-            setSavedRoutePacks(removeSavedRoutePack(pack.routeKey));
+            routeWorkspace?.removePack(pack.routeKey);
           }}
           onMarkBought={(pack, lineKey, qty) => {
             const line = pack.lines[lineKey];
             if (!line) return;
-            updateSavedPackExecution(pack.routeKey, (current) =>
-              markLineBought(
-                current,
-                pack.routeKey,
-                lineKey,
-                qty,
-                qty * line.plannedBuyPrice,
-              ),
+            routeWorkspace?.markBought(
+              pack.routeKey,
+              lineKey,
+              qty,
+              qty * line.plannedBuyPrice,
             );
           }}
           onMarkSold={(pack, lineKey, qty) => {
             const line = pack.lines[lineKey];
             if (!line) return;
-            updateSavedPackExecution(pack.routeKey, (current) =>
-              markLineSold(
-                current,
-                pack.routeKey,
-                lineKey,
-                qty,
-                qty * line.plannedSellPrice,
-              ),
+            routeWorkspace?.markSold(
+              pack.routeKey,
+              lineKey,
+              qty,
+              qty * line.plannedSellPrice,
             );
           }}
           onMarkSkipped={(pack, lineKey, reason) =>
-            updateSavedPackExecution(pack.routeKey, (current) =>
-              markLineSkipped(current, pack.routeKey, lineKey, reason),
-            )
+            routeWorkspace?.markSkipped(pack.routeKey, lineKey, reason)
           }
           onResetLine={(pack, lineKey) =>
-            updateSavedPackExecution(pack.routeKey, (current) =>
-              resetLineState(current, pack.routeKey, lineKey),
-            )
+            routeWorkspace?.resetExecution(pack.routeKey, lineKey)
           }
         />
       )}
@@ -6387,11 +6364,11 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               [activeWorkbenchPack.routeKey]: profileId,
             }));
             if (savedRoutePackByKey[activeWorkbenchPack.routeKey]) {
-              updateSavedPackExecution(activeWorkbenchPack.routeKey, (current) => ({
-                ...current,
+              routeWorkspace?.upsertPack({
+                ...savedRoutePackByKey[activeWorkbenchPack.routeKey],
                 verificationProfileId: profileId,
                 updatedAt: new Date().toISOString(),
-              }));
+              });
             }
           }}
           onVerifyNow={() =>
@@ -6405,47 +6382,34 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
           onMarkBought={(lineKey, qty) => {
             const line = activeWorkbenchPack.lines[lineKey];
             if (!line) return;
-            updateSavedPackExecution(activeWorkbenchPack.routeKey, (current) =>
-              markLineBought(
-                current,
-                activeWorkbenchPack.routeKey,
-                lineKey,
-                qty,
-                qty * line.plannedBuyPrice,
-              ),
+            routeWorkspace?.markBought(
+              activeWorkbenchPack.routeKey,
+              lineKey,
+              qty,
+              qty * line.plannedBuyPrice,
             );
           }}
           onMarkSold={(lineKey, qty) => {
             const line = activeWorkbenchPack.lines[lineKey];
             if (!line) return;
-            updateSavedPackExecution(activeWorkbenchPack.routeKey, (current) =>
-              markLineSold(
-                current,
-                activeWorkbenchPack.routeKey,
-                lineKey,
-                qty,
-                qty * line.plannedSellPrice,
-              ),
+            routeWorkspace?.markSold(
+              activeWorkbenchPack.routeKey,
+              lineKey,
+              qty,
+              qty * line.plannedSellPrice,
             );
           }}
           onMarkSkipped={(lineKey, reason) =>
-            updateSavedPackExecution(activeWorkbenchPack.routeKey, (current) =>
-              markLineSkipped(current, activeWorkbenchPack.routeKey, lineKey, reason),
-            )
+            routeWorkspace?.markSkipped(activeWorkbenchPack.routeKey, lineKey, reason)
           }
           onResetLine={(lineKey) =>
-            updateSavedPackExecution(activeWorkbenchPack.routeKey, (current) =>
-              resetLineState(current, activeWorkbenchPack.routeKey, lineKey),
-            )
+            routeWorkspace?.resetExecution(activeWorkbenchPack.routeKey, lineKey)
           }
-          onCopySummary={() => copySavedRoutePack(activeWorkbenchPack.routeKey)}
-          onCopyManifest={() => copySavedRoutePack(activeWorkbenchPack.routeKey)}
+          onCopySummary={() => routeWorkspace?.copySummary(activeWorkbenchPack.routeKey)}
+          onCopyManifest={() => routeWorkspace?.copyManifest(activeWorkbenchPack.routeKey)}
           onTogglePin={() => toggleSavedRoutePack(activeWorkbenchPack.routeKey)}
           onOpenBatchBuilder={() =>
-            openBatchBuilderForRoute(activeWorkbenchPack.routeKey, {
-              intentLabel: "Primary",
-              batchEntryMode: "core",
-            })
+            routeWorkspace?.openBatchBuilder(activeWorkbenchPack.routeKey)
           }
           onScrollToTable={() => scrollToRouteGroup(activeWorkbenchPack.routeKey)}
         />
