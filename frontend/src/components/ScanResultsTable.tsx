@@ -4743,12 +4743,19 @@ export function ScanResultsTable({
   const emitRouteHandoff = useCallback(
     (preferredEntryAction: RouteHandoffEntryAction) => {
       if (!selectedRouteDerivation) return;
+      const intent =
+        preferredEntryAction === "validation"
+          ? "open-validate"
+          : preferredEntryAction === "planner"
+            ? "open-workbench"
+            : "finder";
       const payload: RouteHandoffContext = {
         source: "scanner",
         routeKey: selectedRouteDerivation.routeKey,
         routeLabel: selectedRouteDerivation.routeLabel,
         legContexts: selectedRouteLegContexts,
         preferredEntryAction,
+        intent,
       };
       if (import.meta.env.DEV) {
         console.debug("[ScanResultsTable] route handoff", payload);
@@ -4760,6 +4767,7 @@ export function ScanResultsTable({
               source: payload.source,
               routeKey: payload.routeKey,
               preferredEntryAction,
+              intent,
               legCount: payload.legContexts.length,
             },
           }),

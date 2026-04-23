@@ -104,6 +104,7 @@ import {
 import type {
   RouteHandoffContext,
   RouteHandoffLegContext,
+  RouteWorkspaceIntent,
 } from "@/lib/routeHandoff";
 import { useRouteExecutionWorkspace } from "@/lib/useRouteExecutionWorkspace";
 
@@ -760,7 +761,7 @@ function App() {
   >(null);
   const [activeRadiusRouteKey, setActiveRadiusRouteKey] = useState<string | null>(null);
   const [routeWorkspaceMode, setRouteWorkspaceMode] =
-    useState<RouteWorkspaceMode>("discover");
+    useState<RouteWorkspaceMode | null>(null);
   const [routeWorkspaceSource, setRouteWorkspaceSource] = useState<"radius" | "finder">("radius");
   const [routeQueueKeys, setRouteQueueKeys] = useState<string[]>([]);
   const [pendingRouteContext, setPendingRouteContext] =
@@ -768,6 +769,8 @@ function App() {
   const [pendingRadiusManifest, setPendingRadiusManifest] = useState("");
   const [pendingSelectedLeg, setPendingSelectedLeg] =
     useState<RouteHandoffLegContext | null>(null);
+  const [routeHandoffIntent, setRouteHandoffIntent] =
+    useState<RouteWorkspaceIntent | null>(null);
   const [bannedTypeIDs, setBannedTypeIDs] = useState<number[]>([]);
   const [bannedStationIDs, setBannedStationIDs] = useState<number[]>([]);
   const [sessionStationFilters, setSessionStationFilters] =
@@ -829,22 +832,28 @@ function App() {
     setRadiusScanSession(createEmptyRadiusScanSession());
     setRouteQueueKeys([]);
     setActiveRadiusRouteKey(null);
-    setRouteWorkspaceMode("discover");
+    setRouteWorkspaceMode(null);
     setRouteWorkspaceSource("radius");
     routeWorkspace.selectPack(null);
     routeWorkspace.setMode("finder");
     setPendingRouteContext(null);
     setPendingRadiusManifest("");
     setPendingSelectedLeg(null);
+    setRouteHandoffIntent(null);
   }, [routeWorkspace]);
   const openRouteWorkspaceFromRadius = useCallback(
-    (routeKey: string, mode: RouteWorkspaceMode) => {
+    (
+      routeKey: string,
+      mode: RouteWorkspaceMode,
+      intent: RouteWorkspaceIntent = "open-workbench",
+    ) => {
       // Keep this handoff strictly for explicit Route workspace actions.
       // Batch-builder CTAs should stay in the scanner context until Route workbench
       // grows beyond its current placeholder state for batch operations.
       setActiveRadiusRouteKey(routeKey);
       setRouteWorkspaceMode(mode);
       setRouteWorkspaceSource("radius");
+      setRouteHandoffIntent(intent);
       if (mode === "workbench" || mode === "finder" || mode === "validate") {
         routeWorkspace.openRoute(routeKey, mode);
       }
@@ -858,7 +867,7 @@ function App() {
         if (prev.includes(routeKey)) return prev;
         return [...prev, routeKey];
       });
-      openRouteWorkspaceFromRadius(routeKey, "discover");
+      openRouteWorkspaceFromRadius(routeKey, "workbench", "open-workbench");
     },
     [openRouteWorkspaceFromRadius],
   );
@@ -871,10 +880,17 @@ function App() {
       setPendingRouteContext(context);
       setPendingRadiusManifest(manifestText);
       setPendingSelectedLeg(selectedLeg);
+      setRouteHandoffIntent(context.intent);
       setActiveRadiusRouteKey(context.routeKey);
-      setRouteWorkspaceMode("finder");
+      const handoffMode: RouteWorkspaceMode =
+        context.intent === "open-validate"
+          ? "validate"
+          : context.intent === "open-workbench"
+            ? "workbench"
+            : "finder";
+      setRouteWorkspaceMode(handoffMode);
       setRouteWorkspaceSource("radius");
-      routeWorkspace.openRoute(context.routeKey, "finder");
+      routeWorkspace.openRoute(context.routeKey, handoffMode);
       setTab("route");
     },
     [routeWorkspace, setTab],
@@ -2801,10 +2817,10 @@ const handleScanAndRefresh = useCallback(async () => {
                 sessionStationFilters={sessionStationFilters}
                 onUpdateSessionStationFilters={updateSessionStationFilters}
                 onOpenInRoute={(routeKey) =>
-                  openRouteWorkspaceFromRadius(routeKey, "discover")
+                  openRouteWorkspaceFromRadius(routeKey, "workbench", "open-workbench")
                 }
                 onOpenInRouteWorkbench={(routeKey) =>
-                  openRouteWorkspaceFromRadius(routeKey, "workbench")
+                  openRouteWorkspaceFromRadius(routeKey, "workbench", "open-workbench")
                 }
                 onSendToRouteQueue={sendRouteToQueueFromRadius}
                 buyHubs={radiusHubSummaries.buyHubs}
@@ -3084,14 +3100,16 @@ const handleScanAndRefresh = useCallback(async () => {
                 isLoggedIn={authStatus.logged_in}
                 radiusScanSession={radiusScanSession}
                 activeRouteKey={activeRadiusRouteKey}
-                workspaceMode={routeWorkspaceMode}
+                workspaceMode={routeWorkspaceMode ?? undefined}
                 onWorkspaceModeChange={(mode) => {
                   setRouteWorkspaceMode(mode);
                   setRouteWorkspaceSource(mode === "finder" ? "finder" : "radius");
+                  setRouteHandoffIntent(null);
                 }}
                 workspaceSource={routeWorkspaceSource}
                 routeQueueKeys={routeQueueKeys}
                 pendingRouteContext={pendingRouteContext}
+                handoffIntent={routeHandoffIntent}
                 pendingRadiusManifest={pendingRadiusManifest}
                 pendingSelectedLeg={pendingSelectedLeg}
                 routeWorkspace={routeWorkspace}

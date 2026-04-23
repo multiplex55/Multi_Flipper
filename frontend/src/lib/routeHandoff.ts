@@ -1,6 +1,7 @@
 import type { FlipResult } from "@/lib/types";
 
 export type RouteHandoffEntryAction = "planner" | "validation" | "cargo";
+export type RouteWorkspaceIntent = "open-workbench" | "open-validate" | "finder";
 
 export interface RouteHandoffLegContext {
   buyLocationID: number;
@@ -22,6 +23,7 @@ export interface RouteHandoffContext {
   routeLabel: string;
   legContexts: RouteHandoffLegContext[];
   preferredEntryAction: RouteHandoffEntryAction;
+  intent: RouteWorkspaceIntent;
 }
 
 export function buildRouteManifestFromFlipRows(rows: FlipResult[]): string {
