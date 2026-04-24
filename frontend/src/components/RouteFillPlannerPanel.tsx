@@ -5,6 +5,13 @@ interface RouteFillPlannerPanelProps {
   sections: RouteFillPlannerSections;
   onAddToRoutePack: (suggestion: RouteFillPlannerSuggestion) => void;
   onOpenBatchBuilderSelection: (suggestion: RouteFillPlannerSuggestion) => void;
+  metrics?: {
+    selectedCargoM3: number;
+    cargoCapacityM3: number;
+    remainingCargoM3: number;
+    selectedCapitalIsk: number;
+    selectedProfitIsk: number;
+  };
 }
 
 function SuggestionSection({
@@ -26,39 +33,48 @@ function SuggestionSection({
       {rows.length === 0 ? (
         <div className="text-[11px] text-eve-dim">No suggestions.</div>
       ) : (
-        <div className="space-y-1">
-          {rows.map((suggestion) => (
-            <div
-              key={suggestion.id}
-              className="rounded-sm border border-eve-border/40 bg-eve-dark/30 px-1.5 py-1 text-[11px]"
-              data-testid={`route-fill-suggestion:${suggestion.id}`}
-            >
-              <div className="flex items-center gap-2">
-                <span className="min-w-0 flex-1 truncate text-eve-text">{suggestion.title}</span>
-                <span className="font-mono text-eve-accent">+{formatISK(suggestion.incrementalProfitIsk)}</span>
-              </div>
-              <div className="mt-0.5 text-eve-dim">
-                +{suggestion.addedJumps} jumps · +{suggestion.addedM3.toFixed(0)} m³ · quality {suggestion.confidencePercent.toFixed(0)}%
-              </div>
-              <div className="mt-0.5 text-eve-dim/90">{suggestion.rationale}</div>
-              <div className="mt-1 flex flex-wrap gap-1">
-                <button
-                  type="button"
-                  className="rounded-sm border border-eve-border/60 px-1 py-0.5"
-                  onClick={() => onAddToRoutePack(suggestion)}
-                >
-                  Add to route pack
-                </button>
-                <button
-                  type="button"
-                  className="rounded-sm border border-eve-accent/60 px-1 py-0.5 text-eve-accent"
-                  onClick={() => onOpenBatchBuilderSelection(suggestion)}
-                >
-                  Open in batch builder
-                </button>
-              </div>
-            </div>
-          ))}
+        <div className="overflow-auto">
+          <table className="w-full text-[11px]">
+            <thead>
+              <tr className="text-left text-eve-dim">
+                <th>title</th>
+                <th>incrementalProfitIsk</th>
+                <th>addedM3</th>
+                <th>addedJumps</th>
+                <th>profitPerM3</th>
+                <th>profitPerAddedJump</th>
+                <th>confidencePercent</th>
+                <th>rationale</th>
+                <th>sourceLineKeys</th>
+                <th>actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((suggestion) => {
+                const profitPerM3 = suggestion.addedM3 > 0 ? suggestion.incrementalProfitIsk / suggestion.addedM3 : suggestion.incrementalProfitIsk;
+                const profitPerAddedJump = suggestion.addedJumps > 0 ? suggestion.incrementalProfitIsk / suggestion.addedJumps : suggestion.incrementalProfitIsk;
+                return (
+                  <tr key={suggestion.id} data-testid={`route-fill-suggestion:${suggestion.id}`} className="border-t border-eve-border/30">
+                    <td className="pr-1 text-eve-text">{suggestion.title}</td>
+                    <td>{formatISK(suggestion.incrementalProfitIsk)}</td>
+                    <td>{suggestion.addedM3.toFixed(2)}</td>
+                    <td>{suggestion.addedJumps}</td>
+                    <td>{formatISK(profitPerM3)}</td>
+                    <td>{formatISK(profitPerAddedJump)}</td>
+                    <td>{suggestion.confidencePercent.toFixed(0)}%</td>
+                    <td className="max-w-[220px] truncate" title={suggestion.rationale}>{suggestion.rationale}</td>
+                    <td className="max-w-[180px] truncate" title={suggestion.sourceLineKeys.join(", ")}>{suggestion.sourceLineKeys.join(", ")}</td>
+                    <td className="py-1">
+                      <div className="flex flex-wrap gap-1">
+                        <button type="button" className="rounded-sm border border-eve-border/60 px-1 py-0.5" onClick={() => onAddToRoutePack(suggestion)}>Add</button>
+                        <button type="button" className="rounded-sm border border-eve-accent/60 px-1 py-0.5 text-eve-accent" onClick={() => onOpenBatchBuilderSelection(suggestion)}>Open</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </section>
@@ -69,9 +85,18 @@ export function RouteFillPlannerPanel({
   sections,
   onAddToRoutePack,
   onOpenBatchBuilderSelection,
+  metrics,
 }: RouteFillPlannerPanelProps) {
   return (
     <div className="space-y-2" data-testid="route-fill-planner-panel">
+      {metrics ? (
+        <section className="grid grid-cols-2 gap-1 rounded-sm border border-eve-border/40 p-2 text-[11px]" data-testid="route-fill-planner-metrics">
+          <div>Selected cargo: <span className="text-eve-text">{metrics.selectedCargoM3.toFixed(2)} / {metrics.cargoCapacityM3.toFixed(2)} m³</span></div>
+          <div>Remaining cargo: <span className="text-eve-text">{metrics.remainingCargoM3.toFixed(2)} m³</span></div>
+          <div>Selected capital: <span className="text-eve-text">{formatISK(metrics.selectedCapitalIsk)}</span></div>
+          <div>Selected profit: <span className="text-eve-text">{formatISK(metrics.selectedProfitIsk)}</span></div>
+        </section>
+      ) : null}
       <SuggestionSection
         title="Same endpoint filler"
         rows={sections.sameEndpointFiller}

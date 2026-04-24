@@ -75,12 +75,36 @@ describe("RouteFillPlannerPanel", () => {
     );
 
     const firstSuggestion = screen.getAllByTestId("route-fill-suggestion:filler:1")[0];
-    fireEvent.click(within(firstSuggestion).getByRole("button", { name: "Add to route pack" }));
-    fireEvent.click(within(firstSuggestion).getByRole("button", { name: "Open in batch builder" }));
+    fireEvent.click(within(firstSuggestion).getByRole("button", { name: "Add" }));
+    fireEvent.click(within(firstSuggestion).getByRole("button", { name: "Open" }));
 
     expect(onAdd).toHaveBeenCalledTimes(1);
     expect(onOpen).toHaveBeenCalledTimes(1);
     expect(onAdd.mock.calls[0][0].id).toBe("filler:1");
     expect(onOpen.mock.calls[0][0].id).toBe("filler:1");
+  });
+
+  it("renders planner metrics and deterministic table columns", () => {
+    render(
+      <RouteFillPlannerPanel
+        sections={sections}
+        metrics={{
+          selectedCargoM3: 40,
+          cargoCapacityM3: 100,
+          remainingCargoM3: 60,
+          selectedCapitalIsk: 500000,
+          selectedProfitIsk: 90000,
+        }}
+        onAddToRoutePack={() => undefined}
+        onOpenBatchBuilderSelection={() => undefined}
+      />,
+    );
+
+    expect(screen.getByTestId("route-fill-planner-metrics")).toHaveTextContent("40.00 / 100.00 m³");
+    expect(screen.getAllByText("incrementalProfitIsk").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("profitPerM3").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("profitPerAddedJump").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("sourceLineKeys").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("route-fill-suggestion:filler:1")).toHaveTextContent("1:100:200");
   });
 });

@@ -80,6 +80,21 @@ export function RouteWorkbenchPanel({
   const lines = Object.values(pack.lines).sort((a, b) => a.typeName.localeCompare(b.typeName));
   const selectedCoreCount = pack.selectedLineKeys.length;
   const fillerCount = Math.max(0, lines.length - selectedCoreCount);
+  const selectedLineKeys = new Set(pack.selectedLineKeys);
+  const selectedCargoM3 = lines
+    .filter((line) => selectedLineKeys.has(line.lineKey))
+    .reduce((sum, line) => sum + line.plannedVolume, 0);
+  const selectedCapitalIsk = lines
+    .filter((line) => selectedLineKeys.has(line.lineKey))
+    .reduce((sum, line) => sum + line.plannedQty * line.plannedBuyPrice, 0);
+  const selectedProfitIsk = lines
+    .filter((line) => selectedLineKeys.has(line.lineKey))
+    .reduce((sum, line) => sum + line.plannedProfit, 0);
+  const cargoCapacityM3 = Math.max(
+    lines.reduce((sum, line) => sum + line.plannedVolume, 0),
+    selectedCargoM3,
+  );
+  const remainingCargoM3 = Math.max(0, cargoCapacityM3 - selectedCargoM3);
 
   return (
     <section
@@ -141,6 +156,13 @@ export function RouteWorkbenchPanel({
               sections={routeFillSections}
               onAddToRoutePack={onAddFillSuggestionToPack}
               onOpenBatchBuilderSelection={onOpenFillSuggestionInBatchBuilder}
+              metrics={{
+                selectedCargoM3,
+                cargoCapacityM3,
+                remainingCargoM3,
+                selectedCapitalIsk,
+                selectedProfitIsk,
+              }}
             />
           ) : null}
         </section>

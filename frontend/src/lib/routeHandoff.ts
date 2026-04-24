@@ -24,6 +24,7 @@ export interface RouteHandoffContext {
   legContexts: RouteHandoffLegContext[];
   preferredEntryAction: RouteHandoffEntryAction;
   intent: RouteWorkspaceIntent;
+  preferredSection?: "summary" | "execution" | "filler" | "verification";
 }
 
 export function buildRouteManifestFromFlipRows(rows: FlipResult[]): string {
