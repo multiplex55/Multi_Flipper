@@ -386,6 +386,33 @@ export async function getSystemsList(
   return data.systems ?? [];
 }
 
+
+export interface RadiusDistanceLensRowInput {
+  row_key: string;
+  buy_system_id: number;
+  sell_system_id: number;
+  total_profit: number;
+  real_profit: number;
+  daily_profit: number;
+}
+
+export interface RadiusDistanceLensRequest {
+  origin_system_id: number;
+  min_route_security: number;
+  rows: RadiusDistanceLensRowInput[];
+}
+
+export interface RadiusDistanceLensMetric {
+  row_key: string;
+  buy_jumps: number;
+  sell_jumps: number;
+  total_jumps: number;
+  profit_per_jump: number;
+  real_isk_per_jump: number;
+  daily_isk_per_jump: number;
+  unreachable: boolean;
+}
+
 export async function scan(
   params: ScanParams,
   onProgress: (msg: string) => void,
@@ -400,6 +427,20 @@ export async function scan(
     "Scan failed",
     (msg) => onMeta?.(msg.cache_meta),
   );
+}
+
+export async function recalculateRadiusDistanceLens(
+  request: RadiusDistanceLensRequest,
+  signal?: AbortSignal,
+): Promise<RadiusDistanceLensMetric[]> {
+  const res = await apiFetch(`${BASE}/api/scan/radius-distance-lens`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+    signal,
+  });
+  const data = await handleResponse<{ rows?: RadiusDistanceLensMetric[] }>(res);
+  return Array.isArray(data.rows) ? data.rows : [];
 }
 
 export async function scanMultiRegion(

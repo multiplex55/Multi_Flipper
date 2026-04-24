@@ -165,4 +165,19 @@ describe("scanResultsOrdering comparator", () => {
 
     expect(ordered).toEqual([50, 51, 52]);
   });
+
+  it("deprioritizes unreachable distance-lens rows", () => {
+    const reachable = makeIndexed(61, 0, makeRow({ TypeID: 601, RealProfit: 10 }));
+    const unreachable = makeIndexed(
+      62,
+      1,
+      makeRow({ TypeID: 602, RealProfit: 999, DistanceLensUnreachable: true }),
+    );
+    const ordered = sortIds(
+      [unreachable, reachable],
+      new Map(),
+      { orderingMode: "column_only", pinsFirst: false, trackedFirst: false },
+    );
+    expect(ordered).toEqual([61, 62]);
+  });
 });
