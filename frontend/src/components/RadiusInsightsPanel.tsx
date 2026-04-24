@@ -55,6 +55,25 @@ type RadiusInsightsPanelProps = {
   lensDeltaByRouteKey?: Record<string, string>
 };
 
+function majorHubActionSummary(
+  systemId: number,
+  systemName: string,
+  rowCount: number,
+): RadiusHubSummary {
+  return {
+    location_id: systemId,
+    station_name: systemName,
+    system_id: systemId,
+    system_name: systemName,
+    row_count: rowCount,
+    item_count: 0,
+    units: 0,
+    capital_required: 0,
+    period_profit: 0,
+    avg_jumps: 0,
+  };
+}
+
 function actionLabel(action: ActionQueueItem["action"]): string {
   switch (action) {
     case "buy_now":
@@ -375,8 +394,22 @@ export function RadiusInsightsPanel({
                       {(onOpenHubRows || onSetHubLock) && (
                         <div className="mt-1 flex flex-wrap gap-1">
                           {(() => {
-                            const buyHub = buyHubs.find((hub) => hub.system_id === entry.hub.systemId);
-                            const sellHub = sellHubs.find((hub) => hub.system_id === entry.hub.systemId);
+                            const buyHub =
+                              entry.buy.rowCount > 0
+                                ? majorHubActionSummary(
+                                    entry.hub.systemId,
+                                    entry.hub.systemName,
+                                    entry.buy.rowCount,
+                                  )
+                                : null;
+                            const sellHub =
+                              entry.sell.rowCount > 0
+                                ? majorHubActionSummary(
+                                    entry.hub.systemId,
+                                    entry.hub.systemName,
+                                    entry.sell.rowCount,
+                                  )
+                                : null;
                             return (
                               <>
                                 {buyHub ? (

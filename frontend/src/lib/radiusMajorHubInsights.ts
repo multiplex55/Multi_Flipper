@@ -23,6 +23,31 @@ export type RadiusMajorHubMetrics = {
   sell: RadiusMajorHubDirectionMetrics;
 };
 
+export type RadiusMajorHubRowEvaluationContext = {
+  /**
+   * True when the row is ignored by session-level station hides
+   * (SessionStationFilters ignored buy/sell station ids).
+   */
+  excludedBySessionStationIgnore?: boolean;
+  /**
+   * True when endpoint-preference policy explicitly excludes this row.
+   */
+  excludedByEndpointPreferences?: boolean;
+  /**
+   * True when the active route-safety filter excludes this row.
+   */
+  excludedByRouteSafetyFilter?: boolean;
+  /**
+   * True when the row is currently hidden or excluded by row-level visibility state.
+   */
+  excludedByRowVisibility?: boolean;
+  /**
+   * Product policy hook for additional fillability / stale-degraded exclusions.
+   * Keep false when no extra policy applies.
+   */
+  excludedByFillabilityOrStalePolicy?: boolean;
+};
+
 const ZERO_DIRECTION_METRICS: RadiusMajorHubDirectionMetrics = {
   rowCount: 0,
   distinctItems: 0,
@@ -82,6 +107,30 @@ export function isRadiusActionableRow(row: FlipResult): boolean {
   return true;
 }
 
+/**
+ * Canonical policy for major-hub counting.
+ *
+ * A row is counted only when ALL of the following are true:
+ * 1) It passes low-level actionable checks (`isRadiusActionableRow`).
+ * 2) It is not ignored by session station filters.
+ * 3) It is not excluded by endpoint preferences.
+ * 4) It is not excluded by the active route-safety filter state.
+ * 5) It is not hidden/excluded by row visibility state.
+ * 6) It does not fail product-defined fillability/stale-degraded policy.
+ */
+export function isRowCountedInMajorHubMetrics(
+  row: FlipResult,
+  context: RadiusMajorHubRowEvaluationContext = {},
+): boolean {
+  if (!isRadiusActionableRow(row)) return false;
+  if (context.excludedBySessionStationIgnore) return false;
+  if (context.excludedByEndpointPreferences) return false;
+  if (context.excludedByRouteSafetyFilter) return false;
+  if (context.excludedByRowVisibility) return false;
+  if (context.excludedByFillabilityOrStalePolicy) return false;
+  return true;
+}
+
 function matchesHub(
   hub: RadiusMajorHubDefinition,
   row: FlipResult,
@@ -97,8 +146,13 @@ function matchesHub(
   );
 }
 
-export function buildRadiusMajorHubInsights(rows: FlipResult[]): RadiusMajorHubMetrics[] {
-  const actionableRows = rows.filter(isRadiusActionableRow);
+export function buildRadiusMajorHubInsights(
+  rows: FlipResult[],
+  resolveContext?: (row: FlipResult) => RadiusMajorHubRowEvaluationContext,
+): RadiusMajorHubMetrics[] {
+  const countedRows = rows.filter((row) =>
+    isRowCountedInMajorHubMetrics(row, resolveContext?.(row)),
+  );
 
   return RADIUS_CANONICAL_MAJOR_HUBS.map((hub) => {
     const buyTypeIds = new Set<number>();
@@ -106,7 +160,7 @@ export function buildRadiusMajorHubInsights(rows: FlipResult[]): RadiusMajorHubM
     const buy = { ...ZERO_DIRECTION_METRICS };
     const sell = { ...ZERO_DIRECTION_METRICS };
 
-    for (const row of actionableRows) {
+    for (const row of countedRows) {
       if (matchesHub(hub, row, "buy")) {
         buy.rowCount += 1;
         buy.totalProfit += Number(row.DayPeriodProfit ?? row.TotalProfit ?? row.ExpectedProfit ?? 0);

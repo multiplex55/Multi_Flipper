@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildRadiusMajorHubInsights,
+  isRowCountedInMajorHubMetrics,
   RADIUS_CANONICAL_MAJOR_HUBS,
 } from "@/lib/radiusMajorHubInsights";
 import type { FlipResult } from "@/lib/types";
@@ -76,6 +77,62 @@ describe("radiusMajorHubInsights", () => {
     const hubs = buildRadiusMajorHubInsights(rows);
     const jita = hubs.find((hub) => hub.hub.key === "jita");
 
+    expect(jita?.buy.rowCount).toBe(1);
+    expect(jita?.buy.distinctItems).toBe(1);
+  });
+
+  it("applies row policy exclusions via shared predicate", () => {
+    const row = makeRow({ TypeID: 33, TotalProfit: 800, UnitsToBuy: 25 });
+    const cases = [
+      {
+        name: "session station ignored",
+        context: { excludedBySessionStationIgnore: true },
+      },
+      {
+        name: "endpoint preference excluded",
+        context: { excludedByEndpointPreferences: true },
+      },
+      {
+        name: "route safety excluded",
+        context: { excludedByRouteSafetyFilter: true },
+      },
+      {
+        name: "hidden row excluded",
+        context: { excludedByRowVisibility: true },
+      },
+      {
+        name: "fillability/stale policy excluded",
+        context: { excludedByFillabilityOrStalePolicy: true },
+      },
+    ] as const;
+
+    expect(isRowCountedInMajorHubMetrics(row)).toBe(true);
+    for (const testCase of cases) {
+      expect(
+        isRowCountedInMajorHubMetrics(row, testCase.context),
+        testCase.name,
+      ).toBe(false);
+    }
+  });
+
+  it("excludes rows that pass legacy actionable checks but fail full policy", () => {
+    const rows: FlipResult[] = [
+      makeRow({ TypeID: 41, BuySystemID: 30000142, BuySystemName: "Jita", TotalProfit: 600 }),
+      makeRow({ TypeID: 42, BuySystemID: 30000142, BuySystemName: "Jita", TotalProfit: 600 }),
+      makeRow({ TypeID: 43, BuySystemID: 30000142, BuySystemName: "Jita", TotalProfit: 600 }),
+      makeRow({ TypeID: 44, BuySystemID: 30000142, BuySystemName: "Jita", TotalProfit: 600 }),
+    ];
+    const excludedTypeIds = new Set([42, 43, 44]);
+
+    const hubs = buildRadiusMajorHubInsights(rows, (row) => ({
+      excludedByEndpointPreferences: row.TypeID === 42,
+      excludedByRowVisibility: row.TypeID === 43,
+      excludedByRouteSafetyFilter: row.TypeID === 44,
+      excludedByFillabilityOrStalePolicy: false,
+    }));
+    const jita = hubs.find((hub) => hub.hub.key === "jita");
+
+    expect(rows.filter((row) => !excludedTypeIds.has(row.TypeID))).toHaveLength(1);
     expect(jita?.buy.rowCount).toBe(1);
     expect(jita?.buy.distinctItems).toBe(1);
   });
