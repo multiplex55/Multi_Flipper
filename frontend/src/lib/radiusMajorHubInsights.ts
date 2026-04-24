@@ -34,6 +34,8 @@ export type RadiusMajorHubMetrics = {
   hub: RadiusMajorHubDefinition;
   buy: RadiusMajorHubDirectionMetrics;
   sell: RadiusMajorHubDirectionMetrics;
+  buyRowIds?: string[];
+  sellRowIds?: string[];
   buyMatchIdentity: RadiusMajorHubMatchIdentity;
   sellMatchIdentity: RadiusMajorHubMatchIdentity;
 };
@@ -185,6 +187,7 @@ export function isRowCountedInMajorHubMetrics(
 export function buildRadiusMajorHubInsights(
   rows: FlipResult[],
   resolveContext?: (row: FlipResult) => RadiusMajorHubRowEvaluationContext,
+  resolveRowId?: (row: FlipResult) => string,
 ): RadiusMajorHubMetrics[] {
   const countedRows = rows.filter((row) =>
     isRowCountedInMajorHubMetrics(row, resolveContext?.(row)),
@@ -195,6 +198,8 @@ export function buildRadiusMajorHubInsights(
     const sellMatchIdentity = buildHubMatchIdentity(hub);
     const buyTypeIds = new Set<number>();
     const sellTypeIds = new Set<number>();
+    const buyRowIds = new Set<string>();
+    const sellRowIds = new Set<string>();
     const buy = { ...ZERO_DIRECTION_METRICS };
     const sell = { ...ZERO_DIRECTION_METRICS };
 
@@ -204,18 +209,28 @@ export function buildRadiusMajorHubInsights(
         buy.totalProfit += Number(row.DayPeriodProfit ?? row.TotalProfit ?? row.ExpectedProfit ?? 0);
         buy.totalCapital += Number(row.DayCapitalRequired ?? row.BuyPrice * Math.max(0, row.UnitsToBuy ?? 0));
         buyTypeIds.add(row.TypeID);
+        if (resolveRowId) buyRowIds.add(resolveRowId(row));
       }
       if (matchesHubIdentity(sellMatchIdentity, row, "sell")) {
         sell.rowCount += 1;
         sell.totalProfit += Number(row.DayPeriodProfit ?? row.TotalProfit ?? row.ExpectedProfit ?? 0);
         sell.totalCapital += Number(row.DayCapitalRequired ?? row.BuyPrice * Math.max(0, row.UnitsToBuy ?? 0));
         sellTypeIds.add(row.TypeID);
+        if (resolveRowId) sellRowIds.add(resolveRowId(row));
       }
     }
 
     buy.distinctItems = buyTypeIds.size;
     sell.distinctItems = sellTypeIds.size;
 
-    return { hub, buy, sell, buyMatchIdentity, sellMatchIdentity };
+    return {
+      hub,
+      buy,
+      sell,
+      buyRowIds: resolveRowId ? [...buyRowIds] : undefined,
+      sellRowIds: resolveRowId ? [...sellRowIds] : undefined,
+      buyMatchIdentity,
+      sellMatchIdentity,
+    };
   });
 }

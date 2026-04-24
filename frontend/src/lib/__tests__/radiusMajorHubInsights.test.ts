@@ -207,4 +207,20 @@ describe("radiusMajorHubInsights", () => {
       expect(hub.sell.distinctItems).toBe(0);
     }
   });
+
+  it("optionally includes directional row ids that align to row counts", () => {
+    const rows: FlipResult[] = [
+      makeRow({ TypeID: 91, BuySystemID: 30000142, BuySystemName: "Jita" }),
+      makeRow({ TypeID: 92, BuySystemID: 30000142, BuySystemName: "Jita" }),
+      makeRow({ TypeID: 93, SellSystemID: 30002187, SellSystemName: "Amarr" }),
+    ];
+    const hubs = buildRadiusMajorHubInsights(rows, undefined, (row) => `row-${row.TypeID}`);
+    const jita = hubs.find((hub) => hub.hub.key === "jita");
+    const amarr = hubs.find((hub) => hub.hub.key === "amarr");
+
+    expect(jita?.buyRowIds).toEqual(["row-91", "row-92", "row-93"]);
+    expect(jita?.buyRowIds?.length).toBe(jita?.buy.rowCount);
+    expect(amarr?.sellRowIds).toEqual(["row-91", "row-92", "row-93"]);
+    expect(amarr?.sellRowIds?.length).toBe(amarr?.sell.rowCount);
+  });
 });

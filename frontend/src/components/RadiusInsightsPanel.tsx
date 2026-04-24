@@ -8,6 +8,7 @@ import type {
   RadiusMajorHubMatchIdentity,
   RadiusMajorHubMetrics,
 } from "@/lib/radiusMajorHubInsights";
+import type { RadiusHubActionPayload } from "@/lib/radiusHubActions";
 import type { HubScopeMode } from "@/lib/radiusHubScope";
 import { LoopOpportunitiesPanel } from "./LoopOpportunitiesPanel";
 import { ExplanationPopoverShell } from "@/components/decision/ExplanationPopoverShell";
@@ -49,8 +50,16 @@ type RadiusInsightsPanelProps = {
   onToggleCompactDashboard?: () => void;
   buyHubs?: RadiusHubSummary[];
   sellHubs?: RadiusHubSummary[];
-  onOpenHubRows?: (hub: RadiusHubSummary, side: "buy" | "sell") => void;
-  onSetHubLock?: (hub: RadiusHubSummary, side: "buy" | "sell") => void;
+  onOpenHubRows?: (
+    hub: RadiusHubSummary,
+    side: "buy" | "sell",
+    action?: RadiusHubActionPayload,
+  ) => void;
+  onSetHubLock?: (
+    hub: RadiusHubSummary,
+    side: "buy" | "sell",
+    action?: RadiusHubActionPayload,
+  ) => void;
   majorHubInsights?: RadiusMajorHubMetrics[];
   hubScopeMode?: HubScopeMode;
   onHubScopeModeChange?: (mode: HubScopeMode) => void;
@@ -401,63 +410,71 @@ export function RadiusInsightsPanel({
                         <div className="mt-1 flex flex-wrap gap-1">
                           {(() => {
                             const buyHub =
-                              entry.buy.rowCount > 0
-                                ? majorHubActionSummary(
-                                    entry.hub.systemId,
-                                    entry.hub.systemName,
-                                    entry.buy.rowCount,
-                                    entry.buyMatchIdentity,
-                                    `${entry.hub.key}:buy`,
-                                  )
-                                : null;
+                              majorHubActionSummary(
+                                entry.hub.systemId,
+                                entry.hub.systemName,
+                                entry.buy.rowCount,
+                                entry.buyMatchIdentity,
+                                `${entry.hub.key}:buy`,
+                              );
                             const sellHub =
-                              entry.sell.rowCount > 0
-                                ? majorHubActionSummary(
-                                    entry.hub.systemId,
-                                    entry.hub.systemName,
-                                    entry.sell.rowCount,
-                                    entry.sellMatchIdentity,
-                                    `${entry.hub.key}:sell`,
-                                  )
-                                : null;
+                              majorHubActionSummary(
+                                entry.hub.systemId,
+                                entry.hub.systemName,
+                                entry.sell.rowCount,
+                                entry.sellMatchIdentity,
+                                `${entry.hub.key}:sell`,
+                              );
                             return (
                               <>
-                                {buyHub ? (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => onOpenHubRows?.(buyHub, "buy")}
-                                      className="rounded-sm border border-eve-border/60 px-1 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
-                                    >
-                                      Open buy rows
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => onSetHubLock?.(buyHub, "buy")}
-                                      className="rounded-sm border border-eve-border/60 px-1 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
-                                    >
-                                      Buy lock
-                                    </button>
-                                  </>
-                                ) : null}
-                                {sellHub ? (
-                                  <>
-                                    <button
-                                      type="button"
-                                      onClick={() => onOpenHubRows?.(sellHub, "sell")}
-                                      className="rounded-sm border border-eve-border/60 px-1 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
-                                    >
-                                      Open sell rows
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => onSetHubLock?.(sellHub, "sell")}
-                                      className="rounded-sm border border-eve-border/60 px-1 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
-                                    >
-                                      Sell lock
-                                    </button>
-                                  </>
-                                ) : null}
+                                <button
+                                  type="button"
+                                  disabled={entry.buy.rowCount <= 0}
+                                  onClick={() =>
+                                    onOpenHubRows?.(buyHub, "buy", {
+                                      rowIds: entry.buyRowIds,
+                                    })
+                                  }
+                                  className="rounded-sm border border-eve-border/60 px-1 py-0.5 text-[10px] text-eve-dim hover:text-eve-text disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  Open buy rows
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={entry.sell.rowCount <= 0}
+                                  onClick={() =>
+                                    onOpenHubRows?.(sellHub, "sell", {
+                                      rowIds: entry.sellRowIds,
+                                    })
+                                  }
+                                  className="rounded-sm border border-eve-border/60 px-1 py-0.5 text-[10px] text-eve-dim hover:text-eve-text disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  Open sell rows
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={entry.buy.rowCount <= 0}
+                                  onClick={() =>
+                                    onSetHubLock?.(buyHub, "buy", {
+                                      rowIds: entry.buyRowIds,
+                                    })
+                                  }
+                                  className="rounded-sm border border-eve-border/60 px-1 py-0.5 text-[10px] text-eve-dim hover:text-eve-text disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  Buy lock
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={entry.sell.rowCount <= 0}
+                                  onClick={() =>
+                                    onSetHubLock?.(sellHub, "sell", {
+                                      rowIds: entry.sellRowIds,
+                                    })
+                                  }
+                                  className="rounded-sm border border-eve-border/60 px-1 py-0.5 text-[10px] text-eve-dim hover:text-eve-text disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  Sell lock
+                                </button>
                               </>
                             );
                           })()}

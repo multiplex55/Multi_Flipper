@@ -102,6 +102,7 @@ import {
   filterRadiusResultsByHub,
   type RadiusHubFilter,
 } from "@/lib/radiusHubFilter";
+import type { RadiusHubActionPayload } from "@/lib/radiusHubActions";
 import type {
   RouteHandoffContext,
   RouteHandoffLegContext,
@@ -1161,7 +1162,11 @@ function App() {
     [],
   );
 
-  const handleOpenRadiusHubRows = useCallback((hub: RadiusHubSummary, side: "buy" | "sell") => {
+  const handleOpenRadiusHubRows = useCallback((
+    hub: RadiusHubSummary,
+    side: "buy" | "sell",
+    action?: RadiusHubActionPayload,
+  ) => {
     setRadiusHubFilter({
       side,
       systemId: hub.system_id,
@@ -1169,32 +1174,56 @@ function App() {
         ? hub.major_hub_match.normalizedStationContains
         : undefined,
       matchKey: hub.major_hub_match?.matchKey,
+      rowIds: action?.rowIds,
     });
+    const matchingRows =
+      action?.rowIds && action.rowIds.length > 0
+        ? filterRadiusResultsByHub(radiusScopedHubRows, { side, systemId: null, rowIds: action.rowIds })
+        : [];
+    const systemFromRows =
+      side === "buy"
+        ? matchingRows[0]?.BuySystemName
+        : matchingRows[0]?.SellSystemName;
+
     if (side === "buy") {
-      setParams((prev) => ({ ...prev, system_name: hub.system_name }));
+      setParams((prev) => ({ ...prev, system_name: systemFromRows || hub.system_name }));
     } else {
-      setParams((prev) => ({ ...prev, target_market_system: hub.system_name }));
+      setParams((prev) => ({ ...prev, target_market_system: systemFromRows || hub.system_name }));
     }
     addToast(`Opened ${side} rows for ${hub.system_name} (${radiusHubScopeMode} scope)`, "success");
-  }, [addToast, radiusHubScopeMode]);
+  }, [addToast, radiusHubScopeMode, radiusScopedHubRows]);
 
-  const handleSetRadiusHubLock = useCallback((hub: RadiusHubSummary, side: "buy" | "sell") => {
+  const handleSetRadiusHubLock = useCallback((
+    hub: RadiusHubSummary,
+    side: "buy" | "sell",
+    action?: RadiusHubActionPayload,
+  ) => {
+    const matchingRows =
+      action?.rowIds && action.rowIds.length > 0
+        ? filterRadiusResultsByHub(radiusScopedHubRows, { side, systemId: null, rowIds: action.rowIds })
+        : [];
+
     if (hub.major_hub_match?.mode === "structure_contains") {
       setRadiusHubFilter({
         side,
         systemId: hub.system_id,
         normalizedStationContains: hub.major_hub_match.normalizedStationContains,
         matchKey: hub.major_hub_match.matchKey,
+        rowIds: action?.rowIds,
       });
     }
+    const systemFromRows =
+      side === "buy"
+        ? matchingRows[0]?.BuySystemName
+        : matchingRows[0]?.SellSystemName;
     if (side === "buy") {
-      setParams((prev) => ({ ...prev, system_name: hub.system_name }));
+      setParams((prev) => ({ ...prev, system_name: systemFromRows || hub.system_name }));
       addToast(`Buy lock set to ${hub.system_name} (${radiusHubScopeMode} scope)`, "success");
       return;
     }
-    setParams((prev) => ({ ...prev, target_market_system: hub.system_name }));
+    setParams((prev) => ({ ...prev, target_market_system: systemFromRows || hub.system_name }));
     addToast(`Sell lock set to ${hub.system_name} (${radiusHubScopeMode} scope)`, "success");
-  }, [addToast, radiusHubScopeMode]);
+  }, [addToast, radiusHubScopeMode, radiusScopedHubRows]);
 
   const handleOpenLaneItemsAtCorridor = useCallback((corridor: {
     source_system_id: number;
