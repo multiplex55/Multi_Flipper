@@ -2,7 +2,19 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "@/App";
 
-const { mockGetConfig, mockScan, mockRebootStationCache } = vi.hoisted(() => ({
+const {
+  authState,
+  mockGetCharacterLocation,
+  mockGetConfig,
+  mockScan,
+  mockRebootStationCache,
+} = vi.hoisted(() => ({
+  authState: {
+    logged_in: false,
+    character_id: null as number | null,
+    characters: [] as Array<{ character_id: number; character_name: string }>,
+  },
+  mockGetCharacterLocation: vi.fn(async () => ({ solar_system_name: "Amarr" })),
   mockGetConfig: vi.fn(async () => ({ system_name: "Jita" })),
   mockScan: vi.fn(async () => []),
   mockRebootStationCache: vi.fn(async () => ({ ok: true, cleared: 1 })),
@@ -10,8 +22,12 @@ const { mockGetConfig, mockScan, mockRebootStationCache } = vi.hoisted(() => ({
 
 vi.mock("@/lib/api", () => ({
   applyAppUpdate: vi.fn(),
+  addPinnedOpportunity: vi.fn(async () => ({})),
   getUpdateCheckStatus: vi.fn(),
   getConfig: () => mockGetConfig(),
+  listPinnedOpportunities: vi.fn(async () => []),
+  removePinnedOpportunity: vi.fn(async () => ({})),
+  subscribePinnedOpportunityChanges: vi.fn(() => () => {}),
   skipAppUpdateForSession: vi.fn(async () => ({})),
   updateConfig: vi.fn(async () => ({})),
   scan: mockScan,
@@ -21,11 +37,12 @@ vi.mock("@/lib/api", () => ({
   testAlertChannels: vi.fn(),
   getWatchlist: vi.fn(async () => []),
   rebootStationCache: mockRebootStationCache,
+  getCharacterLocation: mockGetCharacterLocation,
 }));
 
 vi.mock("@/lib/useAuth", () => ({
   useAuth: () => ({
-    authStatus: { logged_in: false, characters: [] },
+    authStatus: authState,
     loginPolling: false,
     handleLogin: vi.fn(),
     handleLogout: vi.fn(),
@@ -92,8 +109,12 @@ vi.mock("@/components/TopActionButtons", () => ({ TopActionButtons: () => null }
 
 beforeEach(() => {
   mockGetConfig.mockClear();
+  mockGetCharacterLocation.mockClear();
   mockScan.mockClear();
   mockRebootStationCache.mockClear();
+  authState.logged_in = false;
+  authState.character_id = null;
+  authState.characters = [];
   localStorage.clear();
   vi.stubGlobal(
     "fetch",
@@ -117,24 +138,56 @@ describe("App scan and refresh controls", () => {
     expect(screen.getByRole("button", { name: "scanAndRefresh" })).toBeInTheDocument();
   });
 
-  it("calls cache reboot first and then scan", async () => {
+  it("calls cache reboot, location refresh, and then scan in order", async () => {
     const callOrder: string[] = [];
     mockRebootStationCache.mockImplementation(async () => {
       callOrder.push("reboot");
       return { ok: true, cleared: 1 };
     });
+    mockGetCharacterLocation.mockImplementation(async () => {
+      callOrder.push("location");
+      return { solar_system_name: "Amarr" };
+    });
     mockScan.mockImplementation(async () => {
       callOrder.push("scan");
       return [];
     });
+    authState.logged_in = true;
+    authState.character_id = 9001;
 
     render(<App />);
 
     fireEvent.click(await screen.findByRole("button", { name: "scanAndRefresh" }));
 
     await waitFor(() => {
-      expect(callOrder).toEqual(["reboot", "scan"]);
+      expect(callOrder).toEqual(["reboot", "location", "scan"]);
     });
+    expect(mockScan).toHaveBeenCalledWith(
+      expect.objectContaining({ system_name: "Amarr" }),
+      expect.any(Function),
+      expect.any(AbortSignal),
+      expect.any(Function),
+    );
+  });
+
+  it("falls back to existing scan params when location refresh fails", async () => {
+    mockGetCharacterLocation.mockRejectedValueOnce(new Error("boom"));
+    authState.logged_in = true;
+    authState.character_id = 9001;
+
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "scanAndRefresh" }));
+
+    await waitFor(() => {
+      expect(mockScan).toHaveBeenCalled();
+    });
+    expect(mockScan).toHaveBeenCalledWith(
+      expect.objectContaining({ system_name: "Jita" }),
+      expect.any(Function),
+      expect.any(AbortSignal),
+      expect.any(Function),
+    );
   });
 
   it("disables controls and shows loading label while scan-and-refresh is in flight", async () => {
@@ -164,5 +217,15 @@ describe("App scan and refresh controls", () => {
       expect(screen.getByRole("button", { name: "scanAndRefresh" })).toBeEnabled();
       expect(scanButton).toBeEnabled();
     });
+  });
+
+  it("shows scan-and-refresh only on radius tab", async () => {
+    render(<App />);
+
+    expect(await screen.findByRole("button", { name: "scanAndRefresh" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "tabRegion" }));
+
+    expect(screen.queryByRole("button", { name: "scanAndRefresh" })).not.toBeInTheDocument();
   });
 });
