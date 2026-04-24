@@ -234,6 +234,7 @@ describe("RadiusInsightsPanel", () => {
         },
         buy: { rowCount: 2, distinctItems: 2, totalProfit: 10_000, totalCapital: 20_000 },
         sell: { rowCount: 1, distinctItems: 1, totalProfit: 5_000, totalCapital: 10_000 },
+        card: { buyFlipsRows: 2, sellFlipsRows: 1, distinctItemsUnion: 2, profitUnion: 15_000 },
         buyRowIds: ["buy:1", "buy:2"],
         sellRowIds: ["sell:1"],
         buyMatchIdentity: {
@@ -267,6 +268,11 @@ describe("RadiusInsightsPanel", () => {
     );
 
     fireEvent.click(screen.getByRole("button", { name: /major trade hubs/i }));
+    expect(screen.getByText("Buy flips (rows):")).toBeInTheDocument();
+    expect(screen.getByText("Sell flips (rows):")).toBeInTheDocument();
+    expect(screen.getByText("Distinct items (buy ∪ sell):")).toBeInTheDocument();
+    expect(screen.getByText("Profit (day-period, buy ∪ sell):")).toBeInTheDocument();
+    expect(screen.getByText("15 K")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Open buy rows" }));
     fireEvent.click(screen.getByRole("button", { name: "Buy lock" }));
     fireEvent.click(screen.getByRole("button", { name: "Open sell rows" }));
@@ -318,6 +324,7 @@ describe("RadiusInsightsPanel", () => {
         },
         buy: { rowCount: 0, distinctItems: 0, totalProfit: 0, totalCapital: 0 },
         sell: { rowCount: 1, distinctItems: 1, totalProfit: 1000, totalCapital: 2000 },
+        card: { buyFlipsRows: 0, sellFlipsRows: 1, distinctItemsUnion: 1, profitUnion: 1000 },
         buyRowIds: [],
         sellRowIds: ["sell:only"],
         buyMatchIdentity: { mode: "system", systemId: 30000142, normalizedSystemName: "jita" },

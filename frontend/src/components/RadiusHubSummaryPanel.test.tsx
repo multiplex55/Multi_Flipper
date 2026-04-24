@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { RadiusHubSummaryPanel } from "@/components/RadiusHubSummaryPanel";
+import { I18nProvider } from "@/lib/i18n";
 import type { RadiusHubSummary } from "@/lib/radiusHubSummaries";
 
 const buy: RadiusHubSummary[] = [
@@ -39,7 +40,7 @@ describe("RadiusHubSummaryPanel", () => {
   });
 
   it("renders section toggles and defaults to expanded", () => {
-    render(<RadiusHubSummaryPanel buyHubs={buy} sellHubs={sell} />);
+    render(<I18nProvider><RadiusHubSummaryPanel buyHubs={buy} sellHubs={sell} /></I18nProvider>);
 
     const buyToggle = screen.getByRole("button", { name: /top buy hubs/i });
     const sellToggle = screen.getByRole("button", { name: /top sell hubs/i });
@@ -51,7 +52,7 @@ describe("RadiusHubSummaryPanel", () => {
   });
 
   it("collapses only buy rows when buy toggle is clicked", () => {
-    render(<RadiusHubSummaryPanel buyHubs={buy} sellHubs={sell} />);
+    render(<I18nProvider><RadiusHubSummaryPanel buyHubs={buy} sellHubs={sell} /></I18nProvider>);
 
     const buyToggle = screen.getByRole("button", { name: /top buy hubs/i });
     const sellToggle = screen.getByRole("button", { name: /top sell hubs/i });
@@ -65,7 +66,7 @@ describe("RadiusHubSummaryPanel", () => {
   });
 
   it("collapses only sell rows when sell toggle is clicked", () => {
-    render(<RadiusHubSummaryPanel buyHubs={buy} sellHubs={sell} />);
+    render(<I18nProvider><RadiusHubSummaryPanel buyHubs={buy} sellHubs={sell} /></I18nProvider>);
 
     const buyToggle = screen.getByRole("button", { name: /top buy hubs/i });
     const sellToggle = screen.getByRole("button", { name: /top sell hubs/i });
@@ -79,7 +80,7 @@ describe("RadiusHubSummaryPanel", () => {
   });
 
   it("re-expanding restores row content and action buttons", () => {
-    render(<RadiusHubSummaryPanel buyHubs={buy} sellHubs={sell} />);
+    render(<I18nProvider><RadiusHubSummaryPanel buyHubs={buy} sellHubs={sell} /></I18nProvider>);
 
     const buyToggle = screen.getByRole("button", { name: /top buy hubs/i });
 
@@ -104,12 +105,14 @@ describe("RadiusHubSummaryPanel", () => {
     const onOpenHubRows = vi.fn();
     const onSetHubLock = vi.fn();
     render(
-      <RadiusHubSummaryPanel
-        buyHubs={buy}
-        sellHubs={sell}
-        onOpenHubRows={onOpenHubRows}
-        onSetHubLock={onSetHubLock}
-      />,
+      <I18nProvider>
+        <RadiusHubSummaryPanel
+          buyHubs={buy}
+          sellHubs={sell}
+          onOpenHubRows={onOpenHubRows}
+          onSetHubLock={onSetHubLock}
+        />
+      </I18nProvider>,
     );
 
     const openButtons = screen.getAllByRole("button", { name: "Open rows" });
@@ -124,32 +127,39 @@ describe("RadiusHubSummaryPanel", () => {
 
   it("renders major hub insights in nested collapsible", () => {
     render(
-      <RadiusHubSummaryPanel
-        buyHubs={buy}
-        sellHubs={sell}
-        majorHubInsights={[
-          {
-            hub: { key: "jita", label: "Jita", systemName: "Jita", systemId: 30000142 },
-            buy: { rowCount: 4, distinctItems: 3, totalProfit: 300_000, totalCapital: 1_000_000 },
-            sell: { rowCount: 1, distinctItems: 1, totalProfit: 80_000, totalCapital: 250_000 },
-            buyMatchIdentity: {
-              mode: "system",
-              systemId: 30000142,
-              normalizedSystemName: "jita",
+      <I18nProvider>
+        <RadiusHubSummaryPanel
+          buyHubs={buy}
+          sellHubs={sell}
+          majorHubInsights={[
+            {
+              hub: { key: "jita", label: "Jita", systemName: "Jita", systemId: 30000142 },
+              buy: { rowCount: 4, distinctItems: 3, totalProfit: 300_000, totalCapital: 1_000_000 },
+              sell: { rowCount: 1, distinctItems: 1, totalProfit: 80_000, totalCapital: 250_000 },
+              card: { buyFlipsRows: 4, sellFlipsRows: 1, distinctItemsUnion: 3, profitUnion: 380_000 },
+              buyMatchIdentity: {
+                mode: "system",
+                systemId: 30000142,
+                normalizedSystemName: "jita",
+              },
+              sellMatchIdentity: {
+                mode: "system",
+                systemId: 30000142,
+                normalizedSystemName: "jita",
+              },
             },
-            sellMatchIdentity: {
-              mode: "system",
-              systemId: 30000142,
-              normalizedSystemName: "jita",
-            },
-          },
-        ]}
-      />,
+          ]}
+        />
+      </I18nProvider>,
     );
 
     expect(screen.getByText("Major hub insights")).toBeInTheDocument();
-    expect(screen.getByText("Buy here:")).toBeInTheDocument();
+    expect(screen.getByText("Buy flips (rows):")).toBeInTheDocument();
+    expect(screen.getByText("Sell flips (rows):")).toBeInTheDocument();
+    expect(screen.getByText("Distinct items (buy ∪ sell):")).toBeInTheDocument();
+    expect(screen.getByText("Profit (day-period, buy ∪ sell):")).toBeInTheDocument();
+    expect(screen.getByText("380 K")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /major hub insights/i }));
-    expect(screen.queryByText("Buy here:")).not.toBeInTheDocument();
+    expect(screen.queryByText("Buy flips (rows):")).not.toBeInTheDocument();
   });
 });

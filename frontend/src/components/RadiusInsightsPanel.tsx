@@ -108,6 +108,24 @@ function actionLabel(action: ActionQueueItem["action"]): string {
   }
 }
 
+function renderMajorHubCardMetrics(
+  entry: RadiusMajorHubMetrics,
+  t: (key: Parameters<ReturnType<typeof useI18n>["t"]>[0]) => string,
+) {
+  return (
+    <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+      <span className="text-eve-dim">{t("majorHubBuyFlipsRowsLabel")}</span>
+      <span className="text-right">{entry.card.buyFlipsRows}</span>
+      <span className="text-eve-dim">{t("majorHubSellFlipsRowsLabel")}</span>
+      <span className="text-right">{entry.card.sellFlipsRows}</span>
+      <span className="text-eve-dim">{t("majorHubDistinctItemsUnionLabel")}</span>
+      <span className="text-right">{entry.card.distinctItemsUnion}</span>
+      <span className="text-eve-dim">{t("majorHubProfitUnionLabel")}</span>
+      <span className="text-right text-green-300">{formatISK(entry.card.profitUnion)}</span>
+    </div>
+  );
+}
+
 function loadVisibleState(defaultExpanded: boolean): boolean {
   try {
     const saved = localStorage.getItem(INSIGHTS_VISIBLE_STORAGE_KEY);
@@ -394,18 +412,7 @@ export function RadiusInsightsPanel({
                       className="rounded-sm border border-eve-border/60 bg-eve-dark/40 px-2 py-1 text-[10px]"
                     >
                       <div className="mb-1 font-medium text-eve-text">{entry.hub.label}</div>
-                      <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                        <span className="text-eve-dim">Buy here:</span>
-                        <span className="text-right">{entry.buy.rowCount}</span>
-                        <span className="text-eve-dim">Sell here:</span>
-                        <span className="text-right">{entry.sell.rowCount}</span>
-                        <span className="text-eve-dim">Items:</span>
-                        <span className="text-right">{entry.buy.distinctItems + entry.sell.distinctItems}</span>
-                        <span className="text-eve-dim">Profit:</span>
-                        <span className="text-right text-green-300">
-                          {formatISK(entry.buy.totalProfit + entry.sell.totalProfit)}
-                        </span>
-                      </div>
+                      {renderMajorHubCardMetrics(entry, t)}
                       {(onOpenHubRows || onSetHubLock) && (
                         <div className="mt-1 flex flex-wrap gap-1">
                           {(() => {
@@ -823,7 +830,15 @@ export function RadiusInsightsPanel({
                   </button>
                   {sectionExpanded.major && (
                     <div className="mt-1 grid grid-cols-1 gap-1.5 md:grid-cols-2">
-                      {majorHubInsights.map((entry) => (<div key={entry.hub.key} className="rounded-sm border border-eve-border/60 bg-eve-dark/40 px-2 py-1 text-[10px]"><div className="text-eve-text">{entry.hub.label}</div><div className="text-eve-dim">Buy {entry.buy.rowCount} · Sell {entry.sell.rowCount}</div></div>))}
+                      {majorHubInsights.map((entry) => (
+                        <div
+                          key={entry.hub.key}
+                          className="rounded-sm border border-eve-border/60 bg-eve-dark/40 px-2 py-1 text-[10px]"
+                        >
+                          <div className="text-eve-text">{entry.hub.label}</div>
+                          {renderMajorHubCardMetrics(entry, t)}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </section>
