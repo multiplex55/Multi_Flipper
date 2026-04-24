@@ -59,17 +59,17 @@ export function OneLegModePanel(props: {
 
       <div className="grid gap-2 lg:grid-cols-3">
         <PanelList
-          title="Same-endpoint follow-up"
+          title="Same endpoint filler"
           rows={sameEndpoint}
           dataTestId="one-leg-same-endpoint"
         />
         <PanelList
-          title="Next best trade after this leg"
+          title="Along-the-way detour filler"
           rows={nextBest}
           dataTestId="one-leg-next-best"
         />
         <div className="rounded-sm border border-eve-border/50 p-2" data-testid="one-leg-fillers">
-          <div className="mb-1 text-eve-dim">Remaining cargo fillers (same leg)</div>
+          <div className="mb-1 text-eve-dim">Backhaul/return-leg filler</div>
           <div className="mb-1 text-[11px] text-eve-dim/80">
             Remaining {fillers.remainingCapacityM3.toLocaleString(undefined, { maximumFractionDigits: 1 })}m³
           </div>
@@ -79,7 +79,7 @@ export function OneLegModePanel(props: {
               <span className="text-eve-accent font-mono">+{formatISK(candidate.incrementalProfitIsk)}</span>
             </div>
           ))}
-          {fillers.candidates.length === 0 && <div className="text-eve-dim">No same-leg fillers.</div>}
+          {fillers.candidates.length === 0 && <div className="text-eve-dim">No backhaul/return-leg fillers.</div>}
         </div>
       </div>
     </div>

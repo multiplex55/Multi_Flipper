@@ -152,10 +152,10 @@ describe("RadiusInsightsPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Queue" }));
     expect(screen.getByText("Action Queue")).toBeInTheDocument();
-    expect(screen.queryByText("Loop Opportunities")).not.toBeInTheDocument();
+    expect(screen.queryByText("Backhaul/return-leg filler opportunities")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Loops" }));
-    expect(screen.getByText("Loop Opportunities")).toBeInTheDocument();
+    expect(screen.getByText("Backhaul/return-leg filler opportunities")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Summary" }));
     expect(screen.getByText("Top Picks")).toBeInTheDocument();

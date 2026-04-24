@@ -23,6 +23,7 @@ import type { RouteWorkspaceIntent } from "@/lib/routeHandoff";
 import { verificationProfiles } from "@/lib/verificationProfiles";
 import type { VerificationRecommendation } from "@/lib/verificationProfiles";
 import { normalizeVerificationRecommendation } from "@/lib/routeManifestVerification";
+import { buildRouteFillPlannerSections, type RouteFillPlannerSuggestion } from "@/lib/routeFillPlanner";
 
 export type RadiusRouteWorkspaceTab = "discover" | "workbench" | "finder" | "validate";
 
@@ -202,6 +203,28 @@ export function RadiusRouteWorkspace({
     !!effectiveActiveRouteKey && !resolvedActiveRoute && !!radiusScanSession?.hasScan;
   const [validateScope, setValidateScope] = useState<"active_route" | "saved_pack" | "queue">("active_route");
   const [profileSelectionByRoute, setProfileSelectionByRoute] = useState<Record<string, string>>({});
+  const activeRouteRows = activePack ? routeRowsByKey.get(activePack.routeKey) ?? [] : [];
+  const routeFillSections = useMemo(() => {
+    if (!activePack || activeRouteRows.length === 0) {
+      return {
+        sameEndpointFiller: [],
+        alongTheWayDetourFiller: [],
+        backhaulReturnLegFiller: [],
+      };
+    }
+    const loopsForRoute = (radiusScanSession?.loopOpportunities ?? []).filter((loop) => {
+      const outboundRoute = routeGroupKey(loop.outbound.row);
+      const returnRoute = routeGroupKey(loop.returnLeg.row);
+      return outboundRoute === activePack.routeKey || returnRoute === activePack.routeKey;
+    });
+    return buildRouteFillPlannerSections({
+      rows: activeRouteRows,
+      pack: activePack,
+      loops: loopsForRoute,
+      cargoCapacityM3: params.cargo_capacity ?? 0,
+      limitPerSection: 4,
+    });
+  }, [activePack, activeRouteRows, radiusScanSession?.loopOpportunities, params.cargo_capacity]);
 
   const savedPack = routeWorkspace?.selectedPack ?? routeWorkspace?.savedRoutePacks[0] ?? null;
   const queueRouteKey = routeQueueKeys[0] ?? null;
@@ -221,6 +244,24 @@ export function RadiusRouteWorkspace({
     proceed_reduced: "Proceed reduced",
     reprice_rebuild: "Reprice + rebuild",
     abort: "Abort",
+  };
+
+  const handleAddSuggestionToPack = (suggestion: RouteFillPlannerSuggestion) => {
+    if (!activePack || !routeWorkspace) return;
+    const lineKeySet = new Set(activePack.selectedLineKeys);
+    for (const lineKey of suggestion.sourceLineKeys) {
+      lineKeySet.add(lineKey);
+    }
+    routeWorkspace.upsertPack({
+      ...activePack,
+      selectedLineKeys: Array.from(lineKeySet).sort((a, b) => a.localeCompare(b)),
+    });
+  };
+
+  const handleOpenSuggestionInBatchBuilder = (_suggestion: RouteFillPlannerSuggestion) => {
+    if (!activePack) return;
+    routeWorkspace?.openBatchBuilder(activePack.routeKey);
+    onOpenBatchBuilderForRoute?.(activePack.routeKey);
   };
 
   const renderSessionState = () => (
@@ -351,6 +392,9 @@ export function RadiusRouteWorkspace({
                       onOpenBatchBuilderForRoute?.(activePack.routeKey);
                     }}
                     onScrollToTable={() => undefined}
+                    routeFillSections={routeFillSections}
+                    onAddFillSuggestionToPack={handleAddSuggestionToPack}
+                    onOpenFillSuggestionInBatchBuilder={handleOpenSuggestionInBatchBuilder}
                   />
                 ) : (
                   <div className="text-eve-dim" data-testid="route-workspace-workbench-fallback">

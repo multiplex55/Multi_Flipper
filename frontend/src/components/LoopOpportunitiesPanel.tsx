@@ -50,7 +50,7 @@ export function LoopOpportunitiesPanel({
     <section className="shrink-0 border-b border-eve-border/40 bg-eve-panel/30 px-2 py-2">
       <div className="mb-2 flex items-center justify-between gap-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-eve-text">
-          Loop Opportunities
+          Backhaul/return-leg filler opportunities
         </h3>
         {!compactMode && (
           <span className="text-[11px] text-eve-dim">
@@ -127,7 +127,7 @@ export function LoopOpportunitiesPanel({
                       }
                       className="rounded border border-eve-border/60 px-2 py-0.5 text-[11px] text-eve-dim hover:text-eve-text"
                     >
-                      Return
+                      Return-leg
                     </button>
                   </div>
                   {!compactMode && (
@@ -190,7 +190,7 @@ export function LoopOpportunitiesPanel({
                       <div className="text-eve-dim">Cargo: {loop.outbound.cargoM3.toFixed(0)} m³</div>
                     </div>
                     <div>
-                      <div className="font-semibold text-eve-text">Return leg</div>
+                      <div className="font-semibold text-eve-text">Backhaul/return-leg</div>
                       <div className="text-eve-dim">{loop.returnLeg.row.TypeName}</div>
                       <div className="text-eve-dim">
                         Profit: <span className="text-eve-success">{formatIsk(loop.returnProfit)}</span>
