@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { formatISK } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import type { ActionQueueItem, TopRoutePicks } from "@/lib/radiusMetrics";
+import type { RouteBatchMetadata } from "@/lib/batchMetrics";
+import type { FillerCandidate } from "@/lib/fillerCandidates";
 import type { LoopOpportunity } from "@/lib/loopPlanner";
 import type { RadiusHubSummary } from "@/lib/radiusHubSummaries";
 import type {
@@ -13,6 +15,11 @@ import type { HubScopeMode } from "@/lib/radiusHubScope";
 import { LoopOpportunitiesPanel } from "./LoopOpportunitiesPanel";
 import { ExplanationPopoverShell } from "@/components/decision/ExplanationPopoverShell";
 import type { RouteDecisionExplanation } from "@/lib/routeExplanation";
+import type { RouteAggregateMetrics } from "@/lib/useRadiusRouteInsights";
+import {
+  deriveRadiusBestDealCards,
+  type RadiusBestDealCard,
+} from "@/lib/radiusBestDealCards";
 
 const INSIGHTS_VISIBLE_STORAGE_KEY = "eve-radius-insights-visible:v1";
 const INSIGHTS_TAB_STORAGE_KEY = "eve-radius-insights-tab:v1";
@@ -65,6 +72,13 @@ type RadiusInsightsPanelProps = {
   onHubScopeModeChange?: (mode: HubScopeMode) => void;
   routeExplanationByKey?: Record<string, RouteDecisionExplanation>
   lensDeltaByRouteKey?: Record<string, string>
+  batchMetricsByRoute?: Record<string, RouteBatchMetadata>;
+  routeAggregateMetricsByRoute?: Record<string, RouteAggregateMetrics>;
+  routeFillerCandidatesByKey?: Record<
+    string,
+    { remainingCapacityM3: number; candidates: FillerCandidate[] }
+  >;
+  lensActive?: boolean;
 };
 
 function majorHubActionSummary(
@@ -174,6 +188,10 @@ export function RadiusInsightsPanel({
   onHubScopeModeChange,
   routeExplanationByKey = {},
   lensDeltaByRouteKey = {},
+  batchMetricsByRoute = {},
+  routeAggregateMetricsByRoute = {},
+  routeFillerCandidatesByKey = {},
+  lensActive,
 }: RadiusInsightsPanelProps) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState<boolean>(() =>
@@ -213,6 +231,29 @@ export function RadiusInsightsPanel({
   );
 
   const pickCount = picks.filter(([, pick]) => !!pick).length;
+  const bestDealCards = useMemo<RadiusBestDealCard[]>(
+    () =>
+      deriveRadiusBestDealCards({
+        topRoutePicks,
+        actionQueue,
+        batchMetricsByRoute,
+        routeAggregateMetricsByRoute,
+        routeExplanationByKey,
+        routeFillerCandidatesByKey,
+        lensDeltaByRouteKey,
+        lensActive,
+      }),
+    [
+      actionQueue,
+      batchMetricsByRoute,
+      lensActive,
+      lensDeltaByRouteKey,
+      routeAggregateMetricsByRoute,
+      routeExplanationByKey,
+      routeFillerCandidatesByKey,
+      topRoutePicks,
+    ],
+  );
 
   const toggleExpanded = () => {
     setExpanded((prev) => {
@@ -318,27 +359,28 @@ export function RadiusInsightsPanel({
             </button>
           </div>
           <div className="mt-2 grid grid-cols-1 gap-1.5 text-[11px]">
-            {picks
-              .filter(([, pick]) => !!pick)
-              .slice(0, 3)
-              .map(([titleKey, pick]) => (
+            {bestDealCards.slice(0, 7).map((card) => (
                 <div
-                  key={titleKey}
+                  key={card.kind}
                   className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-2 py-1"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-eve-dim">{t(titleKey)}</span>
-                    <span className="truncate text-eve-text">{pick?.routeLabel}</span>
+                    <span className="text-eve-dim">{card.title}</span>
+                    <span className="truncate text-eve-text">{card.routeLabel}</span>
                   </div>
-                  {pick && (
-                    <button
-                      type="button"
-                      onClick={() => onOpenBatchBuilderForRoute?.(pick.routeKey)}
-                      className="mt-1 rounded-sm border border-eve-border/70 px-1.5 py-0.5 text-[10px] text-eve-accent hover:border-eve-accent/60 hover:bg-eve-accent/10"
-                    >
-                      Open in Build Batch
-                    </button>
-                  )}
+                  <div className="mt-0.5 text-[10px] text-eve-dim">{card.metricLabel}</div>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    <button type="button" onClick={() => onOpenBatchBuilderForRoute?.(card.routeKey)} className="rounded-sm border border-eve-border/70 px-1.5 py-0.5 text-[10px] text-eve-accent hover:border-eve-accent/60 hover:bg-eve-accent/10">Open Batch</button>
+                    <button type="button" onClick={() => openRouteWorkbench(card.routeKey, "filler")} disabled={!card.hasFillerCandidates} className="rounded-sm border border-indigo-400/60 px-1.5 py-0.5 text-[10px] text-indigo-200 hover:bg-indigo-500/10 disabled:opacity-50">Fill Cargo</button>
+                    <button type="button" onClick={() => onSendToRouteQueue?.(card.routeKey)} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text">Assign Pilot</button>
+                    <button type="button" onClick={() => openRouteWorkbench(card.routeKey, "verification")} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text">Verify</button>
+                    {card.whySummary ? (
+                      <ExplanationPopoverShell label="Why?">
+                        <div className="text-eve-dim mb-1">{card.whySummary}</div>
+                        {card.lensDelta ? <div className="text-[10px] text-indigo-200">{card.lensDelta}</div> : null}
+                      </ExplanationPopoverShell>
+                    ) : null}
+                  </div>
                 </div>
               ))}
             <div className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-2 py-1 text-eve-dim">
