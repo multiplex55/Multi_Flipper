@@ -61,6 +61,7 @@ interface BatchBuilderPopupProps {
   manifestRouteKey?: string | null;
   entryMode?: "core" | "filler" | "loop";
   launchIntent?: string | null;
+  initialSelectedLineKeys?: string[];
   onManifestVerificationSnapshot?: (
     routeKey: string,
     snapshot: RouteManifestVerificationSnapshot,
@@ -292,6 +293,7 @@ export function BatchBuilderPopup({
   manifestRouteKey = null,
   entryMode = "core",
   launchIntent = null,
+  initialSelectedLineKeys = [],
   onManifestVerificationSnapshot,
   verificationProfileId = "standard",
   precomputedFillerCandidates = [],
@@ -350,11 +352,16 @@ export function BatchBuilderPopup({
     setRouteDiagnostics([]);
     setFillerSuggestions([]);
     setFillerRemainingM3(0);
-    setSelectedFillerKeys({});
+    setSelectedFillerKeys(
+      initialSelectedLineKeys.reduce<Record<string, boolean>>((acc, lineKey) => {
+        if (lineKey) acc[lineKey] = true;
+        return acc;
+      }, {}),
+    );
     setAppliedFillerLines([]);
     setFillerLoading(false);
     setAutoCreateRequested(entryMode === "filler" || entryMode === "loop");
-  }, [open, defaultCargoM3, entryMode]);
+  }, [open, defaultCargoM3, entryMode, initialSelectedLineKeys]);
 
   const allowedRows = useMemo(
     () => filterFlipResults(rows, bannedTypeIDs, bannedStationIDs),

@@ -103,7 +103,7 @@ describe("ScanResultsTable same-leg rail", () => {
     await waitFor(() => expect(screen.queryByTestId("same-leg-rail")).not.toBeInTheDocument());
   });
 
-  it("rail quick verify dispatches manifest and fill-this-leg excludes off-leg rows", async () => {
+  it("rail quick verify dispatches manifest and Fill Cargo excludes off-leg rows", async () => {
     const onOpenPriceValidation = vi.fn();
     const anchor = row({ TypeID: 10, TypeName: "Anchor" });
     const sameLeg = row({ TypeID: 11, TypeName: "Same Leg" });
@@ -115,7 +115,7 @@ describe("ScanResultsTable same-leg rail", () => {
     expect(onOpenPriceValidation).toHaveBeenCalledTimes(1);
     expect(onOpenPriceValidation.mock.calls[0]?.[0]).toContain("Anchor");
 
-    fireEvent.click(screen.getByRole("button", { name: "Fill this leg" }));
+    fireEvent.click(screen.getByRole("button", { name: "Fill Cargo" }));
     fireEvent.click(await screen.findByRole("button", { name: "Open Price Validation" }));
     const manifest =
       onOpenPriceValidation.mock.calls[

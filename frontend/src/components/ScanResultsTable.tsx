@@ -197,6 +197,33 @@ const ONE_LEG_MODE_STORAGE_KEY = "eve-radius-one-leg-mode:v1";
 const PERFORMANCE_LOG_THRESHOLD_MS = 8;
 const HUB_SCOPE_MODE_STORAGE_KEY = "eve-radius-hub-scope-mode:v1";
 
+function buildRouteLegContexts(
+  rows: FlipResult[],
+  routeKey: string,
+): RouteHandoffLegContext[] {
+  const legs = new Map<string, RouteHandoffLegContext>();
+  for (const row of rows) {
+    const buyLocationID = Math.trunc(row.BuyLocationID ?? 0);
+    const sellLocationID = Math.trunc(row.SellLocationID ?? 0);
+    const key = `${buyLocationID}:${sellLocationID}`;
+    if (legs.has(key)) continue;
+    legs.set(key, {
+      buyLocationID,
+      sellLocationID,
+      buySystemID: Math.trunc(row.BuySystemID ?? 0),
+      sellSystemID: Math.trunc(row.SellSystemID ?? 0),
+      buySystemName: row.BuySystemName ?? "",
+      sellSystemName: row.SellSystemName ?? "",
+      buyStationName: row.BuyStation ?? "",
+      sellStationName: row.SellStation ?? "",
+      totalJumps: Math.max(0, Math.trunc(row.TotalJumps ?? 0)),
+      profitPerJump: Math.max(0, row.ProfitPerJump ?? 0),
+      routeKey,
+    });
+  }
+  return Array.from(legs.values());
+}
+
 type SyntheticSortKey =
   | "RouteSafety"
   | "BatchNumber"
@@ -2026,6 +2053,8 @@ export function ScanResultsTable({
   const [execPlanRow, setExecPlanRow] = useState<FlipResult | null>(null);
   const [batchPlanRow, setBatchPlanRow] = useState<FlipResult | null>(null);
   const [batchPlanRows, setBatchPlanRows] = useState<FlipResult[]>(results);
+  const [batchBuilderInitialSelectedLineKeys, setBatchBuilderInitialSelectedLineKeys] =
+    useState<string[] | undefined>(undefined);
   const [scoreExplainRow, setScoreExplainRow] = useState<FlipResult | null>(
     null,
   );
@@ -2089,6 +2118,7 @@ export function ScanResultsTable({
   useEffect(() => {
     if (batchPlanRow == null) {
       setBatchPlanRows(results);
+      setBatchBuilderInitialSelectedLineKeys(undefined);
     }
   }, [batchPlanRow, results]);
 
@@ -4651,6 +4681,7 @@ export function ScanResultsTable({
       setBatchBuilderEntryMode(context?.batchEntryMode ?? "core");
       setBatchBuilderLaunchIntent(context?.intentLabel ?? null);
       setBatchBuilderMode("single_anchor");
+      setBatchBuilderInitialSelectedLineKeys(undefined);
     },
     [routeAnchorRowByKey, routeGroupByKey],
   );
@@ -4719,6 +4750,28 @@ export function ScanResultsTable({
     [getWorkbenchPackForRoute, routeWorkspace, savedRoutePackByKey, scrollToRouteGroup],
   );
 
+  const openFillPlannerForRoute = useCallback(
+    (routeKey: string) => {
+      openRouteWorkbench(routeKey, "filler", {
+        intentLabel: "Fill Cargo",
+        batchEntryMode: "filler",
+      });
+      const group = routeGroupByKey[routeKey];
+      const rows = group?.rows.map((entry) => entry.row) ?? [];
+      const payload: RouteHandoffContext = {
+        source: "scanner",
+        routeKey,
+        routeLabel: group?.label ?? routeKey,
+        legContexts: rows.length > 0 ? buildRouteLegContexts(rows, routeKey) : [],
+        preferredEntryAction: "planner",
+        intent: "open-workbench",
+        preferredSection: "filler",
+      };
+      onRouteHandoff?.(payload, buildRouteManifestFromFlipRows(rows), payload.legContexts[0] ?? null);
+    },
+    [onRouteHandoff, openRouteWorkbench, routeGroupByKey],
+  );
+
   const selectedRouteDerivation = useMemo(() => {
     if (selectedIds.size === 0) return null;
     const selectedRouteKeys = new Set<string>();
@@ -4747,27 +4800,7 @@ export function ScanResultsTable({
   }, [indexed, selectedIds, selectedRouteDerivation]);
 
   const selectedRouteLegContexts = useMemo<RouteHandoffLegContext[]>(() => {
-    const legs = new Map<string, RouteHandoffLegContext>();
-    for (const row of selectedRouteRows) {
-      const buyLocationID = Math.trunc(row.BuyLocationID ?? 0);
-      const sellLocationID = Math.trunc(row.SellLocationID ?? 0);
-      const key = `${buyLocationID}:${sellLocationID}`;
-      if (legs.has(key)) continue;
-      legs.set(key, {
-        buyLocationID,
-        sellLocationID,
-        buySystemID: Math.trunc(row.BuySystemID ?? 0),
-        sellSystemID: Math.trunc(row.SellSystemID ?? 0),
-        buySystemName: row.BuySystemName ?? "",
-        sellSystemName: row.SellSystemName ?? "",
-        buyStationName: row.BuyStation ?? "",
-        sellStationName: row.SellStation ?? "",
-        totalJumps: Math.max(0, Math.trunc(row.TotalJumps ?? 0)),
-        profitPerJump: Math.max(0, row.ProfitPerJump ?? 0),
-        routeKey: selectedRouteDerivation?.routeKey ?? "",
-      });
-    }
-    return Array.from(legs.values());
+    return buildRouteLegContexts(selectedRouteRows, selectedRouteDerivation?.routeKey ?? "");
   }, [selectedRouteDerivation?.routeKey, selectedRouteRows]);
 
   const selectedRouteManifestText = useMemo(
@@ -4791,6 +4824,7 @@ export function ScanResultsTable({
         legContexts: selectedRouteLegContexts,
         preferredEntryAction,
         intent,
+        preferredSection: preferredEntryAction === "planner" ? "summary" : undefined,
       };
       if (import.meta.env.DEV) {
         console.debug("[ScanResultsTable] route handoff", payload);
@@ -4940,6 +4974,7 @@ export function ScanResultsTable({
     setBatchBuilderEntryMode("core");
     setBatchBuilderLaunchIntent("Same-leg fill");
     setBatchBuilderMode("same_leg_fill");
+    setBatchBuilderInitialSelectedLineKeys(undefined);
   }, [sameLegRowsForAnchor, selectedLegAnchor]);
 
   const openRailVerifier = useCallback(
@@ -6446,8 +6481,8 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
             <button type="button" className="rounded-sm border border-eve-accent/60 px-1.5 py-0.5 text-eve-accent" onClick={openBatchBuilderForSameLeg}>
               Open Batch Builder
             </button>
-            <button type="button" className="rounded-sm border border-blue-500/60 px-1.5 py-0.5 text-blue-200" onClick={openBatchBuilderForSameLeg}>
-              Fill this leg
+            <button type="button" className="rounded-sm border border-blue-500/60 px-1.5 py-0.5 text-blue-200" onClick={() => openFillPlannerForRoute(routeGroupKey(selectedLegAnchor))}>
+              Fill Cargo
             </button>
             <button type="button" className="rounded-sm border border-purple-500/60 px-1.5 py-0.5 text-purple-200" onClick={() => openRailVerifier(false)}>
               Quick Verify
@@ -7037,6 +7072,14 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                                     </button>
                                     <button
                                       type="button"
+                                      onClick={() => openFillPlannerForRoute(group.key)}
+                                      className="rounded-sm border border-blue-500/60 px-1.5 py-0.5 text-[10px] text-blue-200 hover:bg-blue-500/10"
+                                      aria-label={`Open route workbench fill cargo for ${group.label}`}
+                                    >
+                                      Fill Cargo
+                                    </button>
+                                    <button
+                                      type="button"
                                       onClick={() => openRouteWorkbench(group.key, "verification")}
                                       className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
                                       aria-label={`Open route workbench verification for ${group.label}`}
@@ -7331,7 +7374,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               }}
             />
             <ContextItem
-              label="Fill this leg"
+              label="Fill Cargo"
               onClick={() => {
                 const legRows = rankSameLegRows(
                   getSameLegRows(
@@ -7810,6 +7853,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
         manifestRouteKey={activeRouteGroupKey}
         entryMode={batchBuilderEntryMode}
         launchIntent={batchBuilderLaunchIntent}
+        initialSelectedLineKeys={batchBuilderInitialSelectedLineKeys}
         verificationProfileId={
           activeRouteGroupKey
             ? routeVerificationProfileByKey[activeRouteGroupKey] ??

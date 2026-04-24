@@ -7,6 +7,7 @@ import { RadiusRouteWorkspace } from "@/components/RadiusRouteWorkspace";
 import { deriveRadiusScanSession } from "@/lib/radiusScanSession";
 import type { RadiusScanSession } from "@/lib/radiusScanSession";
 import type { FlipResult, ScanParams } from "@/lib/types";
+import type { RouteHandoffContext } from "@/lib/routeHandoff";
 import { createSessionStationFilters } from "@/lib/banlistFilters";
 import { useRouteExecutionWorkspace } from "@/lib/useRouteExecutionWorkspace";
 import { ROUTE_WORKSPACE_MODE_STORAGE_KEY } from "@/lib/routeWorkspaceModeResolver";
@@ -119,5 +120,49 @@ describe("RadiusRouteWorkspace rendering", () => {
 
     expect(persisted.mode).toBe("workbench");
     expect(persisted.hadActiveRouteAtPersistTime).toBe(true);
+  });
+
+  it("renders filler section when handoff requests preferred filler section", async () => {
+    const session = deriveRadiusScanSession({
+      results: [makeFlip()],
+      scanParams: params,
+      sessionStationFilters: createSessionStationFilters(),
+    });
+    const pendingRouteContext: RouteHandoffContext = {
+      source: "scanner",
+      routeKey: "loc:60003760->loc:60008494",
+      routeLabel: "Jita → Amarr",
+      legContexts: [],
+      preferredEntryAction: "planner",
+      intent: "open-workbench",
+      preferredSection: "filler",
+    };
+
+    const Wrapper = () => {
+      const workspace = useRouteExecutionWorkspace();
+      const { openRoute } = workspace;
+      useEffect(() => {
+        openRoute("loc:60003760->loc:60008494", "workbench");
+      }, [openRoute]);
+      return (
+        <RadiusRouteWorkspace
+          params={params}
+          radiusScanSession={session}
+          routeWorkspace={workspace}
+          workspaceMode="workbench"
+          pendingRouteContext={pendingRouteContext}
+        />
+      );
+    };
+
+    render(
+      <I18nProvider>
+        <ToastProvider>
+          <Wrapper />
+        </ToastProvider>
+      </I18nProvider>,
+    );
+
+    expect(await screen.findByTestId("route-workbench-section-filler")).toBeInTheDocument();
   });
 });

@@ -24,6 +24,7 @@ import { verificationProfiles } from "@/lib/verificationProfiles";
 import type { VerificationRecommendation } from "@/lib/verificationProfiles";
 import { normalizeVerificationRecommendation } from "@/lib/routeManifestVerification";
 import { buildRouteFillPlannerSections, type RouteFillPlannerSuggestion } from "@/lib/routeFillPlanner";
+import type { RouteWorkbenchMode } from "@/components/RouteWorkbenchPanel";
 
 export type RadiusRouteWorkspaceTab = "discover" | "workbench" | "finder" | "validate";
 
@@ -203,6 +204,7 @@ export function RadiusRouteWorkspace({
     !!effectiveActiveRouteKey && !resolvedActiveRoute && !!radiusScanSession?.hasScan;
   const [validateScope, setValidateScope] = useState<"active_route" | "saved_pack" | "queue">("active_route");
   const [profileSelectionByRoute, setProfileSelectionByRoute] = useState<Record<string, string>>({});
+  const [activeWorkbenchSection, setActiveWorkbenchSection] = useState<"summary" | "filler" | "verification" | "execution">("summary");
   const activeRouteRows = activePack ? routeRowsByKey.get(activePack.routeKey) ?? [] : [];
   const routeFillSections = useMemo(() => {
     if (!activePack || activeRouteRows.length === 0) {
@@ -258,10 +260,35 @@ export function RadiusRouteWorkspace({
     });
   };
 
-  const handleOpenSuggestionInBatchBuilder = (_suggestion: RouteFillPlannerSuggestion) => {
-    if (!activePack) return;
+  const handleOpenSuggestionInBatchBuilder = (suggestion: RouteFillPlannerSuggestion) => {
+    if (!activePack || !routeWorkspace) return;
+    const lineKeySet = new Set([...activePack.selectedLineKeys, ...suggestion.sourceLineKeys]);
+    const entryMode = suggestion.type === "loop_backhaul" ? "loop" : "filler";
+    routeWorkspace.upsertPack({
+      ...activePack,
+      selectedLineKeys: Array.from(lineKeySet).sort((a, b) => a.localeCompare(b)),
+      entryMode,
+      launchIntent: "radius-fill-planner",
+    });
     routeWorkspace?.openBatchBuilder(activePack.routeKey);
     onOpenBatchBuilderForRoute?.(activePack.routeKey);
+  };
+
+  useEffect(() => {
+    if (activeTab !== "workbench") return;
+    const preferred = pendingRouteContext?.preferredSection;
+    if (preferred) {
+      setActiveWorkbenchSection(preferred);
+      return;
+    }
+    setActiveWorkbenchSection("summary");
+  }, [activeTab, pendingRouteContext?.preferredSection, pendingRouteContext?.routeKey]);
+
+  const workbenchModeBySection: Record<typeof activeWorkbenchSection, RouteWorkbenchMode> = {
+    summary: "summary",
+    filler: "filler",
+    verification: "verification",
+    execution: "execution",
   };
 
   const renderSessionState = () => (
@@ -358,10 +385,27 @@ export function RadiusRouteWorkspace({
             ) : (
               <>
                 {activePack ? (
-                  <RouteWorkbenchPanel
+                  <>
+                    <div className="mb-2 flex flex-wrap gap-1">
+                      {(["summary", "filler", "verification", "execution"] as const).map((section) => (
+                        <button
+                          key={section}
+                          type="button"
+                          onClick={() => setActiveWorkbenchSection(section)}
+                          className={`rounded-sm border px-1.5 py-0.5 text-[11px] capitalize ${
+                            activeWorkbenchSection === section
+                              ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10"
+                              : "border-eve-border/60 text-eve-dim"
+                          }`}
+                        >
+                          {section}
+                        </button>
+                      ))}
+                    </div>
+                    <RouteWorkbenchPanel
                     pack={activePack}
-                    mode="summary"
-                    activeSection="summary"
+                    mode={workbenchModeBySection[activeWorkbenchSection]}
+                    activeSection={activeWorkbenchSection}
                     isPinned={Boolean(routeWorkspace?.getPackByRouteKey(activePack.routeKey))}
                     verificationProfileId={routeWorkspace?.getVerificationProfileId(activePack.routeKey) ?? "standard"}
                     onVerificationProfileChange={() => undefined}
@@ -395,7 +439,8 @@ export function RadiusRouteWorkspace({
                     routeFillSections={routeFillSections}
                     onAddFillSuggestionToPack={handleAddSuggestionToPack}
                     onOpenFillSuggestionInBatchBuilder={handleOpenSuggestionInBatchBuilder}
-                  />
+                    />
+                  </>
                 ) : (
                   <div className="text-eve-dim" data-testid="route-workspace-workbench-fallback">
                     {showMissingRouteNotice

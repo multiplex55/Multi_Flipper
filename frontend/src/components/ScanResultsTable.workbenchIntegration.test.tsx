@@ -129,6 +129,7 @@ describe("ScanResultsTable workbench integration", () => {
       preferredEntryAction: "planner",
       intent: "open-workbench",
       routeKey: "loc:60003760->loc:60008494",
+      preferredSection: "summary",
     });
     expect(onRouteHandoff.mock.calls[1][0]).toMatchObject({
       preferredEntryAction: "validation",
@@ -144,6 +145,25 @@ describe("ScanResultsTable workbench integration", () => {
       sellLocationID: 60008494,
       buySystemName: "Jita",
       sellSystemName: "Amarr",
+    });
+  });
+
+  it("propagates preferred filler section for Fill Cargo route action", async () => {
+    const onRouteHandoff = vi.fn();
+    renderTable(onRouteHandoff);
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /Open route workbench fill cargo for Jita → Amarr/i,
+      }),
+    );
+
+    expect(onRouteHandoff).toHaveBeenCalled();
+    const lastCall = onRouteHandoff.mock.calls[onRouteHandoff.mock.calls.length - 1];
+    expect(lastCall?.[0]).toMatchObject({
+      routeKey: "loc:60003760->loc:60008494",
+      preferredSection: "filler",
+      intent: "open-workbench",
     });
   });
 
