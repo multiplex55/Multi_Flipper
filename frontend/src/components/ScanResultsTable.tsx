@@ -14,7 +14,6 @@ import type {
   StationCacheMeta,
   WatchlistItem,
   RouteState,
-  SystemDanger,
   StrategyScoreConfig,
   RouteManifestVerificationSnapshot,
 } from "@/lib/types";
@@ -26,7 +25,6 @@ import {
   routeLineKey,
   type RouteBatchMetadata,
 } from "@/lib/batchMetrics";
-import { routeSafetyRankFromState } from "@/lib/routeSafetySort";
 import {
   classifyFlipUrgency,
   dailyIskPerJump,
@@ -65,7 +63,6 @@ import {
   clearStationTradeStates,
   deleteStationTradeStates,
   getStationTradeStates,
-  getGankCheck,
   getGankCheckBatch,
   getWatchlist,
   openMarketInGame,
@@ -82,7 +79,6 @@ import { EmptyState, type EmptyReason } from "./EmptyState";
 import { ExecutionPlannerPopup } from "./ExecutionPlannerPopup";
 import { handleEveUIError } from "@/lib/handleEveUIError";
 import { BatchBuilderPopup } from "./BatchBuilderPopup";
-import { RouteSafetyModal } from "./RouteSafetyModal";
 import {
   buildFlipScoreContext,
   scoreFlipResult,
@@ -1135,7 +1131,6 @@ type FilterStageKey =
   | "endpoint_hard_rules"
   | "column_filters"
   | "tracked_visibility_mode"
-  | "route_safety_filter"
   | "hidden_row_toggle"
   | "route_badge_filter";
 
@@ -1787,13 +1782,7 @@ export function ScanResultsTable({
   const [routeSafetyMap, setRouteSafetyMap] = useState<
     Record<string, RouteState>
   >({});
-  const [routeSafetyFilter, setRouteSafetyFilter] = useState<
-    "all" | "green" | "yellow" | "red"
-  >("all");
   const [urgencyFilter, setUrgencyFilter] = useState<UrgencyFilterMode>("all");
-  const [routeSafetyModal, setRouteSafetyModal] = useState<{
-    systems: SystemDanger[];
-  } | null>(null);
   const [oneLegModeEnabled, setOneLegModeEnabled] = useState<boolean>(() => {
     try {
       const stored = localStorage.getItem(ONE_LEG_MODE_STORAGE_KEY);
@@ -2478,38 +2467,6 @@ export function ScanResultsTable({
 
     const filteredScoreContext = buildFlipScoreContext(sessionScopedRows);
 
-    const routeSafetyRankForRow = (row: FlipResult): number => {
-      const k = `${row.BuySystemID}:${row.SellSystemID}`;
-      const rs = routeSafetyMap[k];
-      return routeSafetyRankFromState(rs);
-    };
-
-    const routeSafetyTieBreaker = (a: IndexedRow, b: IndexedRow): number => {
-      const aMeta = batchMetricsByRoute[routeGroupKey(a.row)];
-      const bMeta = batchMetricsByRoute[routeGroupKey(b.row)];
-
-      // Conservative tie-breakers for equally-ranked safety buckets:
-      // 1) higher weakest execution quality is safer/more reliable (better),
-      // 2) fewer route risk flags is better.
-      const eqDiff =
-        (bMeta?.routeWeakestExecutionQuality ?? 0) -
-        (aMeta?.routeWeakestExecutionQuality ?? 0);
-      if (eqDiff !== 0) return eqDiff;
-
-      const aRiskCount =
-        (aMeta?.routeRiskSpikeCount ?? 0) +
-        (aMeta?.routeRiskNoHistoryCount ?? 0) +
-        (aMeta?.routeRiskUnstableHistoryCount ?? 0);
-      const bRiskCount =
-        (bMeta?.routeRiskSpikeCount ?? 0) +
-        (bMeta?.routeRiskNoHistoryCount ?? 0) +
-        (bMeta?.routeRiskUnstableHistoryCount ?? 0);
-      const riskCountDiff = aRiskCount - bRiskCount;
-      if (riskCountDiff !== 0) return riskCountDiff;
-
-      return compareRowsStable(a, b);
-    };
-
     const sorted = lockFiltered.slice();
     sorted.sort((a, b) => {
       return compareScanRows(a, b, {
@@ -2539,13 +2496,6 @@ export function ScanResultsTable({
           ),
         isBatchSyntheticKey: (key) => isBatchSyntheticKey(key as SortKey),
         compareBatchSyntheticValues,
-        compareRouteSafety: (left, right) => {
-          const diff =
-            routeSafetyRankForRow(left.row) - routeSafetyRankForRow(right.row);
-          const primaryRisk = sortDir === "asc" ? diff : -diff;
-          if (primaryRisk !== 0) return primaryRisk;
-          return routeSafetyTieBreaker(left as IndexedRow, right as IndexedRow);
-        },
       });
     });
 
@@ -2672,20 +2622,6 @@ export function ScanResultsTable({
         rows = rows.filter((ir) => groupFilter.has(ir.row.DayGroupName ?? ""));
       }
     }
-    // Route safety filter — available in all modes
-    if (routeSafetyFilter !== "all") {
-      rows = rows.filter((ir) => {
-        const k = `${ir.row.BuySystemID}:${ir.row.SellSystemID}`;
-        const rs = routeSafetyMap[k];
-        if (routeSafetyFilter === "green") {
-          return routeSafetyRankFromState(rs) === 0;
-        }
-        if (routeSafetyFilter === "yellow") {
-          return routeSafetyRankFromState(rs) === 1;
-        }
-        return routeSafetyRankFromState(rs) === 2;
-      });
-    }
     if (urgencyFilter !== "all") {
       rows = rows.filter((ir) => {
         const { urgency_band } = classifyFlipUrgency(ir.row);
@@ -2704,9 +2640,7 @@ export function ScanResultsTable({
     categoryFilter,
     securityFilter,
     groupFilter,
-    routeSafetyFilter,
     urgencyFilter,
-    routeSafetyMap,
     trackedVisibilityMode,
     watchlistIds,
   ]);
@@ -2755,21 +2689,11 @@ export function ScanResultsTable({
             endpointPreferenceMode,
           ).excluded;
 
-        const routeSafetyExcluded = (() => {
-          if (routeSafetyFilter === "all") return false;
-          const routeState = routeSafetyMap[`${row.BuySystemID}:${row.SellSystemID}`];
-          const rank = routeSafetyRankFromState(routeState);
-          if (routeSafetyFilter === "green") return rank !== 0;
-          if (routeSafetyFilter === "yellow") return rank !== 1;
-          return rank !== 2;
-        })();
-
         const excludedByRowVisibility = !!hiddenMap[flipStateKey(row)];
 
         return {
           excludedBySessionStationIgnore,
           excludedByEndpointPreferences,
-          excludedByRouteSafetyFilter: routeSafetyExcluded,
           excludedByRowVisibility,
           excludedByFillabilityOrStalePolicy: false,
         };
@@ -2781,9 +2705,7 @@ export function ScanResultsTable({
       endpointPreferenceProfile,
       hiddenMap,
       majorHubSystems,
-      routeSafetyFilter,
-      routeSafetyMap,
-      sessionStationFilters,
+        sessionStationFilters,
     ],
   );
 
@@ -2935,24 +2857,6 @@ export function ScanResultsTable({
       }
     }
     const groups = [...byRoute.values()];
-    const routeSafetyTieBreaker = (
-      left: RouteGroup,
-      right: RouteGroup,
-    ): number => {
-      const leftMeta = routeAggregateMetricsByRoute[left.key];
-      const rightMeta = routeAggregateMetricsByRoute[right.key];
-      const eqDiff =
-        (rightMeta?.weakestExecutionQuality ?? 0) -
-        (leftMeta?.weakestExecutionQuality ?? 0);
-      if (eqDiff !== 0) return eqDiff;
-
-      const leftRiskCount = leftMeta?.riskTotalCount ?? 0;
-      const rightRiskCount = rightMeta?.riskTotalCount ?? 0;
-      const riskCountDiff = leftRiskCount - rightRiskCount;
-      if (riskCountDiff !== 0) return riskCountDiff;
-
-      return left.label.localeCompare(right.label);
-    };
     groups.sort((a, b) => {
       const leftAggregate = routeAggregateMetricsByRoute[a.key];
       const rightAggregate = routeAggregateMetricsByRoute[b.key];
@@ -2971,28 +2875,8 @@ export function ScanResultsTable({
           sortDir,
         );
         if (cmp !== 0) return cmp;
-        if (sortKey === ("RouteSafety" as SortKey)) {
-          return routeSafetyTieBreaker(a, b);
-        }
-        const secondarySafety = compareBatchSyntheticValues(
-          leftAggregate?.routeSafetyRank ?? null,
-          rightAggregate?.routeSafetyRank ?? null,
-          "asc",
-        );
-        if (secondarySafety !== 0) return secondarySafety;
-        return routeSafetyTieBreaker(a, b);
       }
 
-      if (sortKey === ("RouteSafety" as SortKey)) {
-        const diff =
-          sortDir === "asc"
-            ? (leftAggregate?.routeSafetyRank ?? 3) -
-              (rightAggregate?.routeSafetyRank ?? 3)
-            : (rightAggregate?.routeSafetyRank ?? 3) -
-              (leftAggregate?.routeSafetyRank ?? 3);
-        if (diff !== 0) return diff;
-        return routeSafetyTieBreaker(a, b);
-      }
       if (isBatchSyntheticKey(sortKey)) {
         const left = getBatchSyntheticValue(
           a.rows[0].row,
@@ -3054,7 +2938,6 @@ export function ScanResultsTable({
       endpoint_hard_rules: 0,
       column_filters: 0,
       tracked_visibility_mode: 0,
-      route_safety_filter: 0,
       hidden_row_toggle: 0,
       route_badge_filter: 0,
     };
@@ -3138,24 +3021,7 @@ export function ScanResultsTable({
     });
     stageCounts.tracked_visibility_mode = stageTrackedPass.filter((entry) => entry.pass).length;
 
-    const stageRouteSafetyPass = stageTrackedPass.map(({ item, pass }) => {
-      let routePass = true;
-      if (routeSafetyFilter !== "all") {
-        const key = `${item.row.BuySystemID}:${item.row.SellSystemID}`;
-        const rank = routeSafetyRankFromState(routeSafetyMap[key]);
-        routePass =
-          routeSafetyFilter === "green"
-            ? rank === 0
-            : routeSafetyFilter === "yellow"
-              ? rank === 1
-              : rank === 2;
-        if (!routePass) addReason(item.id, `route_safety_${routeSafetyFilter}`);
-      }
-      return { item, pass: pass && routePass };
-    });
-    stageCounts.route_safety_filter = stageRouteSafetyPass.filter((entry) => entry.pass).length;
-
-    const stageHiddenPass = stageRouteSafetyPass.map(({ item, pass }) => {
+    const stageHiddenPass = stageTrackedPass.map(({ item, pass }) => {
       const hiddenExcluded = !showHiddenRows && !!hiddenMap[flipStateKey(item.row)];
       if (hiddenExcluded) addReason(item.id, "hidden_row_toggle");
       const trackedHidePass =
@@ -3212,7 +3078,6 @@ export function ScanResultsTable({
     opportunityProfile,
     routeAggregateMetricsByRoute,
     routeBadgeMetadataByRouteGrouped,
-    routeSafetyFilter,
     routeSafetyMap,
     selectedBadgeFilters,
     sessionStationFilters,
@@ -3782,7 +3647,6 @@ export function ScanResultsTable({
     sortDir,
     showHiddenRows,
     selectedBadgeFilters,
-    routeSafetyFilter,
     trackedVisibilityMode,
     endpointPreferenceMode,
     endpointPreferenceProfile,
@@ -4037,9 +3901,6 @@ export function ScanResultsTable({
     if (!recipe) return;
     setSortKey(recipe.sortKey as SortKey);
     setSortDir(recipe.sortDir);
-    if (recipe.routeSafetyFilter) {
-      setRouteSafetyFilter(recipe.routeSafetyFilter);
-    }
     if (recipe.urgencyFilter) {
       setUrgencyFilter(recipe.urgencyFilter as UrgencyFilterMode);
     }
@@ -4617,15 +4478,6 @@ export function ScanResultsTable({
       });
     }
 
-    if (routeSafetyFilter !== "all") {
-      chips.push({
-        key: "route-safety",
-        label: `Route safety: ${routeSafetyFilter}`,
-        impactCount:
-          stageCounts.tracked_visibility_mode - stageCounts.route_safety_filter,
-        onRemove: () => setRouteSafetyFilter("all"),
-      });
-    }
     if (urgencyFilter !== "all") {
       chips.push({
         key: "urgency-filter",
@@ -4639,7 +4491,7 @@ export function ScanResultsTable({
         key: "hidden-toggle",
         label: "Hidden rows: visible",
         impactCount:
-          stageCounts.route_safety_filter - stageCounts.hidden_row_toggle,
+          stageCounts.tracked_visibility_mode - stageCounts.hidden_row_toggle,
         onRemove: () => setShowHiddenRows(false),
       });
     }
@@ -4678,7 +4530,6 @@ export function ScanResultsTable({
     endpointPreferenceProfile,
     filterAudit,
     results.length,
-    routeSafetyFilter,
     urgencyFilter,
     selectedBadgeFilters,
     sessionStationFilters,
@@ -5187,32 +5038,6 @@ export function ScanResultsTable({
   }, [batchMetricsByRoute, indexed, isRouteGrouped, routeGroups, selectedIds]);
 
   // renderDataRow: renders a DataRow memo component — only the changed row re-renders
-  const handleRouteSafetyClick = useCallback(
-    (from: number, to: number, e: import("react").MouseEvent) => {
-      e.stopPropagation();
-      const key = `${from}:${to}`;
-      const entry = routeSafetyMap[key];
-      if (entry && entry.status === "full") {
-        setRouteSafetyModal({ systems: entry.systems });
-        return;
-      }
-      getGankCheck(from, to).then((systems) => {
-        setRouteSafetyMap((prev) => {
-          const pe = prev[key];
-          const danger = pe && pe.status !== "loading" ? pe.danger : "green";
-          const kills = pe && pe.status !== "loading" ? pe.kills : 0;
-          const totalISK = pe && pe.status !== "loading" ? pe.totalISK : 0;
-          return {
-            ...prev,
-            [key]: { status: "full", danger, kills, totalISK, systems },
-          };
-        });
-        setRouteSafetyModal({ systems });
-      });
-    },
-    [routeSafetyMap],
-  );
-
   const renderDataRow = useCallback(
     (
       ir: IndexedRow,
@@ -5245,10 +5070,6 @@ export function ScanResultsTable({
         onToggleSelect={toggleSelect}
         onTogglePin={togglePin}
         tFn={t}
-        routeSafetyEntry={
-          routeSafetyMap[`${ir.row.BuySystemID}:${ir.row.SellSystemID}`]
-        }
-        onRouteSafetyClick={handleRouteSafetyClick}
         onOpenScore={setScoreExplainRow}
         batchMetricsByRow={batchMetricsByRow}
         opportunityProfile={opportunityProfile}
@@ -5275,8 +5096,6 @@ export function ScanResultsTable({
       variantByRowId,
       watchlistIds,
       showTrackedChip,
-      routeSafetyMap,
-      handleRouteSafetyClick,
       batchMetricsByRow,
       opportunityProfile,
       displayScoreContext,
@@ -5852,29 +5671,6 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               <button type="button" onClick={() => setShowHiddenRows((v) => !v)} title={t("showHidden")} className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${showHiddenRows ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10" : "border-eve-border/60 text-eve-text/50 bg-eve-dark/40 hover:border-eve-accent/40 hover:text-eve-accent/70"}`}>
                 {showHiddenRows ? "Hide hidden" : "Show hidden"}
               </button>
-              <label
-                htmlFor="route-safety-filter-select"
-                className="inline-flex items-center gap-1 rounded-sm border border-eve-border/60 bg-eve-dark/40 px-1.5 py-0.5 text-[11px]"
-              >
-                <span className="text-eve-dim">Route safety</span>
-                <select
-                  id="route-safety-filter-select"
-                  value={routeSafetyFilter}
-                  onChange={(e) =>
-                    setRouteSafetyFilter(
-                      e.target.value as "all" | "green" | "yellow" | "red",
-                    )
-                  }
-                  className="bg-eve-input border border-eve-border rounded-sm px-1 py-0.5 text-[11px]"
-                  title="Route safety filter selector"
-                  data-testid="route-safety-filter-select"
-                >
-                  <option value="all">Any</option>
-                  <option value="green">Green only</option>
-                  <option value="yellow">Yellow+</option>
-                  <option value="red">Red included</option>
-                </select>
-              </label>
               <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
                 {(
                   [
@@ -8046,12 +7842,6 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
         scanSourceTab={tradeStateTab === "region" ? "region" : "radius"}
       />
 
-      {routeSafetyModal && (
-        <RouteSafetyModal
-          systems={routeSafetyModal.systems}
-          onClose={() => setRouteSafetyModal(null)}
-        />
-      )}
     </div>
   );
 }
@@ -8085,12 +7875,6 @@ interface DataRowProps {
   onToggleSelect: (id: number) => void;
   onTogglePin: (row: FlipResult) => void;
   tFn: (key: TranslationKey, vars?: Record<string, string | number>) => string;
-  routeSafetyEntry: RouteState | undefined;
-  onRouteSafetyClick: (
-    from: number,
-    to: number,
-    e: import("react").MouseEvent,
-  ) => void;
   onOpenScore: (row: FlipResult) => void;
   batchMetricsByRow: Record<string, RouteBatchMetadata>;
   opportunityProfile?: OpportunityWeightProfile;
@@ -8119,61 +7903,6 @@ function TradeScoreBadge({ score }: { score: number }) {
     >
       {s}
     </span>
-  );
-}
-
-/* ─── Route Safety Cell ─── */
-function RouteSafetyCell({
-  entry,
-  from,
-  to,
-  onRouteSafetyClick,
-}: {
-  entry: RouteState | undefined;
-  from: number;
-  to: number;
-  onRouteSafetyClick: (
-    from: number,
-    to: number,
-    e: import("react").MouseEvent,
-  ) => void;
-}) {
-  if (!entry) {
-    return <span className="text-eve-dim/30 text-[10px]">—</span>;
-  }
-  if (entry.status === "loading") {
-    return <span className="text-eve-dim/50 text-[10px] animate-pulse">·</span>;
-  }
-  const danger = entry.danger;
-  const kills = entry.kills;
-  const dotCls =
-    danger === "red"
-      ? "bg-red-400"
-      : danger === "yellow"
-        ? "bg-yellow-400"
-        : "bg-green-400";
-  const textCls =
-    danger === "red"
-      ? "text-red-400"
-      : danger === "yellow"
-        ? "text-yellow-400"
-        : "text-green-400/70";
-  return (
-    <button
-      type="button"
-      onClick={(e) => onRouteSafetyClick(from, to, e)}
-      className="inline-flex items-center gap-1 text-[11px] bg-transparent border-0 cursor-pointer p-0 hover:opacity-80 transition-opacity"
-      title={`Route safety: ${danger}${kills > 0 ? ` — ${kills} kills` : ""}`}
-    >
-      <span
-        className={`inline-block w-2 h-2 rounded-full shrink-0 ${dotCls}`}
-      />
-      {kills > 0 && (
-        <span className={`font-mono tabular-nums leading-none ${textCls}`}>
-          {kills}
-        </span>
-      )}
-    </button>
   );
 }
 
@@ -8283,8 +8012,6 @@ const DataRow = memo(
   onToggleSelect,
     onTogglePin,
     tFn,
-    routeSafetyEntry,
-    onRouteSafetyClick,
     onOpenScore,
     batchMetricsByRow,
     opportunityProfile,
@@ -8474,13 +8201,6 @@ const DataRow = memo(
                   </span>
                 );
               })()
-            ) : col.key === ("RouteSafety" as SortKey) ? (
-              <RouteSafetyCell
-                entry={routeSafetyEntry}
-                from={ir.row.BuySystemID}
-                to={ir.row.SellSystemID}
-                onRouteSafetyClick={onRouteSafetyClick}
-              />
             ) : col.key === "BuyStation" ? (
               <span className="truncate">
                 {fmtCell(
@@ -8528,8 +8248,6 @@ const DataRow = memo(
     prev.onActivateRow === next.onActivateRow &&
     prev.onToggleSelect === next.onToggleSelect &&
     prev.onTogglePin === next.onTogglePin &&
-    prev.routeSafetyEntry === next.routeSafetyEntry &&
-    prev.onRouteSafetyClick === next.onRouteSafetyClick &&
     prev.onOpenScore === next.onOpenScore &&
     prev.opportunityProfile === next.opportunityProfile &&
     prev.scoreContext === next.scoreContext,

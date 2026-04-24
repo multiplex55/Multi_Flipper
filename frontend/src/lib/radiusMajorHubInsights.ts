@@ -73,10 +73,6 @@ export type RadiusMajorHubRowEvaluationContext = {
    */
   excludedByEndpointPreferences?: boolean;
   /**
-   * True when the active route-safety filter excludes this row.
-   */
-  excludedByRouteSafetyFilter?: boolean;
-  /**
    * True when the row is currently hidden or excluded by row-level visibility state.
    */
   excludedByRowVisibility?: boolean;
@@ -189,9 +185,8 @@ export function isRadiusActionableRow(row: FlipResult): boolean {
  * 1) It passes low-level actionable checks (`isRadiusActionableRow`).
  * 2) It is not ignored by session station filters.
  * 3) It is not excluded by endpoint preferences.
- * 4) It is not excluded by the active route-safety filter state.
- * 5) It is not hidden/excluded by row visibility state.
- * 6) It does not fail product-defined fillability/stale-degraded policy.
+ * 4) It is not hidden/excluded by row visibility state.
+ * 5) It does not fail product-defined fillability/stale-degraded policy.
  */
 export function isRowCountedInMajorHubMetrics(
   row: FlipResult,
@@ -200,7 +195,6 @@ export function isRowCountedInMajorHubMetrics(
   if (!isRadiusActionableRow(row)) return false;
   if (context.excludedBySessionStationIgnore) return false;
   if (context.excludedByEndpointPreferences) return false;
-  if (context.excludedByRouteSafetyFilter) return false;
   if (context.excludedByRowVisibility) return false;
   if (context.excludedByFillabilityOrStalePolicy) return false;
   return true;

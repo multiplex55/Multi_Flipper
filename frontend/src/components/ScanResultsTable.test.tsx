@@ -2352,7 +2352,6 @@ describe("ScanResultsTable filter audit chips and stage counts", () => {
       expect(counts.endpoint_hard_rules).toBe(1);
       expect(counts.column_filters).toBe(1);
       expect(counts.tracked_visibility_mode).toBe(1);
-      expect(counts.route_safety_filter).toBe(1);
       expect(counts.hidden_row_toggle).toBe(1);
       expect(counts.route_badge_filter).toBe(1);
     });

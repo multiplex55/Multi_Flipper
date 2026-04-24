@@ -9,7 +9,6 @@ describe("SCORING_RECIPES", () => {
     });
     expect(SCORING_RECIPES.high_confidence).toMatchObject({
       sortKey: "ExecutionQuality",
-      routeSafetyFilter: "green",
       urgencyFilter: "stable",
     });
     expect(SCORING_RECIPES.cargo_efficient).toMatchObject({
@@ -20,7 +19,6 @@ describe("SCORING_RECIPES", () => {
     });
     expect(SCORING_RECIPES.fragile_first).toMatchObject({
       sortKey: "UrgencyScore",
-      routeSafetyFilter: "red",
       urgencyFilter: "fragile",
     });
     expect(SCORING_RECIPES.backhaul_builder).toMatchObject({

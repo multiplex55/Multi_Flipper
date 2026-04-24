@@ -19,7 +19,6 @@ export type ScoringRecipeId =
 export type ScoringRecipePayload = {
   sortKey: string;
   sortDir: "asc" | "desc";
-  routeSafetyFilter?: "all" | "green" | "yellow" | "red";
   urgencyFilter?: "all" | "stable" | "aging" | "fragile";
   filters?: Record<string, string>;
 };
@@ -62,42 +61,36 @@ export const SCORING_RECIPES: Record<ScoringRecipeId, ScoringRecipePayload> = {
   fast_run: {
     sortKey: "RealIskPerJump",
     sortDir: "desc",
-    routeSafetyFilter: "all",
     urgencyFilter: "all",
     filters: {},
   },
   high_confidence: {
     sortKey: "ExecutionQuality",
     sortDir: "desc",
-    routeSafetyFilter: "green",
     urgencyFilter: "stable",
     filters: {},
   },
   cargo_efficient: {
     sortKey: "RealIskPerM3PerJump",
     sortDir: "desc",
-    routeSafetyFilter: "yellow",
     urgencyFilter: "all",
     filters: {},
   },
   capital_efficient: {
     sortKey: "RoutePackDailyProfitOverCapital",
     sortDir: "desc",
-    routeSafetyFilter: "yellow",
     urgencyFilter: "all",
     filters: {},
   },
   fragile_first: {
     sortKey: "UrgencyScore",
     sortDir: "desc",
-    routeSafetyFilter: "red",
     urgencyFilter: "fragile",
     filters: {},
   },
   backhaul_builder: {
     sortKey: "DailyIskPerJump",
     sortDir: "desc",
-    routeSafetyFilter: "all",
     urgencyFilter: "aging",
     filters: {},
   },
