@@ -36,6 +36,10 @@ import {
   slippageCostIsk,
   turnoverDays,
 } from "@/lib/radiusMetrics";
+import {
+  assertKnownRadiusColumnKeys,
+  getRadiusColumnMeta,
+} from "@/lib/radiusColumnRegistry";
 import type { LoopOpportunity } from "@/lib/loopPlanner";
 import {
   breakevenBufferForFlip,
@@ -384,6 +388,39 @@ type ColumnDef = {
   tooltipKey?: TranslationKey;
 };
 
+const radiusRegistryBackedColumnKeys = [
+  "UrgencyScore",
+  "OpportunityScore",
+  "IskPerM3",
+  "UnitsToBuy",
+  "FilledQty",
+  "CanFill",
+  "BuyOrderRemain",
+  "RoutePackTotalProfit",
+  "RoutePackRealIskPerJump",
+  "RoutePackWeakestExecutionQuality",
+  "RoutePackTurnoverDays",
+  "RoutePackBreakevenBuffer",
+] as const;
+
+assertKnownRadiusColumnKeys(radiusRegistryBackedColumnKeys, "ScanResultsTable");
+
+function radiusColumnDef(def: ColumnDef): ColumnDef {
+  if (
+    radiusRegistryBackedColumnKeys.includes(
+      def.key as (typeof radiusRegistryBackedColumnKeys)[number],
+    )
+  ) {
+    const meta = getRadiusColumnMeta(String(def.key));
+    if (!meta) {
+      throw new Error(
+        `[ScanResultsTable] Missing radius registry metadata for ${String(def.key)}`,
+      );
+    }
+  }
+  return def;
+}
+
 /* ─── Column definitions ─── */
 
 const baseColumnDefs: ColumnDef[] = [
@@ -454,36 +491,36 @@ const baseColumnDefs: ColumnDef[] = [
     width: "min-w-[80px]",
     numeric: true,
   },
-  {
+  radiusColumnDef({
     key: "IskPerM3",
     labelKey: "colIskPerM3",
     width: "min-w-[90px]",
     numeric: true,
-  },
-  {
+  }),
+  radiusColumnDef({
     key: "UnitsToBuy",
     labelKey: "colUnitsToBuy",
     width: "min-w-[80px]",
     numeric: true,
-  },
-  {
+  }),
+  radiusColumnDef({
     key: "FilledQty",
     labelKey: "colFilledQty",
     width: "min-w-[80px]",
     numeric: true,
-  },
-  {
+  }),
+  radiusColumnDef({
     key: "CanFill",
     labelKey: "colCanFill",
     width: "min-w-[70px]",
     numeric: false,
-  },
-  {
+  }),
+  radiusColumnDef({
     key: "BuyOrderRemain",
     labelKey: "colAcceptQty",
     width: "min-w-[80px]",
     numeric: true,
-  },
+  }),
   {
     key: "RealProfit",
     labelKey: "colRealProfit",
@@ -582,12 +619,12 @@ const baseColumnDefs: ColumnDef[] = [
     width: "min-w-[110px]",
     numeric: true,
   },
-  {
+  radiusColumnDef({
     key: "RoutePackTotalProfit",
     labelKey: "colBatchProfit",
     width: "min-w-[130px]",
     numeric: true,
-  },
+  }),
   {
     key: "RoutePackTotalCapital",
     labelKey: "colBatchTotalCapital",
@@ -606,12 +643,12 @@ const baseColumnDefs: ColumnDef[] = [
     width: "min-w-[120px]",
     numeric: true,
   },
-  {
+  radiusColumnDef({
     key: "RoutePackRealIskPerJump",
     labelKey: "colRealIskPerJump",
     width: "min-w-[140px]",
     numeric: true,
-  },
+  }),
   {
     key: "RoutePackDailyIskPerJump",
     labelKey: "colDailyIskPerJump",
@@ -642,36 +679,36 @@ const baseColumnDefs: ColumnDef[] = [
     width: "min-w-[145px]",
     numeric: true,
   },
-  {
+  radiusColumnDef({
     key: "RoutePackWeakestExecutionQuality",
     labelKey: "colExecutionQuality" as TranslationKey,
     width: "min-w-[150px]",
     numeric: true,
-  },
-  {
+  }),
+  radiusColumnDef({
     key: "RoutePackTurnoverDays",
     labelKey: "colTurnoverDays",
     width: "min-w-[130px]",
     numeric: true,
-  },
+  }),
   {
     key: "RoutePackExitOverhangDays",
     labelKey: "colExitOverhangDays",
     width: "min-w-[150px]",
     numeric: true,
   },
-  {
+  radiusColumnDef({
     key: "RoutePackBreakevenBuffer",
     labelKey: "colBreakevenBuffer",
     width: "min-w-[150px]",
     numeric: true,
-  },
-  {
+  }),
+  radiusColumnDef({
     key: "OpportunityScore",
     labelKey: "colTradeScore",
     width: "min-w-[100px]",
     numeric: true,
-  },
+  }),
   {
     key: "ExpectedProfit",
     labelKey: "colExpectedProfit",
@@ -747,13 +784,13 @@ const baseColumnDefs: ColumnDef[] = [
     width: "min-w-[70px]",
     numeric: true,
   },
-  {
+  radiusColumnDef({
     key: "UrgencyScore",
     labelKey: "colUrgency",
     width: "min-w-[90px]",
     numeric: true,
     tooltipKey: "colUrgencyHint",
-  },
+  }),
 ];
 
 const regionColumnDefs: ColumnDef[] = [
