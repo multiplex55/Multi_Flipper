@@ -84,6 +84,14 @@ export interface FlipResult {
   DayTargetLowestSell?: number;
   urgency_score?: number;
   urgency_band?: "stable" | "aging" | "fragile";
+  DistanceLensApplied?: boolean;
+  DistanceLensUnreachable?: boolean;
+  DistanceLensBaseBuyJumps?: number;
+  DistanceLensBaseSellJumps?: number;
+  DistanceLensBaseTotalJumps?: number;
+  DistanceLensBaseProfitPerJump?: number;
+  DistanceLensBaseRealIskPerJump?: number;
+  DistanceLensBaseDailyIskPerJump?: number;
 }
 
 export interface RegionalDayTradeItem {
@@ -403,6 +411,14 @@ export interface BaseBatchLine {
   jumps: number;
   urgency_score?: number;
   urgency_band?: "stable" | "aging" | "fragile";
+  DistanceLensApplied?: boolean;
+  DistanceLensUnreachable?: boolean;
+  DistanceLensBaseBuyJumps?: number;
+  DistanceLensBaseSellJumps?: number;
+  DistanceLensBaseTotalJumps?: number;
+  DistanceLensBaseProfitPerJump?: number;
+  DistanceLensBaseRealIskPerJump?: number;
+  DistanceLensBaseDailyIskPerJump?: number;
 }
 
 export interface BaseBatchManifest {

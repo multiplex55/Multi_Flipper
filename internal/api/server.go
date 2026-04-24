@@ -750,6 +750,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/scan/multi-region", s.handleScanMultiRegion)
 	mux.HandleFunc("POST /api/scan/regional-day", s.handleScanRegionalDay)
 	mux.HandleFunc("POST /api/scan/contracts", s.handleScanContracts)
+	mux.HandleFunc("POST /api/scan/radius-distance-lens", s.handleRadiusDistanceLens)
 	mux.HandleFunc("POST /api/route/find", s.handleRouteFind)
 	mux.HandleFunc("POST /api/route/planner", s.handleRoutePlanner)
 	mux.HandleFunc("POST /api/batch/create-route", s.handleBatchCreateRoute)

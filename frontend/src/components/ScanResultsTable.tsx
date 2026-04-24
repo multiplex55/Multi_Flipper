@@ -8102,6 +8102,11 @@ const DataRow = memo(
                     Tracked
                   </span>
                 )}
+                {ir.row.DistanceLensUnreachable && (
+                  <span className="shrink-0 inline-flex items-center px-1 py-px rounded-[2px] border border-rose-400/50 bg-rose-500/10 text-rose-200 text-[9px] leading-none font-medium uppercase">
+                    Unreachable
+                  </span>
+                )}
                 {endpointPreferenceMeta && (
                   <EndpointDebugDetails
                     endpointPreferenceMeta={endpointPreferenceMeta}
@@ -8163,11 +8168,28 @@ const DataRow = memo(
                   }}
                   aria-label="Why this score?"
                 >
-                  {scoreFlipResult(
-                    ir.row,
-                    opportunityProfile,
-                    scoreContext,
-                  ).finalScore.toFixed(1)}
+                  {(() => {
+                    const nextScore = scoreFlipResult(
+                      ir.row,
+                      opportunityProfile,
+                      scoreContext,
+                    ).finalScore;
+                    if (!ir.row.DistanceLensApplied || ir.row.DistanceLensBaseTotalJumps == null) {
+                      return nextScore.toFixed(1);
+                    }
+                    const prevScore = scoreFlipResult(
+                      {
+                        ...ir.row,
+                        BuyJumps: ir.row.DistanceLensBaseBuyJumps ?? ir.row.BuyJumps,
+                        SellJumps: ir.row.DistanceLensBaseSellJumps ?? ir.row.SellJumps,
+                        TotalJumps: ir.row.DistanceLensBaseTotalJumps ?? ir.row.TotalJumps,
+                        ProfitPerJump: ir.row.DistanceLensBaseProfitPerJump ?? ir.row.ProfitPerJump,
+                      },
+                      opportunityProfile,
+                      scoreContext,
+                    ).finalScore;
+                    return `${prevScore.toFixed(1)}→${nextScore.toFixed(1)}`;
+                  })()}
                 </button>
                 {(() => {
                   const urgency = classifyFlipUrgency(ir.row);
@@ -8211,14 +8233,50 @@ const DataRow = memo(
                   scoreContext,
                 )}
               </span>
+            ) : col.key === "BuyJumps" ||
+              col.key === "SellJumps" ||
+              col.key === "TotalJumps" ||
+              col.key === "ProfitPerJump" ||
+              col.key === "RealIskPerJump" ||
+              col.key === "DailyIskPerJump" ? (
+              <span>
+                {(() => {
+                  const nextVal = fmtCell(
+                    col,
+                    ir.row,
+                    batchMetricsByRow,
+                    opportunityProfile,
+                    scoreContext,
+                  );
+                  const baseMap: Record<string, number | undefined> = {
+                    BuyJumps: ir.row.DistanceLensBaseBuyJumps,
+                    SellJumps: ir.row.DistanceLensBaseSellJumps,
+                    TotalJumps: ir.row.DistanceLensBaseTotalJumps,
+                    ProfitPerJump: ir.row.DistanceLensBaseProfitPerJump,
+                    RealIskPerJump: ir.row.DistanceLensBaseRealIskPerJump,
+                    DailyIskPerJump: ir.row.DistanceLensBaseDailyIskPerJump,
+                  };
+                  const prevVal = baseMap[col.key];
+                  if (prevVal == null || !ir.row.DistanceLensApplied) return nextVal;
+                  const prevRow = { ...ir.row, [col.key]: prevVal } as FlipResult;
+                  const oldText = fmtCell(
+                    col,
+                    prevRow,
+                    batchMetricsByRow,
+                    opportunityProfile,
+                    scoreContext,
+                  );
+                  return (
+                    <span className="inline-flex items-center gap-1">
+                      <span className="text-eve-dim">{oldText}</span>
+                      <span>→</span>
+                      <span>{nextVal}</span>
+                    </span>
+                  );
+                })()}
+              </span>
             ) : (
-              fmtCell(
-                col,
-                ir.row,
-                batchMetricsByRow,
-                opportunityProfile,
-                scoreContext,
-              )
+              fmtCell(col, ir.row, batchMetricsByRow, opportunityProfile, scoreContext)
             )}
           </td>
         ))}

@@ -47,6 +47,9 @@ import {
   getBannedStations,
   rebootStationCache,
   getCharacterLocation,
+  getSystemsList,
+  recalculateRadiusDistanceLens,
+  type RadiusDistanceLensMetric,
 } from "./lib/api";
 import { useI18n } from "./lib/i18n";
 import { formatISK } from "./lib/format";
@@ -109,6 +112,10 @@ import type {
   RouteWorkspaceIntent,
 } from "@/lib/routeHandoff";
 import { useRouteExecutionWorkspace } from "@/lib/useRouteExecutionWorkspace";
+import {
+  applyDistanceLensToRow,
+  radiusDistanceLensRowKey,
+} from "@/components/radiusDistanceLens";
 
 type Tab =
   | "radius"
@@ -733,6 +740,20 @@ function App() {
   const { esiAvailable } = useEsiStatus();
 
   const [radiusResults, setRadiusResults] = useState<FlipResult[]>([]);
+  const [radiusDistanceLens, setRadiusDistanceLens] = useState<{
+    source: "scan_origin" | "active_character" | "selected_character" | "manual_system";
+    originSystemID: number;
+    originSystemName: string;
+    calculatedAt: string;
+  } | null>(null);
+  const [radiusDistanceLensMetricsByRowKey, setRadiusDistanceLensMetricsByRowKey] =
+    useState<Record<string, RadiusDistanceLensMetric>>({});
+  const [radiusLensSource, setRadiusLensSource] = useState<
+    "scan_origin" | "active_character" | "selected_character" | "manual_system"
+  >("scan_origin");
+  const [radiusLensSelectedCharacterID, setRadiusLensSelectedCharacterID] =
+    useState<number>(0);
+  const [radiusLensManualSystem, setRadiusLensManualSystem] = useState("");
   const [radiusHubFilter, setRadiusHubFilter] = useState<RadiusHubFilter | null>(null);
   const [radiusHubScopeMode, setRadiusHubScopeMode] =
     useState<HubScopeMode>(DEFAULT_HUB_SCOPE_MODE);
@@ -784,6 +805,7 @@ function App() {
 
   const [scanning, setScanning] = useState(false);
   const [scanAndRefreshing, setScanAndRefreshing] = useState(false);
+  const [radiusLensRecalculating, setRadiusLensRecalculating] = useState(false);
   const [progress, setProgress] = useState("");
   const [regionRestorePrompt, setRegionRestorePrompt] = useState<{
     ts: number;
@@ -832,6 +854,8 @@ function App() {
   );
   const clearRadiusScanSession = useCallback(() => {
     setRadiusResults([]);
+    setRadiusDistanceLens(null);
+    setRadiusDistanceLensMetricsByRowKey({});
     setRadiusHubFilter(null);
     setRadiusHubScopeMode(DEFAULT_HUB_SCOPE_MODE);
     setRadiusScopedHubRows([]);
@@ -980,9 +1004,19 @@ function App() {
     if (!regionHubSystemFilter || regionHubSystemFilter <= 0) return regionResults;
     return regionResults.filter((row) => row.BuySystemID === regionHubSystemFilter);
   }, [regionHubSystemFilter, regionResults]);
+  const lensAdjustedRadiusResults = useMemo(
+    () =>
+      radiusResults.map((row) =>
+        applyDistanceLensToRow(
+          row,
+          radiusDistanceLensMetricsByRowKey[radiusDistanceLensRowKey(row)],
+        ),
+      ),
+    [radiusDistanceLensMetricsByRowKey, radiusResults],
+  );
   const visibleRadiusResults = useMemo(
-    () => filterRadiusResultsByHub(radiusResults, radiusHubFilter),
-    [radiusHubFilter, radiusResults],
+    () => filterRadiusResultsByHub(lensAdjustedRadiusResults, radiusHubFilter),
+    [lensAdjustedRadiusResults, radiusHubFilter],
   );
   const regionCorridors = useMemo(
     () => aggregateRegionalTradeCorridors(regionHubResults),
@@ -1804,6 +1838,88 @@ const refreshCurrentLocationIntoScanParams = useCallback(
   },
   [authStatus.logged_in, activeCharacterId, params],
 );
+const clearRadiusDistanceLens = useCallback(() => {
+  setRadiusDistanceLens(null);
+  setRadiusDistanceLensMetricsByRowKey({});
+}, []);
+
+const resolveRadiusLensOrigin = useCallback(async () => {
+  if (radiusLensSource === "scan_origin") {
+    const systems = await getSystemsList(params.system_name, 1);
+    const first = systems[0];
+    if (!first?.id) throw new Error("Unable to resolve scan origin system");
+    return { id: first.id, name: first.name || params.system_name };
+  }
+  if (radiusLensSource === "active_character") {
+    if (!activeCharacterId) throw new Error("No active character");
+    const location = await getCharacterLocation(activeCharacterId);
+    if (!location?.solar_system_id) throw new Error("Active character location unavailable");
+    return { id: location.solar_system_id, name: location.solar_system_name || "Unknown" };
+  }
+  if (radiusLensSource === "selected_character") {
+    const charID = radiusLensSelectedCharacterID > 0 ? radiusLensSelectedCharacterID : authCharacters[0]?.character_id;
+    if (!charID) throw new Error("Select a character first");
+    const location = await getCharacterLocation(charID);
+    if (!location?.solar_system_id) throw new Error("Selected character location unavailable");
+    return { id: location.solar_system_id, name: location.solar_system_name || "Unknown" };
+  }
+  const systems = await getSystemsList(radiusLensManualSystem.trim(), 1);
+  const first = systems[0];
+  if (!first?.id) throw new Error("Manual system was not found");
+  return { id: first.id, name: first.name || radiusLensManualSystem.trim() };
+}, [
+  activeCharacterId,
+  authCharacters,
+  params.system_name,
+  radiusLensManualSystem,
+  radiusLensSelectedCharacterID,
+  radiusLensSource,
+]);
+
+const handleRecalculateRadiusDistanceLens = useCallback(async () => {
+  if (radiusResults.length === 0 || radiusLensRecalculating) return;
+  setRadiusLensRecalculating(true);
+  try {
+    const origin = await resolveRadiusLensOrigin();
+    const rows = radiusResults.map((row) => ({
+      row_key: radiusDistanceLensRowKey(row),
+      buy_system_id: row.BuySystemID,
+      sell_system_id: row.SellSystemID,
+      total_profit: row.TotalProfit ?? 0,
+      real_profit: row.RealProfit ?? row.TotalProfit ?? 0,
+      daily_profit: row.DailyProfit ?? 0,
+    }));
+    const metrics = await recalculateRadiusDistanceLens({
+      origin_system_id: origin.id,
+      min_route_security: params.min_route_security ?? 0,
+      rows,
+    });
+    const next: Record<string, RadiusDistanceLensMetric> = {};
+    for (const metric of metrics) {
+      next[metric.row_key] = metric;
+    }
+    setRadiusDistanceLensMetricsByRowKey(next);
+    setRadiusDistanceLens({
+      source: radiusLensSource,
+      originSystemID: origin.id,
+      originSystemName: origin.name,
+      calculatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Distance lens recalculation failed";
+    addToast(message, "error", 3500);
+  } finally {
+    setRadiusLensRecalculating(false);
+  }
+}, [
+  addToast,
+  params.min_route_security,
+  radiusLensRecalculating,
+  radiusLensSource,
+  radiusResults,
+  resolveRadiusLensOrigin,
+]);
+
 const handleScan = useCallback(async (overrideParams?: ScanParams) => {
     if (scanning) {
       abortRef.current?.abort();
@@ -1949,6 +2065,7 @@ const radiusParams =
         );
         const filtered = filterFlipResults(results, bannedTypeIDs, bannedStationIDs);
         setRadiusResults(filtered);
+        clearRadiusDistanceLens();
         setRadiusCacheMeta(meta ?? null);
         setRadiusScanSession(
           createRadiusScanSession({
@@ -2044,6 +2161,7 @@ const results = await scanMultiRegion(
     alertChannels,
     bannedStationIDs,
     bannedTypeIDs,
+    clearRadiusDistanceLens,
     sessionStationFilters,
   ]);
 
@@ -2833,6 +2951,66 @@ const handleScanAndRefresh = useCallback(async () => {
                       Clear hub filter ({radiusHubFilter.side === "buy" ? "Buy" : "Sell"})
                     </button>
                   ) : null}
+                  <select
+                    value={radiusLensSource}
+                    onChange={(e) =>
+                      setRadiusLensSource(
+                        e.target.value as
+                          | "scan_origin"
+                          | "active_character"
+                          | "selected_character"
+                          | "manual_system",
+                      )
+                    }
+                    className="px-1.5 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark text-eve-text"
+                  >
+                    <option value="scan_origin">Scan origin</option>
+                    <option value="active_character">Active character</option>
+                    <option value="selected_character">Selected character</option>
+                    <option value="manual_system">Manual system</option>
+                  </select>
+                  {radiusLensSource === "selected_character" && (
+                    <select
+                      value={radiusLensSelectedCharacterID}
+                      onChange={(e) => setRadiusLensSelectedCharacterID(Number(e.target.value))}
+                      className="px-1.5 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark text-eve-text"
+                    >
+                      <option value={0}>Pick character</option>
+                      {authCharacters.map((character) => (
+                        <option key={character.character_id} value={character.character_id}>
+                          {character.character_name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {radiusLensSource === "manual_system" && (
+                    <input
+                      value={radiusLensManualSystem}
+                      onChange={(e) => setRadiusLensManualSystem(e.target.value)}
+                      placeholder="Manual system"
+                      className="px-1.5 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark text-eve-text"
+                    />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void handleRecalculateRadiusDistanceLens()}
+                    disabled={radiusLensRecalculating || radiusResults.length === 0}
+                    className="px-2 py-0.5 rounded-sm border border-eve-border text-eve-dim hover:text-eve-text disabled:opacity-50"
+                  >
+                    {radiusLensRecalculating ? "Recalc…" : "Recalc"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearRadiusDistanceLens}
+                    className="px-2 py-0.5 rounded-sm border border-eve-border text-eve-dim hover:text-eve-text"
+                  >
+                    Clear
+                  </button>
+                  {radiusDistanceLens && (
+                    <span className="px-1.5 py-0.5 rounded-sm border border-eve-accent/40 text-eve-accent">
+                      Lens {radiusDistanceLens.originSystemName} · {new Date(radiusDistanceLens.calculatedAt).toLocaleTimeString()}
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={clearRadiusScanSession}
@@ -3335,6 +3513,7 @@ const handleScanAndRefresh = useCallback(async () => {
                   bannedStationIDs,
                 );
                 setRadiusResults(filtered);
+                clearRadiusDistanceLens();
                 setRadiusScanSession(
                   createRadiusScanSession({
                     results: filtered,

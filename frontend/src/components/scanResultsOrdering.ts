@@ -60,6 +60,12 @@ export function compareScanRows<SortKey extends string>(
   b: IndexedOrderingRow,
   options: CompareScanRowsOptions<SortKey>,
 ): number {
+  const aUnreachable = Boolean(a.row.DistanceLensUnreachable);
+  const bUnreachable = Boolean(b.row.DistanceLensUnreachable);
+  if (aUnreachable !== bUnreachable) {
+    return aUnreachable ? 1 : -1;
+  }
+
   if (options.orderingMode === "smart") {
     const aSignals = options.getSmartSignals(a);
     const bSignals = options.getSmartSignals(b);
