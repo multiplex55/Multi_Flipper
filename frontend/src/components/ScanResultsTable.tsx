@@ -6311,6 +6311,12 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
         <RadiusInsightsPanel
           topRoutePicks={topRoutePicks}
           actionQueue={actionQueue}
+          routeExplanationByKey={routeExplanationByKey}
+          lensDeltaByRouteKey={routeLensDeltaByKey}
+          batchMetricsByRoute={batchMetricsByRoute}
+          routeAggregateMetricsByRoute={routeAggregateMetricsByRoute}
+          routeFillerCandidatesByKey={routeFillerCandidatesByKey}
+          lensActive={decisionLens !== "recommended"}
           loopOpportunities={showLoopPanel ? effectiveLoopOpportunities : []}
           openRouteWorkbench={openRouteWorkbench}
           onOpenBatchBuilderForRoute={openBatchBuilderForRoute}
@@ -6355,6 +6361,10 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
           actionQueue={actionQueue}
           routeExplanationByKey={routeExplanationByKey}
           lensDeltaByRouteKey={routeLensDeltaByKey}
+          batchMetricsByRoute={batchMetricsByRoute}
+          routeAggregateMetricsByRoute={routeAggregateMetricsByRoute}
+          routeFillerCandidatesByKey={routeFillerCandidatesByKey}
+          lensActive={decisionLens !== "recommended"}
           loopOpportunities={showLoopPanel ? effectiveLoopOpportunities : []}
           suppressionSummary={
             suppressionTelemetry.softSessionFiltered > 0 ||
