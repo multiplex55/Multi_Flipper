@@ -152,6 +152,8 @@ import {
   type RouteBadgeFilter,
 } from "@/lib/useRadiusRouteInsights";
 import type { RadiusScanSession } from "@/lib/radiusScanSession";
+import { radiusRowKey } from "@/lib/radiusRowIdentity";
+import type { RadiusHubActionPayload } from "@/lib/radiusHubActions";
 import {
   buildRouteManifestFromFlipRows,
   type RouteHandoffContext,
@@ -373,8 +375,16 @@ interface Props {
   onSendToRouteQueue?: (routeKey: string) => void;
   buyHubs?: RadiusHubSummary[];
   sellHubs?: RadiusHubSummary[];
-  onOpenHubRows?: (hub: RadiusHubSummary, side: "buy" | "sell") => void;
-  onSetHubLock?: (hub: RadiusHubSummary, side: "buy" | "sell") => void;
+  onOpenHubRows?: (
+    hub: RadiusHubSummary,
+    side: "buy" | "sell",
+    action?: RadiusHubActionPayload,
+  ) => void;
+  onSetHubLock?: (
+    hub: RadiusHubSummary,
+    side: "buy" | "sell",
+    action?: RadiusHubActionPayload,
+  ) => void;
   onHubScopeRowsChange?: (snapshot: { mode: HubScopeMode; rows: FlipResult[] }) => void;
   onRouteHandoff?: (
     context: RouteHandoffContext,
@@ -2763,7 +2773,7 @@ export function ScanResultsTable({
           excludedByRowVisibility,
           excludedByFillabilityOrStalePolicy: false,
         };
-      }),
+      }, radiusRowKey),
     [
       activeHubScopeRows,
       endpointPreferenceMetaByRowId,

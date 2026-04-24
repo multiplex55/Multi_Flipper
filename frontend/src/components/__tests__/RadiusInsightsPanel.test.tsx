@@ -234,6 +234,8 @@ describe("RadiusInsightsPanel", () => {
         },
         buy: { rowCount: 2, distinctItems: 2, totalProfit: 10_000, totalCapital: 20_000 },
         sell: { rowCount: 1, distinctItems: 1, totalProfit: 5_000, totalCapital: 10_000 },
+        buyRowIds: ["buy:1", "buy:2"],
+        sellRowIds: ["sell:1"],
         buyMatchIdentity: {
           mode: "structure_contains",
           systemId: 30000144,
@@ -267,13 +269,19 @@ describe("RadiusInsightsPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: /major trade hubs/i }));
     fireEvent.click(screen.getByRole("button", { name: "Open buy rows" }));
     fireEvent.click(screen.getByRole("button", { name: "Buy lock" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open sell rows" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sell lock" }));
 
-    expect(onOpenHubRows).toHaveBeenCalledTimes(1);
-    expect(onSetHubLock).toHaveBeenCalledTimes(1);
+    expect(onOpenHubRows).toHaveBeenCalledTimes(2);
+    expect(onSetHubLock).toHaveBeenCalledTimes(2);
 
     const hubArg = onOpenHubRows.mock.calls[0][0];
     expect(hubArg.major_hub_match?.mode).toBe("structure_contains");
     expect(hubArg.major_hub_match?.normalizedStationContains).toBe("tranquility trading tower");
+    expect(onOpenHubRows.mock.calls[0][2]).toEqual({ rowIds: ["buy:1", "buy:2"] });
+    expect(onSetHubLock.mock.calls[0][2]).toEqual({ rowIds: ["buy:1", "buy:2"] });
+    expect(onOpenHubRows.mock.calls[1][2]).toEqual({ rowIds: ["sell:1"] });
+    expect(onSetHubLock.mock.calls[1][2]).toEqual({ rowIds: ["sell:1"] });
 
     const rows = [
       {
@@ -295,5 +303,52 @@ describe("RadiusInsightsPanel", () => {
         : undefined,
     });
     expect(filtered).toEqual([rows[0]]);
+  });
+
+  it("disables directional buttons when corresponding count is zero", () => {
+    const onOpenHubRows = vi.fn();
+    const onSetHubLock = vi.fn();
+    const majorHubInsights: RadiusMajorHubMetrics[] = [
+      {
+        hub: {
+          key: "jita",
+          label: "Jita",
+          systemName: "Jita",
+          systemId: 30000142,
+        },
+        buy: { rowCount: 0, distinctItems: 0, totalProfit: 0, totalCapital: 0 },
+        sell: { rowCount: 1, distinctItems: 1, totalProfit: 1000, totalCapital: 2000 },
+        buyRowIds: [],
+        sellRowIds: ["sell:only"],
+        buyMatchIdentity: { mode: "system", systemId: 30000142, normalizedSystemName: "jita" },
+        sellMatchIdentity: { mode: "system", systemId: 30000142, normalizedSystemName: "jita" },
+      },
+    ];
+
+    render(
+      <I18nProvider>
+        <RadiusInsightsPanel
+          topRoutePicks={makePicks()}
+          actionQueue={makeQueue()}
+          loopOpportunities={makeLoops()}
+          openRouteWorkbench={vi.fn()}
+          onOpenHubRows={onOpenHubRows}
+          onSetHubLock={onSetHubLock}
+          majorHubInsights={majorHubInsights}
+          compactTeaser
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /major trade hubs/i }));
+    expect(screen.getByRole("button", { name: "Open buy rows" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Buy lock" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Open sell rows" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "Sell lock" })).not.toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Open buy rows" }));
+    fireEvent.click(screen.getByRole("button", { name: "Buy lock" }));
+    expect(onOpenHubRows).toHaveBeenCalledTimes(0);
+    expect(onSetHubLock).toHaveBeenCalledTimes(0);
   });
 });
