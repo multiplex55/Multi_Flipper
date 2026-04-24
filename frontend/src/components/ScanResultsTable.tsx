@@ -157,6 +157,11 @@ import {
   type OrderingMode,
   type SortDir,
 } from "@/components/scanResultsOrdering";
+import {
+  SCORING_RECIPE_OPTIONS,
+  SCORING_RECIPES,
+  type ScoringRecipeId,
+} from "@/lib/scoringPresets";
 import type { RouteExecutionWorkspace } from "@/lib/useRouteExecutionWorkspace";
 import {
   loadRouteAssignments,
@@ -3878,6 +3883,23 @@ export function ScanResultsTable({
     }
   }, [applyDecisionLens, decisionLens]);
 
+  const applyScoringRecipe = useCallback((recipeId: ScoringRecipeId) => {
+    const recipe = SCORING_RECIPES[recipeId];
+    if (!recipe) return;
+    setSortKey(recipe.sortKey as SortKey);
+    setSortDir(recipe.sortDir);
+    if (recipe.routeSafetyFilter) {
+      setRouteSafetyFilter(recipe.routeSafetyFilter);
+    }
+    if (recipe.urgencyFilter) {
+      setUrgencyFilter(recipe.urgencyFilter as UrgencyFilterMode);
+    }
+    if (recipe.filters) {
+      setFilters((prev) => ({ ...prev, ...recipe.filters }));
+    }
+    setDecisionLens("custom");
+  }, []);
+
   const hasActiveFilters = Object.values(filters).some((v) => !!v);
 
   const toggleSelect = useCallback((id: number) => {
@@ -5442,6 +5464,20 @@ export function ScanResultsTable({
 
         {showAdvancedToolbar && results.length > 0 && !scanning && (
           <div id="scan-results-advanced-toolbar" className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+            <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/30 text-[11px]">
+              <span className="text-eve-dim px-1">Recipes</span>
+              {SCORING_RECIPE_OPTIONS.map((recipe) => (
+                <button
+                  key={recipe.id}
+                  type="button"
+                  onClick={() => applyScoringRecipe(recipe.id)}
+                  className="px-1.5 py-0.5 rounded-sm border border-eve-border/50 text-eve-dim hover:text-eve-text"
+                  data-testid={`scoring-recipe:${recipe.id}`}
+                >
+                  {recipe.label}
+                </button>
+              ))}
+            </div>
             {!isRegionGrouped && (
               <>
                 <div ref={trackedPanelRootRef} className="relative">

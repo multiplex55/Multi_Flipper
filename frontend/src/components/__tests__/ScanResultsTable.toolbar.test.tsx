@@ -370,4 +370,25 @@ describe("ScanResultsTable advanced toolbar", () => {
       screen.getByRole("group", { name: "Ranking and ordering controls" }),
     ).toBeInTheDocument();
   });
+
+  it("applies scoring recipes to update sort and filter state", () => {
+    renderTable([makeRow(), makeRow({ TypeID: 102, TypeName: "Item 102", RealProfit: 800 })]);
+    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
+
+    fireEvent.click(screen.getByTestId("scoring-recipe:fragile_first"));
+
+    const routeSafetySelect = screen.getByTestId(
+      "route-safety-filter-select",
+    ) as HTMLSelectElement;
+    expect(routeSafetySelect.value).toBe("red");
+    expect(screen.getByTestId("active-filter-chip:route-safety")).toHaveTextContent(
+      "Route safety: red",
+    );
+    expect(screen.getByTestId("active-filter-chip:urgency-filter")).toHaveTextContent(
+      "Urgency: fragile",
+    );
+    expect(screen.getByTestId("urgency-sort-button")).toHaveClass(
+      "border-eve-accent/70",
+    );
+  });
 });

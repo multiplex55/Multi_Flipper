@@ -51,4 +51,18 @@ describe("ScoringProfileEditor", () => {
 
     expect(onChange).toHaveBeenCalledWith({ ...baseValue, profit_weight: 42 });
   });
+
+  it("emits selected run recipe", () => {
+    const onRecipeApply = vi.fn();
+    render(
+      <ScoringProfileEditor
+        value={baseValue}
+        onChange={vi.fn()}
+        onRecipeApply={onRecipeApply}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Fast run" }));
+    expect(onRecipeApply).toHaveBeenCalledWith("fast_run");
+  });
 });
