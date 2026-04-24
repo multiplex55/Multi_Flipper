@@ -1,6 +1,7 @@
 import { executionQualityForFlip, requestedUnitsForFlip } from "@/lib/executionQuality";
 import { routeLineKey } from "@/lib/batchMetrics";
 import type { FlipResult } from "@/lib/types";
+import { computeCargoFillScore } from "@/lib/cargoFillScore";
 
 export interface FillerCandidate {
   lineKey: string;
@@ -161,13 +162,29 @@ export function buildFillerCandidates(
       const normalizedConfidence = clamp(candidate.confidencePercent / 100, 0, 1);
       const normalizedQuality = clamp(candidate.executionQuality / 100, 0, 1);
       const normalizedCapitalEfficiency = clamp(candidate.capitalEfficiency / maxCapEfficiency, 0, 1);
+      const fillScore = computeCargoFillScore({
+        cargoFillRatio: candidate.fitPercent / 100,
+        iskPerJump: candidate.incrementalProfitIsk,
+        expectedProfitIsk: candidate.incrementalProfitIsk,
+        capitalEfficiency: normalizedCapitalEfficiency,
+        confidencePercent: candidate.confidencePercent,
+        executionQuality: candidate.executionQuality,
+        riskPenalty: candidate.riskPenalty,
+        slippagePenalty: clamp(
+          ((candidate.row.SlippageBuyPct ?? 0) + (candidate.row.SlippageSellPct ?? 0)) /
+            12,
+          0,
+          1,
+        ),
+      });
       const rankingScore =
-        normalizedProfit * 0.35 +
-        normalizedIskPerM3 * 0.18 +
+        normalizedProfit * 0.18 +
+        normalizedIskPerM3 * 0.14 +
         normalizedConfidence * 0.14 +
         normalizedQuality * 0.14 +
-        normalizedCapitalEfficiency * 0.12 -
-        candidate.riskPenalty * 0.45;
+        normalizedCapitalEfficiency * 0.1 +
+        (fillScore / 100) * 0.3 -
+        candidate.riskPenalty * 0.2;
       return { ...candidate, rankingScore };
     })
     .sort((left, right) => {
