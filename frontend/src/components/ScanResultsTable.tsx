@@ -109,7 +109,8 @@ import {
 } from "@/lib/endpointPreferences";
 import { RadiusInsightsPanel } from "./RadiusInsightsPanel";
 import { buildRadiusMajorHubInsights } from "@/lib/radiusMajorHubInsights";
-import type { RadiusHubSummary } from "@/lib/radiusHubSummaries";
+import { buildRadiusHubSummaries, type RadiusHubSummary } from "@/lib/radiusHubSummaries";
+import { DEFAULT_HUB_SCOPE_MODE, rowsForHubScope, type HubScopeMode } from "@/lib/radiusHubScope";
 import {
   buildRouteDecisionExplanation,
   explainLensDelta,
@@ -194,6 +195,7 @@ const RADIUS_ROUTE_INSIGHTS_HIDDEN_STORAGE_KEY =
   "eve-radius-route-insights-hidden:v1";
 const ONE_LEG_MODE_STORAGE_KEY = "eve-radius-one-leg-mode:v1";
 const PERFORMANCE_LOG_THRESHOLD_MS = 8;
+const HUB_SCOPE_MODE_STORAGE_KEY = "eve-radius-hub-scope-mode:v1";
 
 type SyntheticSortKey =
   | "RouteSafety"
@@ -371,6 +373,7 @@ interface Props {
   sellHubs?: RadiusHubSummary[];
   onOpenHubRows?: (hub: RadiusHubSummary, side: "buy" | "sell") => void;
   onSetHubLock?: (hub: RadiusHubSummary, side: "buy" | "sell") => void;
+  onHubScopeRowsChange?: (snapshot: { mode: HubScopeMode; rows: FlipResult[] }) => void;
   onRouteHandoff?: (
     context: RouteHandoffContext,
     manifestText: string,
@@ -1546,6 +1549,7 @@ export function ScanResultsTable({
   sellHubs = [],
   onOpenHubRows,
   onSetHubLock,
+  onHubScopeRowsChange,
   onRouteHandoff,
   featureConfig = DEFAULT_SCAN_RESULTS_TABLE_FEATURE_CONFIG,
   routeWorkspace,
@@ -1561,10 +1565,6 @@ export function ScanResultsTable({
   );
   const effectiveLoopOpportunities =
     radiusScanSession?.loopOpportunities ?? loopOpportunities ?? [];
-  const majorHubInsights = useMemo(
-    () => buildRadiusMajorHubInsights(radiusScanSession?.results ?? results),
-    [radiusScanSession?.results, results],
-  );
 
   const allColumnDefs = useMemo(
     () => buildColumnDefs(showRegions, columnProfile),
@@ -1693,6 +1693,16 @@ export function ScanResultsTable({
   const [endpointPresetSelection, setEndpointPresetSelection] = useState<
     "" | keyof typeof ENDPOINT_PREFERENCE_PRESETS
   >("");
+  const [hubScopeMode, setHubScopeMode] = useState<HubScopeMode>(() => {
+    try {
+      const saved = localStorage.getItem(HUB_SCOPE_MODE_STORAGE_KEY);
+      return saved === "session" || saved === "visible"
+        ? saved
+        : DEFAULT_HUB_SCOPE_MODE;
+    } catch {
+      return DEFAULT_HUB_SCOPE_MODE;
+    }
+  });
   const [majorHubInput, setMajorHubInput] = useState<string>(() => {
     try {
       const raw = localStorage.getItem(ENDPOINT_PREFS_STORAGE_KEY);
@@ -2292,6 +2302,14 @@ export function ScanResultsTable({
     }
   }, [endpointPreferenceMode, endpointPreferenceProfile, majorHubSystems]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(HUB_SCOPE_MODE_STORAGE_KEY, hubScopeMode);
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [hubScopeMode]);
+
   const endpointPrefsSummary = useMemo(() => {
     const active: string[] = [];
     if (endpointPreferenceProfile.requireNonHubBuy) active.push("buy: non-hub");
@@ -2380,6 +2398,7 @@ export function ScanResultsTable({
   const {
     indexed,
     filtered,
+    sessionScopedRows,
     sorted,
     variantByRowId,
     endpointPreferenceMetaByRowId,
@@ -2443,9 +2462,9 @@ export function ScanResultsTable({
       return buyMatches && sellMatches && legMatches;
     });
 
-    const filteredScoreContext = buildFlipScoreContext(
-      lockFiltered.map((item) => item.row),
-    );
+    const sessionScopedRows = lockFiltered.map((item) => item.row);
+
+    const filteredScoreContext = buildFlipScoreContext(sessionScopedRows);
 
     const routeSafetyRankForRow = (row: FlipResult): number => {
       const k = `${row.BuySystemID}:${row.SellSystemID}`;
@@ -2554,6 +2573,7 @@ export function ScanResultsTable({
     return {
       indexed,
       filtered: lockFiltered,
+      sessionScopedRows,
       sorted,
       variantByRowId,
       endpointPreferenceMetaByRowId,
@@ -2678,6 +2698,36 @@ export function ScanResultsTable({
     trackedVisibilityMode,
     watchlistIds,
   ]);
+
+  const hubScopeRows = useMemo(
+    () => ({
+      session: sessionScopedRows,
+      visible: datasetRows.map((item) => item.row),
+    }),
+    [datasetRows, sessionScopedRows],
+  );
+
+  const activeHubScopeRows = useMemo(
+    () => rowsForHubScope(hubScopeRows, hubScopeMode),
+    [hubScopeRows, hubScopeMode],
+  );
+
+  const scopedRadiusHubSummaries = useMemo(
+    () => buildRadiusHubSummaries(activeHubScopeRows),
+    [activeHubScopeRows],
+  );
+
+  const displayBuyHubs = buyHubs.length > 0 ? buyHubs : scopedRadiusHubSummaries.buyHubs;
+  const displaySellHubs = sellHubs.length > 0 ? sellHubs : scopedRadiusHubSummaries.sellHubs;
+
+  const majorHubInsights = useMemo(
+    () => buildRadiusMajorHubInsights(activeHubScopeRows),
+    [activeHubScopeRows],
+  );
+
+  useEffect(() => {
+    onHubScopeRowsChange?.({ mode: hubScopeMode, rows: activeHubScopeRows });
+  }, [activeHubScopeRows, hubScopeMode, onHubScopeRowsChange]);
 
   const displayScoreContext = useMemo(
     () => buildFlipScoreContext(datasetRows.map((item) => item.row)),
@@ -6343,11 +6393,13 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
           }}
           compactTeaser
           compactDashboard={compactDashboard}
-          buyHubs={buyHubs}
-          sellHubs={sellHubs}
+          buyHubs={displayBuyHubs}
+          sellHubs={displaySellHubs}
           onOpenHubRows={onOpenHubRows}
           onSetHubLock={onSetHubLock}
           majorHubInsights={majorHubInsights}
+          hubScopeMode={hubScopeMode}
+          onHubScopeModeChange={setHubScopeMode}
         />
       )}
 

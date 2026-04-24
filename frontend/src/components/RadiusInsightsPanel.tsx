@@ -5,6 +5,7 @@ import type { ActionQueueItem, TopRoutePicks } from "@/lib/radiusMetrics";
 import type { LoopOpportunity } from "@/lib/loopPlanner";
 import type { RadiusHubSummary } from "@/lib/radiusHubSummaries";
 import type { RadiusMajorHubMetrics } from "@/lib/radiusMajorHubInsights";
+import type { HubScopeMode } from "@/lib/radiusHubScope";
 import { LoopOpportunitiesPanel } from "./LoopOpportunitiesPanel";
 import { ExplanationPopoverShell } from "@/components/decision/ExplanationPopoverShell";
 import type { RouteDecisionExplanation } from "@/lib/routeExplanation";
@@ -48,6 +49,8 @@ type RadiusInsightsPanelProps = {
   onOpenHubRows?: (hub: RadiusHubSummary, side: "buy" | "sell") => void;
   onSetHubLock?: (hub: RadiusHubSummary, side: "buy" | "sell") => void;
   majorHubInsights?: RadiusMajorHubMetrics[];
+  hubScopeMode?: HubScopeMode;
+  onHubScopeModeChange?: (mode: HubScopeMode) => void;
   routeExplanationByKey?: Record<string, RouteDecisionExplanation>
   lensDeltaByRouteKey?: Record<string, string>
 };
@@ -115,6 +118,8 @@ export function RadiusInsightsPanel({
   onOpenHubRows,
   onSetHubLock,
   majorHubInsights = [],
+  hubScopeMode = "visible",
+  onHubScopeModeChange,
   routeExplanationByKey = {},
   lensDeltaByRouteKey = {},
 }: RadiusInsightsPanelProps) {
@@ -330,7 +335,25 @@ export function RadiusInsightsPanel({
                 <span aria-hidden="true">{majorHubsExpanded ? "▾" : "▸"}</span>
               </button>
               {majorHubsExpanded ? (
-                <div className="mt-2 grid grid-cols-1 gap-1.5 md:grid-cols-2 xl:grid-cols-3">
+                <>
+                  <div className="mt-2 mb-1 flex items-center gap-1 text-[10px]">
+                    <span className="text-eve-dim">Scope:</span>
+                    <button
+                      type="button"
+                      onClick={() => onHubScopeModeChange?.("session")}
+                      className={`rounded-sm border px-1.5 py-0.5 ${hubScopeMode === "session" ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10" : "border-eve-border/60 text-eve-dim hover:text-eve-text"}`}
+                    >
+                      Session
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onHubScopeModeChange?.("visible")}
+                      className={`rounded-sm border px-1.5 py-0.5 ${hubScopeMode === "visible" ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10" : "border-eve-border/60 text-eve-dim hover:text-eve-text"}`}
+                    >
+                      Visible
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 gap-1.5 md:grid-cols-2 xl:grid-cols-3">
                   {majorHubInsights.map((entry) => (
                     <article
                       key={entry.hub.key}
@@ -399,7 +422,8 @@ export function RadiusInsightsPanel({
                       )}
                     </article>
                   ))}
-                </div>
+                  </div>
+                </>
               ) : null}
             </section>
           </div>
