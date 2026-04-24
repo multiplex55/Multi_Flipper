@@ -10,6 +10,19 @@ export type RadiusMajorHubDefinition = {
   structureName?: string;
 };
 
+export type RadiusMajorHubMatchIdentity =
+  | {
+      mode: "system";
+      systemId: number;
+      normalizedSystemName: string;
+    }
+  | {
+      mode: "structure_contains";
+      systemId: number;
+      normalizedSystemName: string;
+      normalizedStationContains: string;
+    };
+
 export type RadiusMajorHubDirectionMetrics = {
   rowCount: number;
   distinctItems: number;
@@ -21,6 +34,8 @@ export type RadiusMajorHubMetrics = {
   hub: RadiusMajorHubDefinition;
   buy: RadiusMajorHubDirectionMetrics;
   sell: RadiusMajorHubDirectionMetrics;
+  buyMatchIdentity: RadiusMajorHubMatchIdentity;
+  sellMatchIdentity: RadiusMajorHubMatchIdentity;
 };
 
 export type RadiusMajorHubRowEvaluationContext = {
@@ -70,8 +85,44 @@ export const RADIUS_CANONICAL_MAJOR_HUBS: RadiusMajorHubDefinition[] = [
   },
 ];
 
-function normalize(value: string | undefined): string {
-  return (value ?? "").trim().toLowerCase();
+export function normalizeHubMatchText(value: string | undefined): string {
+  return (value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+export function buildHubMatchIdentity(
+  hub: RadiusMajorHubDefinition,
+): RadiusMajorHubMatchIdentity {
+  const normalizedSystemName = normalizeHubMatchText(hub.systemName);
+  if (hub.structureName) {
+    return {
+      mode: "structure_contains",
+      systemId: hub.systemId,
+      normalizedSystemName,
+      normalizedStationContains: normalizeHubMatchText(hub.structureName),
+    };
+  }
+  return {
+    mode: "system",
+    systemId: hub.systemId,
+    normalizedSystemName,
+  };
+}
+
+export function matchesHubIdentity(
+  identity: RadiusMajorHubMatchIdentity,
+  row: FlipResult,
+  direction: HubDirection,
+): boolean {
+  const metric = metricOf(row, direction);
+  if (identity.systemId > 0 && metric.systemId !== identity.systemId) return false;
+  if (identity.mode === "structure_contains") {
+    return normalizeHubMatchText(metric.stationName).includes(identity.normalizedStationContains);
+  }
+  return normalizeHubMatchText(metric.systemName) === identity.normalizedSystemName;
 }
 
 function metricOf(row: FlipResult, direction: HubDirection): {
@@ -131,21 +182,6 @@ export function isRowCountedInMajorHubMetrics(
   return true;
 }
 
-function matchesHub(
-  hub: RadiusMajorHubDefinition,
-  row: FlipResult,
-  direction: HubDirection,
-): boolean {
-  const metric = metricOf(row, direction);
-  if (hub.structureName) {
-    return normalize(metric.stationName).includes(normalize(hub.structureName));
-  }
-  return (
-    metric.systemId === hub.systemId ||
-    normalize(metric.systemName) === normalize(hub.systemName)
-  );
-}
-
 export function buildRadiusMajorHubInsights(
   rows: FlipResult[],
   resolveContext?: (row: FlipResult) => RadiusMajorHubRowEvaluationContext,
@@ -155,19 +191,21 @@ export function buildRadiusMajorHubInsights(
   );
 
   return RADIUS_CANONICAL_MAJOR_HUBS.map((hub) => {
+    const buyMatchIdentity = buildHubMatchIdentity(hub);
+    const sellMatchIdentity = buildHubMatchIdentity(hub);
     const buyTypeIds = new Set<number>();
     const sellTypeIds = new Set<number>();
     const buy = { ...ZERO_DIRECTION_METRICS };
     const sell = { ...ZERO_DIRECTION_METRICS };
 
     for (const row of countedRows) {
-      if (matchesHub(hub, row, "buy")) {
+      if (matchesHubIdentity(buyMatchIdentity, row, "buy")) {
         buy.rowCount += 1;
         buy.totalProfit += Number(row.DayPeriodProfit ?? row.TotalProfit ?? row.ExpectedProfit ?? 0);
         buy.totalCapital += Number(row.DayCapitalRequired ?? row.BuyPrice * Math.max(0, row.UnitsToBuy ?? 0));
         buyTypeIds.add(row.TypeID);
       }
-      if (matchesHub(hub, row, "sell")) {
+      if (matchesHubIdentity(sellMatchIdentity, row, "sell")) {
         sell.rowCount += 1;
         sell.totalProfit += Number(row.DayPeriodProfit ?? row.TotalProfit ?? row.ExpectedProfit ?? 0);
         sell.totalCapital += Number(row.DayCapitalRequired ?? row.BuyPrice * Math.max(0, row.UnitsToBuy ?? 0));
@@ -178,6 +216,6 @@ export function buildRadiusMajorHubInsights(
     buy.distinctItems = buyTypeIds.size;
     sell.distinctItems = sellTypeIds.size;
 
-    return { hub, buy, sell };
+    return { hub, buy, sell, buyMatchIdentity, sellMatchIdentity };
   });
 }

@@ -1,4 +1,5 @@
 import type { FlipResult } from "@/lib/types";
+import type { RadiusMajorHubMatchIdentity } from "@/lib/radiusMajorHubInsights";
 
 export interface RadiusHubSummary {
   location_id: number;
@@ -11,6 +12,11 @@ export interface RadiusHubSummary {
   capital_required: number;
   period_profit: number;
   avg_jumps: number;
+  /**
+   * Optional major-hub criteria for exact row-set actions
+   * (e.g., Perimeter rows that specifically match TTT structure naming).
+   */
+  major_hub_match?: RadiusMajorHubMatchIdentity & { matchKey?: string };
 }
 
 function summarize(

@@ -4,6 +4,9 @@ import { I18nProvider } from "@/lib/i18n";
 import { RadiusInsightsPanel } from "@/components/RadiusInsightsPanel";
 import type { ActionQueueItem, TopRoutePicks } from "@/lib/radiusMetrics";
 import type { LoopOpportunity } from "@/lib/loopPlanner";
+import type { RadiusMajorHubMetrics } from "@/lib/radiusMajorHubInsights";
+import { filterRadiusResultsByHub } from "@/lib/radiusHubFilter";
+import type { FlipResult } from "@/lib/types";
 
 const VISIBLE_KEY = "eve-radius-insights-visible:v1";
 const TAB_KEY = "eve-radius-insights-tab:v1";
@@ -157,7 +160,7 @@ describe("RadiusInsightsPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Loops" }));
     expect(screen.getByText("Backhaul/return-leg filler opportunities")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Summary" }));
+    fireEvent.click(screen.getByRole("button", { name: "Picks" }));
     expect(screen.getByText("Top Picks")).toBeInTheDocument();
   });
 
@@ -215,5 +218,82 @@ describe("RadiusInsightsPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Outbound" }));
 
     expect(openRouteWorkbench).toHaveBeenCalledWith("sys:0->sys:0", "summary");
+  });
+
+  it("uses exact major-hub action identity for Perimeter TTT actions", () => {
+    const onOpenHubRows = vi.fn();
+    const onSetHubLock = vi.fn();
+    const majorHubInsights: RadiusMajorHubMetrics[] = [
+      {
+        hub: {
+          key: "perimeter_ttt",
+          label: "Perimeter / TTT",
+          systemName: "Perimeter",
+          systemId: 30000144,
+          structureName: "Tranquility Trading Tower",
+        },
+        buy: { rowCount: 2, distinctItems: 2, totalProfit: 10_000, totalCapital: 20_000 },
+        sell: { rowCount: 1, distinctItems: 1, totalProfit: 5_000, totalCapital: 10_000 },
+        buyMatchIdentity: {
+          mode: "structure_contains",
+          systemId: 30000144,
+          normalizedSystemName: "perimeter",
+          normalizedStationContains: "tranquility trading tower",
+        },
+        sellMatchIdentity: {
+          mode: "structure_contains",
+          systemId: 30000144,
+          normalizedSystemName: "perimeter",
+          normalizedStationContains: "tranquility trading tower",
+        },
+      },
+    ];
+
+    render(
+      <I18nProvider>
+        <RadiusInsightsPanel
+          topRoutePicks={makePicks()}
+          actionQueue={makeQueue()}
+          loopOpportunities={makeLoops()}
+          openRouteWorkbench={vi.fn()}
+          onOpenHubRows={onOpenHubRows}
+          onSetHubLock={onSetHubLock}
+          majorHubInsights={majorHubInsights}
+          compactTeaser
+        />
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /major trade hubs/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Open buy rows" }));
+    fireEvent.click(screen.getByRole("button", { name: "Buy lock" }));
+
+    expect(onOpenHubRows).toHaveBeenCalledTimes(1);
+    expect(onSetHubLock).toHaveBeenCalledTimes(1);
+
+    const hubArg = onOpenHubRows.mock.calls[0][0];
+    expect(hubArg.major_hub_match?.mode).toBe("structure_contains");
+    expect(hubArg.major_hub_match?.normalizedStationContains).toBe("tranquility trading tower");
+
+    const rows = [
+      {
+        TypeID: 1,
+        BuySystemID: 30000144,
+        BuyStation: "Perimeter - Tranquility Trading Tower",
+      },
+      {
+        TypeID: 2,
+        BuySystemID: 30000144,
+        BuyStation: "Perimeter - Caldari Business Tribunal",
+      },
+    ] as FlipResult[];
+    const filtered = filterRadiusResultsByHub(rows, {
+      side: "buy",
+      systemId: hubArg.system_id,
+      normalizedStationContains: hubArg.major_hub_match?.mode === "structure_contains"
+        ? hubArg.major_hub_match.normalizedStationContains
+        : undefined,
+    });
+    expect(filtered).toEqual([rows[0]]);
   });
 });

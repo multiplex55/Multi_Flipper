@@ -1162,7 +1162,14 @@ function App() {
   );
 
   const handleOpenRadiusHubRows = useCallback((hub: RadiusHubSummary, side: "buy" | "sell") => {
-    setRadiusHubFilter({ side, systemId: hub.system_id });
+    setRadiusHubFilter({
+      side,
+      systemId: hub.system_id,
+      normalizedStationContains: hub.major_hub_match?.mode === "structure_contains"
+        ? hub.major_hub_match.normalizedStationContains
+        : undefined,
+      matchKey: hub.major_hub_match?.matchKey,
+    });
     if (side === "buy") {
       setParams((prev) => ({ ...prev, system_name: hub.system_name }));
     } else {
@@ -1172,6 +1179,14 @@ function App() {
   }, [addToast, radiusHubScopeMode]);
 
   const handleSetRadiusHubLock = useCallback((hub: RadiusHubSummary, side: "buy" | "sell") => {
+    if (hub.major_hub_match?.mode === "structure_contains") {
+      setRadiusHubFilter({
+        side,
+        systemId: hub.system_id,
+        normalizedStationContains: hub.major_hub_match.normalizedStationContains,
+        matchKey: hub.major_hub_match.matchKey,
+      });
+    }
     if (side === "buy") {
       setParams((prev) => ({ ...prev, system_name: hub.system_name }));
       addToast(`Buy lock set to ${hub.system_name} (${radiusHubScopeMode} scope)`, "success");
