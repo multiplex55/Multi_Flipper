@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "@/App";
+import { radiusColumnRegistry } from "@/lib/radiusColumnRegistry";
 
 const { mockGetConfig } = vi.hoisted(() => ({
   mockGetConfig: vi.fn(async () => ({ system_name: "Jita" })),
@@ -18,6 +19,8 @@ vi.mock("@/lib/api", () => ({
   scanContracts: vi.fn(async () => []),
   testAlertChannels: vi.fn(),
   getWatchlist: vi.fn(async () => []),
+  listPinnedOpportunities: vi.fn(async () => []),
+  subscribePinnedOpportunityChanges: vi.fn(() => () => undefined),
   getBanlistItems: vi.fn(async () => []),
   getBannedStations: vi.fn(async () => []),
   rebootStationCache: vi.fn(async () => ({ ok: true, cleared: 1 })),
@@ -90,7 +93,15 @@ vi.mock("@/components/CharacterPopup", () => ({ CharacterPopup: () => null }));
 vi.mock("@/components/TopActionButtons", () => ({ TopActionButtons: () => null }));
 vi.mock("@/components/RadiusColumnGuideModal", () => ({
   RadiusColumnGuideModal: ({ open }: { open: boolean }) =>
-    open ? <div data-testid="radius-guide-modal" /> : null,
+    open ? (
+      <div data-testid="radius-guide-modal">
+        {Array.from(
+          new Set(radiusColumnRegistry.map((entry) => entry.category)),
+        ).map((category) => (
+          <span key={category}>{category}</span>
+        ))}
+      </div>
+    ) : null,
 }));
 
 beforeEach(() => {
@@ -126,5 +137,14 @@ describe("App radius column guide entry points", () => {
     fireEvent.click((await screen.findAllByRole("button", { name: "radiusGuideButtonLabel" }))[0]);
 
     expect(screen.getByTestId("radius-guide-modal")).toBeInTheDocument();
+  });
+
+  it("guide includes expected registry categories", async () => {
+    render(<App />);
+    fireEvent.click((await screen.findAllByRole("button", { name: "radiusGuideButtonLabel" }))[0]);
+
+    expect(screen.getByText("Market Depth")).toBeInTheDocument();
+    expect(screen.getByText("Route Pack Aggregates")).toBeInTheDocument();
+    expect(screen.getByText("Prioritization")).toBeInTheDocument();
   });
 });
