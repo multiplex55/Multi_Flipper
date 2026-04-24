@@ -158,6 +158,10 @@ import {
   type SortDir,
 } from "@/components/scanResultsOrdering";
 import type { RouteExecutionWorkspace } from "@/lib/useRouteExecutionWorkspace";
+import {
+  loadRouteAssignments,
+  type RouteAssignment,
+} from "@/lib/routeAssignments";
 
 export const calcRouteConfidence = calcRouteConfidenceFromInsights;
 
@@ -1997,6 +2001,15 @@ export function ScanResultsTable({
   >({});
   const [routeVerificationProfileByKey, setRouteVerificationProfileByKey] =
     useState<Record<string, string>>({});
+  const [routeAssignmentsByKey, setRouteAssignmentsByKey] = useState<
+    Record<string, RouteAssignment>
+  >(() => {
+    const out: Record<string, RouteAssignment> = {};
+    for (const assignment of loadRouteAssignments()) {
+      out[assignment.routeKey] = assignment;
+    }
+    return out;
+  });
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [filterSearch, setFilterSearch] = useState("");
   const filterPanelRef = useRef<HTMLDivElement>(null);
@@ -6299,6 +6312,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
       {!isRegionGrouped && showSavedRoutes && !isRadiusMode && (
         <SavedRoutePacksPanel
           packs={savedRoutePacks}
+          assignmentByRouteKey={routeAssignmentsByKey}
           onOpen={openSavedRoutePack}
           onVerify={(pack) =>
             verifyRouteGroup(
@@ -6420,6 +6434,15 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
             routeWorkspace?.openBatchBuilder(activeWorkbenchPack.routeKey)
           }
           onScrollToTable={() => scrollToRouteGroup(activeWorkbenchPack.routeKey)}
+          assignment={routeAssignmentsByKey[activeWorkbenchPack.routeKey] ?? null}
+          onAssignmentChange={(assignment) => {
+            setRouteAssignmentsByKey((prev) => {
+              const next = { ...prev };
+              if (assignment) next[assignment.routeKey] = assignment;
+              else delete next[activeWorkbenchPack.routeKey];
+              return next;
+            });
+          }}
         />
       )}
 
@@ -6985,6 +7008,14 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                                   </span>
                                   </button>
                                   <div className="inline-flex items-center gap-1 shrink-0">
+                                    {routeAssignmentsByKey[group.key] && (
+                                      <span
+                                        className="rounded-sm border border-indigo-400/50 px-1.5 py-0.5 text-[10px] text-indigo-200"
+                                        data-testid={`route-assignment-badge:${group.key}`}
+                                      >
+                                        {routeAssignmentsByKey[group.key].assignedCharacter} · {routeAssignmentsByKey[group.key].status}
+                                      </span>
+                                    )}
                                     <button
                                       type="button"
                                       onClick={() => onOpenInRoute?.(group.key)}

@@ -1,4 +1,5 @@
 import type { SavedRoutePack } from "@/lib/types";
+import type { RouteAssignment } from "@/lib/routeAssignments";
 import { formatISK } from "@/lib/format";
 
 interface SavedRoutePacksPanelProps {
@@ -15,6 +16,7 @@ interface SavedRoutePacksPanelProps {
   onMarkSold: (pack: SavedRoutePack, lineKey: string, qty: number) => void;
   onMarkSkipped: (pack: SavedRoutePack, lineKey: string, reason: string) => void;
   onResetLine: (pack: SavedRoutePack, lineKey: string) => void;
+  assignmentByRouteKey?: Record<string, RouteAssignment | undefined>;
 }
 
 function verificationAge(lastVerifiedAt: string | null): string {
@@ -35,6 +37,7 @@ export function SavedRoutePacksPanel({
   onVerificationProfileChange,
   onCopy,
   onRemove,
+  assignmentByRouteKey = {},
 }: SavedRoutePacksPanelProps) {
   return (
     <div className="border border-eve-border rounded-sm p-2 mb-2 bg-eve-panel/40" data-testid="saved-route-packs-panel">
@@ -58,7 +61,7 @@ export function SavedRoutePacksPanel({
               {packs.map((pack) => (
                 <tr key={pack.routeKey} className="border-b border-eve-border/40 last:border-b-0 align-top">
                   <td className="py-1 pr-2 text-eve-text">{pack.routeLabel}</td>
-                  <td className="py-1 pr-2">{pack.status}</td>
+                  <td className="py-1 pr-2">{pack.status}{assignmentByRouteKey[pack.routeKey] ? ` · ${assignmentByRouteKey[pack.routeKey]?.assignedCharacter} (${assignmentByRouteKey[pack.routeKey]?.status})` : ""}</td>
                   <td className="py-1 pr-2 font-mono">{formatISK(pack.summarySnapshot.routeTotalProfit)}</td>
                   <td className="py-1 pr-2">{pack.verificationSnapshot?.status ?? "Unverified"}</td>
                   <td className="py-1 pr-2">{verificationAge(pack.lastVerifiedAt)}</td>
