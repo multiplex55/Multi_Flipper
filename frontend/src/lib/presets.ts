@@ -86,8 +86,8 @@ export function sanitizePresetParams(params: Record<string, any>): Record<string
 
 const defaultScanPresetParams = {
   cargo_capacity: 5000,
-  buy_radius: 5,
-  sell_radius: 10,
+  buy_radius: 60,
+  sell_radius: 60,
   min_margin: 5,
   sales_tax_percent: 8,
   broker_fee_percent: 3,
@@ -127,7 +127,7 @@ const defaultScanPresetParams = {
   exclude_rigs_with_ship: true,
   include_structures: false,
   route_min_hops: 2,
-  route_max_hops: 5,
+  route_max_hops: 50,
   route_target_system_name: "",
   route_min_isk_per_jump: 0,
   route_allow_empty_hops: false,

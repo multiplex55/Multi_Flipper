@@ -100,8 +100,8 @@ type Config struct {
 func Default() *Config {
 	return &Config{
 		CargoCapacity:        5000,
-		BuyRadius:            5,
-		SellRadius:           10,
+		BuyRadius:            60,
+		SellRadius:           60,
 		MinMargin:            5,
 		SalesTaxPercent:      8,
 		BrokerFeePercent:     0,

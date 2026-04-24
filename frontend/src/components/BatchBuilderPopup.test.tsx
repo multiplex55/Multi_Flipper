@@ -317,7 +317,7 @@ function makeDuplicateTotalsRouteResponse(): BatchCreateRouteResponse {
 function renderPopup({
   anchorRow,
   rows,
-  routeMaxJumps = 12,
+  routeMaxJumps = 50,
   maxDetourJumpsPerNode = 3,
   onOpenPriceValidation,
   bannedTypeIDs,

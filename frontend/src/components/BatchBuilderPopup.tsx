@@ -279,7 +279,7 @@ export function BatchBuilderPopup({
   allowLowsec = false,
   allowNullsec = false,
   allowWormhole = false,
-  routeMaxJumps = 12,
+  routeMaxJumps = 50,
   maxDetourJumpsPerNode,
   salesTaxPercent = 0,
   buyBrokerFeePercent = 0,
