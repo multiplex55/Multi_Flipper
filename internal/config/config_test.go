@@ -12,11 +12,11 @@ func TestDefault_Values(t *testing.T) {
 	if c.CargoCapacity != 5000 {
 		t.Errorf("CargoCapacity = %v, want 5000", c.CargoCapacity)
 	}
-	if c.BuyRadius != 5 {
-		t.Errorf("BuyRadius = %v, want 5", c.BuyRadius)
+	if c.BuyRadius != 60 {
+		t.Errorf("BuyRadius = %v, want 60", c.BuyRadius)
 	}
-	if c.SellRadius != 10 {
-		t.Errorf("SellRadius = %v, want 10", c.SellRadius)
+	if c.SellRadius != 60 {
+		t.Errorf("SellRadius = %v, want 60", c.SellRadius)
 	}
 	if c.MinMargin != 5 {
 		t.Errorf("MinMargin = %v, want 5", c.MinMargin)

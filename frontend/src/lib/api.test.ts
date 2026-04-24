@@ -145,8 +145,8 @@ describe("config API", () => {
     const response: Partial<AppConfig> = {
       system_name: "Jita",
       cargo_capacity: 5000,
-      buy_radius: 5,
-      sell_radius: 10,
+      buy_radius: 60,
+      sell_radius: 60,
       min_margin: 5,
       sales_tax_percent: 8,
       broker_fee_percent: 0,

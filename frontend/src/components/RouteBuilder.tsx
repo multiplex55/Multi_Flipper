@@ -79,7 +79,7 @@ export function RouteBuilder({
     params.route_min_hops ?? 2,
   );
   const [maxHops, setMaxHops] = useState<number | "">(
-    params.route_max_hops ?? 5,
+    params.route_max_hops ?? 50,
   );
   const [targetSystemName, setTargetSystemName] = useState(
     params.route_target_system_name ?? "",
@@ -133,7 +133,7 @@ export function RouteBuilder({
   }, [params.route_min_hops]);
 
   useEffect(() => {
-    setMaxHops(params.route_max_hops ?? 5);
+    setMaxHops(params.route_max_hops ?? 50);
   }, [params.route_max_hops]);
   useEffect(() => {
     setTargetSystemName(params.route_target_system_name ?? "");
@@ -187,7 +187,7 @@ export function RouteBuilder({
   const handleMinHopsChange = useCallback(
     (value: number) => {
       const boundedMin = Math.max(1, Math.min(25, value));
-      const currentMax = typeof maxHops === "number" ? maxHops : 5;
+      const currentMax = typeof maxHops === "number" ? maxHops : 50;
       const boundedMax = Math.max(boundedMin, Math.min(25, currentMax));
       setMinHops(boundedMin);
       setMaxHops(boundedMax);
