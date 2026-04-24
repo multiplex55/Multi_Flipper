@@ -46,7 +46,7 @@ export function RoutePilotAssignmentsPanel({
     getCharacterLocation()
       .then((location) => {
         if (!isMounted || !location) return;
-        const display = [location.system_name, location.station_name]
+        const display = [location.solar_system_name, location.station_name]
           .filter(Boolean)
           .join(" · ");
         setLocationLabel(display);
