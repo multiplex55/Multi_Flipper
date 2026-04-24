@@ -221,10 +221,10 @@ export function RadiusRouteWorkspace({
       rows: activeRouteRows,
       pack: activePack,
       loops: loopsForRoute,
-      cargoCapacityM3: params.CargoCapacity ?? 0,
+      cargoCapacityM3: params.cargo_capacity ?? 0,
       limitPerSection: 4,
     });
-  }, [activePack, activeRouteRows, radiusScanSession?.loopOpportunities, params.CargoCapacity]);
+  }, [activePack, activeRouteRows, radiusScanSession?.loopOpportunities, params.cargo_capacity]);
 
   const savedPack = routeWorkspace?.selectedPack ?? routeWorkspace?.savedRoutePacks[0] ?? null;
   const queueRouteKey = routeQueueKeys[0] ?? null;

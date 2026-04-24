@@ -115,7 +115,7 @@ export function buildRouteFillPlannerSections(input: {
       addedJumps: Math.max(0, (entry.row.TotalJumps ?? 0) - anchorJumps),
       addedM3: rowVolume(entry.row),
       confidencePercent: clamp(entry.opportunityScore * 100, 0, 100),
-      rationale: `Along-the-way detour candidate (${entry.reason.replaceAll("_", " ")})`,
+      rationale: `Along-the-way detour candidate (${entry.reason.replace(/_/g, " ")})`,
       sourceLineKeys: [entry.lineKey],
     })),
   ).slice(0, limitPerSection);
