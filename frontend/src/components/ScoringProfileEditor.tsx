@@ -3,13 +3,16 @@ import type { StrategyScoreConfig } from "@/lib/types";
 import {
   SCORING_PRESET_OPTIONS,
   SCORING_PRESETS,
+  SCORING_RECIPE_OPTIONS,
   type ScoringPresetId,
+  type ScoringRecipeId,
 } from "@/lib/scoringPresets";
 
 interface Props {
   value: StrategyScoreConfig;
   onChange: (value: StrategyScoreConfig) => void;
   onPresetApply?: (preset: ScoringPresetId, value: StrategyScoreConfig) => void;
+  onRecipeApply?: (recipe: ScoringRecipeId) => void;
   disabled?: boolean;
   compact?: boolean;
   persistKey?: string;
@@ -30,6 +33,7 @@ export function ScoringProfileEditor({
   value,
   onChange,
   onPresetApply,
+  onRecipeApply,
   disabled = false,
   compact = false,
   persistKey,
@@ -87,6 +91,7 @@ export function ScoringProfileEditor({
         <div
           className={`px-3 pb-3 border-t border-eve-border/50 ${compact ? "pt-2" : "pt-3"}`}
         >
+          <div className="mb-1 text-[11px] uppercase tracking-wide text-eve-dim">Weight presets</div>
           <div className="flex flex-wrap items-center gap-2 mb-3">
             {SCORING_PRESET_OPTIONS.map((preset) => (
               <button
@@ -107,6 +112,25 @@ export function ScoringProfileEditor({
               Weights total: {total}%
             </span>
           </div>
+
+          {onRecipeApply && (
+            <>
+              <div className="mb-1 text-[11px] uppercase tracking-wide text-eve-dim">Run recipes</div>
+              <div className="mb-3 flex flex-wrap gap-2">
+                {SCORING_RECIPE_OPTIONS.map((recipe) => (
+                  <button
+                    key={recipe.id}
+                    type="button"
+                    className="px-2 py-1 text-xs rounded-sm border border-eve-accent/40 text-eve-accent hover:bg-eve-accent/10 disabled:opacity-40"
+                    onClick={() => onRecipeApply(recipe.id)}
+                    disabled={disabled}
+                  >
+                    {recipe.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
           <div className="space-y-2">
             {sliderRows.map((row) => (

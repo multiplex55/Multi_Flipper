@@ -11,8 +11,9 @@ import type { RouteDecisionExplanation } from "@/lib/routeExplanation";
 
 const INSIGHTS_VISIBLE_STORAGE_KEY = "eve-radius-insights-visible:v1";
 const INSIGHTS_TAB_STORAGE_KEY = "eve-radius-insights-tab:v1";
+const INSIGHTS_SECTION_STORAGE_KEY = "eve-radius-insights-sections:v1";
 
-type InsightsTab = "summary" | "queue" | "loops";
+type InsightsTab = "picks" | "queue" | "loops" | "hubs";
 
 type RadiusInsightsPanelProps = {
   topRoutePicks: TopRoutePicks;
@@ -41,6 +42,7 @@ type RadiusInsightsPanelProps = {
   defaultExpanded?: boolean;
   compactDashboard?: boolean;
   compactTeaser?: boolean;
+  onToggleCompactDashboard?: () => void;
   buyHubs?: RadiusHubSummary[];
   sellHubs?: RadiusHubSummary[];
   onOpenHubRows?: (hub: RadiusHubSummary, side: "buy" | "sell") => void;
@@ -82,11 +84,11 @@ function loadVisibleState(defaultExpanded: boolean): boolean {
 function loadTabState(): InsightsTab {
   try {
     const saved = localStorage.getItem(INSIGHTS_TAB_STORAGE_KEY);
-    return saved === "queue" || saved === "loops" || saved === "summary"
+    return saved === "queue" || saved === "loops" || saved === "picks" || saved === "hubs"
       ? saved
-      : "summary";
+      : "picks";
   } catch {
-    return "summary";
+    return "picks";
   }
 }
 
@@ -107,6 +109,7 @@ export function RadiusInsightsPanel({
   defaultExpanded = false,
   compactDashboard = false,
   compactTeaser = false,
+  onToggleCompactDashboard,
   buyHubs = [],
   sellHubs = [],
   onOpenHubRows,
@@ -120,6 +123,14 @@ export function RadiusInsightsPanel({
     loadVisibleState(defaultExpanded),
   );
   const [activeTab, setActiveTab] = useState<InsightsTab>(() => loadTabState());
+  const [sectionExpanded, setSectionExpanded] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem(INSIGHTS_SECTION_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : { topBuy: true, topSell: true, major: true };
+    } catch {
+      return { topBuy: true, topSell: true, major: true };
+    }
+  });
   const [showAllQueueItems, setShowAllQueueItems] = useState(false);
   const [hubActivityExpanded, setHubActivityExpanded] = useState(false);
   const [majorHubsExpanded, setMajorHubsExpanded] = useState(false);
@@ -158,6 +169,16 @@ export function RadiusInsightsPanel({
     });
   };
 
+  const setSection = (key: string) => {
+    setSectionExpanded((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      try {
+        localStorage.setItem(INSIGHTS_SECTION_STORAGE_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
   const setTab = (tab: InsightsTab) => {
     setActiveTab(tab);
     if (tab !== "queue") setShowAllQueueItems(false);
@@ -167,6 +188,25 @@ export function RadiusInsightsPanel({
       // ignore storage errors
     }
   };
+
+  const renderHubRows = (hubs: RadiusHubSummary[], side: "buy" | "sell") => (
+    <div className="space-y-1">
+      {hubs.length === 0 ? (
+        <div className="text-[10px] text-eve-dim">No rows yet.</div>
+      ) : (
+        hubs.slice(0, 5).map((hub) => (
+          <div key={`${side}-${hub.location_id}`} className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-2 py-1">
+            <div className="text-[11px] text-eve-text truncate">{hub.station_name}</div>
+            <div className="text-[10px] text-eve-dim truncate">{hub.system_name} · items {hub.item_count} · {formatISK(hub.period_profit)}</div>
+            <div className="mt-1 flex flex-wrap gap-1">
+              <button type="button" onClick={() => onOpenHubRows?.(hub, side)} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text">Open rows</button>
+              <button type="button" onClick={() => onSetHubLock?.(hub, side)} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text">Set lock</button>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  );
 
   if (compactTeaser) {
     const openCompactRoute = (
@@ -200,42 +240,6 @@ export function RadiusInsightsPanel({
       }
       openRouteWorkbench(routeKey, "summary");
     };
-
-    const renderHubRows = (hubs: RadiusHubSummary[], side: "buy" | "sell") => (
-      <div className="space-y-1">
-        {hubs.length === 0 ? (
-          <div className="text-[10px] text-eve-dim">No rows yet.</div>
-        ) : (
-          hubs.slice(0, 5).map((hub) => (
-            <div
-              key={`${side}-${hub.location_id}`}
-              className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-2 py-1"
-            >
-              <div className="text-[11px] text-eve-text truncate">{hub.station_name}</div>
-              <div className="text-[10px] text-eve-dim truncate">
-                {hub.system_name} · items {hub.item_count} · {formatISK(hub.period_profit)}
-              </div>
-              <div className="mt-1 flex flex-wrap gap-1">
-                <button
-                  type="button"
-                  onClick={() => onOpenHubRows?.(hub, side)}
-                  className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
-                >
-                  Open rows
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onSetHubLock?.(hub, side)}
-                  className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
-                >
-                  Set lock
-                </button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    );
 
     return (
       <div className={`shrink-0 px-2 ${compactDashboard ? "pb-1" : "pb-2"}`}>
@@ -414,33 +418,25 @@ export function RadiusInsightsPanel({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <h3 className="text-[11px] uppercase tracking-wider text-eve-dim">Insights</h3>
-            <span className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-1.5 py-0.5 text-[10px] text-eve-dim">
-              Picks {pickCount}
-            </span>
-            <span className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-1.5 py-0.5 text-[10px] text-eve-dim">
-              Queue {actionQueue.length}
-            </span>
-            <span className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-1.5 py-0.5 text-[10px] text-eve-dim">
-              Loops {loopOpportunities.length}
-            </span>
+            <span className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-1.5 py-0.5 text-[10px] text-eve-dim">Picks {pickCount}</span>
+            <span className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-1.5 py-0.5 text-[10px] text-eve-dim">Queue {actionQueue.length}</span>
+            <span className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-1.5 py-0.5 text-[10px] text-eve-dim">Loops {loopOpportunities.length}</span>
           </div>
-          <button
-            type="button"
-            onClick={toggleExpanded}
-            aria-expanded={expanded}
-            className="px-2 py-0.5 rounded-sm border border-eve-border/60 text-[11px] text-eve-dim hover:text-eve-text"
-          >
-            {expanded ? "Collapse" : "Expand"}
-          </button>
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => topRoutePicks.bestRecommendedRoutePack && openRouteWorkbench(topRoutePicks.bestRecommendedRoutePack.routeKey, "summary")} className="px-2 py-0.5 rounded-sm border border-eve-accent/60 text-[11px] text-eve-accent">Open workspace</button>
+            {onToggleCompactDashboard && <button type="button" onClick={onToggleCompactDashboard} className="px-2 py-0.5 rounded-sm border border-eve-border/60 text-[11px] text-eve-dim">Compact</button>}
+            <button type="button" onClick={toggleExpanded} aria-expanded={expanded} className="px-2 py-0.5 rounded-sm border border-eve-border/60 text-[11px] text-eve-dim hover:text-eve-text">{expanded ? "Collapse" : "Expand"}</button>
+          </div>
         </div>
 
         {expanded && (
           <>
             <div className="mt-2 flex flex-wrap items-center gap-1">
               {([
-                ["summary", "Summary"],
+                ["picks", "Picks"],
                 ["queue", "Queue"],
                 ["loops", "Loops"],
+                ["hubs", "Hubs"],
               ] as const).map(([tab, label]) => {
                 const active = activeTab === tab;
                 return (
@@ -460,7 +456,7 @@ export function RadiusInsightsPanel({
               })}
             </div>
 
-            {activeTab === "summary" && (
+            {activeTab === "picks" && (
               <div className="mt-2 space-y-3">
                 <div>
                   <div className="text-[11px] uppercase tracking-wider text-eve-dim mb-2">
@@ -718,6 +714,35 @@ export function RadiusInsightsPanel({
                   defaultExpanded={false}
                   onOpenRouteWorkbench={openRouteWorkbench}
                 />
+              </div>
+            )}
+
+
+
+            {activeTab === "hubs" && (
+              <div className="mt-2 space-y-2">
+                <section className="rounded-sm border border-eve-border/60 bg-eve-panel/30 px-2 py-1">
+                  <button type="button" className="flex w-full items-center justify-between text-[11px] text-eve-accent" aria-expanded={!!sectionExpanded.topBuy} onClick={() => setSection("topBuy")}>
+                    <span>Top Buy</span><span>{sectionExpanded.topBuy ? "▾" : "▸"}</span>
+                  </button>
+                  {sectionExpanded.topBuy && <div className="mt-1">{renderHubRows(buyHubs, "buy")}</div>}
+                </section>
+                <section className="rounded-sm border border-eve-border/60 bg-eve-panel/30 px-2 py-1">
+                  <button type="button" className="flex w-full items-center justify-between text-[11px] text-eve-accent" aria-expanded={!!sectionExpanded.topSell} onClick={() => setSection("topSell")}>
+                    <span>Top Sell</span><span>{sectionExpanded.topSell ? "▾" : "▸"}</span>
+                  </button>
+                  {sectionExpanded.topSell && <div className="mt-1">{renderHubRows(sellHubs, "sell")}</div>}
+                </section>
+                <section className="rounded-sm border border-eve-border/60 bg-eve-panel/30 px-2 py-1">
+                  <button type="button" className="flex w-full items-center justify-between text-[11px] text-eve-accent" aria-expanded={!!sectionExpanded.major} onClick={() => setSection("major")}>
+                    <span>Major Hub insights</span><span>{sectionExpanded.major ? "▾" : "▸"}</span>
+                  </button>
+                  {sectionExpanded.major && (
+                    <div className="mt-1 grid grid-cols-1 gap-1.5 md:grid-cols-2">
+                      {majorHubInsights.map((entry) => (<div key={entry.hub.key} className="rounded-sm border border-eve-border/60 bg-eve-dark/40 px-2 py-1 text-[10px]"><div className="text-eve-text">{entry.hub.label}</div><div className="text-eve-dim">Buy {entry.buy.rowCount} · Sell {entry.sell.rowCount}</div></div>))}
+                    </div>
+                  )}
+                </section>
               </div>
             )}
 

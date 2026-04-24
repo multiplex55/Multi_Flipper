@@ -121,4 +121,25 @@ describe("RadiusHubSummaryPanel", () => {
     expect(onOpenHubRows).toHaveBeenCalledWith(buy[0], "buy");
     expect(onSetHubLock).toHaveBeenCalledWith(sell[0], "sell");
   });
+
+  it("renders major hub insights in nested collapsible", () => {
+    render(
+      <RadiusHubSummaryPanel
+        buyHubs={buy}
+        sellHubs={sell}
+        majorHubInsights={[
+          {
+            hub: { key: "jita", label: "Jita", systemName: "Jita", systemId: 30000142 },
+            buy: { rowCount: 4, distinctItems: 3, totalProfit: 300_000, totalCapital: 1_000_000 },
+            sell: { rowCount: 1, distinctItems: 1, totalProfit: 80_000, totalCapital: 250_000 },
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("Major hub insights")).toBeInTheDocument();
+    expect(screen.getByText("Buy here:")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /major hub insights/i }));
+    expect(screen.queryByText("Buy here:")).not.toBeInTheDocument();
+  });
 });

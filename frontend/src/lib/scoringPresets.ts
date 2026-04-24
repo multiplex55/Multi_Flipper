@@ -8,6 +8,22 @@ export interface ScoringPresetOption {
   value: StrategyScoreConfig;
 }
 
+export type ScoringRecipeId =
+  | "fast_run"
+  | "high_confidence"
+  | "cargo_efficient"
+  | "capital_efficient"
+  | "fragile_first"
+  | "backhaul_builder";
+
+export type ScoringRecipePayload = {
+  sortKey: string;
+  sortDir: "asc" | "desc";
+  routeSafetyFilter?: "all" | "green" | "yellow" | "red";
+  urgencyFilter?: "all" | "stable" | "aging" | "fragile";
+  filters?: Record<string, string>;
+};
+
 export const SCORING_PRESETS: Record<ScoringPresetId, StrategyScoreConfig> = {
   conservative: {
     profit_weight: 20,
@@ -40,6 +56,60 @@ export const SCORING_PRESET_OPTIONS: ScoringPresetOption[] = [
   },
   { id: "balanced", label: "Balanced", value: SCORING_PRESETS.balanced },
   { id: "aggressive", label: "Aggressive", value: SCORING_PRESETS.aggressive },
+];
+
+export const SCORING_RECIPES: Record<ScoringRecipeId, ScoringRecipePayload> = {
+  fast_run: {
+    sortKey: "RealIskPerJump",
+    sortDir: "desc",
+    routeSafetyFilter: "all",
+    urgencyFilter: "all",
+    filters: {},
+  },
+  high_confidence: {
+    sortKey: "ExecutionQuality",
+    sortDir: "desc",
+    routeSafetyFilter: "green",
+    urgencyFilter: "stable",
+    filters: {},
+  },
+  cargo_efficient: {
+    sortKey: "RealIskPerM3PerJump",
+    sortDir: "desc",
+    routeSafetyFilter: "yellow",
+    urgencyFilter: "all",
+    filters: {},
+  },
+  capital_efficient: {
+    sortKey: "RoutePackDailyProfitOverCapital",
+    sortDir: "desc",
+    routeSafetyFilter: "yellow",
+    urgencyFilter: "all",
+    filters: {},
+  },
+  fragile_first: {
+    sortKey: "UrgencyScore",
+    sortDir: "desc",
+    routeSafetyFilter: "red",
+    urgencyFilter: "fragile",
+    filters: {},
+  },
+  backhaul_builder: {
+    sortKey: "DailyIskPerJump",
+    sortDir: "desc",
+    routeSafetyFilter: "all",
+    urgencyFilter: "aging",
+    filters: {},
+  },
+};
+
+export const SCORING_RECIPE_OPTIONS: Array<{ id: ScoringRecipeId; label: string }> = [
+  { id: "fast_run", label: "Fast run" },
+  { id: "high_confidence", label: "High confidence" },
+  { id: "cargo_efficient", label: "Cargo efficient" },
+  { id: "capital_efficient", label: "Capital efficient" },
+  { id: "fragile_first", label: "Fragile first" },
+  { id: "backhaul_builder", label: "Backhaul builder" },
 ];
 
 export const DEFAULT_STRATEGY_SCORE: StrategyScoreConfig =
