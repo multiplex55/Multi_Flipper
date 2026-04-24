@@ -1771,7 +1771,7 @@ function App() {
   ]);
 const refreshCurrentLocationIntoScanParams = useCallback(
   async (): Promise<ScanParams> => {
-    if (!authStatus.logged_in || !activeCharacterId) {
+    if (!authStatus.logged_in || activeCharacterId == null) {
       return params;
     }
 
@@ -2048,7 +2048,7 @@ const results = await scanMultiRegion(
   ]);
 
 const handleScanAndRefresh = useCallback(async () => {
-  if (scanning || scanAndRefreshing) return;
+  if (tab !== "radius" || scanning || scanAndRefreshing) return;
   setScanAndRefreshing(true);
   try {
     await rebootStationCache();
@@ -2062,6 +2062,7 @@ const handleScanAndRefresh = useCallback(async () => {
   refreshCurrentLocationIntoScanParams,
   scanning,
   scanAndRefreshing,
+  tab,
 ]);
 
   // Auto-refresh: when enabled and radius cache expires, re-trigger scan automatically
@@ -2784,22 +2785,18 @@ const handleScanAndRefresh = useCallback(async () => {
                     >
                       {scanning ? t("stop") : t("scan")}
                     </button>
-                    <button
-                      data-scan-refresh-button
-                      onClick={handleScanAndRefresh}
-                      disabled={
-                        (tab === "region"
-                          ? !params.target_market_system?.trim()
-                          : !params.system_name) ||
-                        scanning ||
-                        scanAndRefreshing
-                      }
-                      className="px-3 sm:px-4 py-1.5 rounded-sm text-[10px] sm:text-xs font-semibold uppercase tracking-wider transition-all bg-eve-dark text-eve-text border border-eve-border hover:border-eve-border-light disabled:bg-eve-input disabled:text-eve-dim disabled:cursor-not-allowed"
-                    >
-                      {scanAndRefreshing
-                        ? t("scanAndRefreshProcessing")
-                        : t("scanAndRefresh")}
-                    </button>
+                    {tab === "radius" && (
+                      <button
+                        data-scan-refresh-button
+                        onClick={handleScanAndRefresh}
+                        disabled={!params.system_name || scanning || scanAndRefreshing}
+                        className="px-3 sm:px-4 py-1.5 rounded-sm text-[10px] sm:text-xs font-semibold uppercase tracking-wider transition-all bg-eve-dark text-eve-text border border-eve-border hover:border-eve-border-light disabled:bg-eve-input disabled:text-eve-dim disabled:cursor-not-allowed"
+                      >
+                        {scanAndRefreshing
+                          ? t("scanAndRefreshProcessing")
+                          : t("scanAndRefresh")}
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
