@@ -8,6 +8,8 @@ import {
   verificationProfiles,
 } from "@/lib/verificationProfiles";
 import { RoutePilotAssignmentsPanel } from "@/components/RoutePilotAssignmentsPanel";
+import { RouteFillPlannerPanel } from "@/components/RouteFillPlannerPanel";
+import type { RouteFillPlannerSections, RouteFillPlannerSuggestion } from "@/lib/routeFillPlanner";
 
 export type RouteWorkbenchMode = "summary" | "execution" | "filler" | "verification";
 export type RouteWorkbenchSectionId =
@@ -35,6 +37,9 @@ interface RouteWorkbenchPanelProps {
   onTogglePin: () => void;
   onOpenBatchBuilder: () => void;
   onScrollToTable: () => void;
+  routeFillSections?: RouteFillPlannerSections;
+  onAddFillSuggestionToPack?: (suggestion: RouteFillPlannerSuggestion) => void;
+  onOpenFillSuggestionInBatchBuilder?: (suggestion: RouteFillPlannerSuggestion) => void;
   assignment?: RouteAssignment | null;
   onAssignmentChange?: (assignment: RouteAssignment | null) => void;
 }
@@ -56,6 +61,9 @@ export function RouteWorkbenchPanel({
   onTogglePin,
   onOpenBatchBuilder,
   onScrollToTable,
+  routeFillSections,
+  onAddFillSuggestionToPack,
+  onOpenFillSuggestionInBatchBuilder,
   assignment,
   onAssignmentChange,
 }: RouteWorkbenchPanelProps) {
@@ -123,11 +131,18 @@ export function RouteWorkbenchPanel({
       )}
 
       {(mode === "filler" || activeSection === "filler") && (
-        <section className="mb-2" data-testid="route-workbench-section-filler" aria-label="Filler block">
-          <div className="mb-1 text-[11px] uppercase tracking-wider text-eve-dim">Filler block</div>
-          <div className="text-[11px] text-eve-dim">
-            Candidate filler lines from saved pack scope: <span className="text-eve-text">{fillerCount}</span>
+        <section className="mb-2" data-testid="route-workbench-section-filler" aria-label="Route fill planner">
+          <div className="mb-1 text-[11px] uppercase tracking-wider text-eve-dim">Route fill planner</div>
+          <div className="mb-2 text-[11px] text-eve-dim">
+            Candidate fill opportunities from saved pack scope: <span className="text-eve-text">{fillerCount}</span>
           </div>
+          {routeFillSections && onAddFillSuggestionToPack && onOpenFillSuggestionInBatchBuilder ? (
+            <RouteFillPlannerPanel
+              sections={routeFillSections}
+              onAddToRoutePack={onAddFillSuggestionToPack}
+              onOpenBatchBuilderSelection={onOpenFillSuggestionInBatchBuilder}
+            />
+          ) : null}
         </section>
       )}
 
