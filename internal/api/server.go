@@ -777,6 +777,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/scan/history/{id}/results", s.handleGetHistoryResults)
 	mux.HandleFunc("DELETE /api/scan/history/{id}", s.handleDeleteHistory)
 	mux.HandleFunc("POST /api/scan/history/clear", s.handleClearHistory)
+	mux.HandleFunc("GET /api/scan/history/{id}/diffs", s.handleGetScanHistoryDiffTimeline)
+	mux.HandleFunc("GET /api/pinned-opportunities/{opportunityKey}/diffs", s.handleGetPinnedOpportunityDiffTimeline)
 	// Auth
 	mux.HandleFunc("GET /api/auth/login", s.handleAuthLogin)
 	mux.HandleFunc("GET /api/auth/callback", s.handleAuthCallback)

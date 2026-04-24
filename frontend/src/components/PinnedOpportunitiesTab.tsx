@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   listPinnedOpportunities,
   listPinnedOpportunitySnapshots,
+  getPinnedOpportunityDiffTimeline,
   openMarketInGame,
   removePinnedOpportunity,
   setWaypointInGame,
@@ -13,6 +14,8 @@ import { TrendIndicator } from "@/components/TrendIndicator";
 import { getPinnedOpportunityLabels } from "@/lib/pinnedOpportunityLabels";
 import { ContractDetailsPopup } from "@/components/ContractDetailsPopup";
 import { Modal } from "@/components/Modal";
+import { DiffTimeline } from "@/components/DiffTimeline";
+import type { DiffTimelineResponse } from "@/lib/types";
 
 type CompareMode = "last_scan" | "h24" | "custom";
 type SortField = "profit" | "margin" | "volume" | "risk" | "updated";
@@ -35,6 +38,8 @@ export function PinnedOpportunitiesTab() {
   const [sourceFilter, setSourceFilter] = useState("all");
   const [itemFilter, setItemFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
+  const [selectedTimeline, setSelectedTimeline] = useState<DiffTimelineResponse | null>(null);
+  const [timelineLoading, setTimelineLoading] = useState(false);
 
   const reloadPinnedRows = useCallback(async () => {
     const items = await listPinnedOpportunities();
@@ -132,6 +137,18 @@ export function PinnedOpportunitiesTab() {
     }
     setSortDir((prev) => (prev === "desc" ? "asc" : "desc"));
   };
+
+  useEffect(() => {
+    if (!selected) {
+      setSelectedTimeline(null);
+      return;
+    }
+    setTimelineLoading(true);
+    void getPinnedOpportunityDiffTimeline(selected.opportunity_key)
+      .then((timeline) => setSelectedTimeline(timeline))
+      .catch(() => setSelectedTimeline(null))
+      .finally(() => setTimelineLoading(false));
+  }, [selected]);
 
   return (
     <div className="flex-1 min-h-0 overflow-auto text-xs">
@@ -247,6 +264,7 @@ export function PinnedOpportunitiesTab() {
             <div><span className="text-eve-dim">Buy:</span> {selected ? getPinnedOpportunityLabels(selected).buyLabel : ""}</div>
             <div><span className="text-eve-dim">Sell:</span> {selected ? getPinnedOpportunityLabels(selected).sellLabel : ""}</div>
             <div><span className="text-eve-dim">Hidden ID:</span> <span className="font-mono">{selected?.opportunity_key}</span></div>
+            <DiffTimeline timeline={selectedTimeline} loading={timelineLoading} />
           </div>
         </Modal>
       )}
