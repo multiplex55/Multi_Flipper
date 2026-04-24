@@ -2,10 +2,12 @@ import { useMemo, useState } from "react";
 import { deriveExecutionSummary } from "@/lib/savedRouteExecution";
 import { formatISK } from "@/lib/format";
 import type { SavedRoutePack } from "@/lib/types";
+import type { RouteAssignment } from "@/lib/routeAssignments";
 import {
   getVerificationFreshness,
   verificationProfiles,
 } from "@/lib/verificationProfiles";
+import { RoutePilotAssignmentsPanel } from "@/components/RoutePilotAssignmentsPanel";
 
 export type RouteWorkbenchMode = "summary" | "execution" | "filler" | "verification";
 export type RouteWorkbenchSectionId =
@@ -33,6 +35,8 @@ interface RouteWorkbenchPanelProps {
   onTogglePin: () => void;
   onOpenBatchBuilder: () => void;
   onScrollToTable: () => void;
+  assignment?: RouteAssignment | null;
+  onAssignmentChange?: (assignment: RouteAssignment | null) => void;
 }
 
 export function RouteWorkbenchPanel({
@@ -52,6 +56,8 @@ export function RouteWorkbenchPanel({
   onTogglePin,
   onOpenBatchBuilder,
   onScrollToTable,
+  assignment,
+  onAssignmentChange,
 }: RouteWorkbenchPanelProps) {
   const summary = useMemo(() => deriveExecutionSummary(pack), [pack]);
   const [qtyByLine, setQtyByLine] = useState<Record<string, string>>({});
@@ -84,6 +90,11 @@ export function RouteWorkbenchPanel({
         <span className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 capitalize" data-testid="route-workbench-status">
           {pack.status}
         </span>
+        {assignment && (
+          <span className="rounded-sm border border-indigo-400/60 px-1.5 py-0.5" data-testid="route-workbench-assignment">
+            {assignment.assignedCharacter} · {assignment.status}
+          </span>
+        )}
         <span className="text-eve-dim" data-testid="route-workbench-freshness">
           Verification: {pack.verificationSnapshot?.status ?? "Unverified"} · {freshness}
         </span>
@@ -210,6 +221,13 @@ export function RouteWorkbenchPanel({
           Scroll to table
         </button>
       </section>
+      <div className="mt-2">
+        <RoutePilotAssignmentsPanel
+          routeKey={pack.routeKey}
+          routeLabel={pack.routeLabel}
+          onAssignmentChange={onAssignmentChange}
+        />
+      </div>
     </section>
   );
 }
