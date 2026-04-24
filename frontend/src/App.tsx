@@ -92,6 +92,7 @@ import { HubTrendTable } from "@/components/HubTrendTable";
 import { aggregateRegionalTradeCorridors } from "@/lib/regionalCorridors";
 import { buildBuyHubSummaries, buildSellSinkSummaries } from "@/lib/regionalConcentration";
 import { buildRadiusHubSummaries, type RadiusHubSummary } from "@/lib/radiusHubSummaries";
+import { DEFAULT_HUB_SCOPE_MODE, type HubScopeMode } from "@/lib/radiusHubScope";
 import { buildCharacterStagingRecommendations } from "@/lib/stagingAdvisor";
 import {
   createEmptyRadiusScanSession,
@@ -732,6 +733,9 @@ function App() {
 
   const [radiusResults, setRadiusResults] = useState<FlipResult[]>([]);
   const [radiusHubFilter, setRadiusHubFilter] = useState<RadiusHubFilter | null>(null);
+  const [radiusHubScopeMode, setRadiusHubScopeMode] =
+    useState<HubScopeMode>(DEFAULT_HUB_SCOPE_MODE);
+  const [radiusScopedHubRows, setRadiusScopedHubRows] = useState<FlipResult[]>([]);
   const [regionResults, setRegionResults] = useState<FlipResult[]>([]);
   const [regionHubResults, setRegionHubResults] = useState<RegionalDayTradeHub[]>([]);
   const [regionHubTrends, setRegionHubTrends] = useState<RegionalHubTrend[]>([]);
@@ -828,6 +832,8 @@ function App() {
   const clearRadiusScanSession = useCallback(() => {
     setRadiusResults([]);
     setRadiusHubFilter(null);
+    setRadiusHubScopeMode(DEFAULT_HUB_SCOPE_MODE);
+    setRadiusScopedHubRows([]);
     setRadiusCacheMeta(null);
     setRadiusScanSession(createEmptyRadiusScanSession());
     setRouteQueueKeys([]);
@@ -997,8 +1003,8 @@ function App() {
     [regionHubTrends],
   );
   const radiusHubSummaries = useMemo(
-    () => buildRadiusHubSummaries(radiusResults),
-    [radiusResults],
+    () => buildRadiusHubSummaries(radiusScopedHubRows),
+    [radiusScopedHubRows],
   );
   const regionalScanKey = useMemo(
     () =>
@@ -1079,7 +1085,7 @@ function App() {
     setParams((prev) => ({ ...prev, system_name: hub.source_system_name }));
     setRegionSourceLockSystemID(hub.source_system_id);
     addToast(`Source lock set to ${hub.source_system_name}`, "success");
-  }, [addToast]);
+  }, [addToast, radiusHubScopeMode]);
 
   const handleCopyRegionHubSummary = useCallback(async (hub: RegionalDayTradeHub) => {
     const text = `${hub.source_system_name} (${hub.source_region_name}) · items ${hub.item_count} · period ${formatISK(hub.target_period_profit)} · now ${formatISK(hub.target_now_profit)}`;
@@ -1147,6 +1153,14 @@ function App() {
     }
   }, [addToast]);
 
+  const handleRadiusHubScopeRowsChange = useCallback(
+    (snapshot: { mode: HubScopeMode; rows: FlipResult[] }) => {
+      setRadiusHubScopeMode(snapshot.mode);
+      setRadiusScopedHubRows(snapshot.rows);
+    },
+    [],
+  );
+
   const handleOpenRadiusHubRows = useCallback((hub: RadiusHubSummary, side: "buy" | "sell") => {
     setRadiusHubFilter({ side, systemId: hub.system_id });
     if (side === "buy") {
@@ -1154,18 +1168,18 @@ function App() {
     } else {
       setParams((prev) => ({ ...prev, target_market_system: hub.system_name }));
     }
-    addToast(`Opened ${side} rows for ${hub.system_name}`, "success");
-  }, [addToast]);
+    addToast(`Opened ${side} rows for ${hub.system_name} (${radiusHubScopeMode} scope)`, "success");
+  }, [addToast, radiusHubScopeMode]);
 
   const handleSetRadiusHubLock = useCallback((hub: RadiusHubSummary, side: "buy" | "sell") => {
     if (side === "buy") {
       setParams((prev) => ({ ...prev, system_name: hub.system_name }));
-      addToast(`Buy lock set to ${hub.system_name}`, "success");
+      addToast(`Buy lock set to ${hub.system_name} (${radiusHubScopeMode} scope)`, "success");
       return;
     }
     setParams((prev) => ({ ...prev, target_market_system: hub.system_name }));
-    addToast(`Sell lock set to ${hub.system_name}`, "success");
-  }, [addToast]);
+    addToast(`Sell lock set to ${hub.system_name} (${radiusHubScopeMode} scope)`, "success");
+  }, [addToast, radiusHubScopeMode]);
 
   const handleOpenLaneItemsAtCorridor = useCallback((corridor: {
     source_system_id: number;
@@ -2827,6 +2841,7 @@ const handleScanAndRefresh = useCallback(async () => {
                 sellHubs={radiusHubSummaries.sellHubs}
                 onOpenHubRows={handleOpenRadiusHubRows}
                 onSetHubLock={handleSetRadiusHubLock}
+                onHubScopeRowsChange={handleRadiusHubScopeRowsChange}
                 onRouteHandoff={handleRouteHandoffFromScanner}
                 featureConfig={RADIUS_SCAN_RESULTS_FEATURE_CONFIG}
                 routeWorkspace={routeWorkspace}
