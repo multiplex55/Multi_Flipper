@@ -4,7 +4,10 @@ import { useI18n } from "@/lib/i18n";
 import type { ActionQueueItem, TopRoutePicks } from "@/lib/radiusMetrics";
 import type { LoopOpportunity } from "@/lib/loopPlanner";
 import type { RadiusHubSummary } from "@/lib/radiusHubSummaries";
-import type { RadiusMajorHubMetrics } from "@/lib/radiusMajorHubInsights";
+import type {
+  RadiusMajorHubMatchIdentity,
+  RadiusMajorHubMetrics,
+} from "@/lib/radiusMajorHubInsights";
 import type { HubScopeMode } from "@/lib/radiusHubScope";
 import { LoopOpportunitiesPanel } from "./LoopOpportunitiesPanel";
 import { ExplanationPopoverShell } from "@/components/decision/ExplanationPopoverShell";
@@ -59,6 +62,8 @@ function majorHubActionSummary(
   systemId: number,
   systemName: string,
   rowCount: number,
+  matchIdentity: RadiusMajorHubMatchIdentity,
+  matchKey: string,
 ): RadiusHubSummary {
   return {
     location_id: systemId,
@@ -71,6 +76,7 @@ function majorHubActionSummary(
     capital_required: 0,
     period_profit: 0,
     avg_jumps: 0,
+    major_hub_match: { ...matchIdentity, matchKey },
   };
 }
 
@@ -400,6 +406,8 @@ export function RadiusInsightsPanel({
                                     entry.hub.systemId,
                                     entry.hub.systemName,
                                     entry.buy.rowCount,
+                                    entry.buyMatchIdentity,
+                                    `${entry.hub.key}:buy`,
                                   )
                                 : null;
                             const sellHub =
@@ -408,6 +416,8 @@ export function RadiusInsightsPanel({
                                     entry.hub.systemId,
                                     entry.hub.systemName,
                                     entry.sell.rowCount,
+                                    entry.sellMatchIdentity,
+                                    `${entry.hub.key}:sell`,
                                   )
                                 : null;
                             return (

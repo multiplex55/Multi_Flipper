@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildRadiusMajorHubInsights,
   isRowCountedInMajorHubMetrics,
+  normalizeHubMatchText,
   RADIUS_CANONICAL_MAJOR_HUBS,
 } from "@/lib/radiusMajorHubInsights";
 import type { FlipResult } from "@/lib/types";
@@ -150,6 +151,41 @@ describe("radiusMajorHubInsights", () => {
         BuySystemID: 30000144,
         BuySystemName: "Perimeter",
         BuyStation: "Perimeter - Caldari Business Tribunal",
+      }),
+    ];
+
+    const hubs = buildRadiusMajorHubInsights(rows);
+    const perimeter = hubs.find((hub) => hub.hub.key === "perimeter_ttt");
+
+    expect(perimeter?.buy.rowCount).toBe(1);
+    expect(perimeter?.buy.distinctItems).toBe(1);
+  });
+
+  it("normalizes structure variants for case/punctuation/system prefix", () => {
+    expect(normalizeHubMatchText("Tranquility Trading Tower")).toBe(
+      "tranquility trading tower",
+    );
+    expect(normalizeHubMatchText("TRANQUILITY-TRADING-TOWER")).toBe(
+      "tranquility trading tower",
+    );
+    expect(
+      normalizeHubMatchText("Perimeter – Tranquility Trading Tower"),
+    ).toContain("tranquility trading tower");
+  });
+
+  it("does not count Perimeter non-TTT stations even with punctuation/case variants", () => {
+    const rows: FlipResult[] = [
+      makeRow({
+        TypeID: 31,
+        BuySystemID: 30000144,
+        BuySystemName: "Perimeter",
+        BuyStation: "Perimeter - Caldari Business Tribunal",
+      }),
+      makeRow({
+        TypeID: 32,
+        BuySystemID: 30000144,
+        BuySystemName: "Perimeter",
+        BuyStation: "PERIMETER: Tranquility-Trading-Tower",
       }),
     ];
 

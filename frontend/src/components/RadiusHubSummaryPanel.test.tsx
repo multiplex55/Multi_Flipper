@@ -132,6 +132,16 @@ describe("RadiusHubSummaryPanel", () => {
             hub: { key: "jita", label: "Jita", systemName: "Jita", systemId: 30000142 },
             buy: { rowCount: 4, distinctItems: 3, totalProfit: 300_000, totalCapital: 1_000_000 },
             sell: { rowCount: 1, distinctItems: 1, totalProfit: 80_000, totalCapital: 250_000 },
+            buyMatchIdentity: {
+              mode: "system",
+              systemId: 30000142,
+              normalizedSystemName: "jita",
+            },
+            sellMatchIdentity: {
+              mode: "system",
+              systemId: 30000142,
+              normalizedSystemName: "jita",
+            },
           },
         ]}
       />,

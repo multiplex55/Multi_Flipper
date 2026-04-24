@@ -82,4 +82,24 @@ describe("filterRadiusResultsByHub", () => {
     expect(filterRadiusResultsByHub(rows, { side: "buy", systemId: null })).toEqual(rows);
     expect(filterRadiusResultsByHub(rows, { side: "sell", systemId: 0 })).toEqual(rows);
   });
+
+  it("supports structure-specific matching within a system", () => {
+    const perimRows: FlipResult[] = [
+      {
+        ...rows[1],
+        BuyStation: "Perimeter - Tranquility Trading Tower",
+      },
+      {
+        ...rows[1],
+        TypeID: 36,
+        BuyStation: "Perimeter - Caldari Business Tribunal",
+      },
+    ];
+    const filter: RadiusHubFilter = {
+      side: "buy",
+      systemId: 30000144,
+      normalizedStationContains: "tranquility trading tower",
+    };
+    expect(filterRadiusResultsByHub(perimRows, filter)).toEqual([perimRows[0]]);
+  });
 });
