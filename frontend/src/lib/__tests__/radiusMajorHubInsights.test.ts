@@ -63,8 +63,47 @@ describe("radiusMajorHubInsights", () => {
     const hek = hubs.find((hub) => hub.hub.key === "hek");
     expect(jita?.buy.rowCount).toBe(1);
     expect(jita?.sell.rowCount).toBe(0);
+    expect(jita?.card.buyFlipsRows).toBe(1);
+    expect(jita?.card.sellFlipsRows).toBe(0);
     expect(hek?.buy.rowCount).toBe(1);
     expect(hek?.sell.rowCount).toBe(1);
+  });
+
+  it("computes union-distinct items and union profit without side-sum double counting", () => {
+    const rows: FlipResult[] = [
+      makeRow({
+        TypeID: 101,
+        BuySystemID: 30000142,
+        BuySystemName: "Jita",
+        SellSystemID: 30000142,
+        SellSystemName: "Jita",
+        DayPeriodProfit: 120,
+      }),
+      makeRow({
+        TypeID: 101,
+        BuySystemID: 30000142,
+        BuySystemName: "Jita",
+        SellSystemID: 30002187,
+        SellSystemName: "Amarr",
+        DayPeriodProfit: 80,
+      }),
+      makeRow({
+        TypeID: 202,
+        BuySystemID: 30002053,
+        BuySystemName: "Hek",
+        SellSystemID: 30000142,
+        SellSystemName: "Jita",
+        DayPeriodProfit: 60,
+      }),
+    ];
+
+    const jita = buildRadiusMajorHubInsights(rows).find((hub) => hub.hub.key === "jita");
+    expect(jita?.buy.rowCount).toBe(2);
+    expect(jita?.sell.rowCount).toBe(2);
+    expect(jita?.buy.distinctItems).toBe(1);
+    expect(jita?.sell.distinctItems).toBe(2);
+    expect(jita?.card.distinctItemsUnion).toBe(2);
+    expect(jita?.card.profitUnion).toBe(260);
   });
 
   it("excludes invalid and non-actionable rows", () => {

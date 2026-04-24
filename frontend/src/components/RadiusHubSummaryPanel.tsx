@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { formatISK } from "@/lib/format";
+import { useI18n } from "@/lib/i18n";
 import type { RadiusHubSummary } from "@/lib/radiusHubSummaries";
 import type { RadiusMajorHubMetrics } from "@/lib/radiusMajorHubInsights";
 
@@ -18,6 +19,7 @@ export function RadiusHubSummaryPanel({
   onOpenHubRows,
   onSetHubLock,
 }: Props) {
+  const { t } = useI18n();
   const [isBuyExpanded, setIsBuyExpanded] = useState(true);
   const [isSellExpanded, setIsSellExpanded] = useState(true);
   const [isMajorExpanded, setIsMajorExpanded] = useState(true);
@@ -78,10 +80,14 @@ export function RadiusHubSummaryPanel({
                 <article key={entry.hub.key} className="rounded-sm border border-eve-border/60 bg-eve-dark/40 px-2 py-1 text-[10px]">
                   <div className="mb-1 font-medium text-eve-text">{entry.hub.label}</div>
                   <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
-                    <span className="text-eve-dim">Buy here:</span>
-                    <span className="text-right">{entry.buy.rowCount}</span>
-                    <span className="text-eve-dim">Sell here:</span>
-                    <span className="text-right">{entry.sell.rowCount}</span>
+                    <span className="text-eve-dim">{t("majorHubBuyFlipsRowsLabel")}</span>
+                    <span className="text-right">{entry.card.buyFlipsRows}</span>
+                    <span className="text-eve-dim">{t("majorHubSellFlipsRowsLabel")}</span>
+                    <span className="text-right">{entry.card.sellFlipsRows}</span>
+                    <span className="text-eve-dim">{t("majorHubDistinctItemsUnionLabel")}</span>
+                    <span className="text-right">{entry.card.distinctItemsUnion}</span>
+                    <span className="text-eve-dim">{t("majorHubProfitUnionLabel")}</span>
+                    <span className="text-right text-green-300">{formatISK(entry.card.profitUnion)}</span>
                   </div>
                 </article>
               ))

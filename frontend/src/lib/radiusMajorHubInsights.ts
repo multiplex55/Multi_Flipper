@@ -34,10 +34,32 @@ export type RadiusMajorHubMetrics = {
   hub: RadiusMajorHubDefinition;
   buy: RadiusMajorHubDirectionMetrics;
   sell: RadiusMajorHubDirectionMetrics;
+  card: RadiusMajorHubCardMetrics;
   buyRowIds?: string[];
   sellRowIds?: string[];
   buyMatchIdentity: RadiusMajorHubMatchIdentity;
   sellMatchIdentity: RadiusMajorHubMatchIdentity;
+};
+
+export type RadiusMajorHubCardMetrics = {
+  /**
+   * Count of actionable rows where the buy endpoint matches this hub.
+   */
+  buyFlipsRows: number;
+  /**
+   * Count of actionable rows where the sell endpoint matches this hub.
+   */
+  sellFlipsRows: number;
+  /**
+   * Distinct item count across the union of buy+sell matches for this hub.
+   * This avoids side-sum double counting for type IDs that appear on both sides.
+   */
+  distinctItemsUnion: number;
+  /**
+   * Profit across unique actionable rows that match this hub on buy or sell.
+   * Uses DayPeriodProfit (fallback TotalProfit/ExpectedProfit) once per row.
+   */
+  profitUnion: number;
 };
 
 export type RadiusMajorHubRowEvaluationContext = {
@@ -198,25 +220,38 @@ export function buildRadiusMajorHubInsights(
     const sellMatchIdentity = buildHubMatchIdentity(hub);
     const buyTypeIds = new Set<number>();
     const sellTypeIds = new Set<number>();
+    const unionTypeIds = new Set<number>();
+    const unionProfitRowIds = new Set<string>();
     const buyRowIds = new Set<string>();
     const sellRowIds = new Set<string>();
     const buy = { ...ZERO_DIRECTION_METRICS };
     const sell = { ...ZERO_DIRECTION_METRICS };
+    let profitUnion = 0;
 
-    for (const row of countedRows) {
-      if (matchesHubIdentity(buyMatchIdentity, row, "buy")) {
+    for (const [rowIndex, row] of countedRows.entries()) {
+      const rowId = resolveRowId?.(row) ?? `${hub.key}:${rowIndex}`;
+      const matchesBuy = matchesHubIdentity(buyMatchIdentity, row, "buy");
+      const matchesSell = matchesHubIdentity(sellMatchIdentity, row, "sell");
+      if (matchesBuy) {
         buy.rowCount += 1;
         buy.totalProfit += Number(row.DayPeriodProfit ?? row.TotalProfit ?? row.ExpectedProfit ?? 0);
         buy.totalCapital += Number(row.DayCapitalRequired ?? row.BuyPrice * Math.max(0, row.UnitsToBuy ?? 0));
         buyTypeIds.add(row.TypeID);
-        if (resolveRowId) buyRowIds.add(resolveRowId(row));
+        if (resolveRowId) buyRowIds.add(rowId);
       }
-      if (matchesHubIdentity(sellMatchIdentity, row, "sell")) {
+      if (matchesSell) {
         sell.rowCount += 1;
         sell.totalProfit += Number(row.DayPeriodProfit ?? row.TotalProfit ?? row.ExpectedProfit ?? 0);
         sell.totalCapital += Number(row.DayCapitalRequired ?? row.BuyPrice * Math.max(0, row.UnitsToBuy ?? 0));
         sellTypeIds.add(row.TypeID);
-        if (resolveRowId) sellRowIds.add(resolveRowId(row));
+        if (resolveRowId) sellRowIds.add(rowId);
+      }
+      if (matchesBuy || matchesSell) {
+        unionTypeIds.add(row.TypeID);
+        if (!unionProfitRowIds.has(rowId)) {
+          unionProfitRowIds.add(rowId);
+          profitUnion += Number(row.DayPeriodProfit ?? row.TotalProfit ?? row.ExpectedProfit ?? 0);
+        }
       }
     }
 
@@ -227,6 +262,12 @@ export function buildRadiusMajorHubInsights(
       hub,
       buy,
       sell,
+      card: {
+        buyFlipsRows: buy.rowCount,
+        sellFlipsRows: sell.rowCount,
+        distinctItemsUnion: unionTypeIds.size,
+        profitUnion,
+      },
       buyRowIds: resolveRowId ? [...buyRowIds] : undefined,
       sellRowIds: resolveRowId ? [...sellRowIds] : undefined,
       buyMatchIdentity,
