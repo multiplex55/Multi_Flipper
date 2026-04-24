@@ -157,11 +157,11 @@ const patronsDataURL =
   defaultPatronsURL;
 
 const RADIUS_SCAN_RESULTS_FEATURE_CONFIG = {
-  allowRouteGrouping: false,
-  showRouteInsights: false,
-  showRouteWorkbench: false,
-  showSavedRoutes: false,
-  showLoopPanel: false,
+  allowRouteGrouping: true,
+  showRouteInsights: true,
+  showRouteWorkbench: true,
+  showSavedRoutes: true,
+  showLoopPanel: true,
   defaultViewMode: "rows",
 } satisfies ScanResultsTableFeatureConfig;
 

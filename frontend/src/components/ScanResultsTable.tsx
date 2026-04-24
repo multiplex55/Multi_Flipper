@@ -172,6 +172,11 @@ import {
   loadRouteAssignments,
   type RouteAssignment,
 } from "@/lib/routeAssignments";
+import {
+  buildRadiusCargoBuilds,
+  RADIUS_CARGO_BUILD_PRESETS,
+  type RadiusCargoBuildPreset,
+} from "@/lib/radiusCargoBuilds";
 
 export const calcRouteConfidence = calcRouteConfidenceFromInsights;
 
@@ -324,7 +329,7 @@ type ScanResultsTableRouteHeavyConfig = {
   showRouteWorkbench: true;
   showSavedRoutes: true;
   showLoopPanel: boolean;
-  defaultViewMode: "rows" | "route";
+  defaultViewMode: "rows" | "route" | "cargo_builds";
 };
 
 type ScanResultsTableRouteLightConfig = {
@@ -333,7 +338,7 @@ type ScanResultsTableRouteLightConfig = {
   showRouteWorkbench: false;
   showSavedRoutes: false;
   showLoopPanel: false;
-  defaultViewMode: "rows";
+  defaultViewMode: "rows" | "cargo_builds";
 };
 
 type ScanResultsTableRowFirstConfig = {
@@ -1669,10 +1674,16 @@ export function ScanResultsTable({
       return false;
     }
   });
-  const [routeViewMode, setRouteViewMode] = useState<"rows" | "route">(() => {
+  const [routeViewMode, setRouteViewMode] = useState<
+    "rows" | "route" | "cargo_builds"
+  >(() => {
     try {
       const storedMode = localStorage.getItem(ROUTE_GROUPING_STORAGE_KEY);
-      if (storedMode === "route" || storedMode === "rows") {
+      if (
+        storedMode === "route" ||
+        storedMode === "rows" ||
+        storedMode === "cargo_builds"
+      ) {
         return storedMode;
       }
       return featureConfig.defaultViewMode;
@@ -1682,6 +1693,8 @@ export function ScanResultsTable({
   });
   const [trackedVisibilityMode, setTrackedVisibilityMode] =
     useState<TrackedVisibilityMode>("all");
+  const [cargoBuildPreset, setCargoBuildPreset] =
+    useState<RadiusCargoBuildPreset>("viator_safe");
   const [trackedFirst, setTrackedFirst] = useState(false);
   const [showTrackedChip, setShowTrackedChip] = useState(false);
   const [showAdvancedToolbar, setShowAdvancedToolbar] = useState<boolean>(() => {
@@ -1830,13 +1843,17 @@ export function ScanResultsTable({
   const showLoopPanel = featureConfig.showLoopPanel;
   const isRadiusMode = tradeStateTab === "radius";
   const effectiveRouteViewMode =
-    allowRouteGrouping && routeViewMode === "route" ? "route" : "rows";
+    allowRouteGrouping && routeViewMode !== "rows" ? routeViewMode : "rows";
   const isItemGrouped =
     !isRegionGrouped && groupByItem && effectiveRouteViewMode === "rows";
   const isRouteGrouped =
     !isRegionGrouped &&
     allowRouteGrouping &&
     effectiveRouteViewMode === "route";
+  const isCargoBuildView =
+    !isRegionGrouped &&
+    allowRouteGrouping &&
+    effectiveRouteViewMode === "cargo_builds";
 
   const routeBadgeFilterOptions: Array<{
     key: RouteBadgeFilter;
@@ -2867,6 +2884,23 @@ export function ScanResultsTable({
     suppressionTelemetry: suppressionTelemetryBase,
     explanationMetaByRouteKey,
   } = routeInsights;
+  const cargoBuilds = useMemo(
+    () =>
+      buildRadiusCargoBuilds({
+        rows: datasetRows.map((item) => item.row),
+        routeAggregateMetricsByRoute,
+        preset: {
+          ...RADIUS_CARGO_BUILD_PRESETS[cargoBuildPreset],
+          cargoCapacityM3: cargoLimit > 0
+            ? Math.min(
+                cargoLimit,
+                RADIUS_CARGO_BUILD_PRESETS[cargoBuildPreset].cargoCapacityM3,
+              )
+            : RADIUS_CARGO_BUILD_PRESETS[cargoBuildPreset].cargoCapacityM3,
+        },
+      }),
+    [cargoBuildPreset, cargoLimit, datasetRows, routeAggregateMetricsByRoute],
+  );
 
   const routeGroups = useMemo<RouteGroup[]>(() => {
     if (!isRouteGrouped) return [];
@@ -5300,11 +5334,30 @@ export function ScanResultsTable({
               {!isRegionGrouped && (
                 <RadiusRowControls
                   allowRouteGrouping={allowRouteGrouping}
+                  allowCargoBuilds={isRadiusMode}
                   routeViewMode={effectiveRouteViewMode}
                   setRouteViewMode={setRouteViewMode}
                   groupByItem={groupByItem}
                   setGroupByItem={setGroupByItem}
                 />
+              )}
+              {isCargoBuildView && (
+                <label className="inline-flex items-center gap-1 rounded-sm border border-eve-border/60 bg-eve-dark/40 px-2 py-0.5 text-[11px]">
+                  <span className="text-eve-dim">Cargo preset</span>
+                  <select
+                    value={cargoBuildPreset}
+                    onChange={(event) =>
+                      setCargoBuildPreset(event.target.value as RadiusCargoBuildPreset)
+                    }
+                    className="rounded-sm border border-eve-border/50 bg-eve-dark px-1 py-0.5 text-eve-text"
+                  >
+                    {Object.values(RADIUS_CARGO_BUILD_PRESETS).map((preset) => (
+                      <option key={preset.id} value={preset.id}>
+                        {preset.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               )}
 
               <button
@@ -6507,6 +6560,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
       )}
 
       {/* Table */}
+      {!isCargoBuildView ? (
       <div className="flex-1 min-h-0 flex flex-col border border-eve-border rounded-sm overflow-auto table-scroll-container">
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10">
@@ -7263,6 +7317,44 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
           </tbody>
         </table>
       </div>
+      ) : (
+        <div className="flex-1 min-h-0 overflow-auto rounded-sm border border-eve-border p-2 text-xs">
+          <div className="mb-2 text-eve-dim">
+            Ranked cargo build candidates ({RADIUS_CARGO_BUILD_PRESETS[cargoBuildPreset].label})
+          </div>
+          <div className="grid gap-2">
+            {cargoBuilds.map((build) => (
+              <div key={build.id} className="rounded-sm border border-eve-border/60 bg-eve-dark/30 p-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="font-semibold text-eve-text">{build.routeLabel}</div>
+                  <div className="text-eve-accent font-mono">Score {build.finalScore.toFixed(1)}</div>
+                </div>
+                <div className="mt-1 flex flex-wrap gap-3 text-eve-dim">
+                  <span>Profit {formatISK(build.totalProfitIsk)}</span>
+                  <span>Cargo {build.totalCargoM3.toLocaleString(undefined, { maximumFractionDigits: 1 })} m³</span>
+                  <span>Capital {formatISK(build.totalCapitalIsk)}</span>
+                  <span>Jumps {build.jumps}</span>
+                  <span>ISK/jump {formatISK(build.iskPerJump)}</span>
+                  <span>Cargo score {build.cargoFillPercent.toFixed(0)}%</span>
+                  <span className={build.riskCue === "high" ? "text-rose-300" : build.riskCue === "moderate" ? "text-amber-200" : "text-emerald-300"}>Risk {build.riskCue}</span>
+                  <span className={build.executionCue === "fragile" ? "text-rose-300" : build.executionCue === "watch" ? "text-amber-200" : "text-emerald-300"}>Execution {build.executionCue}</span>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-1">
+                  <button type="button" onClick={() => openBatchBuilderForRoute(build.routeKey, { intentLabel: "Cargo Build", batchEntryMode: "core" })} className="rounded-sm border border-eve-accent/60 px-1.5 py-0.5 text-[10px] text-eve-accent">Open Batch</button>
+                  <button type="button" onClick={() => openFillPlannerForRoute(build.routeKey)} className="rounded-sm border border-blue-500/60 px-1.5 py-0.5 text-[10px] text-blue-200">Fill More</button>
+                  <button type="button" onClick={() => onSendToRouteQueue?.(build.routeKey)} className="rounded-sm border border-indigo-400/60 px-1.5 py-0.5 text-[10px] text-indigo-200">Assign Pilot</button>
+                  <button type="button" onClick={() => verifyRouteGroup(build.routeKey, routeVerificationProfileByKey[build.routeKey] ?? savedRoutePackByKey[build.routeKey]?.verificationProfileId ?? "standard")} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text">Verify</button>
+                </div>
+              </div>
+            ))}
+            {cargoBuilds.length === 0 && (
+              <div className="rounded-sm border border-eve-border/50 bg-eve-dark/30 p-4 text-eve-dim">
+                No cargo builds satisfy the selected preset constraints.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Summary footer */}
       {summary && datasetRows.length > 0 && (
@@ -8755,14 +8847,16 @@ function PriceSparkLine({ prices }: { prices: number[] }) {
 
 function RadiusRowControls({
   allowRouteGrouping,
+  allowCargoBuilds,
   routeViewMode,
   setRouteViewMode,
   groupByItem,
   setGroupByItem,
 }: {
   allowRouteGrouping: boolean;
-  routeViewMode: "rows" | "route";
-  setRouteViewMode: (mode: "rows" | "route") => void;
+  allowCargoBuilds: boolean;
+  routeViewMode: "rows" | "route" | "cargo_builds";
+  setRouteViewMode: (mode: "rows" | "route" | "cargo_builds") => void;
   groupByItem: boolean;
   setGroupByItem: (next: boolean) => void;
 }) {
@@ -8773,6 +8867,9 @@ function RadiusRowControls({
           {([
             ["rows", "Row view"],
             ["route", "Group by route"],
+            ...(allowCargoBuilds
+              ? ([["cargo_builds", "Cargo builds"]] as const)
+              : []),
           ] as const).map(([mode, label]) => {
             const active = routeViewMode === mode;
             return (
