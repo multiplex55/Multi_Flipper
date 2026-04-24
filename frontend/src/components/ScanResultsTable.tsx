@@ -108,7 +108,9 @@ import {
   type EndpointPreferenceProfile,
 } from "@/lib/endpointPreferences";
 import { RadiusInsightsPanel } from "./RadiusInsightsPanel";
-import { buildRadiusMajorHubInsights } from "@/lib/radiusMajorHubInsights";
+import {
+  buildRadiusMajorHubInsights,
+} from "@/lib/radiusMajorHubInsights";
 import { buildRadiusHubSummaries, type RadiusHubSummary } from "@/lib/radiusHubSummaries";
 import { DEFAULT_HUB_SCOPE_MODE, rowsForHubScope, type HubScopeMode } from "@/lib/radiusHubScope";
 import {
@@ -2721,8 +2723,58 @@ export function ScanResultsTable({
   const displaySellHubs = sellHubs.length > 0 ? sellHubs : scopedRadiusHubSummaries.sellHubs;
 
   const majorHubInsights = useMemo(
-    () => buildRadiusMajorHubInsights(activeHubScopeRows),
-    [activeHubScopeRows],
+    () =>
+      buildRadiusMajorHubInsights(activeHubScopeRows, (row) => {
+        const rowId = getRowId(row);
+        const buyLocationId = getBuyLocationID(row);
+        const sellLocationId = getSellLocationID(row);
+        const excludedBySessionStationIgnore = !!(
+          (buyLocationId > 0 &&
+            sessionStationFilters?.ignoredBuyStationIds.has(buyLocationId)) ||
+          (sellLocationId > 0 &&
+            sessionStationFilters?.ignoredSellStationIds.has(sellLocationId))
+        );
+
+        const endpointMeta = endpointPreferenceMetaByRowId.get(rowId);
+        const excludedByEndpointPreferences =
+          endpointMeta?.excluded ??
+          evaluateEndpointPreferences(
+            row,
+            endpointPreferenceProfile,
+            majorHubSystems,
+            endpointPreferenceMode,
+          ).excluded;
+
+        const routeSafetyExcluded = (() => {
+          if (routeSafetyFilter === "all") return false;
+          const routeState = routeSafetyMap[`${row.BuySystemID}:${row.SellSystemID}`];
+          const rank = routeSafetyRankFromState(routeState);
+          if (routeSafetyFilter === "green") return rank !== 0;
+          if (routeSafetyFilter === "yellow") return rank !== 1;
+          return rank !== 2;
+        })();
+
+        const excludedByRowVisibility = !!hiddenMap[flipStateKey(row)];
+
+        return {
+          excludedBySessionStationIgnore,
+          excludedByEndpointPreferences,
+          excludedByRouteSafetyFilter: routeSafetyExcluded,
+          excludedByRowVisibility,
+          excludedByFillabilityOrStalePolicy: false,
+        };
+      }),
+    [
+      activeHubScopeRows,
+      endpointPreferenceMetaByRowId,
+      endpointPreferenceMode,
+      endpointPreferenceProfile,
+      hiddenMap,
+      majorHubSystems,
+      routeSafetyFilter,
+      routeSafetyMap,
+      sessionStationFilters,
+    ],
   );
 
   useEffect(() => {
