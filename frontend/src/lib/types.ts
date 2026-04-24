@@ -908,6 +908,49 @@ export interface PinnedOpportunitySnapshotRecord {
   metrics?: PinnedOpportunityMetrics;
 }
 
+export interface DiffTimelineDriver {
+  key: string;
+  label: string;
+  before?: string;
+  after?: string;
+  delta?: string;
+}
+
+export interface DiffTimelineMetricSet {
+  buy?: string;
+  sell?: string;
+  net_profit?: number;
+  margin?: number;
+  daily_volume?: number;
+  route_risk?: number;
+  confidence_proxy?: number;
+}
+
+export interface DiffTimelineMetricDelta {
+  buy_changed?: boolean;
+  sell_changed?: boolean;
+  net_profit?: number;
+  margin?: number;
+  daily_volume?: number;
+  route_risk?: number;
+  confidence_proxy?: number;
+}
+
+export interface DiffTimelineItem {
+  timeline_key: string;
+  label: string;
+  timestamp: string;
+  fields: DiffTimelineMetricSet;
+  delta: DiffTimelineMetricDelta;
+  drivers?: DiffTimelineDriver[];
+}
+
+export interface DiffTimelineResponse {
+  source: string;
+  key: string;
+  items: DiffTimelineItem[];
+}
+
 export interface WatchlistItem {
   type_id: number;
   type_name: string;

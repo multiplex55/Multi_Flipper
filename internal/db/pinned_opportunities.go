@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -130,6 +131,27 @@ func (d *DB) ListPinnedOpportunitiesForUser(userID string, tab string) ([]Pinned
 		return nil, err
 	}
 	return out, nil
+}
+
+func (d *DB) GetPinnedOpportunityForUser(userID string, opportunityKey string) (*PinnedOpportunity, error) {
+	userID = normalizeUserID(userID)
+	opportunityKey = strings.TrimSpace(opportunityKey)
+	if opportunityKey == "" {
+		return nil, nil
+	}
+	row := d.sql.QueryRow(`
+		SELECT user_id, opportunity_key, tab, payload_json, created_at, updated_at
+		  FROM pinned_opportunities
+		 WHERE user_id = ? AND opportunity_key = ?
+	`, userID, opportunityKey)
+	var item PinnedOpportunity
+	if err := row.Scan(&item.UserID, &item.OpportunityKey, &item.Tab, &item.PayloadJSON, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &item, nil
 }
 
 func (d *DB) UpsertPinnedOpportunitySnapshotForUser(userID, opportunityKey string, snap PinnedSnapshot) error {

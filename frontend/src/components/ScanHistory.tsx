@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { getScanHistory, deleteScanHistory, clearScanHistory, getScanHistoryResults } from "@/lib/api";
+import { getScanHistory, deleteScanHistory, clearScanHistory, getScanHistoryResults, getScanHistoryDiffTimeline } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { formatISK, formatMargin } from "@/lib/format";
 import { useConfirmDialog } from "./ConfirmDialog";
 import { useGlobalToast } from "./Toast";
-import type { ScanRecord, FlipResult, ContractResult, StationTrade, RouteResult } from "@/lib/types";
+import { DiffTimeline } from "./DiffTimeline";
+import type { ScanRecord, FlipResult, ContractResult, StationTrade, RouteResult, DiffTimelineResponse } from "@/lib/types";
 
 interface ScanHistoryProps {
   onLoadResults?: (tab: string, results: unknown[], params: Record<string, unknown>) => void;
@@ -23,6 +24,8 @@ export function ScanHistory({ onLoadResults }: ScanHistoryProps) {
   } | null>(null);
   const [loadingResults, setLoadingResults] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [diffTimeline, setDiffTimeline] = useState<DiffTimelineResponse | null>(null);
+  const [diffLoading, setDiffLoading] = useState(false);
 
   const loadHistory = async () => {
     try {
@@ -84,16 +87,23 @@ export function ScanHistory({ onLoadResults }: ScanHistoryProps) {
 
   const handleViewResults = async (record: ScanRecord) => {
     setLoadingResults(true);
+    setDiffLoading(true);
     try {
-      const data = await getScanHistoryResults(record.id);
+      const [data, diff] = await Promise.all([
+        getScanHistoryResults(record.id),
+        getScanHistoryDiffTimeline(record.id),
+      ]);
       setViewingResults({
         scan: data.scan,
         results: data.results as FlipResult[] | ContractResult[] | StationTrade[] | RouteResult[],
       });
+      setDiffTimeline(diff);
     } catch {
       addToast(t("failedToLoadResults"), "error");
+      setDiffTimeline(null);
     } finally {
       setLoadingResults(false);
+      setDiffLoading(false);
     }
   };
 
@@ -226,6 +236,11 @@ export function ScanHistory({ onLoadResults }: ScanHistoryProps) {
           </div>
           <div className="overflow-auto max-h-96 border border-eve-border rounded">
             {renderResultsTable(resultTab, viewingResults.results || [], t)}
+          </div>
+
+          <div className="mt-4">
+            <div className="text-sm text-eve-dim">Diff timeline</div>
+            <DiffTimeline timeline={diffTimeline} loading={diffLoading} />
           </div>
         </div>
       </div>

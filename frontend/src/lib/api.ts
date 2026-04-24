@@ -67,6 +67,7 @@ import type {
   PinnedOpportunitySource,
   PinnedSnapshotPayload,
   PinnedOpportunitySnapshotRecord,
+  DiffTimelineResponse,
 } from "./types";
 
 const BASE = import.meta.env.VITE_API_URL || "";
@@ -1373,6 +1374,16 @@ export async function clearScanHistory(olderThanDays: number = 7): Promise<{ del
     body: JSON.stringify({ older_than_days: olderThanDays }),
   });
   return handleResponse<{ deleted: number }>(res);
+}
+
+export async function getScanHistoryDiffTimeline(id: number): Promise<DiffTimelineResponse> {
+  const res = await apiFetch(`${BASE}/api/scan/history/${id}/diffs`);
+  return handleResponse<DiffTimelineResponse>(res);
+}
+
+export async function getPinnedOpportunityDiffTimeline(opportunityKey: string): Promise<DiffTimelineResponse> {
+  const res = await apiFetch(`${BASE}/api/pinned-opportunities/${encodeURIComponent(opportunityKey)}/diffs`);
+  return handleResponse<DiffTimelineResponse>(res);
 }
 
 // --- Auth ---
