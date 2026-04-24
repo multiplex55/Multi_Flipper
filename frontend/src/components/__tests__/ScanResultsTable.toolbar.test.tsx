@@ -246,9 +246,6 @@ describe("ScanResultsTable advanced toolbar", () => {
 
     fireEvent.click(screen.getByTestId("urgency-sort-button"));
     fireEvent.click(screen.getByTestId("urgency-filter-chip:aging"));
-    fireEvent.change(screen.getByTestId("route-safety-filter-select"), {
-      target: { value: "red" },
-    });
     const realProfitInput = screen
       .getAllByTitle("Real Profit")
       .find((el) => el.tagName.toLowerCase() === "input");
@@ -257,7 +254,6 @@ describe("ScanResultsTable advanced toolbar", () => {
     }
     fireEvent.change(realProfitInput, { target: { value: ">300" } });
 
-    expect(screen.getByTestId("active-filter-chip:route-safety")).toBeInTheDocument();
     expect(screen.getByTestId("active-filter-chip:urgency-filter")).toBeInTheDocument();
     expect(screen.getByText("Showing 1 of 2")).toBeInTheDocument();
     expect(screen.getByTestId("urgency-sort-button")).toHaveClass(
@@ -266,7 +262,6 @@ describe("ScanResultsTable advanced toolbar", () => {
 
     fireEvent.click(screen.getByTestId("reset-implicit-ordering-button"));
 
-    expect(screen.getByTestId("active-filter-chip:route-safety")).toBeInTheDocument();
     expect(screen.getByTestId("active-filter-chip:urgency-filter")).toBeInTheDocument();
     expect(screen.getByText("Showing 1 of 2")).toBeInTheDocument();
     expect(screen.getByTestId("urgency-sort-button")).toHaveClass(
@@ -274,44 +269,12 @@ describe("ScanResultsTable advanced toolbar", () => {
     );
   });
 
-  it("exposes route safety selector in advanced filtering controls and updates filter state", () => {
+  it("does not expose route safety selector in advanced filtering controls", () => {
     renderTable([makeRow(), makeRow({ TypeID: 102, TypeName: "Item 102", BuySystemID: 30002187, SellSystemID: 30000142 })]);
     fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
 
-    const routeSafetySelect = screen.getByTestId(
-      "route-safety-filter-select",
-    ) as HTMLSelectElement;
-    expect(routeSafetySelect).toBeInTheDocument();
-    expect(routeSafetySelect.value).toBe("all");
-    expect(within(routeSafetySelect).getByRole("option", { name: "Any" })).toBeInTheDocument();
-    expect(within(routeSafetySelect).getByRole("option", { name: "Green only" })).toBeInTheDocument();
-    expect(within(routeSafetySelect).getByRole("option", { name: "Yellow+" })).toBeInTheDocument();
-    expect(within(routeSafetySelect).getByRole("option", { name: "Red included" })).toBeInTheDocument();
-
-    fireEvent.change(routeSafetySelect, { target: { value: "green" } });
-    expect(routeSafetySelect.value).toBe("green");
-    expect(screen.getByTestId("active-filter-chip:route-safety")).toHaveTextContent(
-      "Route safety: green",
-    );
-  });
-
-  it("shows and clears the route safety audit chip when selecting non-default then resetting", () => {
-    renderTable([makeRow(), makeRow({ TypeID: 102, TypeName: "Item 102", BuySystemID: 30002187, SellSystemID: 30000142 })]);
-    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
-
-    const routeSafetySelect = screen.getByTestId(
-      "route-safety-filter-select",
-    ) as HTMLSelectElement;
-
-    fireEvent.change(routeSafetySelect, { target: { value: "green" } });
-    const routeSafetyChip = screen.getByTestId("active-filter-chip:route-safety");
-    expect(routeSafetyChip).toHaveTextContent("Route safety: green");
-
-    fireEvent.click(routeSafetyChip);
-
+    expect(screen.queryByTestId("route-safety-filter-select")).not.toBeInTheDocument();
     expect(screen.queryByTestId("active-filter-chip:route-safety")).not.toBeInTheDocument();
-    expect(routeSafetySelect.value).toBe("all");
-    expect(screen.getByText("Found 2 deals")).toBeInTheDocument();
   });
 
   it("toggles urgency toolbar sort direction and updates directional label", () => {
@@ -377,13 +340,6 @@ describe("ScanResultsTable advanced toolbar", () => {
 
     fireEvent.click(screen.getByTestId("scoring-recipe:fragile_first"));
 
-    const routeSafetySelect = screen.getByTestId(
-      "route-safety-filter-select",
-    ) as HTMLSelectElement;
-    expect(routeSafetySelect.value).toBe("red");
-    expect(screen.getByTestId("active-filter-chip:route-safety")).toHaveTextContent(
-      "Route safety: red",
-    );
     expect(screen.getByTestId("active-filter-chip:urgency-filter")).toHaveTextContent(
       "Urgency: fragile",
     );

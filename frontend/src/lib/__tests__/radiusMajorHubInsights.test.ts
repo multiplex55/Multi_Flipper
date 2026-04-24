@@ -133,10 +133,6 @@ describe("radiusMajorHubInsights", () => {
         context: { excludedByEndpointPreferences: true },
       },
       {
-        name: "route safety excluded",
-        context: { excludedByRouteSafetyFilter: true },
-      },
-      {
         name: "hidden row excluded",
         context: { excludedByRowVisibility: true },
       },
@@ -167,8 +163,7 @@ describe("radiusMajorHubInsights", () => {
     const hubs = buildRadiusMajorHubInsights(rows, (row) => ({
       excludedByEndpointPreferences: row.TypeID === 42,
       excludedByRowVisibility: row.TypeID === 43,
-      excludedByRouteSafetyFilter: row.TypeID === 44,
-      excludedByFillabilityOrStalePolicy: false,
+      excludedByFillabilityOrStalePolicy: row.TypeID === 44,
     }));
     const jita = hubs.find((hub) => hub.hub.key === "jita");
 
