@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { getCharacterLocation } from "@/lib/api";
+import type { AuthCharacter } from "@/lib/types";
 import {
   getRouteAssignment,
-  listAssignedPilots,
   removeRouteAssignment,
   type RouteAssignment,
   type RouteAssignmentStatus,
@@ -10,64 +10,92 @@ import {
   upsertRouteAssignment,
   VALID_STATUSES,
 } from "@/lib/routeAssignments";
+import { recommendBestPilotForRoute } from "@/lib/routePilotRecommendation";
+
+export interface RoutePilotAssignmentEndpoints {
+  buySystemName?: string;
+  sellSystemName?: string;
+  candidateDistancesByCharacterId?: Record<
+    number,
+    { jumpsToBuy?: number | null; totalRunJumps?: number | null }
+  >;
+}
 
 interface RoutePilotAssignmentsPanelProps {
   routeKey: string;
   routeLabel?: string;
+  characters?: AuthCharacter[];
+  routeEndpoints?: RoutePilotAssignmentEndpoints;
   onAssignmentChange?: (assignment: RouteAssignment | null) => void;
+  onRecalculateLensFromCharacter?: (characterId: number) => void;
 }
 
 export function RoutePilotAssignmentsPanel({
   routeKey,
   routeLabel,
+  characters = [],
+  routeEndpoints,
   onAssignmentChange,
+  onRecalculateLensFromCharacter,
 }: RoutePilotAssignmentsPanelProps) {
   const [assignment, setAssignment] = useState<RouteAssignment | null>(
     () => getRouteAssignment(routeKey),
   );
-  const [pilotInput, setPilotInput] = useState(assignment?.assignedCharacter ?? "");
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string>(
+    assignment?.assignedCharacterId ? String(assignment.assignedCharacterId) : "",
+  );
   const [locationLabel, setLocationLabel] = useState<string>("");
+  const [recalcLensOnRecommend, setRecalcLensOnRecommend] = useState(false);
+
+  const selectedCharacter = useMemo(
+    () =>
+      characters.find(
+        (character) => String(character.character_id) === selectedCharacterId,
+      ) ?? null,
+    [characters, selectedCharacterId],
+  );
 
   useEffect(() => {
     const next = getRouteAssignment(routeKey);
     setAssignment(next);
-    setPilotInput(next?.assignedCharacter ?? "");
+    setSelectedCharacterId(next?.assignedCharacterId ? String(next.assignedCharacterId) : "");
   }, [routeKey]);
 
+  const refreshLocation = async () => {
+    if (!assignment?.assignedCharacterId) return;
+    try {
+      const location = await getCharacterLocation(assignment.assignedCharacterId);
+      const display = [location.solar_system_name, location.station_name]
+        .filter(Boolean)
+        .join(" · ");
+      setLocationLabel(display);
+      patchAssignment({
+        assignedCharacterSystemId: location.solar_system_id,
+        assignedCharacterSystemName: location.solar_system_name,
+        currentSystem: location.solar_system_name,
+      });
+    } catch {
+      setLocationLabel("");
+    }
+  };
+
   useEffect(() => {
-    let isMounted = true;
-    if (!assignment?.assignedCharacter) {
+    if (!assignment?.assignedCharacterId) {
       setLocationLabel("");
       return;
     }
-    if (typeof getCharacterLocation !== "function") {
-      return;
-    }
-    getCharacterLocation()
-      .then((location) => {
-        if (!isMounted || !location) return;
-        const display = [location.solar_system_name, location.station_name]
-          .filter(Boolean)
-          .join(" · ");
-        setLocationLabel(display);
-      })
-      .catch(() => {
-        if (isMounted) setLocationLabel("");
-      });
-    return () => {
-      isMounted = false;
-    };
-  }, [assignment?.assignedCharacter]);
+    void refreshLocation();
+  }, [assignment?.assignedCharacterId]);
 
-  const pilots = useMemo(() => listAssignedPilots(), [assignment?.updatedAt]);
-
-  const saveAssignment = (nextPilot: string) => {
-    const pilot = nextPilot.trim();
-    if (!pilot) return;
+  const saveAssignment = () => {
+    if (!selectedCharacter) return;
     const nextList = upsertRouteAssignment({
       routeKey,
-      assignedCharacter: pilot,
+      assignedCharacterName: selectedCharacter.character_name,
+      assignedCharacterId: selectedCharacter.character_id,
       status: assignment?.status ?? "queued",
+      assignedCharacterSystemId: assignment?.assignedCharacterSystemId,
+      assignedCharacterSystemName: assignment?.assignedCharacterSystemName,
       currentSystem: assignment?.currentSystem,
       stagedSystem: assignment?.stagedSystem,
       notes: assignment?.notes,
@@ -81,11 +109,49 @@ export function RoutePilotAssignmentsPanel({
     patch: Partial<Omit<RouteAssignment, "routeKey" | "updatedAt">>,
   ) => {
     if (!assignment) return;
-    const next = updateRouteAssignment(routeKey, patch).find(
-      (entry) => entry.routeKey === routeKey,
-    ) ?? null;
+    const next =
+      updateRouteAssignment(routeKey, patch).find(
+        (entry) => entry.routeKey === routeKey,
+      ) ?? null;
     setAssignment(next);
     onAssignmentChange?.(next);
+  };
+
+  const applyRecommendation = () => {
+    const recommendation = recommendBestPilotForRoute(
+      characters.map((character) => ({
+        characterId: character.character_id,
+        characterName: character.character_name,
+        jumpsToBuy:
+          routeEndpoints?.candidateDistancesByCharacterId?.[character.character_id]
+            ?.jumpsToBuy ?? null,
+        totalRunJumps:
+          routeEndpoints?.candidateDistancesByCharacterId?.[character.character_id]
+            ?.totalRunJumps ?? null,
+      })),
+    );
+    if (!recommendation.bestCandidate) return;
+    setSelectedCharacterId(String(recommendation.bestCandidate.characterId));
+
+    const character = characters.find(
+      (entry) => entry.character_id === recommendation.bestCandidate?.characterId,
+    );
+    if (!character) return;
+    const nextList = upsertRouteAssignment({
+      routeKey,
+      assignedCharacterName: character.character_name,
+      assignedCharacterId: character.character_id,
+      status: assignment?.status ?? "queued",
+      currentSystem: assignment?.currentSystem,
+      stagedSystem: assignment?.stagedSystem,
+      notes: assignment?.notes,
+    });
+    const next = nextList.find((entry) => entry.routeKey === routeKey) ?? null;
+    setAssignment(next);
+    onAssignmentChange?.(next);
+    if (recalcLensOnRecommend) {
+      onRecalculateLensFromCharacter?.(character.character_id);
+    }
   };
 
   return (
@@ -93,38 +159,58 @@ export function RoutePilotAssignmentsPanel({
       <div className="mb-1 flex flex-wrap items-center gap-2">
         <span className="text-eve-dim uppercase tracking-wide">Pilot assignment</span>
         {routeLabel && <span className="text-eve-dim">{routeLabel}</span>}
+        {routeEndpoints?.buySystemName && routeEndpoints?.sellSystemName && (
+          <span className="text-eve-dim">{routeEndpoints.buySystemName} → {routeEndpoints.sellSystemName}</span>
+        )}
         {assignment?.updatedAt && (
           <span className="text-eve-dim">Updated {new Date(assignment.updatedAt).toLocaleString()}</span>
         )}
       </div>
 
       <div className="mb-1 flex flex-wrap items-center gap-1.5">
-        <input
-          value={pilotInput}
-          onChange={(event) => setPilotInput(event.target.value)}
-          list={`route-pilot-list:${routeKey}`}
-          placeholder="Pilot name"
+        <select
+          value={selectedCharacterId}
+          onChange={(event) => setSelectedCharacterId(event.target.value)}
           className="rounded-sm border border-eve-border/60 bg-eve-dark px-1.5 py-0.5"
-          aria-label="Assigned pilot"
-        />
-        <datalist id={`route-pilot-list:${routeKey}`}>
-          {pilots.map((pilot) => (
-            <option key={pilot} value={pilot} />
+          aria-label="Assigned character"
+        >
+          <option value="">Select character</option>
+          {characters.map((character) => (
+            <option key={character.character_id} value={String(character.character_id)}>
+              {character.character_name}
+            </option>
           ))}
-        </datalist>
+        </select>
         <button
           type="button"
-          onClick={() => saveAssignment(pilotInput)}
+          onClick={saveAssignment}
           className="rounded-sm border border-eve-border/60 px-1.5 py-0.5"
+          disabled={!selectedCharacter}
         >
           Assign
         </button>
         <button
           type="button"
+          onClick={applyRecommendation}
+          className="rounded-sm border border-indigo-500/60 px-1.5 py-0.5 text-indigo-200"
+          disabled={characters.length === 0}
+        >
+          Recommend
+        </button>
+        <label className="flex items-center gap-1 text-eve-dim">
+          <input
+            type="checkbox"
+            checked={recalcLensOnRecommend}
+            onChange={(event) => setRecalcLensOnRecommend(event.target.checked)}
+          />
+          Recalc lens
+        </label>
+        <button
+          type="button"
           onClick={() => {
             removeRouteAssignment(routeKey);
             setAssignment(null);
-            setPilotInput("");
+            setSelectedCharacterId("");
             onAssignmentChange?.(null);
           }}
           className="rounded-sm border border-rose-500/50 px-1.5 py-0.5 text-rose-200"
@@ -148,6 +234,14 @@ export function RoutePilotAssignmentsPanel({
             </option>
           ))}
         </select>
+        <button
+          type="button"
+          onClick={() => void refreshLocation()}
+          className="rounded-sm border border-cyan-500/60 px-1.5 py-0.5 text-cyan-200"
+          disabled={!assignment?.assignedCharacterId}
+        >
+          Refresh location
+        </button>
         {assignment?.status && (
           <span className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 capitalize" data-testid="route-assignment-status-chip">
             {assignment.status}

@@ -19,12 +19,13 @@ describe("routeAssignments", () => {
   it("creates, updates, deletes with persistence", () => {
     upsertRouteAssignment({
       routeKey: "route-1",
-      assignedCharacter: "Pilot One",
+      assignedCharacterName: "Pilot One",
+      assignedCharacterId: 1001,
       status: "queued",
     });
 
     expect(loadRouteAssignments()).toHaveLength(1);
-    expect(getRouteAssignment("route-1")?.assignedCharacter).toBe("Pilot One");
+    expect(getRouteAssignment("route-1")?.assignedCharacterName).toBe("Pilot One");
 
     updateRouteAssignment("route-1", { status: "buying", notes: "started" });
     expect(getRouteAssignment("route-1")?.status).toBe("buying");
@@ -35,10 +36,42 @@ describe("routeAssignments", () => {
     expect(localStorage.getItem(ROUTE_ASSIGNMENTS_STORAGE_KEY)).toBe("[]");
   });
 
+  it("migrates legacy assignedCharacter payloads and defaults missing ids", () => {
+    localStorage.setItem(
+      ROUTE_ASSIGNMENTS_STORAGE_KEY,
+      JSON.stringify([
+        {
+          routeKey: "legacy-route",
+          assignedCharacter: "Legacy Pilot",
+          status: "hauling",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      ]),
+    );
+
+    const [entry] = loadRouteAssignments();
+    expect(entry?.assignedCharacterName).toBe("Legacy Pilot");
+    expect(entry?.assignedCharacterId).toBeUndefined();
+  });
+
+  it("preserves assignedCharacterId in save/load roundtrip", () => {
+    saveRouteAssignments([
+      {
+        routeKey: "route-a",
+        assignedCharacterName: "Pilot A",
+        assignedCharacterId: 77,
+        status: "queued",
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+
+    expect(loadRouteAssignments()[0]?.assignedCharacterId).toBe(77);
+  });
+
   it("supports status transitions", () => {
     upsertRouteAssignment({
       routeKey: "route-2",
-      assignedCharacter: "Pilot Two",
+      assignedCharacterName: "Pilot Two",
       status: "queued",
     });
     updateRouteAssignment("route-2", { status: "hauling" });
@@ -53,25 +86,25 @@ describe("routeAssignments", () => {
     saveRouteAssignments([
       {
         routeKey: "route-a",
-        assignedCharacter: "Pilot A",
+        assignedCharacterName: "Pilot A",
         status: "queued",
         updatedAt: new Date().toISOString(),
       },
       {
         routeKey: "route-b",
-        assignedCharacter: "Pilot B",
+        assignedCharacterName: "Pilot B",
         status: "buying",
         updatedAt: new Date().toISOString(),
       },
       {
         routeKey: "route-c",
-        assignedCharacter: "Pilot A",
+        assignedCharacterName: "Pilot A",
         status: "buying",
         updatedAt: new Date().toISOString(),
       },
     ]);
 
-    expect(getRouteAssignment("route-b")?.assignedCharacter).toBe("Pilot B");
+    expect(getRouteAssignment("route-b")?.assignedCharacterName).toBe("Pilot B");
     expect(getAssignmentsByPilot("pilot a")).toHaveLength(2);
     expect(getAssignmentsByStatus("buying").map((entry) => entry.routeKey).sort()).toEqual([
       "route-b",
