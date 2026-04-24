@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
 import { deriveExecutionSummary } from "@/lib/savedRouteExecution";
 import { formatISK } from "@/lib/format";
-import type { SavedRoutePack } from "@/lib/types";
+import type { AuthCharacter, SavedRoutePack } from "@/lib/types";
 import type { RouteAssignment } from "@/lib/routeAssignments";
 import {
   getVerificationFreshness,
   verificationProfiles,
 } from "@/lib/verificationProfiles";
-import { RoutePilotAssignmentsPanel } from "@/components/RoutePilotAssignmentsPanel";
+import { RoutePilotAssignmentsPanel, type RoutePilotAssignmentEndpoints } from "@/components/RoutePilotAssignmentsPanel";
 import { RouteFillPlannerPanel } from "@/components/RouteFillPlannerPanel";
 import type { RouteFillPlannerSections, RouteFillPlannerSuggestion } from "@/lib/routeFillPlanner";
 
@@ -42,6 +42,9 @@ interface RouteWorkbenchPanelProps {
   onOpenFillSuggestionInBatchBuilder?: (suggestion: RouteFillPlannerSuggestion) => void;
   assignment?: RouteAssignment | null;
   onAssignmentChange?: (assignment: RouteAssignment | null) => void;
+  characters?: AuthCharacter[];
+  routeEndpoints?: RoutePilotAssignmentEndpoints;
+  onRecalculateLensFromCharacter?: (characterId: number) => void;
 }
 
 export function RouteWorkbenchPanel({
@@ -66,6 +69,9 @@ export function RouteWorkbenchPanel({
   onOpenFillSuggestionInBatchBuilder,
   assignment,
   onAssignmentChange,
+  characters = [],
+  routeEndpoints,
+  onRecalculateLensFromCharacter,
 }: RouteWorkbenchPanelProps) {
   const summary = useMemo(() => deriveExecutionSummary(pack), [pack]);
   const [qtyByLine, setQtyByLine] = useState<Record<string, string>>({});
@@ -115,7 +121,7 @@ export function RouteWorkbenchPanel({
         </span>
         {assignment && (
           <span className="rounded-sm border border-indigo-400/60 px-1.5 py-0.5" data-testid="route-workbench-assignment">
-            {assignment.assignedCharacter} · {assignment.status}
+            {assignment.assignedCharacterName} · {assignment.status}
           </span>
         )}
         <span className="text-eve-dim" data-testid="route-workbench-freshness">
@@ -262,7 +268,10 @@ export function RouteWorkbenchPanel({
         <RoutePilotAssignmentsPanel
           routeKey={pack.routeKey}
           routeLabel={pack.routeLabel}
+          characters={characters}
+          routeEndpoints={routeEndpoints}
           onAssignmentChange={onAssignmentChange}
+          onRecalculateLensFromCharacter={onRecalculateLensFromCharacter}
         />
       </div>
     </section>

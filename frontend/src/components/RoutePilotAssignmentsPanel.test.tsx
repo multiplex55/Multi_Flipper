@@ -1,24 +1,37 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RoutePilotAssignmentsPanel } from "@/components/RoutePilotAssignmentsPanel";
+import { getCharacterLocation } from "@/lib/api";
 
 vi.mock("@/lib/api", () => ({
   getCharacterLocation: vi.fn(async () => null),
 }));
 
+const characters = [
+  { character_id: 101, character_name: "Pilot One", active: true },
+  { character_id: 102, character_name: "Pilot Two", active: true },
+];
+
 describe("RoutePilotAssignmentsPanel", () => {
   beforeEach(() => {
     localStorage.clear();
+    vi.clearAllMocks();
   });
   afterEach(() => {
     cleanup();
   });
 
   it("assigns pilot and updates status", () => {
-    render(<RoutePilotAssignmentsPanel routeKey="route-1" routeLabel="Jita → Amarr" />);
+    render(
+      <RoutePilotAssignmentsPanel
+        routeKey="route-1"
+        routeLabel="Jita → Amarr"
+        characters={characters}
+      />,
+    );
 
-    fireEvent.change(screen.getByLabelText("Assigned pilot"), {
-      target: { value: "Pilot One" },
+    fireEvent.change(screen.getByLabelText("Assigned character"), {
+      target: { value: "101" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Assign" }));
 
@@ -35,10 +48,10 @@ describe("RoutePilotAssignmentsPanel", () => {
   });
 
   it("edits notes/system fields", () => {
-    render(<RoutePilotAssignmentsPanel routeKey="route-2" />);
+    render(<RoutePilotAssignmentsPanel routeKey="route-2" characters={characters} />);
 
-    fireEvent.change(screen.getByLabelText("Assigned pilot"), {
-      target: { value: "Pilot Two" },
+    fireEvent.change(screen.getByLabelText("Assigned character"), {
+      target: { value: "102" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Assign" }));
 
@@ -57,16 +70,36 @@ describe("RoutePilotAssignmentsPanel", () => {
     expect(screen.getByLabelText("Assignment notes")).toHaveValue("Buy then haul");
   });
 
-  it("unassign behavior", () => {
-    render(<RoutePilotAssignmentsPanel routeKey="route-3" />);
+  it("refreshes location using assigned character id", async () => {
+    vi.mocked(getCharacterLocation).mockResolvedValue({
+      solar_system_id: 30000142,
+      solar_system_name: "Jita",
+      station_name: "Jita IV - Moon 4",
+    });
 
-    fireEvent.change(screen.getByLabelText("Assigned pilot"), {
-      target: { value: "Pilot Three" },
+    render(<RoutePilotAssignmentsPanel routeKey="route-3" characters={characters} />);
+
+    fireEvent.change(screen.getByLabelText("Assigned character"), {
+      target: { value: "101" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh location" }));
+
+    await waitFor(() => {
+      expect(getCharacterLocation).toHaveBeenCalledWith(101);
+    });
+  });
+
+  it("unassign behavior", () => {
+    render(<RoutePilotAssignmentsPanel routeKey="route-4" characters={characters} />);
+
+    fireEvent.change(screen.getByLabelText("Assigned character"), {
+      target: { value: "101" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Assign" }));
     fireEvent.click(screen.getByRole("button", { name: "Unassign" }));
 
-    expect(screen.getByLabelText("Assigned pilot")).toHaveValue("");
+    expect(screen.getByLabelText("Assigned character")).toHaveValue("");
     expect(screen.queryByTestId("route-assignment-status-chip")).not.toBeInTheDocument();
   });
 });

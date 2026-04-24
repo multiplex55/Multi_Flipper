@@ -9,6 +9,7 @@ import {
   useRef,
 } from "react";
 import type {
+  AuthCharacter,
   FlipResult,
   SavedRoutePack,
   StationCacheMeta,
@@ -421,6 +422,8 @@ interface Props {
   ) => void;
   featureConfig?: ScanResultsTableFeatureConfig;
   routeWorkspace?: RouteExecutionWorkspace;
+  authCharacters?: AuthCharacter[];
+  onRecalculateLensFromCharacter?: (characterId: number) => void;
 }
 
 type ColumnDef = {
@@ -1592,6 +1595,8 @@ export function ScanResultsTable({
   onRouteHandoff,
   featureConfig = DEFAULT_SCAN_RESULTS_TABLE_FEATURE_CONFIG,
   routeWorkspace,
+  authCharacters = [],
+  onRecalculateLensFromCharacter,
 }: Props) {
   const { t } = useI18n();
   const emptyReason: EmptyReason = scanCompletedWithZero
@@ -3208,6 +3213,20 @@ export function ScanResultsTable({
       };
     }
     return out;
+  }, [datasetRows]);
+
+
+  const routeLabelByKey = useMemo(() => {
+    const next: Record<string, { buySystemName: string; sellSystemName: string }> = {};
+    for (const ir of datasetRows) {
+      const key = routeGroupKey(ir.row);
+      if (next[key]) continue;
+      next[key] = {
+        buySystemName: ir.row.BuySystemName ?? "",
+        sellSystemName: ir.row.SellSystemName ?? "",
+      };
+    }
+    return next;
   }, [datasetRows]);
 
   const routeAnchorRowByKey = useMemo<Record<string, FlipResult>>(() => {
@@ -6515,6 +6534,12 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
             routeWorkspace?.openBatchBuilder(activeWorkbenchPack.routeKey)
           }
           onScrollToTable={() => scrollToRouteGroup(activeWorkbenchPack.routeKey)}
+          characters={authCharacters}
+          routeEndpoints={{
+            buySystemName: routeLabelByKey[activeWorkbenchPack.routeKey]?.buySystemName,
+            sellSystemName: routeLabelByKey[activeWorkbenchPack.routeKey]?.sellSystemName,
+          }}
+          onRecalculateLensFromCharacter={onRecalculateLensFromCharacter}
           assignment={routeAssignmentsByKey[activeWorkbenchPack.routeKey] ?? null}
           onAssignmentChange={(assignment) => {
             setRouteAssignmentsByKey((prev) => {
@@ -7095,7 +7120,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                                         className="rounded-sm border border-indigo-400/50 px-1.5 py-0.5 text-[10px] text-indigo-200"
                                         data-testid={`route-assignment-badge:${group.key}`}
                                       >
-                                        {routeAssignmentsByKey[group.key].assignedCharacter} · {routeAssignmentsByKey[group.key].status}
+                                        {routeAssignmentsByKey[group.key].assignedCharacterName} · {routeAssignmentsByKey[group.key].status}
                                       </span>
                                     )}
                                     <button

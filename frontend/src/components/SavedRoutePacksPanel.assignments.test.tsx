@@ -48,7 +48,7 @@ describe("SavedRoutePacksPanel assignments", () => {
         assignmentByRouteKey={{
           [pack.routeKey]: {
             routeKey: pack.routeKey,
-            assignedCharacter: "Pilot One",
+            assignedCharacterName: "Pilot One",
             status: "buying",
             updatedAt: new Date().toISOString(),
           },

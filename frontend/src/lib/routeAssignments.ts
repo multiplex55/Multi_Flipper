@@ -7,13 +7,20 @@ export type RouteAssignmentStatus =
 
 export interface RouteAssignment {
   routeKey: string;
-  assignedCharacter: string;
+  assignedCharacterName: string;
+  assignedCharacterId?: number;
+  assignedCharacterSystemId?: number;
+  assignedCharacterSystemName?: string;
   status: RouteAssignmentStatus;
   currentSystem?: string;
   stagedSystem?: string;
   notes?: string;
   updatedAt: string;
 }
+
+type LegacyRouteAssignment = Partial<RouteAssignment> & {
+  assignedCharacter?: string;
+};
 
 const ROUTE_ASSIGNMENTS_STORAGE_KEY = "eve-route-assignments:v1";
 
@@ -29,22 +36,40 @@ const VALID_STATUSES: RouteAssignmentStatus[] = [
   "done",
 ];
 
+function normalizeNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.trunc(value)
+    : undefined;
+}
+
 function normalizeAssignment(value: unknown): RouteAssignment | null {
   if (!value || typeof value !== "object") return null;
-  const raw = value as Partial<RouteAssignment>;
+  const raw = value as LegacyRouteAssignment;
   if (typeof raw.routeKey !== "string" || !raw.routeKey.trim()) return null;
-  if (
-    typeof raw.assignedCharacter !== "string" ||
-    !raw.assignedCharacter.trim()
-  ) {
-    return null;
-  }
+
+  const assignedCharacterName =
+    typeof raw.assignedCharacterName === "string" && raw.assignedCharacterName.trim()
+      ? raw.assignedCharacterName.trim()
+      : typeof raw.assignedCharacter === "string" && raw.assignedCharacter.trim()
+        ? raw.assignedCharacter.trim()
+        : "";
+
+  if (!assignedCharacterName) return null;
+
   const status = VALID_STATUSES.includes(raw.status as RouteAssignmentStatus)
     ? (raw.status as RouteAssignmentStatus)
     : "queued";
+
   return {
     routeKey: raw.routeKey.trim(),
-    assignedCharacter: raw.assignedCharacter.trim(),
+    assignedCharacterName,
+    assignedCharacterId: normalizeNumber(raw.assignedCharacterId),
+    assignedCharacterSystemId: normalizeNumber(raw.assignedCharacterSystemId),
+    assignedCharacterSystemName:
+      typeof raw.assignedCharacterSystemName === "string" &&
+      raw.assignedCharacterSystemName.trim()
+        ? raw.assignedCharacterSystemName.trim()
+        : undefined,
     status,
     currentSystem:
       typeof raw.currentSystem === "string" && raw.currentSystem.trim()
@@ -139,7 +164,7 @@ export function getAssignmentsByPilot(pilotName: string): RouteAssignment[] {
   const normalizedPilot = pilotName.trim().toLowerCase();
   if (!normalizedPilot) return [];
   return loadRouteAssignments().filter(
-    (entry) => entry.assignedCharacter.toLowerCase() === normalizedPilot,
+    (entry) => entry.assignedCharacterName.toLowerCase() === normalizedPilot,
   );
 }
 
@@ -151,7 +176,7 @@ export function getAssignmentsByStatus(
 
 export function listAssignedPilots(): string[] {
   return Array.from(
-    new Set(loadRouteAssignments().map((entry) => entry.assignedCharacter)),
+    new Set(loadRouteAssignments().map((entry) => entry.assignedCharacterName)),
   ).sort((a, b) => a.localeCompare(b));
 }
 

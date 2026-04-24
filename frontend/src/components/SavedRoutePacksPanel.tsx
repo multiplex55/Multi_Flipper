@@ -61,7 +61,7 @@ export function SavedRoutePacksPanel({
               {packs.map((pack) => (
                 <tr key={pack.routeKey} className="border-b border-eve-border/40 last:border-b-0 align-top">
                   <td className="py-1 pr-2 text-eve-text">{pack.routeLabel}</td>
-                  <td className="py-1 pr-2">{pack.status}{assignmentByRouteKey[pack.routeKey] ? ` · ${assignmentByRouteKey[pack.routeKey]?.assignedCharacter} (${assignmentByRouteKey[pack.routeKey]?.status})` : ""}</td>
+                  <td className="py-1 pr-2">{pack.status}{assignmentByRouteKey[pack.routeKey] ? ` · ${assignmentByRouteKey[pack.routeKey]?.assignedCharacterName} (${assignmentByRouteKey[pack.routeKey]?.status})` : ""}</td>
                   <td className="py-1 pr-2 font-mono">{formatISK(pack.summarySnapshot.routeTotalProfit)}</td>
                   <td className="py-1 pr-2">{pack.verificationSnapshot?.status ?? "Unverified"}</td>
                   <td className="py-1 pr-2">{verificationAge(pack.lastVerifiedAt)}</td>
