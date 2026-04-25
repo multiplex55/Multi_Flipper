@@ -137,7 +137,17 @@ describe("RadiusRouteWorkspace validate panel", () => {
             workspaceMode="validate"
             radiusScanSession={session}
             routeWorkspace={makeWorkspace()}
-            routeQueueKeys={["loc:60003760->loc:60008494"]}
+            routeQueue={[{
+              routeKey: "loc:60003760->loc:60008494",
+              routeLabel: "Jita → Amarr",
+              status: "queued",
+              priority: 1,
+              assignedPilot: null,
+              verificationProfileId: "standard",
+              lastVerifiedAt: null,
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            }]}
           />
         </ToastProvider>
       </I18nProvider>,
@@ -168,7 +178,17 @@ describe("RadiusRouteWorkspace validate panel", () => {
             workspaceMode="validate"
             radiusScanSession={session}
             routeWorkspace={makeWorkspace()}
-            routeQueueKeys={["loc:60003760->loc:60008494"]}
+            routeQueue={[{
+              routeKey: "loc:60003760->loc:60008494",
+              routeLabel: "Jita → Amarr",
+              status: "queued",
+              priority: 1,
+              assignedPilot: null,
+              verificationProfileId: "standard",
+              lastVerifiedAt: null,
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            }]}
             onValidateVerifyNow={onValidateVerifyNow}
             onValidateProfileSwitch={onValidateProfileSwitch}
             onValidateRebuildFromLiveRows={onValidateRebuildFromLiveRows}
@@ -190,6 +210,60 @@ describe("RadiusRouteWorkspace validate panel", () => {
     expect(onValidateRebuildFromLiveRows).toHaveBeenCalledTimes(1);
     expect(onValidateOpenOffenders).toHaveBeenCalledWith(
       expect.objectContaining({ offenderLines: ["34:60003760:60008494"] }),
+    );
+  });
+
+  it("uses next non-skipped queue entry when queue scope is selected", () => {
+    const onValidateVerifyNow = vi.fn();
+    const session = deriveRadiusScanSession({
+      results: [row],
+      scanParams: params,
+      sessionStationFilters: createSessionStationFilters(),
+    });
+
+    render(
+      <I18nProvider>
+        <ToastProvider>
+          <RadiusRouteWorkspace
+            params={params}
+            workspaceMode="validate"
+            radiusScanSession={session}
+            routeWorkspace={makeWorkspace()}
+            routeQueue={[
+              {
+                routeKey: "loc:skip->loc:skip",
+                routeLabel: "Skip",
+                status: "skipped",
+                priority: 9,
+                assignedPilot: null,
+                verificationProfileId: "standard",
+                lastVerifiedAt: null,
+                createdAt: "2026-01-01T00:00:00.000Z",
+                updatedAt: "2026-01-01T00:00:00.000Z",
+              },
+              {
+                routeKey: "loc:60003760->loc:60008494",
+                routeLabel: "Jita → Amarr",
+                status: "queued",
+                priority: 1,
+                assignedPilot: null,
+                verificationProfileId: "standard",
+                lastVerifiedAt: null,
+                createdAt: "2026-01-01T00:00:00.000Z",
+                updatedAt: "2026-01-01T00:00:00.000Z",
+              },
+            ]}
+            onValidateVerifyNow={onValidateVerifyNow}
+          />
+        </ToastProvider>
+      </I18nProvider>,
+    );
+
+    fireEvent.change(screen.getByLabelText("Validation scope"), { target: { value: "queue" } });
+    fireEvent.click(screen.getByRole("button", { name: "Verify now" }));
+
+    expect(onValidateVerifyNow).toHaveBeenCalledWith(
+      expect.objectContaining({ scope: "queue", routeKey: "loc:60003760->loc:60008494" }),
     );
   });
 
