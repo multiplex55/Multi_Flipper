@@ -4441,19 +4441,24 @@ export function ScanResultsTable({
       selectedIds.size > 0
         ? selectionScopeRows.filter((ir) => selectedIds.has(ir.id))
         : selectionScopeRows;
-    const header = columnDefs.map((c) => t(c.labelKey)).join(",");
+    const exportColumnDefs = isRadiusMode ? orderedColumnDefs : columnDefs;
+    const escapeCSVValue = (value: unknown) => {
+      const str = String(value ?? "");
+      if (!/[",\n\r]/.test(str)) return str;
+      return `"${str.replace(/"/g, "\"\"")}"`;
+    };
+    const header = exportColumnDefs.map((c) => escapeCSVValue(t(c.labelKey))).join(",");
     const csvRows = rows.map((ir) =>
-      columnDefs
+      exportColumnDefs
         .map((col) => {
-          const str = String(
+          const value =
             getCellValue(
               ir.row,
               col.key,
               batchMetricsByRow,
               opportunityProfile,
-            ) ?? "",
-          );
-          return str.includes(",") ? `"${str}"` : str;
+            ) ?? "";
+          return escapeCSVValue(value);
         })
         .join(","),
     );
@@ -4470,9 +4475,10 @@ export function ScanResultsTable({
     selectionScopeRows,
     selectedIds,
     columnDefs,
+    isRadiusMode,
+    orderedColumnDefs,
     batchMetricsByRow,
     opportunityProfile,
-    displayScoreContext,
     addToast,
     t,
   ]);
