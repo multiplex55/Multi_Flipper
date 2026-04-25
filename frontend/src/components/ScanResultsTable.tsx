@@ -179,6 +179,8 @@ import {
   RADIUS_CARGO_BUILD_PRESETS,
   type RadiusCargoBuildPreset,
 } from "@/lib/radiusCargoBuilds";
+import { RadiusToolbar } from "@/components/RadiusToolbar";
+import { RadiusToolbarPanel } from "@/components/RadiusToolbarPanel";
 
 export const calcRouteConfidence = calcRouteConfidenceFromInsights;
 
@@ -5261,6 +5263,105 @@ export function ScanResultsTable({
         </div>
       )}
       {/* Toolbar */}
+      {isRadiusMode && !isRegionGrouped && (
+        <div className={`shrink-0 px-2 ${compactDashboard ? "pt-1" : "pt-1.5"}`}>
+          <RadiusToolbar
+            primaryControls={(
+              <>
+                <button
+                  type="button"
+                  onClick={() => setCompactDashboard((prev) => !prev)}
+                  className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
+                    compactDashboard
+                      ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10"
+                      : "border-eve-border/60 bg-eve-dark/40 text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent"
+                  }`}
+                >
+                  Compact Dashboard
+                </button>
+                <ToolbarBtn
+                  label={t("columnsButton")}
+                  title={t("columnsPanelTitle")}
+                  active={showColumnPanel}
+                  onClick={() => setShowColumnPanel((v) => !v)}
+                />
+                <ToolbarBtn
+                  label="⊞"
+                  title={showFilters ? t("clearFilters") : t("filterPlaceholder")}
+                  active={showFilters}
+                  onClick={() => setShowFilters((v) => !v)}
+                />
+                {hasActiveFilters && (
+                  <ToolbarBtn label="✕" title={t("clearFilters")} onClick={clearFilters} />
+                )}
+                <button
+                  type="button"
+                  className={`rounded-sm border px-1.5 py-0.5 text-[10px] transition-colors ${
+                    oneLegModeEnabled
+                      ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10"
+                      : "border-eve-border/60 text-eve-dim hover:text-eve-text"
+                  }`}
+                  onClick={() => setOneLegModeEnabled((prev) => !prev)}
+                  data-testid="one-leg-mode-toggle"
+                >
+                  One-leg mode {oneLegModeEnabled ? "On" : "Off"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRadiusRouteInsightsHidden((previous) => !previous)}
+                  className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
+                    radiusRouteInsightsHidden
+                      ? "border-eve-border/60 bg-eve-dark/40 text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent"
+                      : "border-eve-accent/60 text-eve-accent bg-eve-accent/10"
+                  }`}
+                  aria-pressed={radiusRouteInsightsHidden}
+                >
+                  {radiusRouteInsightsHidden ? t("showRadiusRouteInsights") : t("hideRadiusRouteInsights")}
+                </button>
+              </>
+            )}
+            utilityToggle={(
+              <RadiusToolbarPanel open={showAdvancedToolbar} onToggle={() => setShowAdvancedToolbar((v) => !v)}>
+                <div className="inline-flex items-center gap-1">
+                  <span>{t("decisionLensTitle")}</span>
+                  {(["recommended", "fastest_isk", "cargo", "safest", "capital_efficient"] as const).map((preset) => (
+                    <button key={preset} type="button" onClick={() => applyDecisionLens(preset)} className="rounded-sm border border-eve-border/50 px-1.5 py-0.5 text-[10px]">
+                      {t(preset === "recommended" ? "decisionLensTitle" : preset === "fastest_isk" ? "decisionLensFastest" : preset === "cargo" ? "decisionLensCargo" : preset === "safest" ? "decisionLensSafest" : "decisionLensCapital")}
+                    </button>
+                  ))}
+                </div>
+              </RadiusToolbarPanel>
+            )}
+            quickActions={(
+              <>
+                <button
+                  type="button"
+                  onClick={() => onOpenPriceValidation?.("")}
+                  className="rounded-sm border border-eve-accent/50 px-1.5 py-0.5 text-[10px] text-eve-accent hover:bg-eve-accent/10"
+                >
+                  Verifier
+                </button>
+                {results.length > 0 && (
+                  <>
+                    <ToolbarBtn label="CSV" title={t("exportCSV")} onClick={exportCSV} />
+                    <ToolbarBtn label="⎘" title={t("copyTable")} onClick={copyTable} />
+                  </>
+                )}
+                {lockedBuyLocationId != null && (
+                  <button type="button" className="rounded-sm border border-cyan-500/50 px-1.5 py-0.5 text-[10px] text-cyan-200" onClick={() => setLockedBuyLocationId(null)}>
+                    Buy lock #{lockedBuyLocationId} ×
+                  </button>
+                )}
+                {lockedSellLocationId != null && (
+                  <button type="button" className="rounded-sm border border-fuchsia-500/50 px-1.5 py-0.5 text-[10px] text-fuchsia-200" onClick={() => setLockedSellLocationId(null)}>
+                    Sell lock #{lockedSellLocationId} ×
+                  </button>
+                )}
+              </>
+            )}
+          />
+        </div>
+      )}
       <div className={`shrink-0 px-2 ${compactDashboard ? "py-1" : "py-1.5"}`}>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <div className="flex items-center gap-2 text-eve-dim">
@@ -6372,6 +6473,9 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
           majorHubInsights={majorHubInsights}
           hubScopeMode={hubScopeMode}
           onHubScopeModeChange={setHubScopeMode}
+          rows={results}
+          characters={authCharacters}
+          fallbackSystemName={originSystemName ?? "Unknown"}
         />
       )}
 
@@ -6407,6 +6511,9 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
           activeRouteLabel={activeRouteGroupKey ? routeGroupByKey[activeRouteGroupKey]?.label ?? null : null}
           defaultExpanded={!compactDashboard}
           compactDashboard={compactDashboard}
+          rows={results}
+          characters={authCharacters}
+          fallbackSystemName={originSystemName ?? "Unknown"}
         />
       )}
 

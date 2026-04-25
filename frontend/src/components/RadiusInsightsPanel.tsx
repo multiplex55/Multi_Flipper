@@ -21,12 +21,15 @@ import {
   type RadiusBestDealCard,
 } from "@/lib/radiusBestDealCards";
 import { classifyVerificationPriority, verificationPriorityChipClass } from "@/lib/radiusVerificationPriority";
+import { buildRadiusStagingRecommendations, type RadiusCharacterLocation } from "@/lib/radiusStagingAdvisor";
+import type { AuthCharacter, FlipResult } from "@/lib/types";
+import { RadiusStagingAdvisorPanel } from "@/components/RadiusStagingAdvisorPanel";
 
 const INSIGHTS_VISIBLE_STORAGE_KEY = "eve-radius-insights-visible:v1";
 const INSIGHTS_TAB_STORAGE_KEY = "eve-radius-insights-tab:v1";
 const INSIGHTS_SECTION_STORAGE_KEY = "eve-radius-insights-sections:v1";
 
-type InsightsTab = "picks" | "queue" | "loops" | "hubs";
+type InsightsTab = "picks" | "queue" | "loops" | "hubs" | "staging";
 
 type RadiusInsightsPanelProps = {
   topRoutePicks: TopRoutePicks;
@@ -80,6 +83,10 @@ type RadiusInsightsPanelProps = {
     { remainingCapacityM3: number; candidates: FillerCandidate[] }
   >;
   lensActive?: boolean;
+  rows?: FlipResult[];
+  characters?: AuthCharacter[];
+  characterLocations?: RadiusCharacterLocation[];
+  fallbackSystemName?: string;
 };
 
 function majorHubActionSummary(
@@ -193,6 +200,10 @@ export function RadiusInsightsPanel({
   routeAggregateMetricsByRoute = {},
   routeFillerCandidatesByKey = {},
   lensActive,
+  rows = [],
+  characters = [],
+  characterLocations = [],
+  fallbackSystemName = "Unknown",
 }: RadiusInsightsPanelProps) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState<boolean>(() =>
@@ -254,6 +265,18 @@ export function RadiusInsightsPanel({
       routeFillerCandidatesByKey,
       topRoutePicks,
     ],
+  );
+  const stagingRecommendations = useMemo(
+    () =>
+      buildRadiusStagingRecommendations({
+        rows,
+        buyHubs,
+        sellHubs,
+        characters,
+        characterLocations,
+        fallbackSystemName,
+      }),
+    [buyHubs, characterLocations, characters, fallbackSystemName, rows, sellHubs],
   );
 
   const toggleExpanded = () => {
@@ -404,6 +427,10 @@ export function RadiusInsightsPanel({
             <div className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-2 py-1 text-eve-dim">
               Loop candidates: <span className="text-eve-text">{loopOpportunities.length}</span>
             </div>
+            <section className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-2 py-1">
+              <div className="mb-1 text-[11px] text-eve-accent">Staging advisor</div>
+              <RadiusStagingAdvisorPanel recommendations={stagingRecommendations} />
+            </section>
 
             <section className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-2 py-1">
               <button
@@ -585,6 +612,7 @@ export function RadiusInsightsPanel({
                 ["queue", "Queue"],
                 ["loops", "Loops"],
                 ["hubs", "Hubs"],
+                ["staging", "Staging"],
               ] as const).map(([tab, label]) => {
                 const active = activeTab === tab;
                 return (
@@ -899,6 +927,12 @@ export function RadiusInsightsPanel({
                     </div>
                   )}
                 </section>
+              </div>
+            )}
+
+            {activeTab === "staging" && (
+              <div className="mt-2">
+                <RadiusStagingAdvisorPanel recommendations={stagingRecommendations} />
               </div>
             )}
 

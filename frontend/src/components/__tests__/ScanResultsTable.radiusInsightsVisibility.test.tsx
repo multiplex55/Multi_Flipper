@@ -112,6 +112,22 @@ afterEach(() => {
 });
 
 describe("ScanResultsTable radius insights visibility", () => {
+  it("renders moved radius controls in canonical toolbar", () => {
+    renderTable([makeRow()]);
+
+    expect(screen.getByTestId("radius-toolbar-quick-bar")).toBeInTheDocument();
+    expect(screen.getByTestId("radius-toolbar-primary-controls")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /compact dashboard/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("one-leg-mode-toggle")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /utilities/i }));
+    expect(
+      screen.getByTestId("radius-toolbar-utilities-panel"),
+    ).toBeInTheDocument();
+  });
+
   it("shows compact insights by default, hides them, and restores with show toggle", () => {
     renderTable([makeRow()]);
 

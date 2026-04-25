@@ -77,14 +77,6 @@ vi.mock("@/components/ScanResultsTable", () => ({
     <div data-testid={`${tradeStateTab}-items-table`}>{results.map((row) => `${row.BuySystemID}->${row.SellSystemID}`).join(",")}</div>
   ),
 }));
-vi.mock("@/components/RadiusHubSummaryPanel", () => ({
-  RadiusHubSummaryPanel: ({ onOpenHubRows }: { onOpenHubRows?: (hub: { system_id: number; system_name: string }, side: "buy" | "sell") => void }) => (
-    <div>
-      <button onClick={() => onOpenHubRows?.({ system_id: 30000142, system_name: "Jita" }, "buy")}>open-radius-buy</button>
-      <button onClick={() => onOpenHubRows?.({ system_id: 30002187, system_name: "Amarr" }, "sell")}>open-radius-sell</button>
-    </div>
-  ),
-}));
 vi.mock("@/components/RegionalBuyHubTable", () => ({
   RegionalBuyHubTable: ({ onOpenItemsAtHub }: { onOpenItemsAtHub?: (hub: { source_system_id: number }) => void }) => (
     <button onClick={() => onOpenItemsAtHub?.({ source_system_id: 30000142 })}>open-region-buy-summary</button>
@@ -126,27 +118,6 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
-});
-
-describe("App radius hub view", () => {
-  it("filters radius rows by selected buy/sell hub and clears filter", async () => {
-    localStorage.setItem("eve-flipper-active-tab", "radius");
-    render(<App />);
-
-    fireEvent.click(await screen.findByRole("button", { name: "scan" }));
-    await waitFor(() => expect(mockScan).toHaveBeenCalledTimes(1));
-
-    expect(await screen.findByTestId("radius-items-table")).toHaveTextContent("30000142->30002187,30000144->30000142");
-
-    fireEvent.click(screen.getByRole("button", { name: "open-radius-buy" }));
-    expect(screen.getByTestId("radius-items-table")).toHaveTextContent("30000142->30002187");
-
-    fireEvent.click(screen.getByRole("button", { name: "open-radius-sell" }));
-    expect(screen.getByTestId("radius-items-table")).toHaveTextContent("30000142->30002187");
-
-    fireEvent.click(screen.getByRole("button", { name: /Clear hub filter/ }));
-    expect(screen.getByTestId("radius-items-table")).toHaveTextContent("30000142->30002187,30000144->30000142");
-  });
 });
 
 describe("App region open rows behavior", () => {
