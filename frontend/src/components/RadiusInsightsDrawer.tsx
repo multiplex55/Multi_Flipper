@@ -1,4 +1,5 @@
 import type { PropsWithChildren } from "react";
+import { ActionButton, ControlGroup, MutedLabel } from "@/components/ui/ControlPrimitives";
 
 type RadiusInsightsDrawerProps = PropsWithChildren<{
   open: boolean;
@@ -16,16 +17,14 @@ export function RadiusInsightsDrawer({
     <div className="shrink-0 px-2 pb-1" data-testid="radius-insights-drawer">
       <div className="rounded-sm border border-eve-border/70 bg-eve-dark/30">
         <div className="flex items-center justify-between border-b border-eve-border/50 px-2 py-1">
-          <span className="text-[11px] uppercase tracking-wider text-eve-dim">
+          <MutedLabel className="uppercase tracking-wider">
             Full insights
-          </span>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-sm border border-eve-border/60 px-2 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
-          >
-            Close
-          </button>
+          </MutedLabel>
+          <ControlGroup zone="analysis">
+            <ActionButton size="xs" onClick={onClose}>
+              Close
+            </ActionButton>
+          </ControlGroup>
         </div>
         <div className="pt-1">{children}</div>
       </div>
