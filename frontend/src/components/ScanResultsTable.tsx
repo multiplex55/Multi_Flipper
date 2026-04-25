@@ -433,6 +433,8 @@ interface Props {
   routeWorkspace?: RouteExecutionWorkspace;
   authCharacters?: AuthCharacter[];
   onRecalculateLensFromCharacter?: (characterId: number) => void;
+  onRecalculateLens?: () => void;
+  recalcLensDisabled?: boolean;
   batchBuilderRouteRequest?: { routeKey: string; requestId: number } | null;
   radiusSessionControls?: ReactNode;
 }
@@ -1609,6 +1611,8 @@ export function ScanResultsTable({
   routeWorkspace,
   authCharacters = [],
   onRecalculateLensFromCharacter,
+  onRecalculateLens,
+  recalcLensDisabled = false,
   batchBuilderRouteRequest = null,
   radiusSessionControls,
 }: Props) {
@@ -5331,6 +5335,7 @@ export function ScanResultsTable({
       {useRadiusCommandBar && (
         <div className={`shrink-0 px-2 ${compactDashboard ? "pt-1" : "pt-1.5"}`}>
           <RadiusCommandBar
+            shortcutScopeActive={useRadiusCommandBar}
             metrics={{
               scanning,
               progressLabel: progress,
@@ -5363,8 +5368,10 @@ export function ScanResultsTable({
               onVerifyPrices: () => onOpenPriceValidation?.(""),
               onExportCsv: exportCSV,
               onCopyTable: copyTable,
+              onRecalcLens: onRecalculateLens,
               exportDisabled: results.length === 0,
               copyDisabled: results.length === 0,
+              recalcDisabled: recalcLensDisabled,
             }}
             moreControls={{
               expanded: showAdvancedToolbar,

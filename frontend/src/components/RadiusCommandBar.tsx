@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import {
   ActionButton,
@@ -7,6 +8,7 @@ import {
 } from "@/components/ui/ControlPrimitives";
 
 type RadiusCommandBarProps = {
+  shortcutScopeActive?: boolean;
   metrics: {
     scanning: boolean;
     progressLabel: string;
@@ -32,8 +34,10 @@ type RadiusCommandBarProps = {
     onVerifyPrices: () => void;
     onExportCsv: () => void;
     onCopyTable: () => void;
+    onRecalcLens?: () => void;
     exportDisabled: boolean;
     copyDisabled: boolean;
+    recalcDisabled?: boolean;
   };
   moreControls: {
     expanded: boolean;
@@ -46,7 +50,29 @@ type RadiusCommandBarProps = {
   routeActionsSection?: ReactNode;
 };
 
+const RADIUS_COMMAND_INTENT_MAP = {
+  verify: { key: "v", label: "Verify prices" },
+  copy: { key: "c", label: "Copy table" },
+  export: { key: "e", label: "Export CSV" },
+  filters: { key: "f", label: "Toggle filters" },
+  insights: { key: "i", label: "Toggle insights" },
+  recalc: { key: "r", label: "Recalculate lens" },
+} as const;
+
+function isTextEntryTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tagName = target.tagName;
+  return (
+    target.isContentEditable ||
+    target.getAttribute("contenteditable") === "true" ||
+    tagName === "INPUT" ||
+    tagName === "TEXTAREA" ||
+    tagName === "SELECT"
+  );
+}
+
 export function RadiusCommandBar({
+  shortcutScopeActive = true,
   metrics,
   insightsToggle,
   tableControls,
@@ -56,8 +82,46 @@ export function RadiusCommandBar({
   rankingSection,
   routeActionsSection,
 }: RadiusCommandBarProps) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const intentHandlers = useMemo(
+    () => ({
+      [RADIUS_COMMAND_INTENT_MAP.verify.key]: () => actions.onVerifyPrices(),
+      [RADIUS_COMMAND_INTENT_MAP.copy.key]: () => {
+        if (!actions.copyDisabled) actions.onCopyTable();
+      },
+      [RADIUS_COMMAND_INTENT_MAP.export.key]: () => {
+        if (!actions.exportDisabled) actions.onExportCsv();
+      },
+      [RADIUS_COMMAND_INTENT_MAP.filters.key]: () => tableControls.onToggleFilters(),
+      [RADIUS_COMMAND_INTENT_MAP.insights.key]: () => insightsToggle.onToggle(),
+      [RADIUS_COMMAND_INTENT_MAP.recalc.key]: () => {
+        if (!actions.recalcDisabled) actions.onRecalcLens?.();
+      },
+    }),
+    [actions, insightsToggle, tableControls],
+  );
+
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (!shortcutScopeActive) return;
+      const root = rootRef.current;
+      if (!root || root.closest(".hidden")) return;
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      if (isTextEntryTarget(event.target)) return;
+      const intent = event.key.toLowerCase();
+      const execute = intentHandlers[intent as keyof typeof intentHandlers];
+      if (!execute) return;
+      event.preventDefault();
+      execute();
+    };
+
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [intentHandlers, shortcutScopeActive]);
+
   return (
     <div
+      ref={rootRef}
       className="sticky top-0 z-20 mt-1 rounded-sm border border-eve-border/60 bg-eve-panel/95 px-2 py-1 backdrop-blur"
       data-testid="radius-toolbar-quick-bar"
     >
@@ -77,14 +141,19 @@ export function RadiusCommandBar({
           </MutedLabel>
           <div className="flex-1" />
           {routeActionsSection ? <div>{routeActionsSection}</div> : null}
-          <ActionButton tone="accent" size="xs" onClick={actions.onVerifyPrices}>
+          <ActionButton
+            tone="accent"
+            size="xs"
+            onClick={actions.onVerifyPrices}
+            title="Verify Prices (V)"
+          >
             Verify Prices
           </ActionButton>
           <ActionButton
             tone="neutral"
             size="xs"
             onClick={actions.onExportCsv}
-            title="Export CSV"
+            title="Export CSV (E)"
             disabled={actions.exportDisabled}
           >
             Export CSV
@@ -93,7 +162,7 @@ export function RadiusCommandBar({
             tone="neutral"
             size="xs"
             onClick={actions.onCopyTable}
-            title="Copy table"
+            title="Copy table (C)"
             disabled={actions.copyDisabled}
           >
             Copy Table
@@ -107,13 +176,21 @@ export function RadiusCommandBar({
         data-testid="radius-toolbar-primary-controls"
       >
         <ControlGroup zone="analysis">
-          <ToggleButton pressed={insightsToggle.pressed} onClick={insightsToggle.onToggle}>
+          <ToggleButton
+            pressed={insightsToggle.pressed}
+            onClick={insightsToggle.onToggle}
+            title={`${insightsToggle.label} (I)`}
+          >
             {insightsToggle.label}
           </ToggleButton>
           <ActionButton selected={tableControls.columnsActive} onClick={tableControls.onToggleColumns} title="Column setup">
             Columns
           </ActionButton>
-          <ToggleButton pressed={tableControls.filtersActive} onClick={tableControls.onToggleFilters}>
+          <ToggleButton
+            pressed={tableControls.filtersActive}
+            onClick={tableControls.onToggleFilters}
+            title="Filters (F)"
+          >
             Filters
           </ToggleButton>
           {tableControls.hasActiveFilters ? (
@@ -143,6 +220,13 @@ export function RadiusCommandBar({
       >
         <ControlGroup zone="status" className="items-center">
           {rankingSection ? <div>{rankingSection}</div> : null}
+          <ActionButton
+            onClick={actions.onRecalcLens}
+            title="Recalculate lens (R)"
+            disabled={actions.recalcDisabled}
+          >
+            Recalc Lens
+          </ActionButton>
           <ActionButton
             onClick={moreControls.onToggleExpanded}
             aria-expanded={moreControls.expanded}
