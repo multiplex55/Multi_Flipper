@@ -81,11 +81,11 @@ afterEach(() => {
   localStorage.clear();
 });
 
-describe("ScanResultsTable advanced toolbar", () => {
+describe("ScanResultsTable more controls toolbar", () => {
   it("is hidden by default and keeps primary controls visible", () => {
     renderTable([makeRow()]);
 
-    expect(screen.getByRole("button", { name: /advanced ▸/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /more controls ▸/i })).toBeInTheDocument();
     expect(screen.queryByTitle("Quick profile preset")).not.toBeInTheDocument();
     expect(screen.queryByText("Route: All")).not.toBeInTheDocument();
     expect(screen.getByTitle("Export CSV")).toBeInTheDocument();
@@ -93,30 +93,30 @@ describe("ScanResultsTable advanced toolbar", () => {
     expect(screen.getByTitle("Column setup")).toBeInTheDocument();
   });
 
-  it("shows and hides advanced controls when toggled", () => {
+  it("shows and hides more controls when toggled", () => {
     renderTable([makeRow()]);
 
-    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
-    expect(screen.getByRole("button", { name: /advanced ▾/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /more controls ▸/i }));
+    expect(screen.getByRole("button", { name: /more controls ▾/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /endpoint prefs ▸/i })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /advanced ▾/i }));
-    expect(screen.getByRole("button", { name: /advanced ▸/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /more controls ▾/i }));
+    expect(screen.getByRole("button", { name: /more controls ▸/i })).toBeInTheDocument();
     expect(screen.queryByTitle("Quick profile preset")).not.toBeInTheDocument();
   });
 
-  it("restores advanced toolbar visibility from localStorage", () => {
+  it("restores more controls visibility from localStorage", () => {
     localStorage.setItem(ADVANCED_TOOLBAR_VISIBLE_STORAGE_KEY, "1");
 
     renderTable([makeRow()]);
 
-    expect(screen.getByRole("button", { name: /advanced ▾/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /more controls ▾/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /endpoint prefs ▸/i })).toBeInTheDocument();
   });
 
   it("toggles ordering mode and updates pins-first control state", () => {
     renderTable([makeRow(), makeRow({ TypeID: 102, TypeName: "Item 102" })]);
-    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
+    fireEvent.click(screen.getByRole("button", { name: /more controls ▸/i }));
 
     const smartButton = screen.getByTestId("ordering-mode-toggle:smart");
     const columnOnlyButton = screen.getByTestId("ordering-mode-toggle:column_only");
@@ -139,7 +139,7 @@ describe("ScanResultsTable advanced toolbar", () => {
 
   it("renders ordering stack for smart and column-only modes", () => {
     renderTable([makeRow(), makeRow({ TypeID: 102, TypeName: "Item 102" })]);
-    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
+    fireEvent.click(screen.getByRole("button", { name: /more controls ▸/i }));
 
     const orderingStack = screen.getByTestId("ordering-stack");
     expect(orderingStack).toBeInTheDocument();
@@ -168,7 +168,7 @@ describe("ScanResultsTable advanced toolbar", () => {
         </ToastProvider>
       </I18nProvider>,
     );
-    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
+    fireEvent.click(screen.getByRole("button", { name: /more controls ▸/i }));
 
     expect(screen.getByText("Session deprioritized")).toBeInTheDocument();
     expect(screen.queryByText("Tracked first")).not.toBeInTheDocument();
@@ -182,7 +182,7 @@ describe("ScanResultsTable advanced toolbar", () => {
 
   it("shows smart-mode sort tooltip only while smart ordering is active", () => {
     renderTable([makeRow()]);
-    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
+    fireEvent.click(screen.getByRole("button", { name: /more controls ▸/i }));
 
     expect(
       screen.getByTitle(/Smart ordering layers .* this column sort/i),
@@ -210,7 +210,7 @@ describe("ScanResultsTable advanced toolbar", () => {
         SellStation: "Perimeter Keepstar",
       }),
     ]);
-    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
+    fireEvent.click(screen.getByRole("button", { name: /more controls ▸/i }));
 
     fireEvent.click(screen.getByRole("button", { name: /tracked ▸/i }));
     fireEvent.click(screen.getByLabelText("Tracked first"));
@@ -242,7 +242,7 @@ describe("ScanResultsTable advanced toolbar", () => {
 
   it("preserves explicit filters and active sort when implicit ordering is reset", () => {
     renderTable([makeRow(), makeRow({ TypeID: 102, TypeName: "Item 102", RealProfit: 800 })]);
-    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
+    fireEvent.click(screen.getByRole("button", { name: /more controls ▸/i }));
 
     fireEvent.click(screen.getByTestId("urgency-sort-button"));
     fireEvent.click(screen.getByTestId("urgency-filter-chip:aging"));
@@ -269,9 +269,9 @@ describe("ScanResultsTable advanced toolbar", () => {
     );
   });
 
-  it("does not expose route safety selector in advanced filtering controls", () => {
+  it("does not expose route safety selector in more-controls filtering controls", () => {
     renderTable([makeRow(), makeRow({ TypeID: 102, TypeName: "Item 102", BuySystemID: 30002187, SellSystemID: 30000142 })]);
-    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
+    fireEvent.click(screen.getByRole("button", { name: /more controls ▸/i }));
 
     expect(screen.queryByTestId("route-safety-filter-select")).not.toBeInTheDocument();
     expect(screen.queryByTestId("active-filter-chip:route-safety")).not.toBeInTheDocument();
@@ -279,7 +279,7 @@ describe("ScanResultsTable advanced toolbar", () => {
 
   it("toggles urgency toolbar sort direction and updates directional label", () => {
     renderTable([makeRow(), makeRow({ TypeID: 102, TypeName: "Item 102", RealProfit: 800 })]);
-    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
+    fireEvent.click(screen.getByRole("button", { name: /more controls ▸/i }));
 
     const urgencySortButton = screen.getByTestId("urgency-sort-button");
     expect(urgencySortButton).toHaveTextContent("Urgency ↓");
@@ -299,7 +299,7 @@ describe("ScanResultsTable advanced toolbar", () => {
     renderTable([makeRow(), makeRow({ TypeID: 102, TypeName: "Item 102", RealProfit: 800 })]);
     fireEvent.click(screen.getByTitle("Column setup"));
     fireEvent.click(screen.getByRole("button", { name: /show all/i }));
-    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
+    fireEvent.click(screen.getByRole("button", { name: /more controls ▸/i }));
 
     const urgencySortButton = screen.getByTestId("urgency-sort-button");
     const urgencyHeader = screen
@@ -324,7 +324,7 @@ describe("ScanResultsTable advanced toolbar", () => {
 
   it("exposes accessible grouping labels for filtering and ranking controls", () => {
     renderTable([makeRow()]);
-    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
+    fireEvent.click(screen.getByRole("button", { name: /more controls ▸/i }));
 
     expect(
       screen.getByRole("group", { name: "Filtering controls" }),
@@ -336,7 +336,7 @@ describe("ScanResultsTable advanced toolbar", () => {
 
   it("applies scoring recipes to update sort and filter state", () => {
     renderTable([makeRow(), makeRow({ TypeID: 102, TypeName: "Item 102", RealProfit: 800 })]);
-    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
+    fireEvent.click(screen.getByRole("button", { name: /more controls ▸/i }));
 
     fireEvent.click(screen.getByTestId("scoring-recipe:fragile_first"));
 

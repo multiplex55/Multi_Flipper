@@ -179,8 +179,7 @@ import {
   RADIUS_CARGO_BUILD_PRESETS,
   type RadiusCargoBuildPreset,
 } from "@/lib/radiusCargoBuilds";
-import { RadiusToolbar } from "@/components/RadiusToolbar";
-import { RadiusToolbarPanel } from "@/components/RadiusToolbarPanel";
+import { RadiusCommandBar } from "@/components/RadiusCommandBar";
 import { useRouteBatchBuilderController } from "@/lib/useRouteBatchBuilderController";
 
 export const calcRouteConfidence = calcRouteConfidenceFromInsights;
@@ -5280,95 +5279,97 @@ export function ScanResultsTable({
       {/* Radius and generic toolbars must remain mutually exclusive */}
       {useRadiusCommandBar && (
         <div className={`shrink-0 px-2 ${compactDashboard ? "pt-1" : "pt-1.5"}`}>
-          <RadiusToolbar
-            primaryControls={(
-              <>
-                <button
-                  type="button"
-                  onClick={() => setCompactDashboard((prev) => !prev)}
-                  className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
-                    compactDashboard
-                      ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10"
-                      : "border-eve-border/60 bg-eve-dark/40 text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent"
-                  }`}
-                >
-                  Compact Dashboard
-                </button>
-                <ToolbarBtn
-                  label="Columns"
-                  title={t("columnsPanelTitle")}
-                  active={showColumnPanel}
-                  onClick={() => setShowColumnPanel((v) => !v)}
-                />
-                <ToolbarBtn
-                  label="Filters"
-                  title={showFilters ? t("clearFilters") : t("filterPlaceholder")}
-                  active={showFilters}
-                  onClick={() => setShowFilters((v) => !v)}
-                />
-                {hasActiveFilters && (
-                  <ToolbarBtn label="✕" title={t("clearFilters")} onClick={clearFilters} />
-                )}
-                <button
-                  type="button"
-                  className={`rounded-sm border px-1.5 py-0.5 text-[10px] transition-colors ${
-                    oneLegModeEnabled
-                      ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10"
-                      : "border-eve-border/60 text-eve-dim hover:text-eve-text"
-                  }`}
-                  onClick={() => setOneLegModeEnabled((prev) => !prev)}
-                  data-testid="one-leg-mode-toggle"
-                >
-                  One-leg mode {oneLegModeEnabled ? "On" : "Off"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRadiusRouteInsightsHidden((previous) => !previous)}
-                  className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
-                    radiusRouteInsightsHidden
-                      ? "border-eve-border/60 bg-eve-dark/40 text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent"
-                      : "border-eve-accent/60 text-eve-accent bg-eve-accent/10"
-                  }`}
-                  aria-pressed={radiusRouteInsightsHidden}
-                >
-                  {radiusRouteInsightsHidden ? t("showRadiusRouteInsights") : t("hideRadiusRouteInsights")}
-                </button>
-              </>
-            )}
-            utilityToggle={(
-              <RadiusToolbarPanel open={showAdvancedToolbar} onToggle={() => setShowAdvancedToolbar((v) => !v)}>
+          <RadiusCommandBar
+            metrics={{
+              scanning,
+              progressLabel: progress,
+              resultLabel:
+                results.length > 0
+                  ? filtered.length !== indexed.length
+                    ? t("showing", { shown: filtered.length, total: indexed.length })
+                    : t("foundDeals", { count: indexed.length })
+                  : "",
+              ariaLabel: scanning
+                ? `Scan progress: ${progress}`
+                : `Scan results: ${filtered.length} visible from ${indexed.length} total`,
+            }}
+            insightsToggle={{
+              pressed: compactDashboard,
+              label: "Compact Insights",
+              onToggle: () => setCompactDashboard((previous) => !previous),
+            }}
+            tableControls={{
+              columnsActive: showColumnPanel,
+              onToggleColumns: () => setShowColumnPanel((v) => !v),
+              filtersActive: showFilters,
+              hasActiveFilters,
+              onToggleFilters: () => setShowFilters((v) => !v),
+              onClearFilters: clearFilters,
+              oneLegEnabled: oneLegModeEnabled,
+              onToggleOneLeg: () => setOneLegModeEnabled((prev) => !prev),
+            }}
+            actions={{
+              onVerifyPrices: () => onOpenPriceValidation?.(""),
+              onExportCsv: exportCSV,
+              onCopyTable: copyTable,
+              exportDisabled: results.length === 0,
+              copyDisabled: results.length === 0,
+            }}
+            moreControls={{
+              expanded: showAdvancedToolbar,
+              controlsId: "scan-results-advanced-toolbar",
+              onToggleExpanded: () => setShowAdvancedToolbar((v) => !v),
+              content: (
                 <div className="inline-flex items-center gap-1">
                   <span>{t("decisionLensTitle")}</span>
-                  {(["recommended", "fastest_isk", "cargo", "safest", "capital_efficient"] as const).map((preset) => (
-                    <button key={preset} type="button" onClick={() => applyDecisionLens(preset)} className="rounded-sm border border-eve-border/50 px-1.5 py-0.5 text-[10px]">
-                      {t(preset === "recommended" ? "decisionLensTitle" : preset === "fastest_isk" ? "decisionLensFastest" : preset === "cargo" ? "decisionLensCargo" : preset === "safest" ? "decisionLensSafest" : "decisionLensCapital")}
+                  {(
+                    [
+                      "recommended",
+                      "fastest_isk",
+                      "cargo",
+                      "safest",
+                      "capital_efficient",
+                    ] as const
+                  ).map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => applyDecisionLens(preset)}
+                      className="rounded-sm border border-eve-border/50 px-1.5 py-0.5 text-[10px]"
+                    >
+                      {t(
+                        preset === "recommended"
+                          ? "decisionLensTitle"
+                          : preset === "fastest_isk"
+                            ? "decisionLensFastest"
+                            : preset === "cargo"
+                              ? "decisionLensCargo"
+                              : preset === "safest"
+                                ? "decisionLensSafest"
+                                : "decisionLensCapital",
+                      )}
                     </button>
                   ))}
                 </div>
-              </RadiusToolbarPanel>
-            )}
-            quickActions={(
+              ),
+            }}
+            routeActionsSection={(
               <>
-                <button
-                  type="button"
-                  onClick={() => onOpenPriceValidation?.("")}
-                  className="rounded-sm border border-eve-accent/50 px-1.5 py-0.5 text-[10px] text-eve-accent hover:bg-eve-accent/10"
-                >
-                  Verify Prices
-                </button>
-                {results.length > 0 && (
-                  <>
-                    <ToolbarBtn label="Export CSV" title={t("exportCSV")} onClick={exportCSV} />
-                    <ToolbarBtn label="Copy Table" title={t("copyTable")} onClick={copyTable} />
-                  </>
-                )}
                 {lockedBuyLocationId != null && (
-                  <button type="button" className="rounded-sm border border-cyan-500/50 px-1.5 py-0.5 text-[10px] text-cyan-200" onClick={() => setLockedBuyLocationId(null)}>
+                  <button
+                    type="button"
+                    className="rounded-sm border border-cyan-500/50 px-1.5 py-0.5 text-[10px] text-cyan-200"
+                    onClick={() => setLockedBuyLocationId(null)}
+                  >
                     Buy lock #{lockedBuyLocationId} ×
                   </button>
                 )}
                 {lockedSellLocationId != null && (
-                  <button type="button" className="rounded-sm border border-fuchsia-500/50 px-1.5 py-0.5 text-[10px] text-fuchsia-200" onClick={() => setLockedSellLocationId(null)}>
+                  <button
+                    type="button"
+                    className="rounded-sm border border-fuchsia-500/50 px-1.5 py-0.5 text-[10px] text-fuchsia-200"
+                    onClick={() => setLockedSellLocationId(null)}
+                  >
                     Sell lock #{lockedSellLocationId} ×
                   </button>
                 )}
@@ -5380,12 +5381,12 @@ export function ScanResultsTable({
       <div className={`shrink-0 px-2 ${compactDashboard ? "py-1" : "py-1.5"}`}>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <div className="flex items-center gap-2 text-eve-dim">
-            {scanning ? (
+            {!useRadiusCommandBar && scanning ? (
               <span className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-eve-accent animate-pulse" />
                 {progress}
               </span>
-            ) : results.length > 0 ? (
+            ) : !useRadiusCommandBar && results.length > 0 ? (
               filtered.length !== indexed.length ? (
                 t("showing", { shown: filtered.length, total: indexed.length })
               ) : (
@@ -5640,9 +5641,9 @@ export function ScanResultsTable({
             </>
           )}
         </div>
-        {!compactDashboard && results.length > 0 && !scanning && (
+        {!useRadiusCommandBar && !compactDashboard && results.length > 0 && !scanning && (
           <div className="mt-1 text-[11px] text-eve-dim/80">
-            Use Advanced for endpoint preferences, tracked visibility, and cache controls.
+            Use More Controls for endpoint preferences, tracked visibility, and cache controls.
           </div>
         )}
 

@@ -64,7 +64,7 @@ describe("ScanResultsTable ordering flows", () => {
       buildFlipResult({ TypeID: 403, TypeName: "HighPlain", RealProfit: 800, BuySystemName: "Perimeter" }),
     ], sessionFilters);
 
-    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
+    fireEvent.click(screen.getByRole("button", { name: /more controls ▸/i }));
     expect(screen.getByTestId("ordering-stack-chip:Order: Smart")).toBeInTheDocument();
     expect(screen.getByTestId("ordering-stack-chip:Session deprioritized")).toBeInTheDocument();
 
@@ -110,7 +110,7 @@ describe("ScanResultsTable ordering flows", () => {
       buildFlipResult({ TypeID: 502, TypeName: "HigherColumnValue", RealProfit: 500, BuySystemName: "Jita", SellSystemName: "Perimeter" }),
     ]);
 
-    fireEvent.click(screen.getByRole("button", { name: /advanced ▸/i }));
+    fireEvent.click(screen.getByRole("button", { name: /more controls ▸/i }));
     const realProfitHeader = screen
       .getAllByTitle(/Real Profit/i)
       .find((el) => el.tagName.toLowerCase() === "th");
