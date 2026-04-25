@@ -1,4 +1,10 @@
 import type { ReactNode } from "react";
+import {
+  ActionButton,
+  ControlGroup,
+  MutedLabel,
+  ToggleButton,
+} from "@/components/ui/ControlPrimitives";
 
 type RadiusCommandBarProps = {
   metrics: {
@@ -40,14 +46,6 @@ type RadiusCommandBarProps = {
   routeActionsSection?: ReactNode;
 };
 
-function commandBarButtonClass(active: boolean): string {
-  return `px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
-    active
-      ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10"
-      : "border-eve-border/60 bg-eve-dark/40 text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent"
-  }`;
-}
-
 export function RadiusCommandBar({
   metrics,
   insightsToggle,
@@ -65,119 +63,99 @@ export function RadiusCommandBar({
     >
       <section
         aria-label="Session and execution actions"
-        className="flex flex-wrap items-center gap-1.5"
+        className="rounded-sm border border-eve-border/40 bg-eve-dark/20 px-1.5 py-1"
       >
-        {sessionSection ? <div>{sessionSection}</div> : null}
-        <div
-          className="text-[11px] text-eve-dim"
-          role="status"
-          aria-live="polite"
-          aria-label={metrics.ariaLabel}
-          data-testid="radius-command-bar-metrics"
-        >
-          {metrics.scanning ? metrics.progressLabel : metrics.resultLabel}
-        </div>
-        <div className="flex-1" />
-        {routeActionsSection ? <div>{routeActionsSection}</div> : null}
-        <button
-          type="button"
-          onClick={actions.onVerifyPrices}
-          className="rounded-sm border border-eve-accent/50 px-1.5 py-0.5 text-[10px] text-eve-accent hover:bg-eve-accent/10"
-        >
-          Verify Prices
-        </button>
-        <button
-          type="button"
-          onClick={actions.onExportCsv}
-          title="Export CSV"
-          className="rounded-sm border border-eve-border/60 bg-eve-dark/40 px-1.5 py-0.5 text-[10px] text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={actions.exportDisabled}
-        >
-          Export CSV
-        </button>
-        <button
-          type="button"
-          onClick={actions.onCopyTable}
-          title="Copy table"
-          className="rounded-sm border border-eve-border/60 bg-eve-dark/40 px-1.5 py-0.5 text-[10px] text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={actions.copyDisabled}
-        >
-          Copy Table
-        </button>
+        <ControlGroup zone="execution" className="items-center">
+          {sessionSection ? <div>{sessionSection}</div> : null}
+          <MutedLabel
+            role="status"
+            aria-live="polite"
+            aria-label={metrics.ariaLabel}
+            data-testid="radius-command-bar-metrics"
+          >
+            {metrics.scanning ? metrics.progressLabel : metrics.resultLabel}
+          </MutedLabel>
+          <div className="flex-1" />
+          {routeActionsSection ? <div>{routeActionsSection}</div> : null}
+          <ActionButton tone="accent" size="xs" onClick={actions.onVerifyPrices}>
+            Verify Prices
+          </ActionButton>
+          <ActionButton
+            tone="neutral"
+            size="xs"
+            onClick={actions.onExportCsv}
+            title="Export CSV"
+            disabled={actions.exportDisabled}
+          >
+            Export CSV
+          </ActionButton>
+          <ActionButton
+            tone="neutral"
+            size="xs"
+            onClick={actions.onCopyTable}
+            title="Copy table"
+            disabled={actions.copyDisabled}
+          >
+            Copy Table
+          </ActionButton>
+        </ControlGroup>
       </section>
 
       <section
         aria-label="Table view controls"
-        className="mt-1 flex flex-wrap items-center gap-1"
+        className="mt-1 rounded-sm border border-eve-border/40 bg-eve-dark/20 px-1.5 py-1"
         data-testid="radius-toolbar-primary-controls"
       >
-        <button
-          type="button"
-          onClick={insightsToggle.onToggle}
-          className={commandBarButtonClass(insightsToggle.pressed)}
-          aria-pressed={insightsToggle.pressed}
-        >
-          {insightsToggle.label}
-        </button>
-        <button
-          type="button"
-          onClick={tableControls.onToggleColumns}
-          title="Column setup"
-          className={commandBarButtonClass(tableControls.columnsActive)}
-        >
-          Columns
-        </button>
-        <button
-          type="button"
-          onClick={tableControls.onToggleFilters}
-          className={commandBarButtonClass(tableControls.filtersActive)}
-          aria-pressed={tableControls.filtersActive}
-        >
-          Filters
-        </button>
-        {tableControls.hasActiveFilters ? (
-          <button
-            type="button"
-            onClick={tableControls.onClearFilters}
-            className="inline-flex items-center gap-1 rounded-sm border border-eve-accent/60 bg-eve-accent/10 px-1.5 py-0.5 text-[10px] text-eve-accent"
-            data-testid="radius-command-bar-filters-active-chip"
+        <ControlGroup zone="analysis">
+          <ToggleButton pressed={insightsToggle.pressed} onClick={insightsToggle.onToggle}>
+            {insightsToggle.label}
+          </ToggleButton>
+          <ActionButton selected={tableControls.columnsActive} onClick={tableControls.onToggleColumns} title="Column setup">
+            Columns
+          </ActionButton>
+          <ToggleButton pressed={tableControls.filtersActive} onClick={tableControls.onToggleFilters}>
+            Filters
+          </ToggleButton>
+          {tableControls.hasActiveFilters ? (
+            <ActionButton
+              tone="accent"
+              size="xs"
+              onClick={tableControls.onClearFilters}
+              data-testid="radius-command-bar-filters-active-chip"
+            >
+              Active ✕
+            </ActionButton>
+          ) : null}
+          <ToggleButton
+            pressed={tableControls.oneLegEnabled}
+            onClick={tableControls.onToggleOneLeg}
+            data-testid="one-leg-mode-toggle"
           >
-            Active ✕
-          </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={tableControls.onToggleOneLeg}
-          className={commandBarButtonClass(tableControls.oneLegEnabled)}
-          data-testid="one-leg-mode-toggle"
-          aria-pressed={tableControls.oneLegEnabled}
-        >
-          One-leg mode {tableControls.oneLegEnabled ? "On" : "Off"}
-        </button>
+            One-leg mode {tableControls.oneLegEnabled ? "On" : "Off"}
+          </ToggleButton>
+        </ControlGroup>
       </section>
 
       <section
         aria-label="Collapsible ranking and advanced controls"
-        className="mt-1"
+        className="mt-1 rounded-sm border border-eve-border/40 bg-eve-dark/20 px-1.5 py-1"
         data-testid="radius-toolbar-secondary-actions"
       >
-        <div className="flex flex-wrap items-center gap-1.5">
+        <ControlGroup zone="status" className="items-center">
           {rankingSection ? <div>{rankingSection}</div> : null}
-          <button
-            type="button"
+          <ActionButton
             onClick={moreControls.onToggleExpanded}
-            className="px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] hover:border-eve-accent/50 hover:text-eve-accent transition-colors"
             aria-expanded={moreControls.expanded}
             aria-controls={moreControls.controlsId}
             title="Toggle more controls"
           >
             More Controls {moreControls.expanded ? "▾" : "▸"}
-          </button>
-        </div>
+          </ActionButton>
+        </ControlGroup>
         {moreControls.expanded ? (
-          <div id={moreControls.controlsId} className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+          <ControlGroup id={moreControls.controlsId} zone="analysis" className="mt-1.5 text-[11px]">
             {moreControls.content}
-          </div>
+          </ControlGroup>
         ) : null}
       </section>
     </div>

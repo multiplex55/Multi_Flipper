@@ -24,6 +24,13 @@ import { classifyVerificationPriority, verificationPriorityChipClass } from "@/l
 import { buildRadiusStagingRecommendations, type RadiusCharacterLocation } from "@/lib/radiusStagingAdvisor";
 import type { AuthCharacter, FlipResult } from "@/lib/types";
 import { RadiusStagingAdvisorPanel } from "@/components/RadiusStagingAdvisorPanel";
+import {
+  ActionButton,
+  ControlGroup,
+  MutedLabel,
+  StatusChip,
+  ToggleButton,
+} from "@/components/ui/ControlPrimitives";
 
 const INSIGHTS_VISIBLE_STORAGE_KEY = "eve-radius-insights-visible:v1";
 const INSIGHTS_TAB_STORAGE_KEY = "eve-radius-insights-tab:v1";
@@ -314,16 +321,22 @@ export function RadiusInsightsPanel({
   const renderHubRows = (hubs: RadiusHubSummary[], side: "buy" | "sell") => (
     <div className="space-y-1">
       {hubs.length === 0 ? (
-        <div className="text-[10px] text-eve-dim">No rows yet.</div>
+        <MutedLabel className="text-[10px]">No rows yet.</MutedLabel>
       ) : (
         hubs.slice(0, 5).map((hub) => (
           <div key={`${side}-${hub.location_id}`} className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-2 py-1">
             <div className="text-[11px] text-eve-text truncate">{hub.station_name}</div>
-            <div className="text-[10px] text-eve-dim truncate">{hub.system_name} · items {hub.item_count} · {formatISK(hub.period_profit)}</div>
-            <div className="mt-1 flex flex-wrap gap-1">
-              <button type="button" onClick={() => onOpenHubRows?.(hub, side)} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text">Open rows</button>
-              <button type="button" onClick={() => onSetHubLock?.(hub, side)} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text">Set lock</button>
-            </div>
+            <MutedLabel className="truncate text-[10px]">
+              {hub.system_name} · items {hub.item_count} · {formatISK(hub.period_profit)}
+            </MutedLabel>
+            <ControlGroup zone="analysis" className="mt-1">
+              <ActionButton size="xs" onClick={() => onOpenHubRows?.(hub, side)}>
+                Open rows
+              </ActionButton>
+              <ActionButton size="xs" onClick={() => onSetHubLock?.(hub, side)}>
+                Set lock
+              </ActionButton>
+            </ControlGroup>
           </div>
         ))
       )}
@@ -591,22 +604,34 @@ export function RadiusInsightsPanel({
         }`}
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+          <ControlGroup zone="status" className="items-center">
             <h3 className="text-[11px] uppercase tracking-wider text-eve-dim">Insights</h3>
-            <span className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-1.5 py-0.5 text-[10px] text-eve-dim">Picks {pickCount}</span>
-            <span className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-1.5 py-0.5 text-[10px] text-eve-dim">Queue {actionQueue.length}</span>
-            <span className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-1.5 py-0.5 text-[10px] text-eve-dim">Loops {loopOpportunities.length}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <button type="button" onClick={() => topRoutePicks.bestRecommendedRoutePack && openRouteWorkbench(topRoutePicks.bestRecommendedRoutePack.routeKey, "summary")} className="px-2 py-0.5 rounded-sm border border-eve-accent/60 text-[11px] text-eve-accent">Open workspace</button>
-            {onToggleCompactDashboard && <button type="button" onClick={onToggleCompactDashboard} className="px-2 py-0.5 rounded-sm border border-eve-border/60 text-[11px] text-eve-dim">Compact</button>}
-            <button type="button" onClick={toggleExpanded} aria-expanded={expanded} className="px-2 py-0.5 rounded-sm border border-eve-border/60 text-[11px] text-eve-dim hover:text-eve-text">{expanded ? "Collapse" : "Expand"}</button>
-          </div>
+            <StatusChip>Picks {pickCount}</StatusChip>
+            <StatusChip>Queue {actionQueue.length}</StatusChip>
+            <StatusChip>Loops {loopOpportunities.length}</StatusChip>
+          </ControlGroup>
+          <ControlGroup zone="execution">
+            <ActionButton
+              tone="accent"
+              onClick={() =>
+                topRoutePicks.bestRecommendedRoutePack &&
+                openRouteWorkbench(topRoutePicks.bestRecommendedRoutePack.routeKey, "summary")
+              }
+            >
+              Open workspace
+            </ActionButton>
+            {onToggleCompactDashboard && (
+              <ActionButton onClick={onToggleCompactDashboard}>Compact</ActionButton>
+            )}
+            <ToggleButton pressed={expanded} onClick={toggleExpanded}>
+              {expanded ? "Collapse" : "Expand"}
+            </ToggleButton>
+          </ControlGroup>
         </div>
 
         {expanded && (
           <>
-            <div className="mt-2 flex flex-wrap items-center gap-1">
+            <ControlGroup zone="analysis" className="mt-2">
               {([
                 ["picks", "Picks"],
                 ["queue", "Queue"],
@@ -616,21 +641,16 @@ export function RadiusInsightsPanel({
               ] as const).map(([tab, label]) => {
                 const active = activeTab === tab;
                 return (
-                  <button
+                  <ToggleButton
                     key={tab}
-                    type="button"
+                    pressed={active}
                     onClick={() => setTab(tab)}
-                    className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
-                      active
-                        ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10"
-                        : "border-eve-border/60 text-eve-dim hover:text-eve-text"
-                    }`}
                   >
                     {label}
-                  </button>
+                  </ToggleButton>
                 );
               })}
-            </div>
+            </ControlGroup>
 
             {activeTab === "picks" && (
               <div className="mt-2 space-y-3">
@@ -943,28 +963,21 @@ export function RadiusInsightsPanel({
                     <span className="font-semibold">Route workbench:</span>{" "}
                     {activeRouteLabel ?? activeRouteGroupKey}
                   </div>
-                  <span className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-eve-dim">
+                  <StatusChip className="uppercase tracking-wide">
                     {routeWorkbenchMode[0].toUpperCase() + routeWorkbenchMode.slice(1)}
-                  </span>
+                  </StatusChip>
                 </div>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      openRouteWorkbench(activeRouteGroupKey, "execution")
-                    }
-                    className="rounded-sm border border-eve-accent/60 px-2 py-0.5 text-[11px] text-eve-accent hover:bg-eve-accent/10"
+                <ControlGroup zone="execution" className="mt-2">
+                  <ActionButton
+                    tone="accent"
+                    onClick={() => openRouteWorkbench(activeRouteGroupKey, "execution")}
                   >
-Open execution
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openRouteWorkbench(activeRouteGroupKey, "summary")}
-                    className="rounded-sm border border-eve-border/60 px-2 py-0.5 text-[11px] text-eve-dim hover:text-eve-text"
-                  >
+                    Open execution
+                  </ActionButton>
+                  <ActionButton onClick={() => openRouteWorkbench(activeRouteGroupKey, "summary")}>
                     Scroll to table
-                  </button>
-                </div>
+                  </ActionButton>
+                </ControlGroup>
               </div>
             )}
           </>
