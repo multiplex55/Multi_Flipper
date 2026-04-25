@@ -181,6 +181,7 @@ import {
 } from "@/lib/radiusCargoBuilds";
 import { RadiusToolbar } from "@/components/RadiusToolbar";
 import { RadiusToolbarPanel } from "@/components/RadiusToolbarPanel";
+import { useRouteBatchBuilderController } from "@/lib/useRouteBatchBuilderController";
 
 export const calcRouteConfidence = calcRouteConfidenceFromInsights;
 
@@ -427,7 +428,9 @@ interface Props {
   routeWorkspace?: RouteExecutionWorkspace;
   authCharacters?: AuthCharacter[];
   onRecalculateLensFromCharacter?: (characterId: number) => void;
+  batchBuilderRouteRequest?: { routeKey: string; requestId: number } | null;
 }
+
 
 type ColumnDef = {
   key: SortKey;
@@ -1600,6 +1603,7 @@ export function ScanResultsTable({
   routeWorkspace,
   authCharacters = [],
   onRecalculateLensFromCharacter,
+  batchBuilderRouteRequest = null,
 }: Props) {
   const { t } = useI18n();
   const emptyReason: EmptyReason = scanCompletedWithZero
@@ -4723,24 +4727,34 @@ export function ScanResultsTable({
     }, 0);
   }, []);
 
-  const openBatchBuilderForRoute = useCallback(
-    (
-      routeKey: string,
-      context?: { intentLabel?: string; batchEntryMode?: "core" | "filler" | "loop" },
-    ) => {
-      const routeGroup = routeGroupByKey[routeKey];
-      const anchor = routeAnchorRowByKey[routeKey];
-      if (!routeGroup || !anchor) return;
-      setBatchPlanRow(anchor);
-      setBatchPlanRows(routeGroup.rows.map((item) => item.row));
-      setActiveRouteGroupKey(routeKey);
-      setBatchBuilderEntryMode(context?.batchEntryMode ?? "core");
-      setBatchBuilderLaunchIntent(context?.intentLabel ?? null);
-      setBatchBuilderMode("single_anchor");
-      setBatchBuilderInitialSelectedLineKeys(undefined);
-    },
-    [routeAnchorRowByKey, routeGroupByKey],
-  );
+  const routeRowsByKey = useMemo<Record<string, FlipResult[]>>(() => {
+    const out: Record<string, FlipResult[]> = {};
+    for (const [routeKey, group] of Object.entries(routeGroupByKey)) {
+      out[routeKey] = group.rows.map((item) => item.row);
+    }
+    return out;
+  }, [routeGroupByKey]);
+
+  const { openBatchBuilderForRoute } = useRouteBatchBuilderController({
+    routeRowsByKey,
+    savedRoutePacks,
+    preferredRouteKey: activeRouteGroupKey,
+    setBatchPlanRow,
+    setBatchPlanRows,
+    setActiveRouteGroupKey,
+    setBatchBuilderEntryMode,
+    setBatchBuilderLaunchIntent,
+    setBatchBuilderMode,
+    setBatchBuilderInitialSelectedLineKeys,
+  });
+
+  useEffect(() => {
+    if (!batchBuilderRouteRequest) return;
+    openBatchBuilderForRoute(batchBuilderRouteRequest.routeKey, {
+      intentLabel: "Route workspace",
+      batchEntryMode: "core",
+    });
+  }, [batchBuilderRouteRequest, openBatchBuilderForRoute]);
 
   const getWorkbenchPackForRoute = useCallback(
     (routeKey: string): SavedRoutePack | null => {

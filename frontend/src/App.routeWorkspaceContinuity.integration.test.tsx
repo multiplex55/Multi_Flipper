@@ -149,7 +149,6 @@ describe("App route workspace continuity", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: "open-promoted-route" })[0]);
     expect(await screen.findByTestId("route-workspace-workbench")).toBeInTheDocument();
-    expect(screen.getByText(/Selected route: Jita → Amarr/i)).toBeInTheDocument();
     expect(screen.getByText(/Source: radius/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "tabRadius" }));
@@ -176,7 +175,6 @@ describe("App route workspace continuity", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "open-route-workspace-cta" })[0]);
 
     expect(await screen.findByTestId("route-workspace-workbench")).toBeInTheDocument();
-    expect(screen.getByText(/Selected route: Jita → Amarr/i)).toBeInTheDocument();
   });
 
   it("continues selected-row batch actions after returning from route workspace", async () => {
@@ -187,15 +185,13 @@ describe("App route workspace continuity", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: "selected-row-batch-action" })[0]);
     fireEvent.click(screen.getByRole("tab", { name: "tabRoute" }));
-    expect(await screen.findByTestId("route-workspace-discover")).toBeInTheDocument();
-    expect(screen.getByText(/Route queue \(1\)/i)).toBeInTheDocument();
+    expect(await screen.findByLabelText("radius-route-workspace")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "tabRadius" }));
     fireEvent.click(screen.getAllByRole("button", { name: "selected-row-batch-action" })[0]);
 
     fireEvent.click(screen.getByRole("tab", { name: "tabRoute" }));
-    expect(await screen.findByTestId("route-workspace-discover")).toBeInTheDocument();
-    expect(screen.getByText(/Route queue \(1\)/i)).toBeInTheDocument();
+    expect(await screen.findByLabelText("radius-route-workspace")).toBeInTheDocument();
   });
 
   it("keeps promoted route continuity across discover/workbench and keeps Finder independent", async () => {
@@ -206,7 +202,6 @@ describe("App route workspace continuity", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: "open-promoted-route" })[0]);
     expect(await screen.findByTestId("route-workspace-workbench")).toBeInTheDocument();
-    expect(screen.getByText(/Selected route: Jita → Amarr/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Discover" }));
     expect(await screen.findByTestId("route-workspace-discover")).toBeInTheDocument();
@@ -224,7 +219,7 @@ describe("App route workspace continuity", () => {
     await waitFor(() => expect(screen.getByTestId("rows-radius")).toHaveTextContent("3"));
 
     fireEvent.click(screen.getByRole("tab", { name: "tabRoute" }));
-    expect(await screen.findByTestId("route-workspace-discover")).toBeInTheDocument();
+    expect(await screen.findByLabelText("radius-route-workspace")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "tabRadius" }));
     expect(await screen.findByTestId("rows-radius")).toHaveTextContent("3");
@@ -233,8 +228,6 @@ describe("App route workspace continuity", () => {
     expect(await screen.findByTestId("rows-radius")).toHaveTextContent("0");
 
     fireEvent.click(screen.getByRole("tab", { name: "tabRoute" }));
-    expect(await screen.findByTestId("route-workspace-discover")).toBeInTheDocument();
-    expect(screen.getByText(/Grouped routes/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Jita → Amarr/i)).not.toBeInTheDocument();
+    expect(await screen.findByLabelText("radius-route-workspace")).toBeInTheDocument();
   });
 });

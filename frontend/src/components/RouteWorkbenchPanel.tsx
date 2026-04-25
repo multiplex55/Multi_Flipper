@@ -43,8 +43,10 @@ interface RouteWorkbenchPanelProps {
   assignment?: RouteAssignment | null;
   onAssignmentChange?: (assignment: RouteAssignment | null) => void;
   characters?: AuthCharacter[];
+  characterLocations?: Record<number, string>;
   routeEndpoints?: RoutePilotAssignmentEndpoints;
   onRecalculateLensFromCharacter?: (characterId: number) => void;
+  lineFilterKeys?: string[];
 }
 
 export function RouteWorkbenchPanel({
@@ -70,8 +72,10 @@ export function RouteWorkbenchPanel({
   assignment,
   onAssignmentChange,
   characters = [],
+  characterLocations = {},
   routeEndpoints,
   onRecalculateLensFromCharacter,
+  lineFilterKeys = [],
 }: RouteWorkbenchPanelProps) {
   const summary = useMemo(() => deriveExecutionSummary(pack), [pack]);
   const [qtyByLine, setQtyByLine] = useState<Record<string, string>>({});
@@ -84,6 +88,11 @@ export function RouteWorkbenchPanel({
   const freshness = getVerificationFreshness(pack.lastVerifiedAt, selectedProfile);
 
   const lines = Object.values(pack.lines).sort((a, b) => a.typeName.localeCompare(b.typeName));
+  const visibleLineSet = new Set(lineFilterKeys);
+  const visibleLines =
+    visibleLineSet.size > 0
+      ? lines.filter((line) => visibleLineSet.has(line.lineKey))
+      : lines;
   const selectedCoreCount = pack.selectedLineKeys.length;
   const fillerCount = Math.max(0, lines.length - selectedCoreCount);
   const selectedLineKeys = new Set(pack.selectedLineKeys);
@@ -212,7 +221,7 @@ export function RouteWorkbenchPanel({
         <section className="mb-2" data-testid="route-workbench-section-execution" aria-label="Execution block">
           <div className="mb-1 text-[11px] uppercase tracking-wider text-eve-dim">Execution block</div>
           <div className="space-y-1">
-            {lines.map((line) => {
+            {visibleLines.map((line) => {
               const qty = Math.max(0, Number(qtyByLine[line.lineKey] ?? 1) || 0);
               return (
                 <div key={line.lineKey} className="flex flex-wrap items-center gap-1 rounded-sm border border-eve-border/40 px-1.5 py-1 text-[11px]">
@@ -269,6 +278,7 @@ export function RouteWorkbenchPanel({
           routeKey={pack.routeKey}
           routeLabel={pack.routeLabel}
           characters={characters}
+          characterLocations={characterLocations}
           routeEndpoints={routeEndpoints}
           onAssignmentChange={onAssignmentChange}
           onRecalculateLensFromCharacter={onRecalculateLensFromCharacter}

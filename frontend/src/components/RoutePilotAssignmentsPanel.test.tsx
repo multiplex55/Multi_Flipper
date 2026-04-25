@@ -47,6 +47,19 @@ describe("RoutePilotAssignmentsPanel", () => {
     );
   });
 
+  it("renders auth characters in dropdown", () => {
+    render(
+      <RoutePilotAssignmentsPanel
+        routeKey="route-characters"
+        characters={characters}
+        characterLocations={{ 101: "Jita" }}
+      />,
+    );
+    const select = screen.getByLabelText("Assigned character");
+    expect(select).toHaveTextContent("Pilot One · Jita");
+    expect(select).toHaveTextContent("Pilot Two");
+  });
+
   it("edits notes/system fields", () => {
     render(<RoutePilotAssignmentsPanel routeKey="route-2" characters={characters} />);
 
@@ -101,5 +114,24 @@ describe("RoutePilotAssignmentsPanel", () => {
 
     expect(screen.getByLabelText("Assigned character")).toHaveValue("");
     expect(screen.queryByTestId("route-assignment-status-chip")).not.toBeInTheDocument();
+  });
+
+  it("manual assignment entry continues to work without character id in storage", () => {
+    localStorage.setItem(
+      "eve-route-assignments:v1",
+      JSON.stringify([
+        {
+          routeKey: "route-legacy",
+          assignedCharacterName: "Pilot One",
+          status: "queued",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      ]),
+    );
+    render(<RoutePilotAssignmentsPanel routeKey="route-legacy" characters={characters} />);
+    fireEvent.change(screen.getByLabelText("Assignment notes"), {
+      target: { value: "legacy edited" },
+    });
+    expect(screen.getByLabelText("Assignment notes")).toHaveValue("legacy edited");
   });
 });

@@ -52,6 +52,35 @@ describe("routeAssignments", () => {
     const [entry] = loadRouteAssignments();
     expect(entry?.assignedCharacterName).toBe("Legacy Pilot");
     expect(entry?.assignedCharacterId).toBeUndefined();
+    expect(entry?.characterId).toBeUndefined();
+  });
+
+  it("normalizes extended optional metadata fields", () => {
+    saveRouteAssignments([
+      {
+        routeKey: "route-meta",
+        assignedCharacterName: "Pilot Meta",
+        characterId: 999,
+        assignedAt: "2026-01-02T00:00:00.000Z",
+        priority: 2,
+        reserveCharacterIds: [100, 101],
+        reserveCharacterNames: ["Reserve A", "Reserve B"],
+        expectedProfitIsk: 1200000,
+        expectedCapitalIsk: 5000000,
+        expectedJumps: 14,
+        verificationStatusAtAssignment: "Good",
+        buySystemId: 30000142,
+        sellSystemId: 30002187,
+        status: "queued",
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+
+    const entry = loadRouteAssignments()[0];
+    expect(entry?.characterId).toBe(999);
+    expect(entry?.reserveCharacterIds).toEqual([100, 101]);
+    expect(entry?.verificationStatusAtAssignment).toBe("Good");
+    expect(entry?.buySystemId).toBe(30000142);
   });
 
   it("preserves assignedCharacterId in save/load roundtrip", () => {
