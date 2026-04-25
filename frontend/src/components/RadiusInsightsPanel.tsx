@@ -20,6 +20,7 @@ import {
   deriveRadiusBestDealCards,
   type RadiusBestDealCard,
 } from "@/lib/radiusBestDealCards";
+import { classifyVerificationPriority, verificationPriorityChipClass } from "@/lib/radiusVerificationPriority";
 
 const INSIGHTS_VISIBLE_STORAGE_KEY = "eve-radius-insights-visible:v1";
 const INSIGHTS_TAB_STORAGE_KEY = "eve-radius-insights-tab:v1";
@@ -360,6 +361,15 @@ export function RadiusInsightsPanel({
           </div>
           <div className="mt-2 grid grid-cols-1 gap-1.5 text-[11px]">
             {bestDealCards.slice(0, 7).map((card) => (
+              (() => {
+                const priority = classifyVerificationPriority({
+                  expectedProfitIsk: card.expectedProfitIsk,
+                  totalJumps: card.totalJumps,
+                  scanAgeMinutes: card.scanAgeMinutes,
+                  lensJumpDelta: card.lensJumpDelta,
+                  urgencyBand: card.urgencyBand ?? "stable",
+                });
+                return (
                 <div
                   key={card.kind}
                   className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-2 py-1"
@@ -368,7 +378,10 @@ export function RadiusInsightsPanel({
                     <span className="text-eve-dim">{card.title}</span>
                     <span className="truncate text-eve-text">{card.routeLabel}</span>
                   </div>
-                  <div className="mt-0.5 text-[10px] text-eve-dim">{card.metricLabel}</div>
+                  <div className="mt-0.5 flex items-center gap-1 text-[10px] text-eve-dim">
+                    <span>{card.metricLabel}</span>
+                    <span className={`rounded-sm border px-1 py-0.5 ${verificationPriorityChipClass(priority.priority)}`} title={priority.reason}>{priority.label}</span>
+                  </div>
                   <div className="mt-1 flex flex-wrap gap-1">
                     <button type="button" onClick={() => onOpenBatchBuilderForRoute?.(card.routeKey)} className="rounded-sm border border-eve-border/70 px-1.5 py-0.5 text-[10px] text-eve-accent hover:border-eve-accent/60 hover:bg-eve-accent/10">Open Batch</button>
                     <button type="button" onClick={() => openRouteWorkbench(card.routeKey, "filler")} disabled={!card.hasFillerCandidates} className="rounded-sm border border-indigo-400/60 px-1.5 py-0.5 text-[10px] text-indigo-200 hover:bg-indigo-500/10 disabled:opacity-50">Fill Cargo</button>
@@ -382,7 +395,9 @@ export function RadiusInsightsPanel({
                     ) : null}
                   </div>
                 </div>
-              ))}
+                );
+              })()
+            ))}
             <div className="rounded-sm border border-eve-border/60 bg-eve-panel/40 px-2 py-1 text-eve-dim">
               Route queue: <span className="text-eve-text">{actionQueue.length}</span>
             </div>

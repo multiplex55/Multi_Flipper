@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { FlipResult, RouteManifestVerificationSnapshot } from "@/lib/types";
 import {
+  buildOffenderReasonMap,
+  computeRouteVerificationDiff,
   normalizeVerificationRecommendation,
   verifyRouteManifestAgainstRows,
 } from "@/lib/routeManifestVerification";
@@ -144,5 +146,43 @@ describe("verifyRouteManifestAgainstRows", () => {
     expect(normalizeVerificationRecommendation({ status: "Good", summary: "ok" })).toBe("proceed");
     expect(normalizeVerificationRecommendation({ status: "Reduced edge", summary: "ok" })).toBe("proceed_reduced");
     expect(normalizeVerificationRecommendation({ status: "Good", summary: "stale" })).toBe("abort");
+  });
+
+  it("computes verification diff deltas, retention, and degraded reasons", () => {
+    const reasons = buildOffenderReasonMap({
+      offenders: [
+        {
+          line_ref: "2:12:23",
+          type_id: 2,
+          type_name: "Item B",
+          direction: "sell_down",
+          drift_pct: 8,
+          threshold_pct: 5,
+        },
+      ],
+    });
+    const diff = computeRouteVerificationDiff({
+      before: {
+        profitabilityIsk: 1_000_000,
+        capitalIsk: 5_000_000,
+        volumeM3: 1000,
+        selectedLineKeys: ["1:11:22", "2:12:23", "3:13:24"],
+      },
+      after: {
+        profitabilityIsk: 850_000,
+        capitalIsk: 4_200_000,
+        volumeM3: 860,
+        selectedLineKeys: ["1:11:22", "2:12:23"],
+        offenderLineKeys: ["2:12:23"],
+        offenderReasonsByLine: reasons,
+      },
+    });
+    expect(diff.profitabilityDeltaIsk).toBe(-150_000);
+    expect(diff.capitalDeltaIsk).toBe(-800_000);
+    expect(diff.volumeDeltaM3).toBe(-140);
+    expect(diff.retainedLinePct).toBeCloseTo(66.666, 2);
+    expect(diff.removedLineKeys).toEqual(["3:13:24"]);
+    expect(diff.degradedLineKeys).toEqual(["2:12:23"]);
+    expect(diff.offenderReasonsByLine["2:12:23"]?.[0]).toContain("sell drift high");
   });
 });

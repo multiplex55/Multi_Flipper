@@ -22,9 +22,12 @@ import {
 import type { RouteWorkspaceIntent } from "@/lib/routeHandoff";
 import { verificationProfiles } from "@/lib/verificationProfiles";
 import type { VerificationRecommendation } from "@/lib/verificationProfiles";
-import { normalizeVerificationRecommendation } from "@/lib/routeManifestVerification";
+import { computeRouteVerificationDiff, normalizeVerificationRecommendation } from "@/lib/routeManifestVerification";
 import { buildRouteFillPlannerSections, type RouteFillPlannerSuggestion } from "@/lib/routeFillPlanner";
+import { removeOffendersAndRefill } from "@/lib/routeVerificationRefill";
+import { classifyVerificationPriority, verificationPriorityChipClass } from "@/lib/radiusVerificationPriority";
 import type { RouteWorkbenchMode } from "@/components/RouteWorkbenchPanel";
+import { routeLineKey, safeNumber } from "@/lib/batchMetrics";
 
 export type RadiusRouteWorkspaceTab = "discover" | "workbench" | "finder" | "validate";
 
@@ -247,6 +250,49 @@ export function RadiusRouteWorkspace({
     reprice_rebuild: "Reprice + rebuild",
     abort: "Abort",
   };
+  const verificationAgeMinutes = typeof verification?.checkedAt === "string"
+    ? Math.max(0, (Date.now() - new Date(verification.checkedAt).getTime()) / 60_000)
+    : 0;
+  const selectedRowsForTarget = validateTarget.pack
+    ? (routeRowsByKey.get(validateTarget.pack.routeKey) ?? []).filter((row) => validateTarget.pack?.selectedLineKeys.includes(routeLineKey(row)))
+    : [];
+  const dominantUrgencyBand = selectedRowsForTarget.some((row) => row.urgency_band === "fragile")
+    ? "fragile"
+    : selectedRowsForTarget.some((row) => row.urgency_band === "aging")
+      ? "aging"
+      : "stable";
+  const priority = classifyVerificationPriority({
+    expectedProfitIsk: Math.max(verification?.currentProfitIsk ?? 0, validateTarget.pack?.summarySnapshot.routeTotalProfit ?? 0),
+    totalJumps: selectedRowsForTarget.reduce((max, row) => Math.max(max, safeNumber(row.TotalJumps)), 0),
+    stopCount: validateTarget.pack?.summarySnapshot.routeItemCount ?? 0,
+    urgencyBand: dominantUrgencyBand,
+    scanAgeMinutes: verificationAgeMinutes,
+    lensJumpDelta: selectedRowsForTarget.reduce((max, row) => {
+      const base = safeNumber(row.DistanceLensBaseTotalJumps);
+      if (!(base > 0)) return max;
+      return Math.max(max, safeNumber(row.TotalJumps) - base);
+    }, 0),
+  });
+  const verificationDiff = validateTarget.pack
+    ? computeRouteVerificationDiff({
+      before: {
+        profitabilityIsk: validateTarget.pack.summarySnapshot.routeTotalProfit,
+        capitalIsk: validateTarget.pack.summarySnapshot.routeTotalCapital,
+        volumeM3: selectedRowsForTarget.reduce((sum, row) => sum + Math.max(0, safeNumber(row.Volume) * safeNumber(row.UnitsToBuy)), 0),
+        selectedLineKeys: validateTarget.pack.selectedLineKeys,
+      },
+      after: {
+        profitabilityIsk: verification?.currentProfitIsk ?? validateTarget.pack.summarySnapshot.routeTotalProfit,
+        capitalIsk: validateTarget.pack.summarySnapshot.routeTotalCapital,
+        volumeM3: selectedRowsForTarget.reduce((sum, row) => sum + Math.max(0, safeNumber(row.Volume) * safeNumber(row.UnitsToBuy)), 0),
+        selectedLineKeys: validateTarget.pack.selectedLineKeys,
+        offenderLineKeys: verification?.offenderLines ?? [],
+        offenderReasonsByLine: verification
+          ? Object.fromEntries((verification.offenderLines ?? []).map((key) => [key, ["verification offender"]]))
+          : {},
+      },
+    })
+    : null;
 
   const handleAddSuggestionToPack = (suggestion: RouteFillPlannerSuggestion) => {
     if (!activePack || !routeWorkspace) return;
@@ -272,6 +318,63 @@ export function RadiusRouteWorkspace({
     });
     routeWorkspace?.openBatchBuilder(activePack.routeKey);
     onOpenBatchBuilderForRoute?.(activePack.routeKey);
+  };
+
+  const handleKeepBatch = () => {
+    if (!validateTarget.pack) return;
+    routeWorkspace?.selectPack(validateTarget.pack.routeKey);
+    routeWorkspace?.openBatchBuilder(validateTarget.pack.routeKey);
+    onOpenBatchBuilderForRoute?.(validateTarget.pack.routeKey);
+    setActiveTab("workbench");
+  };
+
+  const handleRemoveBadRows = () => {
+    if (!validateTarget.pack || !routeWorkspace) return;
+    const offenderSet = new Set(verification?.offenderLines ?? []);
+    if (offenderSet.size === 0) return;
+    const selectedLineKeys = validateTarget.pack.selectedLineKeys.filter((key) => !offenderSet.has(key));
+    routeWorkspace.upsertPack({
+      ...validateTarget.pack,
+      selectedLineKeys,
+      updatedAt: new Date().toISOString(),
+      launchIntent: "radius-validate-remove-bad-rows",
+    });
+  };
+
+  const handleRefillCargo = () => {
+    if (!validateTarget.pack || !routeWorkspace) return;
+    const routeRows = routeRowsByKey.get(validateTarget.pack.routeKey) ?? [];
+    const refill = removeOffendersAndRefill({
+      rows: routeRows,
+      selectedLineKeys: validateTarget.pack.selectedLineKeys,
+      offenderLineKeys: verification?.offenderLines ?? [],
+      cargoCapacityM3: params.cargo_capacity ?? 0,
+      maxCapitalIsk: params.max_investment,
+      minConfidencePercent: 50,
+      minExecutionQuality: 50,
+      maxNewLines: 4,
+    });
+    buildRouteFillPlannerSections({
+      rows: routeRows,
+      pack: { ...validateTarget.pack, selectedLineKeys: refill.selectedLineKeys },
+      loops: (radiusScanSession?.loopOpportunities ?? []).filter((loop) => routeGroupKey(loop.outbound.row) === validateTarget.pack?.routeKey || routeGroupKey(loop.returnLeg.row) === validateTarget.pack?.routeKey),
+      cargoCapacityM3: params.cargo_capacity ?? 0,
+      limitPerSection: 4,
+    });
+    routeWorkspace.upsertPack({
+      ...validateTarget.pack,
+      selectedLineKeys: refill.selectedLineKeys,
+      updatedAt: new Date().toISOString(),
+      launchIntent: "radius-validate-remove-refill",
+    });
+    routeWorkspace.openBatchBuilder(validateTarget.pack.routeKey);
+    onOpenBatchBuilderForRoute?.(validateTarget.pack.routeKey);
+    setActiveTab("workbench");
+  };
+
+  const handleSkipRoute = () => {
+    if (!validateTarget.pack || !routeWorkspace) return;
+    routeWorkspace.removePack(validateTarget.pack.routeKey);
   };
 
   useEffect(() => {
@@ -498,7 +601,29 @@ export function RadiusRouteWorkspace({
                     <div>Sell drift: <span className="text-eve-text">{verification?.sellDriftPct?.toFixed(1) ?? "0.0"}%</span></div>
                     <div>Offender lines: <span className="text-eve-text">{verification?.offenderLines.length ?? 0}</span></div>
                     <div>Recommendation: <span className="text-eve-text">{recommendationLabelById[normalizeVerificationRecommendation({ recommendation: verification?.recommendation, status: verification?.status, summary: verification?.summary })]}</span></div>
+                    <div>
+                      Verification priority:{" "}
+                      <span className={`rounded-sm border px-1 py-0.5 text-[10px] ${verificationPriorityChipClass(priority.priority)}`} title={priority.reason}>
+                        {priority.label}
+                      </span>
+                    </div>
                   </div>
+                  {verificationDiff && (
+                    <div className="rounded-sm border border-eve-border/50 bg-eve-dark/40 p-2 space-y-1" data-testid="validate-diff-block">
+                      <div className="text-eve-text">Before/after verification diff</div>
+                      <div className="grid grid-cols-2 lg:grid-cols-3 gap-1 text-[11px]">
+                        <div>Profit: {formatISK(verificationDiff.before.profitabilityIsk)} → {formatISK(verificationDiff.after.profitabilityIsk)}</div>
+                        <div>Capital: {formatISK(verificationDiff.before.capitalIsk)} → {formatISK(verificationDiff.after.capitalIsk)}</div>
+                        <div>Volume: {verificationDiff.before.volumeM3.toFixed(1)} → {verificationDiff.after.volumeM3.toFixed(1)} m³</div>
+                        <div>Retained lines: {verificationDiff.retainedLinePct.toFixed(1)}%</div>
+                        <div>Removed: {verificationDiff.removedLineKeys.length}</div>
+                        <div>Degraded: {verificationDiff.degradedLineKeys.length}</div>
+                      </div>
+                      <div className="text-eve-dim">
+                        Changed lines: -{verificationDiff.removedLineKeys.join(", ") || "none"} · !{verificationDiff.degradedLineKeys.join(", ") || "none"}
+                      </div>
+                    </div>
+                  )}
                   <div className="flex flex-wrap gap-2" data-testid="validate-quick-actions">
                     <button
                       type="button"
@@ -554,6 +679,18 @@ export function RadiusRouteWorkspace({
                       }}
                     >
                       Open offender lines
+                    </button>
+                    <button type="button" className="rounded-sm border border-emerald-500/50 px-1 py-0.5 text-emerald-200" onClick={handleKeepBatch}>
+                      Keep Batch
+                    </button>
+                    <button type="button" className="rounded-sm border border-amber-500/50 px-1 py-0.5 text-amber-200" onClick={handleRemoveBadRows}>
+                      Remove Bad Rows
+                    </button>
+                    <button type="button" className="rounded-sm border border-indigo-500/50 px-1 py-0.5 text-indigo-200" onClick={handleRefillCargo}>
+                      Refill Cargo
+                    </button>
+                    <button type="button" className="rounded-sm border border-rose-500/50 px-1 py-0.5 text-rose-200" onClick={handleSkipRoute}>
+                      Skip Route
                     </button>
                   </div>
                 </div>
