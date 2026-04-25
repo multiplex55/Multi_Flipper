@@ -25,9 +25,6 @@ vi.mock("@/lib/api", () => ({
   setWaypointInGame: vi.fn(async () => undefined),
 }));
 
-const RADIUS_ROUTE_INSIGHTS_HIDDEN_STORAGE_KEY =
-  "eve-radius-route-insights-hidden:v1";
-
 function makeRow(overrides: Partial<FlipResult> = {}): FlipResult {
   return {
     TypeID: 101,
@@ -90,6 +87,7 @@ function renderTable(results: FlipResult[]) {
       avg_jumps: 1,
     },
   ];
+
   return render(
     <I18nProvider>
       <ToastProvider>
@@ -111,75 +109,36 @@ afterEach(() => {
   localStorage.clear();
 });
 
-describe("ScanResultsTable radius insights visibility", () => {
-  it("renders moved radius controls in canonical toolbar", () => {
-    renderTable([makeRow()]);
-
-    expect(screen.getByTestId("radius-toolbar-quick-bar")).toBeInTheDocument();
-    expect(screen.getByTestId("radius-toolbar-primary-controls")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /compact dashboard/i }),
-    ).toBeInTheDocument();
-    expect(screen.getByTestId("one-leg-mode-toggle")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: /utilities/i }));
-    expect(
-      screen.getByTestId("radius-toolbar-utilities-panel"),
-    ).toBeInTheDocument();
-  });
-
-  it("shows compact strip by default, hides it, and restores with show toggle", () => {
+describe("Radius insights compact drawer flow", () => {
+  it("renders compact strip by default and keeps full insights hidden", () => {
     renderTable([makeRow()]);
 
     expect(screen.getByTestId("radius-best-deal-strip")).toBeInTheDocument();
-    const hideButton = screen.getByRole("button", {
-      name: /hide radius route insights/i,
-    });
-
-    fireEvent.click(hideButton);
-
-    expect(screen.queryByTestId("radius-best-deal-strip")).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /show radius route insights/i }),
-    ).toBeInTheDocument();
-
-    fireEvent.click(
-      screen.getByRole("button", { name: /show radius route insights/i }),
-    );
-
-    expect(screen.getByTestId("radius-best-deal-strip")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /hide radius route insights/i }),
-    ).toBeInTheDocument();
+    expect(screen.queryByTestId("radius-insights-drawer")).not.toBeInTheDocument();
   });
 
-  it("persists hidden state in localStorage and restores it on rerender", () => {
-    const firstRender = renderTable([makeRow()]);
-
-    fireEvent.click(
-      screen.getByRole("button", { name: /hide radius route insights/i }),
-    );
-    expect(localStorage.getItem(RADIUS_ROUTE_INSIGHTS_HIDDEN_STORAGE_KEY)).toBe(
-      "1",
-    );
-
-    firstRender.unmount();
-    renderTable([makeRow()]);
-
-    expect(screen.queryByTestId("radius-best-deal-strip")).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /show radius route insights/i }),
-    ).toBeInTheDocument();
-  });
-
-  it("opens insights drawer from strip and shows hub data", () => {
+  it("opens and closes full insights via explicit controls", () => {
     renderTable([makeRow()]);
 
     fireEvent.click(screen.getByRole("button", { name: /open insights/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Hubs" }));
-    fireEvent.click(screen.getByRole("button", { name: /Top Buy/i }));
-    const headings = screen.getAllByText("Top Buy Hubs");
-    expect(headings).toHaveLength(1);
-    expect(screen.getAllByText("Jita IV - Moon 4").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("radius-insights-drawer")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^close$/i }));
+    expect(screen.queryByTestId("radius-insights-drawer")).not.toBeInTheDocument();
+  });
+
+  it("keeps the main table rendered while insights are collapsed", () => {
+    renderTable([makeRow()]);
+
+    expect(screen.getByText("Item 101")).toBeInTheDocument();
+    expect(screen.queryByTestId("radius-insights-drawer")).not.toBeInTheDocument();
+  });
+
+  it("keeps stale and unverified indicators discoverable in compact mode", () => {
+    renderTable([makeRow()]);
+
+    const indicatorArea = screen.getByTestId("radius-stale-unverified-indicators");
+    expect(indicatorArea).toBeInTheDocument();
+    expect(indicatorArea.textContent).toMatch(/stable|aging|fragile|verification pending/i);
   });
 });

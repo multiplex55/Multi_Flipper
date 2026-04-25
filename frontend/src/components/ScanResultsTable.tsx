@@ -107,6 +107,9 @@ import {
   type EndpointPreferenceProfile,
 } from "@/lib/endpointPreferences";
 import { RadiusInsightsPanel } from "./RadiusInsightsPanel";
+import { RadiusInsightsDrawer } from "./RadiusInsightsDrawer";
+import { RadiusBestDealStrip } from "./RadiusBestDealStrip";
+import { deriveRadiusBestDealCards } from "@/lib/radiusBestDealCards";
 import {
   buildRadiusMajorHubInsights,
 } from "@/lib/radiusMajorHubInsights";
@@ -203,6 +206,8 @@ const ADVANCED_TOOLBAR_VISIBLE_STORAGE_KEY =
 const COMPACT_DASHBOARD_STORAGE_KEY = "eve-radius-compact-dashboard:v1";
 const RADIUS_ROUTE_INSIGHTS_HIDDEN_STORAGE_KEY =
   "eve-radius-route-insights-hidden:v1";
+const RADIUS_INSIGHTS_DRAWER_OPEN_STORAGE_KEY =
+  "eve-radius-insights-drawer-open:v1";
 const ONE_LEG_MODE_STORAGE_KEY = "eve-radius-one-leg-mode:v1";
 const PERFORMANCE_LOG_THRESHOLD_MS = 8;
 const HUB_SCOPE_MODE_STORAGE_KEY = "eve-radius-hub-scope-mode:v1";
@@ -1680,6 +1685,14 @@ export function ScanResultsTable({
         return false;
       }
     });
+  const [radiusInsightsDrawerOpen, setRadiusInsightsDrawerOpen] =
+    useState<boolean>(() => {
+      try {
+        return localStorage.getItem(RADIUS_INSIGHTS_DRAWER_OPEN_STORAGE_KEY) === "1";
+      } catch {
+        return false;
+      }
+    });
   const previousScanningRef = useRef(scanning);
   const [groupByItem, setGroupByItem] = useState<boolean>(() => {
     try {
@@ -2335,6 +2348,17 @@ export function ScanResultsTable({
       // ignore storage quota errors
     }
   }, [radiusRouteInsightsHidden]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        RADIUS_INSIGHTS_DRAWER_OPEN_STORAGE_KEY,
+        radiusInsightsDrawerOpen ? "1" : "0",
+      );
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [radiusInsightsDrawerOpen]);
 
   useEffect(() => {
     if (!isRouteGrouped && selectedBadgeFilters.size > 0) {
@@ -5145,6 +5169,30 @@ export function ScanResultsTable({
     return out;
   }, [batchMetricsByRoute, indexed, isRouteGrouped, routeGroups, selectedIds]);
 
+  const radiusBestDealCards = useMemo(
+    () =>
+      deriveRadiusBestDealCards({
+        topRoutePicks,
+        actionQueue,
+        batchMetricsByRoute,
+        routeAggregateMetricsByRoute,
+        routeExplanationByKey,
+        routeFillerCandidatesByKey,
+        lensDeltaByRouteKey: routeLensDeltaByKey,
+        lensActive: decisionLens !== "recommended",
+      }),
+    [
+      actionQueue,
+      batchMetricsByRoute,
+      decisionLens,
+      routeAggregateMetricsByRoute,
+      routeExplanationByKey,
+      routeFillerCandidatesByKey,
+      routeLensDeltaByKey,
+      topRoutePicks,
+    ],
+  );
+
   // renderDataRow: renders a DataRow memo component — only the changed row re-renders
   const renderDataRow = useCallback(
     (
@@ -6441,54 +6489,68 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
       )}
 
       {!isRegionGrouped && isRadiusMode && !radiusRouteInsightsHidden && (
-        <RadiusInsightsPanel
-          topRoutePicks={topRoutePicks}
-          actionQueue={actionQueue}
-          routeExplanationByKey={routeExplanationByKey}
-          lensDeltaByRouteKey={routeLensDeltaByKey}
-          batchMetricsByRoute={batchMetricsByRoute}
-          routeAggregateMetricsByRoute={routeAggregateMetricsByRoute}
-          routeFillerCandidatesByKey={routeFillerCandidatesByKey}
-          lensActive={decisionLens !== "recommended"}
-          loopOpportunities={showLoopPanel ? effectiveLoopOpportunities : []}
-          openRouteWorkbench={openRouteWorkbench}
-          onOpenBatchBuilderForRoute={openBatchBuilderForRoute}
-          onOpenInRoute={onOpenInRoute}
-          onOpenInRouteWorkbench={(routeKey) => {
-            if (onOpenInRouteWorkbench) {
-              onOpenInRouteWorkbench(routeKey);
-              return;
-            }
-            onOpenInRoute?.(routeKey);
-          }}
-          onOpenRouteFromInsights={(routeKey, targetMode = "workbench") => {
-            if (targetMode === "workbench") {
-              if (onOpenInRouteWorkbench) {
-                onOpenInRouteWorkbench(routeKey);
-                return;
-              }
-              onOpenInRoute?.(routeKey);
-              return;
-            }
-            if (onOpenInRoute) {
-              onOpenInRoute(routeKey);
-              return;
-            }
-            onOpenInRouteWorkbench?.(routeKey);
-          }}
-          compactTeaser
-          compactDashboard={compactDashboard}
-          buyHubs={displayBuyHubs}
-          sellHubs={displaySellHubs}
-          onOpenHubRows={onOpenHubRows}
-          onSetHubLock={onSetHubLock}
-          majorHubInsights={majorHubInsights}
-          hubScopeMode={hubScopeMode}
-          onHubScopeModeChange={setHubScopeMode}
-          rows={results}
-          characters={authCharacters}
-          fallbackSystemName={originSystemName ?? "Unknown"}
-        />
+        <>
+          <RadiusBestDealStrip
+            bestDealCards={radiusBestDealCards}
+            onOpenBatchBuilderForRoute={openBatchBuilderForRoute}
+            onOpenRouteWorkbench={openRouteWorkbench}
+            insightsOpen={radiusInsightsDrawerOpen}
+            onOpenInsights={() => setRadiusInsightsDrawerOpen((previous) => !previous)}
+          />
+          <RadiusInsightsDrawer
+            open={radiusInsightsDrawerOpen}
+            onClose={() => setRadiusInsightsDrawerOpen(false)}
+          >
+            <RadiusInsightsPanel
+              topRoutePicks={topRoutePicks}
+              actionQueue={actionQueue}
+              routeExplanationByKey={routeExplanationByKey}
+              lensDeltaByRouteKey={routeLensDeltaByKey}
+              batchMetricsByRoute={batchMetricsByRoute}
+              routeAggregateMetricsByRoute={routeAggregateMetricsByRoute}
+              routeFillerCandidatesByKey={routeFillerCandidatesByKey}
+              lensActive={decisionLens !== "recommended"}
+              defaultExpanded
+              loopOpportunities={showLoopPanel ? effectiveLoopOpportunities : []}
+              openRouteWorkbench={openRouteWorkbench}
+              onOpenBatchBuilderForRoute={openBatchBuilderForRoute}
+              onOpenInRoute={onOpenInRoute}
+              onOpenInRouteWorkbench={(routeKey) => {
+                if (onOpenInRouteWorkbench) {
+                  onOpenInRouteWorkbench(routeKey);
+                  return;
+                }
+                onOpenInRoute?.(routeKey);
+              }}
+              onOpenRouteFromInsights={(routeKey, targetMode = "workbench") => {
+                if (targetMode === "workbench") {
+                  if (onOpenInRouteWorkbench) {
+                    onOpenInRouteWorkbench(routeKey);
+                    return;
+                  }
+                  onOpenInRoute?.(routeKey);
+                  return;
+                }
+                if (onOpenInRoute) {
+                  onOpenInRoute(routeKey);
+                  return;
+                }
+                onOpenInRouteWorkbench?.(routeKey);
+              }}
+              compactDashboard={compactDashboard}
+              buyHubs={displayBuyHubs}
+              sellHubs={displaySellHubs}
+              onOpenHubRows={onOpenHubRows}
+              onSetHubLock={onSetHubLock}
+              majorHubInsights={majorHubInsights}
+              hubScopeMode={hubScopeMode}
+              onHubScopeModeChange={setHubScopeMode}
+              rows={results}
+              characters={authCharacters}
+              fallbackSystemName={originSystemName ?? "Unknown"}
+            />
+          </RadiusInsightsDrawer>
+        </>
       )}
 
       {!isRegionGrouped && showRouteInsights && !isRadiusMode && (
