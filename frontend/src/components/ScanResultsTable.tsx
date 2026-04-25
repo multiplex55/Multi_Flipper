@@ -2,6 +2,7 @@ import {
   Fragment,
   memo,
   startTransition,
+  type ReactNode,
   useState,
   useMemo,
   useCallback,
@@ -428,6 +429,7 @@ interface Props {
   authCharacters?: AuthCharacter[];
   onRecalculateLensFromCharacter?: (characterId: number) => void;
   batchBuilderRouteRequest?: { routeKey: string; requestId: number } | null;
+  radiusSessionControls?: ReactNode;
 }
 
 
@@ -1603,6 +1605,7 @@ export function ScanResultsTable({
   authCharacters = [],
   onRecalculateLensFromCharacter,
   batchBuilderRouteRequest = null,
+  radiusSessionControls,
 }: Props) {
   const { t } = useI18n();
   const emptyReason: EmptyReason = scanCompletedWithZero
@@ -5375,6 +5378,7 @@ export function ScanResultsTable({
                 )}
               </>
             )}
+            sessionSection={radiusSessionControls}
           />
         </div>
       )}

@@ -27,6 +27,7 @@ import { Modal } from "./components/Modal";
 import { CharacterPopup } from "./components/CharacterPopup";
 import { TopActionButtons } from "./components/TopActionButtons";
 import { RadiusColumnGuideModal } from "./components/RadiusColumnGuideModal";
+import { RadiusSessionControls } from "./components/RadiusSessionControls";
 import {
   addPinnedOpportunity,
   applyAppUpdate,
@@ -3173,101 +3174,6 @@ const handleScanAndRefresh = useCallback(async () => {
             <div
               className={`flex-1 min-h-0 flex flex-col ${tab === "radius" ? "" : "hidden"}`}
             >
-              {tab === "radius" && (
-                <div className="shrink-0 flex items-center gap-2 px-2 py-1 text-xs border-b border-eve-border/20">
-                  <label className="inline-flex items-center gap-1.5 cursor-pointer select-none text-eve-dim hover:text-eve-text transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={autoRefreshRadius}
-                      onChange={(e) => setAutoRefreshRadius(e.target.checked)}
-                      className="accent-eve-accent"
-                    />
-                    Auto-refresh
-                  </label>
-                  {autoRefreshRadius && (
-                    <span className="flex items-center gap-1 text-eve-accent">
-                      <span className="w-1.5 h-1.5 rounded-full bg-eve-accent animate-pulse" />
-                      active
-                    </span>
-                  )}
-                  {radiusHubFilter && radiusHubFilter.systemId ? (
-                    <button
-                      type="button"
-                      className="px-2 py-0.5 rounded-sm border border-eve-border text-eve-dim hover:text-eve-text"
-                      onClick={() => setRadiusHubFilter(null)}
-                    >
-                      Clear hub filter ({radiusHubFilter.side === "buy" ? "Buy" : "Sell"})
-                    </button>
-                  ) : null}
-                  <select
-                    value={radiusLensSource}
-                    onChange={(e) =>
-                      setRadiusLensSource(
-                        e.target.value as
-                          | "scan_origin"
-                          | "active_character"
-                          | "selected_character"
-                          | "manual_system",
-                      )
-                    }
-                    className="px-1.5 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark text-eve-text"
-                  >
-                    <option value="scan_origin">Scan origin</option>
-                    <option value="active_character">Active character</option>
-                    <option value="selected_character">Selected character</option>
-                    <option value="manual_system">Manual system</option>
-                  </select>
-                  {radiusLensSource === "selected_character" && (
-                    <select
-                      value={radiusLensSelectedCharacterID}
-                      onChange={(e) => setRadiusLensSelectedCharacterID(Number(e.target.value))}
-                      className="px-1.5 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark text-eve-text"
-                    >
-                      <option value={0}>Pick character</option>
-                      {authCharacters.map((character) => (
-                        <option key={character.character_id} value={character.character_id}>
-                          {character.character_name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  {radiusLensSource === "manual_system" && (
-                    <input
-                      value={radiusLensManualSystem}
-                      onChange={(e) => setRadiusLensManualSystem(e.target.value)}
-                      placeholder="Manual system"
-                      className="px-1.5 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark text-eve-text"
-                    />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => void handleRecalculateRadiusDistanceLens()}
-                    disabled={radiusLensRecalculating || radiusResults.length === 0}
-                    className="px-2 py-0.5 rounded-sm border border-eve-border text-eve-dim hover:text-eve-text disabled:opacity-50"
-                  >
-                    {radiusLensRecalculating ? "Recalc…" : "Recalc"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={clearRadiusDistanceLens}
-                    className="px-2 py-0.5 rounded-sm border border-eve-border text-eve-dim hover:text-eve-text"
-                  >
-                    Clear
-                  </button>
-                  {radiusDistanceLens && (
-                    <span className="px-1.5 py-0.5 rounded-sm border border-eve-accent/40 text-eve-accent">
-                      Lens {radiusDistanceLens.originSystemName} · {new Date(radiusDistanceLens.calculatedAt).toLocaleTimeString()}
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={clearRadiusScanSession}
-                    className="ml-auto px-2 py-0.5 rounded-sm border border-eve-border/60 text-eve-dim hover:text-eve-text hover:border-eve-border-light transition-colors"
-                  >
-                    Reset session
-                  </button>
-                </div>
-              )}
               <ScanResultsTable
                 results={visibleRadiusResults}
                 scanning={scanning && tab === "radius"}
@@ -3315,6 +3221,41 @@ const handleScanAndRefresh = useCallback(async () => {
                 batchBuilderRouteRequest={batchBuilderRouteRequest}
                 authCharacters={authStatus.characters ?? []}
                 onRecalculateLensFromCharacter={recalculateRadiusLensFromCharacter}
+                radiusSessionControls={(
+                  <RadiusSessionControls
+                    autoRefreshRadius={autoRefreshRadius}
+                    onAutoRefreshChange={setAutoRefreshRadius}
+                    radiusHubFilterLabel={
+                      radiusHubFilter && radiusHubFilter.systemId
+                        ? `Clear hub filter (${radiusHubFilter.side === "buy" ? "Buy" : "Sell"})`
+                        : undefined
+                    }
+                    onClearHubFilter={
+                      radiusHubFilter && radiusHubFilter.systemId
+                        ? () => setRadiusHubFilter(null)
+                        : undefined
+                    }
+                    radiusLensSource={radiusLensSource}
+                    onLensSourceChange={setRadiusLensSource}
+                    radiusLensSelectedCharacterID={radiusLensSelectedCharacterID}
+                    onLensSelectedCharacterChange={setRadiusLensSelectedCharacterID}
+                    authCharacters={authCharacters}
+                    radiusLensManualSystem={radiusLensManualSystem}
+                    onLensManualSystemChange={setRadiusLensManualSystem}
+                    onRecalculateLens={() => void handleRecalculateRadiusDistanceLens()}
+                    radiusLensRecalculating={radiusLensRecalculating}
+                    recalcDisabled={radiusResults.length === 0}
+                    onClearLens={clearRadiusDistanceLens}
+                    radiusDistanceLensLabel={
+                      radiusDistanceLens
+                        ? `Lens ${radiusDistanceLens.originSystemName} · ${new Date(
+                            radiusDistanceLens.calculatedAt,
+                          ).toLocaleTimeString()}`
+                        : undefined
+                    }
+                    onResetSession={clearRadiusScanSession}
+                  />
+                )}
               />
             </div>
             <div
