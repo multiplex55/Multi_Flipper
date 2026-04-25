@@ -3221,6 +3221,8 @@ const handleScanAndRefresh = useCallback(async () => {
                 batchBuilderRouteRequest={batchBuilderRouteRequest}
                 authCharacters={authStatus.characters ?? []}
                 onRecalculateLensFromCharacter={recalculateRadiusLensFromCharacter}
+                onRecalculateLens={() => void handleRecalculateRadiusDistanceLens()}
+                recalcLensDisabled={radiusResults.length === 0}
                 radiusSessionControls={(
                   <RadiusSessionControls
                     autoRefreshRadius={autoRefreshRadius}
