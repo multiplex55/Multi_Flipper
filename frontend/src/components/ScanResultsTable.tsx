@@ -1854,6 +1854,7 @@ export function ScanResultsTable({
   const showSavedRoutes = featureConfig.showSavedRoutes;
   const showLoopPanel = featureConfig.showLoopPanel;
   const isRadiusMode = tradeStateTab === "radius";
+  const useRadiusCommandBar = isRadiusMode && !isRegionGrouped;
   const effectiveRouteViewMode =
     allowRouteGrouping && routeViewMode !== "rows" ? routeViewMode : "rows";
   const isItemGrouped =
@@ -5276,8 +5277,8 @@ export function ScanResultsTable({
           ))}
         </div>
       )}
-      {/* Toolbar */}
-      {isRadiusMode && !isRegionGrouped && (
+      {/* Radius and generic toolbars must remain mutually exclusive */}
+      {useRadiusCommandBar && (
         <div className={`shrink-0 px-2 ${compactDashboard ? "pt-1" : "pt-1.5"}`}>
           <RadiusToolbar
             primaryControls={(
@@ -5294,13 +5295,13 @@ export function ScanResultsTable({
                   Compact Dashboard
                 </button>
                 <ToolbarBtn
-                  label={t("columnsButton")}
+                  label="Columns"
                   title={t("columnsPanelTitle")}
                   active={showColumnPanel}
                   onClick={() => setShowColumnPanel((v) => !v)}
                 />
                 <ToolbarBtn
-                  label="⊞"
+                  label="Filters"
                   title={showFilters ? t("clearFilters") : t("filterPlaceholder")}
                   active={showFilters}
                   onClick={() => setShowFilters((v) => !v)}
@@ -5353,12 +5354,12 @@ export function ScanResultsTable({
                   onClick={() => onOpenPriceValidation?.("")}
                   className="rounded-sm border border-eve-accent/50 px-1.5 py-0.5 text-[10px] text-eve-accent hover:bg-eve-accent/10"
                 >
-                  Verifier
+                  Verify Prices
                 </button>
                 {results.length > 0 && (
                   <>
-                    <ToolbarBtn label="CSV" title={t("exportCSV")} onClick={exportCSV} />
-                    <ToolbarBtn label="⎘" title={t("copyTable")} onClick={copyTable} />
+                    <ToolbarBtn label="Export CSV" title={t("exportCSV")} onClick={exportCSV} />
+                    <ToolbarBtn label="Copy Table" title={t("copyTable")} onClick={copyTable} />
                   </>
                 )}
                 {lockedBuyLocationId != null && (
@@ -5495,30 +5496,34 @@ export function ScanResultsTable({
                 </label>
               )}
 
-              <button
-                type="button"
-                onClick={() => setShowAdvancedToolbar((v) => !v)}
-                className="px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] hover:border-eve-accent/50 hover:text-eve-accent transition-colors"
-                aria-expanded={showAdvancedToolbar}
-                aria-controls="scan-results-advanced-toolbar"
-                title="Toggle advanced controls"
-              >
-                Advanced {showAdvancedToolbar ? "▾" : "▸"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setCompactDashboard((prev) => !prev)}
-                className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
-                  compactDashboard
-                    ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10"
-                    : "border-eve-border/60 bg-eve-dark/40 text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent"
-                }`}
-                aria-pressed={compactDashboard}
-                title="Compact dashboard layout"
-              >
-                Compact Dashboard
-              </button>
-              {isRadiusMode && !isRegionGrouped && (
+              {!useRadiusCommandBar && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedToolbar((v) => !v)}
+                    className="px-2 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] hover:border-eve-accent/50 hover:text-eve-accent transition-colors"
+                    aria-expanded={showAdvancedToolbar}
+                    aria-controls="scan-results-advanced-toolbar"
+                    title="Toggle advanced controls"
+                  >
+                    Advanced {showAdvancedToolbar ? "▾" : "▸"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCompactDashboard((prev) => !prev)}
+                    className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
+                      compactDashboard
+                        ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10"
+                        : "border-eve-border/60 bg-eve-dark/40 text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent"
+                    }`}
+                    aria-pressed={compactDashboard}
+                    title="Compact dashboard layout"
+                  >
+                    Compact Dashboard
+                  </button>
+                </>
+              )}
+              {useRadiusCommandBar && (
                 <button
                   type="button"
                   onClick={() =>
@@ -5539,113 +5544,101 @@ export function ScanResultsTable({
             </>
           )}
 
-          <div data-testid="radius-toolbar-primary-controls" className="flex flex-wrap items-center gap-1">
-            <ToolbarBtn
-              label={t("columnsButton")}
-              title={t("columnsPanelTitle")}
-              active={showColumnPanel}
-              onClick={() => setShowColumnPanel((v) => !v)}
-            />
-            <ToolbarBtn
-              label="⊞"
-              title={showFilters ? t("clearFilters") : t("filterPlaceholder")}
-              active={showFilters}
-              onClick={() => setShowFilters((v) => !v)}
-            />
-            {hasActiveFilters && <ToolbarBtn label="✕" title={t("clearFilters")} onClick={clearFilters} />}
-            {results.length > 0 && (
-              <ToolbarBtn
-                label={compactRows ? "⊞" : "⊟"}
-                title={compactRows ? t("comfyRows") : t("compactRows")}
-                active={compactRows}
-                onClick={() => setCompactRows((v) => !v)}
-              />
-            )}
-            {isRadiusMode &&
-              !isRegionGrouped &&
-              effectiveRouteViewMode === "rows" && (
-              <button
-                type="button"
-                className={`rounded-sm border px-1.5 py-0.5 text-[10px] transition-colors ${
-                  oneLegModeEnabled
-                    ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10"
-                    : "border-eve-border/60 text-eve-dim hover:text-eve-text"
-                }`}
-                onClick={() => setOneLegModeEnabled((prev) => !prev)}
-                data-testid="one-leg-mode-toggle"
-              >
-                One-leg mode {oneLegModeEnabled ? "On" : "Off"}
-              </button>
-            )}
-          </div>
-          <div data-testid="radius-toolbar-secondary-actions" className="flex flex-wrap items-center gap-1">
-            {selectedIds.size > 0 && <span className="text-eve-accent">{t("selected", { count: selectedIds.size })}</span>}
-            {lockedBuyLocationId != null && (
-              <button
-                type="button"
-                className="rounded-sm border border-cyan-500/50 px-1.5 py-0.5 text-[10px] text-cyan-200"
-                onClick={() => setLockedBuyLocationId(null)}
-              >
-                Buy lock #{lockedBuyLocationId} ×
-              </button>
-            )}
-            {lockedSellLocationId != null && (
-              <button
-                type="button"
-                className="rounded-sm border border-fuchsia-500/50 px-1.5 py-0.5 text-[10px] text-fuchsia-200"
-                onClick={() => setLockedSellLocationId(null)}
-              >
-                Sell lock #{lockedSellLocationId} ×
-              </button>
-            )}
-            {lockedLegKey && (
-              <button
-                type="button"
-                className="rounded-sm border border-indigo-500/50 px-1.5 py-0.5 text-[10px] text-indigo-200"
-                onClick={() => setLockedLegKey(null)}
-              >
-                Leg filter ×
-              </button>
-            )}
-            {selectedRouteDerivation && (
-              <>
+          {!useRadiusCommandBar && (
+            <>
+              <div data-testid="radius-toolbar-primary-controls" className="flex flex-wrap items-center gap-1">
+                <ToolbarBtn
+                  label={t("columnsButton")}
+                  title={t("columnsPanelTitle")}
+                  active={showColumnPanel}
+                  onClick={() => setShowColumnPanel((v) => !v)}
+                />
+                <ToolbarBtn
+                  label="Filters"
+                  title={showFilters ? t("clearFilters") : t("filterPlaceholder")}
+                  active={showFilters}
+                  onClick={() => setShowFilters((v) => !v)}
+                />
+                {hasActiveFilters && <ToolbarBtn label="✕" title={t("clearFilters")} onClick={clearFilters} />}
+                {results.length > 0 && (
+                  <ToolbarBtn
+                    label={compactRows ? "Comfy rows" : "Compact rows"}
+                    title={compactRows ? t("comfyRows") : t("compactRows")}
+                    active={compactRows}
+                    onClick={() => setCompactRows((v) => !v)}
+                  />
+                )}
+              </div>
+              <div data-testid="radius-toolbar-secondary-actions" className="flex flex-wrap items-center gap-1">
+                {selectedIds.size > 0 && <span className="text-eve-accent">{t("selected", { count: selectedIds.size })}</span>}
+                {lockedBuyLocationId != null && (
+                  <button
+                    type="button"
+                    className="rounded-sm border border-cyan-500/50 px-1.5 py-0.5 text-[10px] text-cyan-200"
+                    onClick={() => setLockedBuyLocationId(null)}
+                  >
+                    Buy lock #{lockedBuyLocationId} ×
+                  </button>
+                )}
+                {lockedSellLocationId != null && (
+                  <button
+                    type="button"
+                    className="rounded-sm border border-fuchsia-500/50 px-1.5 py-0.5 text-[10px] text-fuchsia-200"
+                    onClick={() => setLockedSellLocationId(null)}
+                  >
+                    Sell lock #{lockedSellLocationId} ×
+                  </button>
+                )}
+                {lockedLegKey && (
+                  <button
+                    type="button"
+                    className="rounded-sm border border-indigo-500/50 px-1.5 py-0.5 text-[10px] text-indigo-200"
+                    onClick={() => setLockedLegKey(null)}
+                  >
+                    Leg filter ×
+                  </button>
+                )}
+                {selectedRouteDerivation && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => emitRouteHandoff("planner")}
+                      className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
+                    >
+                      Open in Route Planner
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => emitRouteHandoff("validation")}
+                      className="rounded-sm border border-eve-accent/60 px-1.5 py-0.5 text-[10px] text-eve-accent hover:bg-eve-accent/10"
+                    >
+                      Open in Route Validation
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => emitRouteHandoff("cargo")}
+                      className="rounded-sm border border-indigo-400/50 px-1.5 py-0.5 text-[10px] text-indigo-200 hover:bg-indigo-500/10"
+                    >
+                      Open in Cargo Plan
+                    </button>
+                  </>
+                )}
                 <button
                   type="button"
-                  onClick={() => emitRouteHandoff("planner")}
-                  className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text"
+                  onClick={() => onOpenPriceValidation?.("")}
+                  className="rounded-sm border border-eve-accent/50 px-1.5 py-0.5 text-[10px] text-eve-accent hover:bg-eve-accent/10"
                 >
-                  Open in Route Planner
+                  Verify Prices
                 </button>
-                <button
-                  type="button"
-                  onClick={() => emitRouteHandoff("validation")}
-                  className="rounded-sm border border-eve-accent/60 px-1.5 py-0.5 text-[10px] text-eve-accent hover:bg-eve-accent/10"
-                >
-                  Open in Route Validation
-                </button>
-                <button
-                  type="button"
-                  onClick={() => emitRouteHandoff("cargo")}
-                  className="rounded-sm border border-indigo-400/50 px-1.5 py-0.5 text-[10px] text-indigo-200 hover:bg-indigo-500/10"
-                >
-                  Open in Cargo Plan
-                </button>
-              </>
-            )}
-            <button
-              type="button"
-              onClick={() => onOpenPriceValidation?.("")}
-              className="rounded-sm border border-eve-accent/50 px-1.5 py-0.5 text-[10px] text-eve-accent hover:bg-eve-accent/10"
-            >
-              Verifier
-            </button>
-            {results.length > 0 && (
-              <>
-                <ToolbarBtn label="CSV" title={t("exportCSV")} onClick={exportCSV} />
-                <ToolbarBtn label="⎘" title={t("copyTable")} onClick={copyTable} />
-              </>
-            )}
-          </div>
+                {results.length > 0 && (
+                  <>
+                    <ToolbarBtn label="Export CSV" title={t("exportCSV")} onClick={exportCSV} />
+                    <ToolbarBtn label="Copy Table" title={t("copyTable")} onClick={copyTable} />
+                  </>
+                )}
+              </div>
+            </>
+          )}
         </div>
         {!compactDashboard && results.length > 0 && !scanning && (
           <div className="mt-1 text-[11px] text-eve-dim/80">
