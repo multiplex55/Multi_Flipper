@@ -19,6 +19,7 @@ import type {
   RouteManifestVerificationSnapshot,
 } from "@/lib/types";
 import { formatISK, formatMargin } from "@/lib/format";
+import { classifyVerificationPriority, verificationPriorityChipClass } from "@/lib/radiusVerificationPriority";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import {
   buildRouteBatchMetadata,
@@ -6931,6 +6932,23 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                                       {badgeMetadata.confidence.label}{" "}
                                       {badgeMetadata.confidence.score}
                                     </span>
+                                    {(() => {
+                                      const priority = classifyVerificationPriority({
+                                        expectedProfitIsk: routeSummary?.routeTotalProfit ?? 0,
+                                        totalJumps: routeSummary?.routeStopCount ? Math.max(0, routeSummary.routeStopCount - 1) : 0,
+                                        urgencyBand:
+                                          (routeSummary?.routeTurnoverDays ?? 0) <= 1
+                                            ? "fragile"
+                                            : (routeSummary?.routeTurnoverDays ?? 0) <= 3
+                                              ? "aging"
+                                              : "stable",
+                                      });
+                                      return (
+                                        <span className={`px-1 py-0.5 rounded-sm border text-[10px] font-bold shrink-0 ${verificationPriorityChipClass(priority.priority)}`} title={priority.reason}>
+                                          {priority.label}
+                                        </span>
+                                      );
+                                    })()}
                                     <span className="font-medium truncate">
                                       {group.label}
                                     </span>
@@ -7373,6 +7391,14 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                   <span>Cargo score {build.cargoFillPercent.toFixed(0)}%</span>
                   <span className={build.riskCue === "high" ? "text-rose-300" : build.riskCue === "moderate" ? "text-amber-200" : "text-emerald-300"}>Risk {build.riskCue}</span>
                   <span className={build.executionCue === "fragile" ? "text-rose-300" : build.executionCue === "watch" ? "text-amber-200" : "text-emerald-300"}>Execution {build.executionCue}</span>
+                  {(() => {
+                    const priority = classifyVerificationPriority({
+                      expectedProfitIsk: build.totalProfitIsk,
+                      totalJumps: build.jumps,
+                      urgencyBand: build.executionCue === "fragile" ? "fragile" : build.executionCue === "watch" ? "aging" : "stable",
+                    });
+                    return <span className={`rounded-sm border px-1 py-0.5 text-[10px] ${verificationPriorityChipClass(priority.priority)}`}>{priority.label}</span>;
+                  })()}
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-1">
                   <button type="button" onClick={() => openBatchBuilderForRoute(build.routeKey, { intentLabel: "Cargo Build", batchEntryMode: "core" })} className="rounded-sm border border-eve-accent/60 px-1.5 py-0.5 text-[10px] text-eve-accent">Open Batch</button>

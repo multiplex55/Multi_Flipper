@@ -39,6 +39,27 @@ export type RouteVerificationResult = {
   summary: string;
 };
 
+export type RouteVerificationDiffSnapshot = {
+  profitabilityIsk: number;
+  capitalIsk: number;
+  volumeM3: number;
+  selectedLineKeys: string[];
+  offenderLineKeys?: string[];
+  offenderReasonsByLine?: Record<string, string[]>;
+};
+
+export type RouteVerificationDiff = {
+  before: Pick<RouteVerificationDiffSnapshot, "profitabilityIsk" | "capitalIsk" | "volumeM3">;
+  after: Pick<RouteVerificationDiffSnapshot, "profitabilityIsk" | "capitalIsk" | "volumeM3">;
+  profitabilityDeltaIsk: number;
+  capitalDeltaIsk: number;
+  volumeDeltaM3: number;
+  retainedLinePct: number;
+  removedLineKeys: string[];
+  degradedLineKeys: string[];
+  offenderReasonsByLine: Record<string, string[]>;
+};
+
 function deriveRecommendation(input: {
   status: RouteVerificationStatus;
   profile: VerificationProfile;
@@ -82,6 +103,54 @@ export function normalizeVerificationRecommendation(input: {
   if (input.status === "Good") return "proceed";
   if (input.status === "Reduced edge") return "proceed_reduced";
   return "abort";
+}
+
+export function buildOffenderReasonMap(result: Pick<RouteVerificationResult, "offenders">): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const offender of result.offenders) {
+    const directionLabel = offender.direction === "buy_up" ? "buy drift high" : "sell drift high";
+    const message = `${directionLabel}: ${offender.drift_pct.toFixed(1)}% > ${offender.threshold_pct.toFixed(1)}%`;
+    out[offender.line_ref] = [...(out[offender.line_ref] ?? []), message];
+  }
+  return out;
+}
+
+export function computeRouteVerificationDiff(input: {
+  before: RouteVerificationDiffSnapshot;
+  after: RouteVerificationDiffSnapshot;
+}): RouteVerificationDiff {
+  const beforeSet = new Set(input.before.selectedLineKeys);
+  const afterSet = new Set(input.after.selectedLineKeys);
+  const removedLineKeys = input.before.selectedLineKeys.filter((lineKey) => !afterSet.has(lineKey));
+  const degradedFromOffenders = new Set([
+    ...(input.after.offenderLineKeys ?? []),
+    ...Object.keys(input.after.offenderReasonsByLine ?? {}),
+  ]);
+  const degradedLineKeys = Array.from(degradedFromOffenders).filter((lineKey) => beforeSet.has(lineKey) && afterSet.has(lineKey));
+  const retainedLinePct =
+    input.before.selectedLineKeys.length > 0
+      ? ((input.before.selectedLineKeys.length - removedLineKeys.length) / input.before.selectedLineKeys.length) * 100
+      : 100;
+
+  return {
+    before: {
+      profitabilityIsk: input.before.profitabilityIsk,
+      capitalIsk: input.before.capitalIsk,
+      volumeM3: input.before.volumeM3,
+    },
+    after: {
+      profitabilityIsk: input.after.profitabilityIsk,
+      capitalIsk: input.after.capitalIsk,
+      volumeM3: input.after.volumeM3,
+    },
+    profitabilityDeltaIsk: input.after.profitabilityIsk - input.before.profitabilityIsk,
+    capitalDeltaIsk: input.after.capitalIsk - input.before.capitalIsk,
+    volumeDeltaM3: input.after.volumeM3 - input.before.volumeM3,
+    retainedLinePct,
+    removedLineKeys,
+    degradedLineKeys,
+    offenderReasonsByLine: input.after.offenderReasonsByLine ?? {},
+  };
 }
 
 function percentUp(expected: number, current: number): number {

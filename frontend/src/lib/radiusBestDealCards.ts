@@ -26,6 +26,11 @@ export type RadiusBestDealCard = {
   whySummary?: string;
   lensDelta?: string;
   hasFillerCandidates: boolean;
+  expectedProfitIsk: number;
+  totalJumps: number;
+  urgencyBand?: "stable" | "aging" | "fragile";
+  scanAgeMinutes?: number;
+  lensJumpDelta?: number;
 };
 
 export type RadiusBestDealCardDerivationInput = {
@@ -118,6 +123,15 @@ export function deriveRadiusBestDealCards(
       whySummary: explanation?.summary,
       lensDelta,
       hasFillerCandidates: (filler?.candidates.length ?? 0) > 0,
+      expectedProfitIsk: batch?.routeTotalProfit ?? candidate?.totalProfit ?? 0,
+      totalJumps: Math.max(0, (batch?.routeStopCount ?? 1) - 1),
+      urgencyBand: batch && batch.routeTurnoverDays != null && batch.routeTurnoverDays <= 1
+        ? "fragile"
+        : batch && batch.routeTurnoverDays != null && batch.routeTurnoverDays <= 3
+          ? "aging"
+          : "stable",
+      scanAgeMinutes: undefined,
+      lensJumpDelta: lensDelta ? parseLensDeltaMagnitude(lensDelta) : 0,
     });
   };
 

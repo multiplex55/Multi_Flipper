@@ -93,6 +93,9 @@ function makePack(): SavedRoutePack {
 
 function makeWorkspace(): RouteExecutionWorkspace {
   const pack = makePack();
+  const upsertPack = vi.fn();
+  const openBatchBuilder = vi.fn();
+  const removePack = vi.fn();
   return {
     activeRouteKey: pack.routeKey,
     activeMode: "validate",
@@ -103,8 +106,8 @@ function makeWorkspace(): RouteExecutionWorkspace {
     openRoute: vi.fn(),
     setMode: vi.fn(),
     selectPack: vi.fn(),
-    upsertPack: vi.fn(),
-    removePack: vi.fn(),
+    upsertPack,
+    removePack,
     verifyRoute: vi.fn(),
     markBought: vi.fn(),
     markSold: vi.fn(),
@@ -112,7 +115,7 @@ function makeWorkspace(): RouteExecutionWorkspace {
     resetExecution: vi.fn(),
     copySummary: vi.fn(() => ""),
     copyManifest: vi.fn(() => ""),
-    openBatchBuilder: vi.fn(),
+    openBatchBuilder,
   };
 }
 
@@ -188,5 +191,35 @@ describe("RadiusRouteWorkspace validate panel", () => {
     expect(onValidateOpenOffenders).toHaveBeenCalledWith(
       expect.objectContaining({ offenderLines: ["34:60003760:60008494"] }),
     );
+  });
+
+  it("renders validate actions and applies keep/remove/skip flows", () => {
+    const session = deriveRadiusScanSession({
+      results: [row],
+      scanParams: params,
+      sessionStationFilters: createSessionStationFilters(),
+    });
+    const workspace = makeWorkspace();
+
+    render(
+      <I18nProvider>
+        <ToastProvider>
+          <RadiusRouteWorkspace
+            params={params}
+            workspaceMode="validate"
+            radiusScanSession={session}
+            routeWorkspace={workspace}
+          />
+        </ToastProvider>
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Keep Batch" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove Bad Rows" }));
+    fireEvent.click(screen.getByRole("button", { name: "Skip Route" }));
+
+    expect(workspace.openBatchBuilder).toHaveBeenCalledWith("loc:60003760->loc:60008494");
+    expect(workspace.upsertPack).toHaveBeenCalledTimes(1);
+    expect(workspace.removePack).toHaveBeenCalledWith("loc:60003760->loc:60008494");
   });
 });
