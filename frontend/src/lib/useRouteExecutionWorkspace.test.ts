@@ -106,4 +106,16 @@ describe("useRouteExecutionWorkspace", () => {
     expect(manifestPayload).toContain("Expected profit");
     expect(writeClipboard).toHaveBeenCalledTimes(2);
   });
+
+  it("calls app handoff callback when opening batch builder", () => {
+    const onOpenBatchBuilder = vi.fn();
+    const { result } = renderHook(() =>
+      useRouteExecutionWorkspace({ onOpenBatchBuilder }),
+    );
+    const pack = makePack();
+    act(() => result.current.upsertPack(pack));
+    act(() => result.current.openBatchBuilder(pack.routeKey));
+    expect(result.current.activeRouteKey).toBe(pack.routeKey);
+    expect(onOpenBatchBuilder).toHaveBeenCalledWith(pack.routeKey);
+  });
 });

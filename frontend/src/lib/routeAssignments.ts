@@ -9,6 +9,17 @@ export interface RouteAssignment {
   routeKey: string;
   assignedCharacterName: string;
   assignedCharacterId?: number;
+  characterId?: number;
+  assignedAt?: string;
+  priority?: number;
+  reserveCharacterIds?: number[];
+  reserveCharacterNames?: string[];
+  expectedProfitIsk?: number;
+  expectedCapitalIsk?: number;
+  expectedJumps?: number;
+  verificationStatusAtAssignment?: "Good" | "Reduced edge" | "Abort";
+  buySystemId?: number;
+  sellSystemId?: number;
   assignedCharacterSystemId?: number;
   assignedCharacterSystemName?: string;
   status: RouteAssignmentStatus;
@@ -42,6 +53,14 @@ function normalizeNumber(value: unknown): number | undefined {
     : undefined;
 }
 
+function normalizeNumberArray(value: unknown): number[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out = value
+    .map((entry) => normalizeNumber(entry))
+    .filter((entry): entry is number => typeof entry === "number");
+  return out.length > 0 ? out : undefined;
+}
+
 function normalizeAssignment(value: unknown): RouteAssignment | null {
   if (!value || typeof value !== "object") return null;
   const raw = value as LegacyRouteAssignment;
@@ -64,6 +83,29 @@ function normalizeAssignment(value: unknown): RouteAssignment | null {
     routeKey: raw.routeKey.trim(),
     assignedCharacterName,
     assignedCharacterId: normalizeNumber(raw.assignedCharacterId),
+    characterId: normalizeNumber(raw.characterId) ?? normalizeNumber(raw.assignedCharacterId),
+    assignedAt:
+      typeof raw.assignedAt === "string" && raw.assignedAt
+        ? raw.assignedAt
+        : undefined,
+    priority: normalizeNumber(raw.priority),
+    reserveCharacterIds: normalizeNumberArray(raw.reserveCharacterIds),
+    reserveCharacterNames:
+      Array.isArray(raw.reserveCharacterNames) &&
+      raw.reserveCharacterNames.every((entry) => typeof entry === "string")
+        ? raw.reserveCharacterNames.map((entry) => entry.trim()).filter(Boolean)
+        : undefined,
+    expectedProfitIsk: normalizeNumber(raw.expectedProfitIsk),
+    expectedCapitalIsk: normalizeNumber(raw.expectedCapitalIsk),
+    expectedJumps: normalizeNumber(raw.expectedJumps),
+    verificationStatusAtAssignment:
+      raw.verificationStatusAtAssignment === "Good" ||
+      raw.verificationStatusAtAssignment === "Reduced edge" ||
+      raw.verificationStatusAtAssignment === "Abort"
+        ? raw.verificationStatusAtAssignment
+        : undefined,
+    buySystemId: normalizeNumber(raw.buySystemId),
+    sellSystemId: normalizeNumber(raw.sellSystemId),
     assignedCharacterSystemId: normalizeNumber(raw.assignedCharacterSystemId),
     assignedCharacterSystemName:
       typeof raw.assignedCharacterSystemName === "string" &&

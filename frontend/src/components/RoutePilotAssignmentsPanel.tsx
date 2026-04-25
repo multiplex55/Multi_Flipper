@@ -25,6 +25,7 @@ interface RoutePilotAssignmentsPanelProps {
   routeKey: string;
   routeLabel?: string;
   characters?: AuthCharacter[];
+  characterLocations?: Record<number, string>;
   routeEndpoints?: RoutePilotAssignmentEndpoints;
   onAssignmentChange?: (assignment: RouteAssignment | null) => void;
   onRecalculateLensFromCharacter?: (characterId: number) => void;
@@ -34,6 +35,7 @@ export function RoutePilotAssignmentsPanel({
   routeKey,
   routeLabel,
   characters = [],
+  characterLocations = {},
   routeEndpoints,
   onAssignmentChange,
   onRecalculateLensFromCharacter,
@@ -178,6 +180,9 @@ export function RoutePilotAssignmentsPanel({
           {characters.map((character) => (
             <option key={character.character_id} value={String(character.character_id)}>
               {character.character_name}
+              {characterLocations[character.character_id]
+                ? ` · ${characterLocations[character.character_id]}`
+                : ""}
             </option>
           ))}
         </select>

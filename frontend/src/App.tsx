@@ -101,6 +101,7 @@ import {
   createEmptyRadiusScanSession,
   createRadiusScanSession,
 } from "@/lib/radiusScanSession";
+import { routeGroupKey, routeLineKey } from "@/lib/batchMetrics";
 import {
   filterRadiusResultsByHub,
   type RadiusHubFilter,
@@ -116,6 +117,10 @@ import {
   applyDistanceLensToRow,
   radiusDistanceLensRowKey,
 } from "@/components/radiusDistanceLens";
+import { buildSavedRoutePack } from "@/lib/routePackBuilder";
+import { verifyRouteManifestAgainstRows } from "@/lib/routeManifestVerification";
+import { getVerificationProfileById } from "@/lib/verificationProfiles";
+import { resolveRouteBatchBuilderRouteKey } from "@/lib/useRouteBatchBuilderController";
 
 type Tab =
   | "radius"
@@ -797,11 +802,59 @@ function App() {
     useState<RouteHandoffLegContext | null>(null);
   const [routeHandoffIntent, setRouteHandoffIntent] =
     useState<RouteWorkspaceIntent | null>(null);
+  const [batchBuilderRouteRequest, setBatchBuilderRouteRequest] = useState<{
+    routeKey: string;
+    requestId: number;
+  } | null>(null);
+  const [workbenchOffenderFilter, setWorkbenchOffenderFilter] = useState<string[]>(
+    [],
+  );
+  const [characterLocations, setCharacterLocations] = useState<
+    Record<number, string>
+  >({});
   const [bannedTypeIDs, setBannedTypeIDs] = useState<number[]>([]);
   const [bannedStationIDs, setBannedStationIDs] = useState<number[]>([]);
   const [sessionStationFilters, setSessionStationFilters] =
     useState<SessionStationFilters>(() => createSessionStationFilters());
-  const routeWorkspace = useRouteExecutionWorkspace();
+  const routeRowsByKey = useMemo(() => {
+    const out: Record<string, FlipResult[]> = {};
+    for (const row of radiusResults) {
+      const key = routeGroupKey(row);
+      const entries = out[key] ?? [];
+      entries.push(row);
+      out[key] = entries;
+    }
+    return out;
+  }, [radiusResults]);
+  const resolveBestRouteKey = useCallback(
+    (
+      routeKey?: string | null,
+      scope?: "active_route" | "saved_pack" | "queue",
+    ): string | null =>
+      resolveRouteBatchBuilderRouteKey({
+        routeKey,
+        preferredRouteKey:
+          (scope === "active_route" ? activeRadiusRouteKey : null) ?? null,
+        routeRowsByKey,
+        savedRoutePacks: [],
+      }),
+    [activeRadiusRouteKey, routeRowsByKey],
+  );
+  const openBatchBuilderForRoute = useCallback(
+    (routeKey: string) => {
+      const resolvedRouteKey = resolveBestRouteKey(routeKey, "active_route");
+      if (!resolvedRouteKey) return;
+      setTab("radius");
+      setBatchBuilderRouteRequest({
+        routeKey: resolvedRouteKey,
+        requestId: Date.now(),
+      });
+    },
+    [resolveBestRouteKey, setTab],
+  );
+  const routeWorkspace = useRouteExecutionWorkspace({
+    onOpenBatchBuilder: openBatchBuilderForRoute,
+  });
 
   const [scanning, setScanning] = useState(false);
   const [scanAndRefreshing, setScanAndRefreshing] = useState(false);
@@ -871,6 +924,8 @@ function App() {
     setPendingRadiusManifest("");
     setPendingSelectedLeg(null);
     setRouteHandoffIntent(null);
+    setBatchBuilderRouteRequest(null);
+    setWorkbenchOffenderFilter([]);
   }, [routeWorkspace]);
   const openRouteWorkspaceFromRadius = useCallback(
     (
@@ -925,6 +980,148 @@ function App() {
       setTab("route");
     },
     [routeWorkspace, setTab],
+  );
+  const resolvePackForRoute = useCallback(
+    (routeKey: string) => {
+      const existing = routeWorkspace.getPackByRouteKey(routeKey);
+      if (existing) return existing;
+      const routeRows = routeRowsByKey[routeKey] ?? [];
+      const anchor = routeRows[0];
+      if (!anchor) return null;
+      return buildSavedRoutePack({
+        routeKey,
+        routeLabel: `${anchor.BuySystemName ?? "Unknown"} → ${anchor.SellSystemName ?? "Unknown"}`,
+        anchorRow: anchor,
+        routeRows,
+        selectedRows: routeRows,
+        entryMode: "core",
+        launchIntent: "radius-workspace-validate",
+        summary: null,
+        routeSafetyRank: null,
+        verificationProfileId: routeWorkspace.getVerificationProfileId(routeKey),
+      });
+    },
+    [routeRowsByKey, routeWorkspace],
+  );
+  const handleValidateVerifyNow = useCallback(
+    (input: {
+      scope: "active_route" | "saved_pack" | "queue";
+      routeKey: string | null;
+    }) => {
+      const queuedRouteKey = routeQueueKeys[0] ?? null;
+      const routeKey = resolveBestRouteKey(
+        input.routeKey ??
+          (input.scope === "queue" ? queuedRouteKey : null) ??
+          routeWorkspace.activeRouteKey,
+        input.scope,
+      );
+      if (!routeKey) return;
+      const pack = resolvePackForRoute(routeKey);
+      if (!pack?.manifestSnapshot) return;
+      const rows = routeRowsByKey[routeKey] ?? [];
+      const profileId = routeWorkspace.getVerificationProfileId(routeKey);
+      const profile = getVerificationProfileById(profileId);
+      const result = verifyRouteManifestAgainstRows({
+        snapshot: pack.manifestSnapshot,
+        rows,
+        profile,
+      });
+      routeWorkspace.verifyRoute(routeKey, {
+        profileId: profile.id,
+        result,
+        rebuildPack: (existing, resolvedProfileId) => {
+          const base = existing ?? pack;
+          return {
+            ...base,
+            verificationProfileId: resolvedProfileId,
+            updatedAt: new Date().toISOString(),
+          };
+        },
+      });
+      setRouteWorkspaceMode("validate");
+      setTab("route");
+    },
+    [resolveBestRouteKey, resolvePackForRoute, routeQueueKeys, routeRowsByKey, routeWorkspace, setTab],
+  );
+  const handleValidateProfileSwitch = useCallback(
+    (input: {
+      scope: "active_route" | "saved_pack" | "queue";
+      routeKey: string | null;
+      profileId: string;
+    }) => {
+      const routeKey = resolveBestRouteKey(input.routeKey, input.scope);
+      if (!routeKey) return;
+      const pack = resolvePackForRoute(routeKey);
+      if (!pack) return;
+      const nextProfile = getVerificationProfileById(input.profileId);
+      routeWorkspace.upsertPack({
+        ...pack,
+        verificationProfileId: nextProfile.id,
+        updatedAt: new Date().toISOString(),
+      });
+      const hasSnapshot = Boolean(pack.manifestSnapshot);
+      const isActive = routeWorkspace.activeRouteKey === routeKey;
+      if (hasSnapshot && isActive) {
+        handleValidateVerifyNow({ scope: input.scope, routeKey });
+      }
+    },
+    [handleValidateVerifyNow, resolveBestRouteKey, resolvePackForRoute, routeWorkspace],
+  );
+  const handleValidateRebuildFromLiveRows = useCallback(
+    (input: {
+      scope: "active_route" | "saved_pack" | "queue";
+      routeKey: string | null;
+    }) => {
+      const routeKey = resolveBestRouteKey(input.routeKey, input.scope);
+      if (!routeKey) return;
+      const pack = resolvePackForRoute(routeKey);
+      if (!pack) return;
+      const liveRows = routeRowsByKey[routeKey] ?? [];
+      const liveByLineKey = new Map(liveRows.map((row) => [routeLineKey(row), row]));
+      const selectedRows = pack.selectedLineKeys
+        .map((lineKey) => liveByLineKey.get(lineKey))
+        .filter((row): row is FlipResult => Boolean(row));
+      const fallbackRows = selectedRows.length > 0 ? selectedRows : liveRows;
+      const anchor = fallbackRows[0];
+      if (!anchor) return;
+      const rebuilt = buildSavedRoutePack({
+        existingPack: pack,
+        routeKey,
+        routeLabel: pack.routeLabel,
+        anchorRow: anchor,
+        routeRows: liveRows,
+        selectedRows: fallbackRows,
+        entryMode: pack.entryMode,
+        launchIntent: "radius-validate-rebuild-live",
+        summary: null,
+        routeSafetyRank: pack.summarySnapshot.routeSafetyRank,
+        manifestSnapshot: pack.manifestSnapshot,
+        verificationProfileId: pack.verificationProfileId,
+      });
+      rebuilt.selectedLineKeys = rebuilt.selectedLineKeys.filter((lineKey) =>
+        liveByLineKey.has(lineKey),
+      );
+      rebuilt.excludedLineKeys = Object.keys(rebuilt.lines).filter(
+        (lineKey) => !rebuilt.selectedLineKeys.includes(lineKey),
+      );
+      routeWorkspace.upsertPack(rebuilt);
+    },
+    [resolveBestRouteKey, resolvePackForRoute, routeRowsByKey, routeWorkspace],
+  );
+  const handleValidateOpenOffenders = useCallback(
+    (input: {
+      scope: "active_route" | "saved_pack" | "queue";
+      routeKey: string | null;
+      offenderLines: string[];
+    }) => {
+      const routeKey = resolveBestRouteKey(input.routeKey, input.scope);
+      if (!routeKey) return;
+      routeWorkspace.selectPack(routeKey);
+      setWorkbenchOffenderFilter(input.offenderLines);
+      setRouteWorkspaceMode("workbench");
+      setTab("route");
+    },
+    [resolveBestRouteKey, routeWorkspace, setTab],
   );
 
   const abortRef = useRef<AbortController | null>(null);
@@ -1110,6 +1307,28 @@ function App() {
     regionHubResults,
     regionalScanKey,
   ]);
+
+  useEffect(() => {
+    const next: Record<number, string> = {};
+    for (const character of authStatus.characters ?? []) {
+      next[character.character_id] = character.character_name;
+    }
+    setCharacterLocations((prev) => {
+      const prevKeys = Object.keys(prev);
+      const nextKeys = Object.keys(next);
+      if (prevKeys.length === nextKeys.length) {
+        let equal = true;
+        for (const key of nextKeys) {
+          if (prev[Number(key)] !== next[Number(key)]) {
+            equal = false;
+            break;
+          }
+        }
+        if (equal) return prev;
+      }
+      return next;
+    });
+  }, [authCharacterSignature, authStatus.characters]);
 
   const handleOpenItemsAtHub = useCallback((hub: RegionalDayTradeHub) => {
     setRegionHubSystemFilter(hub.source_system_id);
@@ -1919,6 +2138,15 @@ const handleRecalculateRadiusDistanceLens = useCallback(async () => {
   radiusResults,
   resolveRadiusLensOrigin,
 ]);
+const recalculateRadiusLensFromCharacter = useCallback(
+  (characterId: number) => {
+    if (!Number.isFinite(characterId) || characterId <= 0) return;
+    setRadiusLensSource("selected_character");
+    setRadiusLensSelectedCharacterID(Math.trunc(characterId));
+    void handleRecalculateRadiusDistanceLens();
+  },
+  [handleRecalculateRadiusDistanceLens],
+);
 
 const handleScan = useCallback(async (overrideParams?: ScanParams) => {
     if (scanning) {
@@ -3064,6 +3292,9 @@ const handleScanAndRefresh = useCallback(async () => {
                 onRouteHandoff={handleRouteHandoffFromScanner}
                 featureConfig={RADIUS_SCAN_RESULTS_FEATURE_CONFIG}
                 routeWorkspace={routeWorkspace}
+                batchBuilderRouteRequest={batchBuilderRouteRequest}
+                authCharacters={authStatus.characters ?? []}
+                onRecalculateLensFromCharacter={recalculateRadiusLensFromCharacter}
               />
             </div>
             <div
@@ -3347,6 +3578,15 @@ const handleScanAndRefresh = useCallback(async () => {
                 pendingRadiusManifest={pendingRadiusManifest}
                 pendingSelectedLeg={pendingSelectedLeg}
                 routeWorkspace={routeWorkspace}
+                onOpenBatchBuilderForRoute={openBatchBuilderForRoute}
+                onValidateVerifyNow={handleValidateVerifyNow}
+                onValidateProfileSwitch={handleValidateProfileSwitch}
+                onValidateRebuildFromLiveRows={handleValidateRebuildFromLiveRows}
+                onValidateOpenOffenders={handleValidateOpenOffenders}
+                characters={authStatus.characters ?? []}
+                characterLocations={characterLocations}
+                onRecalculateLensFromCharacter={recalculateRadiusLensFromCharacter}
+                workbenchOffenderLineFilter={workbenchOffenderFilter}
               />
             </div>
             <div

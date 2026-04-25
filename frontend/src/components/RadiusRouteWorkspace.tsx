@@ -7,7 +7,7 @@ import type {
   RouteHandoffLegContext,
 } from "@/lib/routeHandoff";
 import type { RadiusScanSession } from "@/lib/radiusScanSession";
-import type { FlipResult, RouteResult, ScanParams, SavedRoutePack } from "@/lib/types";
+import type { AuthCharacter, FlipResult, RouteResult, ScanParams, SavedRoutePack } from "@/lib/types";
 import { formatISK } from "@/lib/format";
 import type { RouteExecutionWorkspace } from "@/lib/useRouteExecutionWorkspace";
 import { buildSavedRoutePack } from "@/lib/routePackBuilder";
@@ -54,6 +54,10 @@ type RadiusRouteWorkspaceProps = {
   onValidateProfileSwitch?: (input: { scope: "active_route" | "saved_pack" | "queue"; routeKey: string | null; profileId: string }) => void;
   onValidateRebuildFromLiveRows?: (input: { scope: "active_route" | "saved_pack" | "queue"; routeKey: string | null }) => void;
   onValidateOpenOffenders?: (input: { scope: "active_route" | "saved_pack" | "queue"; routeKey: string | null; offenderLines: string[] }) => void;
+  characters?: AuthCharacter[];
+  characterLocations?: Record<number, string>;
+  onRecalculateLensFromCharacter?: (characterId: number) => void;
+  workbenchOffenderLineFilter?: string[];
 };
 
 function EmptySessionState({
@@ -99,6 +103,10 @@ export function RadiusRouteWorkspace({
   onValidateProfileSwitch,
   onValidateRebuildFromLiveRows,
   onValidateOpenOffenders,
+  characters = [],
+  characterLocations = {},
+  onRecalculateLensFromCharacter,
+  workbenchOffenderLineFilter = [],
 }: RadiusRouteWorkspaceProps) {
   const hasActiveRouteContext = Boolean(routeWorkspace?.activeRouteKey ?? activeRouteKey);
   const hasSavedPack = Boolean(routeWorkspace && routeWorkspace.savedRoutePacks.length > 0);
@@ -542,6 +550,10 @@ export function RadiusRouteWorkspace({
                     routeFillSections={routeFillSections}
                     onAddFillSuggestionToPack={handleAddSuggestionToPack}
                     onOpenFillSuggestionInBatchBuilder={handleOpenSuggestionInBatchBuilder}
+                    characters={characters}
+                    characterLocations={characterLocations}
+                    onRecalculateLensFromCharacter={onRecalculateLensFromCharacter}
+                    lineFilterKeys={workbenchOffenderLineFilter}
                     />
                   </>
                 ) : (
