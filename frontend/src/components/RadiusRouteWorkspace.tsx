@@ -11,7 +11,7 @@ import type { AuthCharacter, FlipResult, RouteResult, ScanParams, SavedRoutePack
 import { formatISK } from "@/lib/format";
 import type { RouteExecutionWorkspace } from "@/lib/useRouteExecutionWorkspace";
 import { buildSavedRoutePack } from "@/lib/routePackBuilder";
-import { routeGroupKey } from "@/lib/batchMetrics";
+import { routeGroupKey, routeLineKey, safeNumber } from "@/lib/batchMetrics";
 import {
   clearPersistedRouteWorkspaceMode,
   loadPersistedRouteWorkspaceMode,
@@ -27,7 +27,8 @@ import { buildRouteFillPlannerSections, type RouteFillPlannerSuggestion } from "
 import { removeOffendersAndRefill } from "@/lib/routeVerificationRefill";
 import { classifyVerificationPriority, verificationPriorityChipClass } from "@/lib/radiusVerificationPriority";
 import type { RouteWorkbenchMode } from "@/components/RouteWorkbenchPanel";
-import { routeLineKey, safeNumber } from "@/lib/batchMetrics";
+import { RouteQueuePanel } from "@/components/RouteQueuePanel";
+import { getNextQueuedRoute, type RouteQueueEntry } from "@/lib/routeQueue";
 
 export type RadiusRouteWorkspaceTab = "discover" | "workbench" | "finder" | "validate";
 
@@ -43,7 +44,8 @@ type RadiusRouteWorkspaceProps = {
   workspaceMode?: RadiusRouteWorkspaceTab;
   onWorkspaceModeChange?: (mode: RadiusRouteWorkspaceTab) => void;
   workspaceSource?: "radius" | "finder";
-  routeQueueKeys?: string[];
+  routeQueue?: RouteQueueEntry[];
+  onRouteQueueChange?: (entries: RouteQueueEntry[]) => void;
   pendingRouteContext?: RouteHandoffContext | null;
   handoffIntent?: RouteWorkspaceIntent | null;
   pendingRadiusManifest?: string;
@@ -92,7 +94,8 @@ export function RadiusRouteWorkspace({
   workspaceMode,
   onWorkspaceModeChange,
   workspaceSource = "radius",
-  routeQueueKeys = [],
+  routeQueue = [],
+  onRouteQueueChange,
   pendingRouteContext = null,
   handoffIntent = null,
   pendingRadiusManifest = "",
@@ -240,7 +243,7 @@ export function RadiusRouteWorkspace({
   }, [activePack, activeRouteRows, radiusScanSession?.loopOpportunities, params.cargo_capacity]);
 
   const savedPack = routeWorkspace?.selectedPack ?? routeWorkspace?.savedRoutePacks[0] ?? null;
-  const queueRouteKey = routeQueueKeys[0] ?? null;
+  const queueRouteKey = getNextQueuedRoute(routeQueue)?.routeKey ?? null;
   const queuePack = queueRouteKey ? routeWorkspace?.getPackByRouteKey(queueRouteKey) ?? null : null;
   const validateTarget = validateScope === "active_route"
     ? { routeKey: effectiveActiveRouteKey ?? null, pack: activePack }
@@ -461,14 +464,18 @@ export function RadiusRouteWorkspace({
                     <div className="text-eve-text font-semibold">{radiusScanSession.loopOpportunities.length}</div>
                   </div>
                 </div>
-                {routeQueueKeys.length > 0 && (
-                  <div className="rounded-sm border border-indigo-400/40 bg-indigo-500/5 p-2 text-xs">
-                    <div className="text-indigo-200">Route queue ({routeQueueKeys.length})</div>
-                    <div className="mt-1 text-eve-dim">
-                      {routeQueueKeys.slice(0, 4).join(", ")}
-                    </div>
-                  </div>
-                )}
+                <RouteQueuePanel
+                  entries={routeQueue}
+                  onChange={(entries) => onRouteQueueChange?.(entries)}
+                  onOpenWorkbench={(routeKey) => {
+                    routeWorkspace?.openRoute(routeKey, "workbench");
+                    setActiveTab("workbench");
+                  }}
+                  onOpenBatchBuilder={(routeKey) => {
+                    routeWorkspace?.openBatchBuilder(routeKey);
+                    onOpenBatchBuilderForRoute?.(routeKey);
+                  }}
+                />
                 <div className="space-y-1">
                   <h3 className="text-xs uppercase tracking-wide text-eve-dim">Top grouped routes</h3>
                   {topRouteRows.length === 0 ? (

@@ -121,6 +121,13 @@ import { buildSavedRoutePack } from "@/lib/routePackBuilder";
 import { verifyRouteManifestAgainstRows } from "@/lib/routeManifestVerification";
 import { getVerificationProfileById } from "@/lib/verificationProfiles";
 import { resolveRouteBatchBuilderRouteKey } from "@/lib/useRouteBatchBuilderController";
+import {
+  getNextQueuedRoute,
+  loadRouteQueue,
+  saveRouteQueue,
+  upsertRouteQueueEntry,
+  type RouteQueueEntry,
+} from "@/lib/routeQueue";
 
 type Tab =
   | "radius"
@@ -794,7 +801,7 @@ function App() {
   const [routeWorkspaceMode, setRouteWorkspaceMode] =
     useState<RouteWorkspaceMode | null>(null);
   const [routeWorkspaceSource, setRouteWorkspaceSource] = useState<"radius" | "finder">("radius");
-  const [routeQueueKeys, setRouteQueueKeys] = useState<string[]>([]);
+  const [routeQueue, setRouteQueue] = useState<RouteQueueEntry[]>(() => loadRouteQueue());
   const [pendingRouteContext, setPendingRouteContext] =
     useState<RouteHandoffContext | null>(null);
   const [pendingRadiusManifest, setPendingRadiusManifest] = useState("");
@@ -897,6 +904,10 @@ function App() {
   const [alertTelegramChatID, setAlertTelegramChatID] = useState("");
   const [alertDiscordWebhook, setAlertDiscordWebhook] = useState("");
   const [alertTestLoading, setAlertTestLoading] = useState(false);
+  useEffect(() => {
+    saveRouteQueue(routeQueue);
+  }, [routeQueue]);
+
   const updateSessionStationFilters = useCallback(
     (
       updater: (prev: SessionStationFilters) => SessionStationFilters,
@@ -914,7 +925,7 @@ function App() {
     setRadiusScopedHubRows([]);
     setRadiusCacheMeta(null);
     setRadiusScanSession(createEmptyRadiusScanSession());
-    setRouteQueueKeys([]);
+    setRouteQueue([]);
     setActiveRadiusRouteKey(null);
     setRouteWorkspaceMode(null);
     setRouteWorkspaceSource("radius");
@@ -949,10 +960,19 @@ function App() {
   );
   const sendRouteToQueueFromRadius = useCallback(
     (routeKey: string) => {
-      setRouteQueueKeys((prev) => {
-        if (prev.includes(routeKey)) return prev;
-        return [...prev, routeKey];
-      });
+      setRouteQueue((prev) =>
+        upsertRouteQueueEntry(prev, {
+          routeKey,
+          routeLabel: routeKey,
+          status: "queued",
+          priority: prev.length + 1,
+          assignedPilot: null,
+          verificationProfileId: "standard",
+          lastVerifiedAt: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }),
+      );
       openRouteWorkspaceFromRadius(routeKey, "workbench", "open-workbench");
     },
     [openRouteWorkspaceFromRadius],
@@ -1008,7 +1028,7 @@ function App() {
       scope: "active_route" | "saved_pack" | "queue";
       routeKey: string | null;
     }) => {
-      const queuedRouteKey = routeQueueKeys[0] ?? null;
+      const queuedRouteKey = getNextQueuedRoute(routeQueue)?.routeKey ?? null;
       const routeKey = resolveBestRouteKey(
         input.routeKey ??
           (input.scope === "queue" ? queuedRouteKey : null) ??
@@ -1041,7 +1061,7 @@ function App() {
       setRouteWorkspaceMode("validate");
       setTab("route");
     },
-    [resolveBestRouteKey, resolvePackForRoute, routeQueueKeys, routeRowsByKey, routeWorkspace, setTab],
+    [resolveBestRouteKey, resolvePackForRoute, routeQueue, routeRowsByKey, routeWorkspace, setTab],
   );
   const handleValidateProfileSwitch = useCallback(
     (input: {
@@ -3572,7 +3592,8 @@ const handleScanAndRefresh = useCallback(async () => {
                   setRouteHandoffIntent(null);
                 }}
                 workspaceSource={routeWorkspaceSource}
-                routeQueueKeys={routeQueueKeys}
+                routeQueue={routeQueue}
+                onRouteQueueChange={setRouteQueue}
                 pendingRouteContext={pendingRouteContext}
                 handoffIntent={routeHandoffIntent}
                 pendingRadiusManifest={pendingRadiusManifest}
