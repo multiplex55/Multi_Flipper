@@ -185,6 +185,8 @@ import {
 } from "@/lib/radiusCargoBuilds";
 import { RadiusCommandBar } from "@/components/RadiusCommandBar";
 import { useRouteBatchBuilderController } from "@/lib/useRouteBatchBuilderController";
+import { RadiusRowContextMenu } from "@/components/RadiusRowContextMenu";
+import type { RadiusContextMenuAction } from "@/lib/radiusContextMenuItems";
 
 export const calcRouteConfidence = calcRouteConfidenceFromInsights;
 
@@ -2153,7 +2155,6 @@ export function ScanResultsTable({
     id: number;
     row: FlipResult;
   } | null>(null);
-  const contextMenuRef = useRef<HTMLDivElement>(null);
   const keyNavRootRef = useRef<HTMLDivElement>(null);
   const [execPlanRow, setExecPlanRow] = useState<FlipResult | null>(null);
   const [batchPlanRow, setBatchPlanRow] = useState<FlipResult | null>(null);
@@ -2226,22 +2227,6 @@ export function ScanResultsTable({
       setBatchBuilderInitialSelectedLineKeys(undefined);
     }
   }, [batchPlanRow, results]);
-
-  useEffect(() => {
-    if (contextMenu && contextMenuRef.current) {
-      const menu = contextMenuRef.current;
-      const rect = menu.getBoundingClientRect();
-      const pad = 10;
-      let x = contextMenu.x,
-        y = contextMenu.y;
-      if (x + rect.width > window.innerWidth - pad)
-        x = window.innerWidth - rect.width - pad;
-      if (y + rect.height > window.innerHeight - pad)
-        y = window.innerHeight - rect.height - pad;
-      menu.style.left = `${Math.max(pad, x)}px`;
-      menu.style.top = `${Math.max(pad, y)}px`;
-    }
-  }, [contextMenu]);
 
   // Close filter panel on outside click
   useEffect(() => {
@@ -4609,6 +4594,168 @@ export function ScanResultsTable({
   const contextHiddenEntry = contextMenu
     ? hiddenMap[flipStateKey(contextMenu.row)]
     : undefined;
+  const hasLegLocks =
+    lockedLegKey != null || lockedBuyLocationId != null || lockedSellLocationId != null;
+
+  const handleRadiusContextAction = useCallback(
+    async (action: RadiusContextMenuAction, row: FlipResult, routeKey?: string) => {
+      switch (action) {
+        case "copy_item":
+          copyText(row.TypeName ?? "");
+          return;
+        case "copy_buy_station":
+          copyText(row.BuyStation ?? "");
+          return;
+        case "copy_sell_station":
+          copyText(row.SellStation ?? "");
+          return;
+        case "copy_trade_route":
+          copyText(`Buy: ${row.TypeName} x${row.UnitsToBuy} @ ${row.BuyStation} → Sell: @ ${row.SellStation}`);
+          return;
+        case "build_batch":
+          setBatchPlanRow(row);
+          setBatchPlanRows(results);
+          setBatchBuilderMode("single_anchor");
+          return;
+        case "fill_cargo": {
+          const legRows = rankSameLegRows(
+            getSameLegRows(row, selectionScopeRows.map((entry) => entry.row)),
+          );
+          setBatchPlanRow(row);
+          setBatchPlanRows(legRows.length > 0 ? legRows : [row]);
+          setBatchBuilderMode("same_leg_fill");
+          setBatchBuilderLaunchIntent("Same-leg fill");
+          return;
+        }
+        case "filter_leg":
+          setLockedLegKey(getExactLegKey(row));
+          return;
+        case "lock_buy":
+          setLockedBuyLocationId(getBuyLocationID(row) || null);
+          return;
+        case "lock_sell":
+          setLockedSellLocationId(getSellLocationID(row) || null);
+          return;
+        case "clear_locks":
+          setLockedBuyLocationId(null);
+          setLockedSellLocationId(null);
+          setLockedLegKey(null);
+          return;
+        case "copy_system_autopilot":
+          copyText(row.BuySystemName);
+          return;
+        case "ignore_buy_station":
+          addBuyStationIgnore(getBuyLocationID(row));
+          return;
+        case "ignore_sell_station":
+          addSellStationIgnore(getSellLocationID(row));
+          return;
+        case "deprioritize_station":
+          addDeprioritizedStation(getBuyLocationID(row) || getSellLocationID(row));
+          return;
+        case "clear_station_filters":
+          clearTemporaryStationFilters();
+          return;
+        case "queue_route":
+          if (routeKey) onSendToRouteQueue?.(routeKey);
+          return;
+        case "assign_route":
+          if (routeKey) {
+            if (onOpenInRouteWorkbench) onOpenInRouteWorkbench(routeKey);
+            else onOpenInRoute?.(routeKey);
+          }
+          return;
+        case "verify_route":
+          if (routeKey && onOpenInRouteWorkbench) onOpenInRouteWorkbench(routeKey);
+          return;
+        case "place_draft":
+          setExecPlanRow(row);
+          return;
+        case "open_everef":
+          window.open(`https://everef.net/type/${row.TypeID}`, "_blank");
+          return;
+        case "open_jita_space":
+          window.open(`https://www.jita.space/market/${row.TypeID}`, "_blank");
+          return;
+        case "watchlist_toggle":
+          if (watchlistIds.has(row.TypeID)) {
+            removeFromWatchlist(row.TypeID)
+              .then(setWatchlist)
+              .then(() => addToast(t("watchlistRemoved"), "success", 2000))
+              .catch(() => addToast(t("watchlistError"), "error", 3000));
+          } else {
+            addToWatchlist(row.TypeID, row.TypeName)
+              .then((r) => {
+                setWatchlist(r.items);
+                addToast(
+                  r.inserted ? t("watchlistItemAdded") : t("watchlistAlready"),
+                  r.inserted ? "success" : "info",
+                  2000,
+                );
+              })
+              .catch(() => addToast(t("watchlistError"), "error", 3000));
+          }
+          return;
+        case "unhide":
+          if (contextHiddenEntry) void unhideRowsByKeys([contextHiddenEntry.key]);
+          return;
+        case "hide_done":
+          void setRowHiddenState(row, "done");
+          return;
+        case "hide_ignored":
+          void setRowHiddenState(row, "ignored");
+          return;
+        case "open_market":
+          try {
+            await openMarketInGame(row.TypeID);
+            addToast(t("actionSuccess"), "success", 2000);
+          } catch (err: any) {
+            const { messageKey, duration } = handleEveUIError(err);
+            addToast(t(messageKey), "error", duration);
+          }
+          return;
+        case "set_destination_buy":
+          try {
+            await setWaypointInGame(row.BuySystemID);
+            addToast(t("actionSuccess"), "success", 2000);
+          } catch (err: any) {
+            const { messageKey, duration } = handleEveUIError(err);
+            addToast(t(messageKey), "error", duration);
+          }
+          return;
+        case "set_destination_sell":
+          try {
+            await setWaypointInGame(row.SellSystemID);
+            addToast(t("actionSuccess"), "success", 2000);
+          } catch (err: any) {
+            addToast(t("actionFailed").replace("{error}", err.message), "error", 3000);
+          }
+          return;
+        case "pin_toggle":
+          togglePin(row);
+          return;
+      }
+    },
+    [
+      addBuyStationIgnore,
+      addDeprioritizedStation,
+      addSellStationIgnore,
+      addToast,
+      clearTemporaryStationFilters,
+      contextHiddenEntry,
+      copyText,
+      onOpenInRoute,
+      onOpenInRouteWorkbench,
+      onSendToRouteQueue,
+      results,
+      selectionScopeRows,
+      setRowHiddenState,
+      t,
+      togglePin,
+      unhideRowsByKeys,
+      watchlistIds,
+    ],
+  );
 
   const activeFilterChips = useMemo<FilterChip[]>(() => {
     const chips: FilterChip[] = [];
@@ -7764,282 +7911,21 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
 
       {/* Context menu */}
       {contextMenu && (
-        <>
-          <div
-            className="fixed inset-0 z-50"
-            onClick={() => setContextMenu(null)}
-          />
-          <div
-            ref={contextMenuRef}
-            className="fixed z-50 bg-eve-panel border border-eve-border rounded-sm shadow-eve-glow-strong py-1 min-w-[200px]"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
-          >
-            <ContextItem
-              label={t("copyItem")}
-              onClick={() => copyText(contextMenu.row.TypeName ?? "")}
-            />
-            <ContextItem
-              label={t("copyBuyStation")}
-              onClick={() => copyText(contextMenu.row.BuyStation ?? "")}
-            />
-            <ContextItem
-              label={t("copySellStation")}
-              onClick={() => copyText(contextMenu.row.SellStation ?? "")}
-            />
-            <ContextItem
-              label={t("copyTradeRoute")}
-              onClick={() =>
-                copyText(
-                  `Buy: ${contextMenu.row.TypeName} x${contextMenu.row.UnitsToBuy} @ ${contextMenu.row.BuyStation} \u2192 Sell: @ ${contextMenu.row.SellStation}`,
-                )
-              }
-            />
-            <ContextItem
-              label={t("buildBatch")}
-              onClick={() => {
-                setBatchPlanRow(contextMenu.row);
-                setBatchPlanRows(results);
-                setBatchBuilderMode("single_anchor");
-                setContextMenu(null);
-              }}
-            />
-            <ContextItem
-              label="Fill Cargo"
-              onClick={() => {
-                const legRows = rankSameLegRows(
-                  getSameLegRows(
-                    contextMenu.row,
-                    selectionScopeRows.map((entry) => entry.row),
-                  ),
-                );
-                setBatchPlanRow(contextMenu.row);
-                setBatchPlanRows(legRows.length > 0 ? legRows : [contextMenu.row]);
-                setBatchBuilderMode("same_leg_fill");
-                setBatchBuilderLaunchIntent("Same-leg fill");
-                setContextMenu(null);
-              }}
-            />
-            <ContextItem
-              label="Filter to this leg"
-              onClick={() => {
-                setLockedLegKey(getExactLegKey(contextMenu.row));
-                setContextMenu(null);
-              }}
-            />
-            <ContextItem
-              label="Lock this buy"
-              onClick={() => {
-                setLockedBuyLocationId(getBuyLocationID(contextMenu.row) || null);
-                setContextMenu(null);
-              }}
-            />
-            <ContextItem
-              label="Lock this sell"
-              onClick={() => {
-                setLockedSellLocationId(getSellLocationID(contextMenu.row) || null);
-                setContextMenu(null);
-              }}
-            />
-            <ContextItem
-              label="Clear locks"
-              onClick={() => {
-                clearLegLocks();
-                setContextMenu(null);
-              }}
-            />
-            <ContextItem
-              label={t("copySystemAutopilot")}
-              onClick={() => copyText(contextMenu.row.BuySystemName)}
-            />
-            {(contextMenu.row.BuyLocationID ?? 0) > 0 && (
-              <ContextItem
-                label="Ignore this buy station (session)"
-                onClick={() =>
-                  addBuyStationIgnore(getBuyLocationID(contextMenu.row))
-                }
-              />
-            )}
-            {(contextMenu.row.SellLocationID ?? 0) > 0 && (
-              <ContextItem
-                label="Ignore this sell station (session)"
-                onClick={() =>
-                  addSellStationIgnore(getSellLocationID(contextMenu.row))
-                }
-              />
-            )}
-            {((contextMenu.row.BuyLocationID ?? 0) > 0 ||
-              (contextMenu.row.SellLocationID ?? 0) > 0) && (
-              <ContextItem
-                label="Deprioritize this station"
-                onClick={() =>
-                  addDeprioritizedStation(
-                    getBuyLocationID(contextMenu.row) ||
-                      getSellLocationID(contextMenu.row),
-                  )
-                }
-              />
-            )}
-            <ContextItem
-              label="Clear all temporary station filters"
-              onClick={clearTemporaryStationFilters}
-            />
-            <div className="h-px bg-eve-border my-1" />
-            <ContextItem
-              label={t("openInEveref")}
-              onClick={() => {
-                window.open(
-                  `https://everef.net/type/${contextMenu.row.TypeID}`,
-                  "_blank",
-                );
-                setContextMenu(null);
-              }}
-            />
-            <ContextItem
-              label={t("openInJitaSpace")}
-              onClick={() => {
-                window.open(
-                  `https://www.jita.space/market/${contextMenu.row.TypeID}`,
-                  "_blank",
-                );
-                setContextMenu(null);
-              }}
-            />
-            <div className="h-px bg-eve-border my-1" />
-            <ContextItem
-              label={
-                watchlistIds.has(contextMenu.row.TypeID)
-                  ? t("untrackItem")
-                  : `\u2B50 ${t("trackItem")}`
-              }
-              onClick={() => {
-                const row = contextMenu.row;
-                if (watchlistIds.has(row.TypeID)) {
-                  removeFromWatchlist(row.TypeID)
-                    .then(setWatchlist)
-                    .then(() =>
-                      addToast(t("watchlistRemoved"), "success", 2000),
-                    )
-                    .catch(() => addToast(t("watchlistError"), "error", 3000));
-                } else {
-                  addToWatchlist(row.TypeID, row.TypeName)
-                    .then((r) => {
-                      setWatchlist(r.items);
-                      addToast(
-                        r.inserted
-                          ? t("watchlistItemAdded")
-                          : t("watchlistAlready"),
-                        r.inserted ? "success" : "info",
-                        2000,
-                      );
-                    })
-                    .catch(() => addToast(t("watchlistError"), "error", 3000));
-                }
-                setContextMenu(null);
-              }}
-            />
-            <div className="h-px bg-eve-border my-1" />
-            {contextHiddenEntry ? (
-              <ContextItem
-                label={t("hiddenContextUnhide")}
-                onClick={() => {
-                  void unhideRowsByKeys([contextHiddenEntry.key]);
-                  setContextMenu(null);
-                }}
-              />
-            ) : (
-              <>
-                <ContextItem
-                  label={t("hiddenContextMarkDone")}
-                  onClick={() => {
-                    void setRowHiddenState(contextMenu.row, "done");
-                  }}
-                />
-                <ContextItem
-                  label={t("hiddenContextIgnore")}
-                  onClick={() => {
-                    void setRowHiddenState(contextMenu.row, "ignored");
-                  }}
-                />
-              </>
-            )}
-            {(contextMenu.row.BuyRegionID != null ||
-              contextMenu.row.SellRegionID != null) && (
-              <ContextItem
-                label={t("placeDraft")}
-                onClick={() => {
-                  setExecPlanRow(contextMenu.row);
-                  setContextMenu(null);
-                }}
-              />
-            )}
-            {/* EVE UI actions */}
-            {isLoggedIn && (
-              <>
-                <div className="h-px bg-eve-border my-1" />
-                <ContextItem
-                  label={`🎮 ${t("openMarket")}`}
-                  onClick={async () => {
-                    try {
-                      await openMarketInGame(contextMenu.row.TypeID);
-                      addToast(t("actionSuccess"), "success", 2000);
-                    } catch (err: any) {
-                      const { messageKey, duration } = handleEveUIError(err);
-                      addToast(t(messageKey), "error", duration);
-                    }
-                    setContextMenu(null);
-                  }}
-                />
-                <ContextItem
-                  label={`🎯 ${t("setDestination")} (Buy)`}
-                  onClick={async () => {
-                    try {
-                      await setWaypointInGame(contextMenu.row.BuySystemID);
-                      addToast(t("actionSuccess"), "success", 2000);
-                    } catch (err: any) {
-                      const { messageKey, duration } = handleEveUIError(err);
-                      addToast(t(messageKey), "error", duration);
-                    }
-                    setContextMenu(null);
-                  }}
-                />
-                {contextMenu.row.SellSystemID !==
-                  contextMenu.row.BuySystemID && (
-                  <ContextItem
-                    label={`🎯 ${t("setDestination")} (Sell)`}
-                    onClick={async () => {
-                      try {
-                        await setWaypointInGame(contextMenu.row.SellSystemID);
-                        addToast(t("actionSuccess"), "success", 2000);
-                      } catch (err: any) {
-                        addToast(
-                          t("actionFailed").replace("{error}", err.message),
-                          "error",
-                          3000,
-                        );
-                      }
-                      setContextMenu(null);
-                    }}
-                  />
-                )}
-              </>
-            )}
-            <div className="h-px bg-eve-border my-1" />
-            <ContextItem
-              label={
-                pinnedKeys.has(
-                  mapScanRowToPinnedOpportunity(contextMenu.row)
-                    .opportunity_key,
-                )
-                  ? t("unpinRow")
-                  : t("pinRow")
-              }
-              onClick={() => {
-                togglePin(contextMenu.row);
-                setContextMenu(null);
-              }}
-            />
-          </div>
-        </>
+        <RadiusRowContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          row={contextMenu.row}
+          isLoggedIn={isLoggedIn}
+          isTracked={watchlistIds.has(contextMenu.row.TypeID)}
+          isPinned={pinnedKeys.has(mapScanRowToPinnedOpportunity(contextMenu.row).opportunity_key)}
+          hiddenEntryKey={contextHiddenEntry?.key}
+          hasLegLocks={hasLegLocks}
+          canQueueRoute={Boolean(onSendToRouteQueue)}
+          canAssignRoute={Boolean(onOpenInRouteWorkbench || onOpenInRoute)}
+          canVerifyRoute
+          onClose={() => setContextMenu(null)}
+          callbacks={{ onAction: (action, row, routeKey) => void handleRadiusContextAction(action, row, routeKey) }}
+        />
       )}
 
       {ignoredModalOpen && (
@@ -9267,22 +9153,5 @@ function ToolbarBtn({
     >
       {label}
     </button>
-  );
-}
-
-function ContextItem({
-  label,
-  onClick,
-}: {
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <div
-      onClick={onClick}
-      className="px-4 py-1.5 text-sm text-eve-text hover:bg-eve-accent/20 hover:text-eve-accent cursor-pointer transition-colors"
-    >
-      {label}
-    </div>
   );
 }
