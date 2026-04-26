@@ -34,6 +34,7 @@ type RadiusBestDealStripProps = {
   onAssignBest?: (routeKey: string) => void;
   onAssignSpecificPilot?: (routeKey: string, characterId: number) => void;
   onSetStagedSystem?: (routeKey: string, stagedSystem: string) => void;
+  showAssignmentActions?: boolean;
 };
 
 export function RadiusBestDealStrip({
@@ -51,6 +52,7 @@ export function RadiusBestDealStrip({
   onAssignBest,
   onAssignSpecificPilot,
   onSetStagedSystem,
+  showAssignmentActions = false,
 }: RadiusBestDealStripProps) {
   const maxCards = 3;
   const visibleCards = bestDealCards.slice(0, maxCards);
@@ -161,34 +163,36 @@ export function RadiusBestDealStrip({
                           </ExplanationPopoverShell>
                         ) : null}
                       </div>
-                      <div className="mt-1">
-                        <RouteAssignmentQuickActions
-                          compact
-                          context={{
-                            routeKey: card.routeKey,
-                            routeLabel: card.routeLabel,
-                            expectedProfitIsk: card.expectedProfitIsk,
-                            expectedJumps: card.totalJumps,
-                            verificationStatusAtAssignment:
-                              verificationState === "fresh"
-                                ? "Good"
-                                : verificationState === "reduced_edge"
-                                  ? "Reduced edge"
-                                  : verificationState === "abort"
-                                    ? "Abort"
-                                    : undefined,
-                          }}
-                          characters={characters}
-                          onAssignActive={(ctx) => onAssignActive?.(ctx.routeKey)}
-                          onAssignBest={(ctx) => onAssignBest?.(ctx.routeKey)}
-                          onAssignSpecificPilot={(ctx, characterId) =>
-                            onAssignSpecificPilot?.(ctx.routeKey, characterId)
-                          }
-                          onSetStagedSystem={(ctx, stagedSystem) =>
-                            onSetStagedSystem?.(ctx.routeKey, stagedSystem)
-                          }
-                        />
-                      </div>
+                      {showAssignmentActions ? (
+                        <div className="mt-1">
+                          <RouteAssignmentQuickActions
+                            compact
+                            context={{
+                              routeKey: card.routeKey,
+                              routeLabel: card.routeLabel,
+                              expectedProfitIsk: card.expectedProfitIsk,
+                              expectedJumps: card.totalJumps,
+                              verificationStatusAtAssignment:
+                                verificationState === "fresh"
+                                  ? "Good"
+                                  : verificationState === "reduced_edge"
+                                    ? "Reduced edge"
+                                    : verificationState === "abort"
+                                      ? "Abort"
+                                      : undefined,
+                            }}
+                            characters={characters}
+                            onAssignActive={(ctx) => onAssignActive?.(ctx.routeKey)}
+                            onAssignBest={(ctx) => onAssignBest?.(ctx.routeKey)}
+                            onAssignSpecificPilot={(ctx, characterId) =>
+                              onAssignSpecificPilot?.(ctx.routeKey, characterId)
+                            }
+                            onSetStagedSystem={(ctx, stagedSystem) =>
+                              onSetStagedSystem?.(ctx.routeKey, stagedSystem)
+                            }
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}

@@ -8839,6 +8839,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                     batchEntryMode: "core",
                   })
                 }
+                showAssignmentActions={false}
                 characters={authCharacters}
                 onAssignActive={(routeKey) => {
                   if (authCharacters[0]) assignRouteWithCharacterId(routeKey, authCharacters[0].character_id);

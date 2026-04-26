@@ -109,4 +109,55 @@ describe("RadiusBestDealStrip", () => {
     expect(onVerifyRoute).toHaveBeenCalledWith("route-b");
     expect(onVerifyRoute.mock.calls.filter((call) => call[0] === "route-a").length).toBeGreaterThanOrEqual(2);
   });
+
+  it("hides assignment quick actions by default while keeping core actions visible", () => {
+    render(
+      <RadiusBestDealStrip
+        bestDealCards={[makeCard({ whySummary: "Why this route" })]}
+        onOpenRouteWorkbench={vi.fn()}
+        onOpenInsights={vi.fn()}
+        insightsOpen={false}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Open Batch" })).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /verify/i }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "Assign active" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Assign best" })).not.toBeInTheDocument();
+  });
+
+  it("renders assignment quick actions when explicitly enabled", () => {
+    render(
+      <RadiusBestDealStrip
+        bestDealCards={[makeCard({ routeKey: "route-z" })]}
+        onOpenRouteWorkbench={vi.fn()}
+        onOpenInsights={vi.fn()}
+        insightsOpen={false}
+        showAssignmentActions
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Assign active" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Assign best" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Assign specific pilot route-z")).toBeInTheDocument();
+    expect(screen.getByLabelText("Set staged system route-z")).toBeInTheDocument();
+  });
+
+  it("handles empty character and assignment data without layout regressions", () => {
+    render(
+      <RadiusBestDealStrip
+        bestDealCards={[makeCard({ routeKey: "route-empty" })]}
+        onOpenRouteWorkbench={vi.fn()}
+        onOpenInsights={vi.fn()}
+        insightsOpen={false}
+        showAssignmentActions
+        assignmentByRouteKey={{}}
+        characters={[]}
+      />,
+    );
+
+    expect(screen.getByTestId("radius-best-deal-strip")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open Batch" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Assign active" })).toBeInTheDocument();
+  });
 });

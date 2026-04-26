@@ -94,4 +94,68 @@ describe("RadiusCargoBuildCard", () => {
     expect(onWorkbench).toHaveBeenCalledWith("route-a");
     expect(onBatch).toHaveBeenCalledWith("route-a");
   });
+
+  it("hides assignment quick actions by default and keeps copy/verify actions visible", () => {
+    render(
+      <RadiusCargoBuildCard
+        build={build()}
+        onCopyManifest={vi.fn()}
+        onCopyBuyChecklist={vi.fn()}
+        onCopySellChecklist={vi.fn()}
+        onVerify={vi.fn()}
+        onQueue={vi.fn()}
+        onOpenWorkbench={vi.fn()}
+        onOpenBatch={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Copy manifest" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Buy checklist" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /verify/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Assign active" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Assign best" })).not.toBeInTheDocument();
+  });
+
+  it("renders assignment quick actions when explicitly enabled", () => {
+    render(
+      <RadiusCargoBuildCard
+        build={build()}
+        onCopyManifest={vi.fn()}
+        onCopyBuyChecklist={vi.fn()}
+        onCopySellChecklist={vi.fn()}
+        onVerify={vi.fn()}
+        onQueue={vi.fn()}
+        onOpenWorkbench={vi.fn()}
+        onOpenBatch={vi.fn()}
+        showAssignmentActions
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Assign active" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Assign best" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Assign specific pilot route-a")).toBeInTheDocument();
+    expect(screen.getByLabelText("Set staged system route-a")).toBeInTheDocument();
+  });
+
+  it("does not break layout with empty assignment data when quick actions are enabled", () => {
+    render(
+      <RadiusCargoBuildCard
+        build={build()}
+        onCopyManifest={vi.fn()}
+        onCopyBuyChecklist={vi.fn()}
+        onCopySellChecklist={vi.fn()}
+        onVerify={vi.fn()}
+        onQueue={vi.fn()}
+        onOpenWorkbench={vi.fn()}
+        onOpenBatch={vi.fn()}
+        showAssignmentActions
+        assignmentByRouteKey={{}}
+        characters={[]}
+      />,
+    );
+
+    expect(screen.getByTestId("radius-cargo-build-card")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy manifest" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Assign active" })).toBeInTheDocument();
+  });
 });
