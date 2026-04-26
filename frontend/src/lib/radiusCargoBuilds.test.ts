@@ -236,6 +236,80 @@ describe("buildRadiusCargoBuilds", () => {
     expect(first.map((b) => b.routeKey)).toEqual(second.map((b) => b.routeKey));
   });
 
+
+  it("admits practical Viator-safe low six-figure ISK/jump routes", () => {
+    const practical = row("Practical viator", {
+      UnitsToBuy: 100,
+      ProfitPerUnit: 1_500,
+      TotalProfit: 150_000,
+      ExpectedProfit: 150_000,
+      RealProfit: 150_000,
+      TotalJumps: 1,
+    });
+    const key = routeGroupKey(practical);
+
+    const builds = buildRadiusCargoBuilds({
+      rows: [practical],
+      routeAggregateMetricsByRoute: {
+        [key]: { ...aggregate, dailyIskPerJump: 0, riskTotalCount: 1 },
+      },
+      preset: RADIUS_CARGO_BUILD_PRESETS.viator_safe,
+    });
+
+    expect(builds).toHaveLength(1);
+    expect(builds[0].iskPerJump).toBe(150_000);
+  });
+
+  it("allows moderate warning density when maxRiskRate permits it", () => {
+    const rows = Array.from({ length: 8 }, (_, index) =>
+      row(`Batch ${index + 1}`, {
+        TypeID: 4_000 + index,
+        BuyLocationID: 501,
+        SellLocationID: 601,
+        BuyStation: "Jita",
+        SellStation: "Amarr",
+        BuySystemName: "Jita",
+        SellSystemName: "Amarr",
+      }),
+    );
+    const key = routeGroupKey(rows[0]);
+    const byRoute: Record<string, RouteAggregateMetrics> = {
+      [key]: { ...aggregate, dailyIskPerJump: 0, riskTotalCount: 4 },
+    };
+
+    const allowed = buildRadiusCargoBuilds({
+      rows,
+      routeAggregateMetricsByRoute: byRoute,
+      preset: RADIUS_CARGO_BUILD_PRESETS.dst_bulk,
+    });
+
+    const blocked = buildRadiusCargoBuilds({
+      rows,
+      routeAggregateMetricsByRoute: byRoute,
+      preset: { ...RADIUS_CARGO_BUILD_PRESETS.dst_bulk, maxRiskRate: 0.45 },
+    });
+
+    expect(allowed).toHaveLength(1);
+    expect(allowed[0].riskRate).toBe(0.5);
+    expect(blocked).toHaveLength(0);
+  });
+
+  it("still accepts high-quality high-efficiency routes under viator safe", () => {
+    const reliable = row("Reliable", { ProfitPerUnit: 50_000, TotalJumps: 4 });
+    const key = routeGroupKey(reliable);
+
+    const builds = buildRadiusCargoBuilds({
+      rows: [reliable],
+      routeAggregateMetricsByRoute: {
+        [key]: { ...aggregate, dailyIskPerJump: 0, riskTotalCount: 1 },
+      },
+      preset: RADIUS_CARGO_BUILD_PRESETS.viator_safe,
+    });
+
+    expect(builds).toHaveLength(1);
+    expect(builds[0].executionCue).toBe("smooth");
+  });
+
   it("preset switches alter eligible outputs", () => {
     const risky = row("Risky", {
       BuyLocationID: 77,
