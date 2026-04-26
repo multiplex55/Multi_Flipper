@@ -188,6 +188,7 @@ import { getRadiusRouteExecutionBadge } from "@/lib/radiusRouteStatus";
 import {
   buildRadiusCargoBuilds,
   RADIUS_CARGO_BUILD_PRESETS,
+  type RadiusCargoBuildOptimizerMode,
   type RadiusCargoBuildPreset,
 } from "@/lib/radiusCargoBuilds";
 import { RadiusCommandBar } from "@/components/RadiusCommandBar";
@@ -230,6 +231,7 @@ const CACHE_TTL_FALLBACK_MS = 20 * 60 * 1000;
 const COLUMN_PREFS_STORAGE_PREFIX = "eve-scan-columns:v1:";
 const ITEM_GROUPING_STORAGE_KEY = "eve-radius-group-by-item:v1";
 const ROUTE_GROUPING_STORAGE_KEY = "eve-radius-route-view-mode:v1";
+const RADIUS_CARGO_BUILD_OPTIMIZER_STORAGE_KEY = "eve-radius-cargo-build-optimizer:v1";
 const ENDPOINT_PREFS_STORAGE_KEY = "eve-radius-endpoint-preferences:v1";
 const ADVANCED_TOOLBAR_VISIBLE_STORAGE_KEY =
   "eve-radius-advanced-toolbar-visible:v1";
@@ -1860,6 +1862,23 @@ export function ScanResultsTable({
     useState<TrackedVisibilityMode>("all");
   const [cargoBuildPreset, setCargoBuildPreset] =
     useState<RadiusCargoBuildPreset>("viator_safe");
+  const [cargoBuildOptimizerMode, setCargoBuildOptimizerMode] =
+    useState<RadiusCargoBuildOptimizerMode>(() => {
+      try {
+        const saved = localStorage.getItem(RADIUS_CARGO_BUILD_OPTIMIZER_STORAGE_KEY);
+        if (
+          saved === "greedy_profit" ||
+          saved === "greedy_isk_per_m3" ||
+          saved === "balanced_score" ||
+          saved === "bounded_knapsack"
+        ) {
+          return saved;
+        }
+      } catch {
+        // ignore storage errors
+      }
+      return "balanced_score";
+    });
   const [trackedFirst, setTrackedFirst] = useState(false);
   const [showTrackedChip, setShowTrackedChip] = useState(false);
   const [showAdvancedToolbar, setShowAdvancedToolbar] = useState<boolean>(() => {
@@ -2449,6 +2468,17 @@ export function ScanResultsTable({
       // ignore storage quota errors
     }
   }, [effectiveRouteViewMode, modeAppliedLayout]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        RADIUS_CARGO_BUILD_OPTIMIZER_STORAGE_KEY,
+        cargoBuildOptimizerMode,
+      );
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [cargoBuildOptimizerMode]);
 
   useEffect(() => {
     if (!allowRouteGrouping && routeViewMode !== "rows") {
@@ -3175,6 +3205,7 @@ export function ScanResultsTable({
       buildRadiusCargoBuilds({
         rows: datasetRows.map((item) => item.row),
         routeAggregateMetricsByRoute,
+        optimizerMode: cargoBuildOptimizerMode,
         preset: {
           ...RADIUS_CARGO_BUILD_PRESETS[cargoBuildPreset],
           cargoCapacityM3: cargoLimit > 0
@@ -3185,7 +3216,7 @@ export function ScanResultsTable({
             : RADIUS_CARGO_BUILD_PRESETS[cargoBuildPreset].cargoCapacityM3,
         },
       }),
-    [cargoBuildPreset, cargoLimit, datasetRows, routeAggregateMetricsByRoute],
+    [cargoBuildOptimizerMode, cargoBuildPreset, cargoLimit, datasetRows, routeAggregateMetricsByRoute],
   );
 
 
@@ -6345,22 +6376,39 @@ export function ScanResultsTable({
                 />
               )}
               {isCargoBuildView && (
-                <label className="inline-flex items-center gap-1 rounded-sm border border-eve-border/60 bg-eve-dark/40 px-2 py-0.5 text-[11px]">
-                  <span className="text-eve-dim">Cargo preset</span>
-                  <select
-                    value={cargoBuildPreset}
-                    onChange={(event) =>
-                      setCargoBuildPreset(event.target.value as RadiusCargoBuildPreset)
-                    }
-                    className="rounded-sm border border-eve-border/50 bg-eve-dark px-1 py-0.5 text-eve-text"
-                  >
-                    {Object.values(RADIUS_CARGO_BUILD_PRESETS).map((preset) => (
-                      <option key={preset.id} value={preset.id}>
-                        {preset.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                <>
+                  <label className="inline-flex items-center gap-1 rounded-sm border border-eve-border/60 bg-eve-dark/40 px-2 py-0.5 text-[11px]">
+                    <span className="text-eve-dim">Cargo preset</span>
+                    <select
+                      value={cargoBuildPreset}
+                      onChange={(event) =>
+                        setCargoBuildPreset(event.target.value as RadiusCargoBuildPreset)
+                      }
+                      className="rounded-sm border border-eve-border/50 bg-eve-dark px-1 py-0.5 text-eve-text"
+                    >
+                      {Object.values(RADIUS_CARGO_BUILD_PRESETS).map((preset) => (
+                        <option key={preset.id} value={preset.id}>
+                          {preset.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="inline-flex items-center gap-1 rounded-sm border border-eve-border/60 bg-eve-dark/40 px-2 py-0.5 text-[11px]">
+                    <span className="text-eve-dim">Optimizer</span>
+                    <select
+                      value={cargoBuildOptimizerMode}
+                      onChange={(event) =>
+                        setCargoBuildOptimizerMode(event.target.value as RadiusCargoBuildOptimizerMode)
+                      }
+                      className="rounded-sm border border-eve-border/50 bg-eve-dark px-1 py-0.5 text-eve-text"
+                    >
+                      <option value="balanced_score">Balanced Score</option>
+                      <option value="greedy_profit">Greedy Profit</option>
+                      <option value="greedy_isk_per_m3">Greedy ISK/m³</option>
+                      <option value="bounded_knapsack">Bounded Knapsack</option>
+                    </select>
+                  </label>
+                </>
               )}
 
               {!useRadiusCommandBar && (
