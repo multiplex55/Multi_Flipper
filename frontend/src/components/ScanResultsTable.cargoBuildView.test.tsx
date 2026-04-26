@@ -138,8 +138,8 @@ describe("ScanResultsTable cargo builds toggle", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cargo builds" }));
 
     expect(screen.getByText(/No cargo builds matched the/i)).toBeInTheDocument();
-    expect(screen.getByText(/Top exclusions:/i)).toBeInTheDocument();
-    expect(screen.getByText(/Try a broader preset like Viator Max Profit/i)).toBeInTheDocument();
+    expect(screen.getByTestId("radius-cargo-build-diagnostics-panel")).toBeInTheDocument();
+    expect(screen.getByText(/Switch preset/i)).toBeInTheDocument();
   });
 
 });
