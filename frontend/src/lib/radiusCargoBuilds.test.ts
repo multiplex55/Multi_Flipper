@@ -541,4 +541,62 @@ describe("buildRadiusCargoBuilds", () => {
     );
   });
 
+  it("captures near-miss blockers when routes fail gates", () => {
+    const lowConfidence = row("Low confidence", {
+      TypeID: 8101,
+      FilledQty: 0,
+      CanFill: false,
+    });
+    const key = routeGroupKey(lowConfidence);
+    const result = buildRadiusCargoBuilds({
+      rows: [lowConfidence],
+      routeAggregateMetricsByRoute: { [key]: makeRouteAggregateMetrics() },
+      preset: { ...RADIUS_CARGO_BUILD_PRESETS.high_confidence, minExecutionQuality: 0, minConfidencePercent: 70 },
+    });
+
+    expect(result.builds).toHaveLength(0);
+    expect(result.rejectedBuilds).toHaveLength(1);
+    expect(result.rejectedBuilds[0].blockers.some((blocker) => blocker.kind === "confidence")).toBe(true);
+    expect(result.rejectedBuilds[0].suggestedAction).toBe("relax_preset");
+  });
+
+  it("emits multi-blocker near misses and sorts closest useful first", () => {
+    const a = row("A", { TypeID: 8201, BuyLocationID: 3001, SellLocationID: 4001, TotalProfit: 20_000_000, ExpectedProfit: 20_000_000, RealProfit: 20_000_000, ProfitPerUnit: 100_000, UnitsToBuy: 200, TotalJumps: 2 });
+    const b = row("B", { TypeID: 8202, BuyLocationID: 3002, SellLocationID: 4002, TotalProfit: 8_000_000, ExpectedProfit: 8_000_000, RealProfit: 8_000_000, ProfitPerUnit: 40_000, UnitsToBuy: 100, TotalJumps: 2 });
+    const c = row("C", { TypeID: 8203, BuyLocationID: 3003, SellLocationID: 4003, TotalProfit: 4_000_000, ExpectedProfit: 4_000_000, RealProfit: 4_000_000, ProfitPerUnit: 10_000, UnitsToBuy: 100, TotalJumps: 2, FilledQty: 0, CanFill: false });
+    const cHelper = row("C helper", {
+      TypeID: 8204,
+      BuyLocationID: 3003,
+      SellLocationID: 4003,
+      TotalProfit: 6_000_000,
+      ExpectedProfit: 6_000_000,
+      RealProfit: 6_000_000,
+      ProfitPerUnit: 30_000,
+      UnitsToBuy: 100,
+      TotalJumps: 2,
+    });
+
+    const result = buildRadiusCargoBuilds({
+      rows: [a, b, c, cHelper],
+      routeAggregateMetricsByRoute: {
+        [routeGroupKey(a)]: makeRouteAggregateMetrics({ riskTotalCount: 9 }),
+        [routeGroupKey(b)]: makeRouteAggregateMetrics({ riskTotalCount: 0 }),
+        [routeGroupKey(c)]: makeRouteAggregateMetrics({ riskTotalCount: 0 }),
+      },
+      preset: {
+        ...RADIUS_CARGO_BUILD_PRESETS.viator_safe,
+        minExecutionQuality: 0,
+        minConfidencePercent: 55,
+        minJumpEfficiencyIsk: 12_000_000,
+      },
+    });
+
+    expect(result.builds).toHaveLength(0);
+    expect(result.rejectedBuilds.length).toBeGreaterThanOrEqual(2);
+    expect(result.rejectedBuilds[0].totalProfitIsk).toBeGreaterThanOrEqual(result.rejectedBuilds[1].totalProfitIsk);
+    const multiRejected = result.rejectedBuilds.find((item) => item.routeKey === routeGroupKey(c));
+    expect(multiRejected?.blockers.some((blocker) => blocker.kind === "jump_efficiency")).toBe(true);
+    expect(multiRejected?.blockers.some((blocker) => blocker.kind === "confidence")).toBe(true);
+  });
+
 });

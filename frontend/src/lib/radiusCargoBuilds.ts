@@ -67,6 +67,48 @@ export type RadiusCargoBuildLine = {
   partial: boolean;
 };
 
+export type RadiusCargoBuildSuggestedAction =
+  | "relax_preset"
+  | "trim_lines"
+  | "increase_capital"
+  | "increase_cargo"
+  | "skip";
+
+export type RadiusCargoBuildBlockerKind =
+  | "jump_efficiency"
+  | "execution_quality"
+  | "confidence"
+  | "risk"
+  | "capital"
+  | "cargo"
+  | "no_units"
+  | "no_volume";
+
+export type RadiusCargoBuildBlocker = {
+  kind: RadiusCargoBuildBlockerKind;
+  actual: number;
+  required: number;
+  message: string;
+  severity: number;
+};
+
+export type RadiusRejectedCargoBuild = {
+  routeKey: string;
+  routeLabel: string;
+  totalProfitIsk: number;
+  totalCapitalIsk: number;
+  totalCargoM3: number;
+  cargoFillPercent: number;
+  confidencePercent: number;
+  executionQuality: number;
+  jumps: number;
+  iskPerJump: number;
+  riskCount: number;
+  riskRate: number;
+  blockers: RadiusCargoBuildBlocker[];
+  suggestedAction: RadiusCargoBuildSuggestedAction;
+};
+
 export const RADIUS_CARGO_BUILD_PRESETS: Record<
   RadiusCargoBuildPreset,
   RadiusCargoBuildPresetConfig
@@ -171,6 +213,7 @@ export type BuildRadiusCargoBuildsInput = {
 export type BuildRadiusCargoBuildsResult = {
   builds: RadiusCargoBuild[];
   diagnostics: RadiusCargoBuildDiagnostics;
+  rejectedBuilds: RadiusRejectedCargoBuild[];
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -192,6 +235,40 @@ function createRadiusCargoBuildDiagnostics(totalRows: number): RadiusCargoBuildD
     skippedRisk: 0,
     partialRowsAvailable: 0,
   };
+}
+
+function upsertBlocker(
+  blockers: Map<RadiusCargoBuildBlockerKind, RadiusCargoBuildBlocker>,
+  blocker: RadiusCargoBuildBlocker,
+): void {
+  const existing = blockers.get(blocker.kind);
+  if (!existing || blocker.severity < existing.severity) blockers.set(blocker.kind, blocker);
+}
+
+function suggestedActionForBlockers(
+  blockers: RadiusCargoBuildBlocker[],
+): RadiusCargoBuildSuggestedAction {
+  if (blockers.some((blocker) => blocker.kind === "capital")) return "increase_capital";
+  if (blockers.some((blocker) => blocker.kind === "cargo")) return "increase_cargo";
+  if (blockers.some((blocker) => blocker.kind === "no_units" || blocker.kind === "no_volume")) {
+    return "trim_lines";
+  }
+  if (
+    blockers.some((blocker) =>
+      blocker.kind === "jump_efficiency" ||
+      blocker.kind === "execution_quality" ||
+      blocker.kind === "confidence" ||
+      blocker.kind === "risk",
+    )
+  ) {
+    return "relax_preset";
+  }
+  return "skip";
+}
+
+function blockerSeverityTotal(blockers: RadiusCargoBuildBlocker[]): number {
+  if (blockers.length === 0) return Number.POSITIVE_INFINITY;
+  return blockers.reduce((sum, blocker) => sum + blocker.severity, 0);
 }
 
 export function explicitRouteJumps(
@@ -224,7 +301,7 @@ export function buildRadiusCargoBuilds(
     optimizerMode = "balanced_score",
   } = input;
   const diagnostics = createRadiusCargoBuildDiagnostics(rows.length);
-  if (rows.length === 0) return { builds: [], diagnostics };
+  if (rows.length === 0) return { builds: [], diagnostics, rejectedBuilds: [] };
 
   const grouped = new Map<string, FlipResult[]>();
   for (const row of rows) {
@@ -233,6 +310,7 @@ export function buildRadiusCargoBuilds(
   }
 
   const builds: RadiusCargoBuild[] = [];
+  const rejectedBuilds: RadiusRejectedCargoBuild[] = [];
   for (const [routeKey, routeRows] of grouped.entries()) {
     const aggregate = routeAggregateMetricsByRoute[routeKey];
     const lineCandidates: Array<{
@@ -257,6 +335,7 @@ export function buildRadiusCargoBuilds(
     let weightedConfidence = 0;
     let weightedExecution = 0;
     let weightTotal = 0;
+    const blockers = new Map<RadiusCargoBuildBlockerKind, RadiusCargoBuildBlocker>();
 
     // Deterministic filter sequence:
     // 1) data validity -> 2) execution quality -> 3) confidence
@@ -265,6 +344,13 @@ export function buildRadiusCargoBuilds(
       const requestedUnits = Math.max(0, Math.floor(requestedUnitsForFlip(row) || row.UnitsToBuy || 0));
       if (requestedUnits <= 0) {
         diagnostics.skippedNoUnits += 1;
+        upsertBlocker(blockers, {
+          kind: "no_units",
+          actual: requestedUnits,
+          required: 1,
+          message: "No actionable units were available for this line.",
+          severity: 3,
+        });
         continue;
       }
 
@@ -279,14 +365,35 @@ export function buildRadiusCargoBuilds(
       );
       if (volumePerUnit <= 0) {
         diagnostics.skippedNoVolume += 1;
+        upsertBlocker(blockers, {
+          kind: "no_volume",
+          actual: volumePerUnit,
+          required: 0.01,
+          message: "At least one line has missing/zero volume metadata.",
+          severity: 3,
+        });
         continue;
       }
       if (buyPrice <= 0) {
         diagnostics.skippedNoCapital += 1;
+        upsertBlocker(blockers, {
+          kind: "capital",
+          actual: buyPrice,
+          required: 1,
+          message: "Buy cost data is missing, so capital sizing cannot be computed.",
+          severity: 3,
+        });
         continue;
       }
       if (profitPerUnit <= 0 || profitQuality <= 0) {
         diagnostics.skippedNoUnits += 1;
+        upsertBlocker(blockers, {
+          kind: "no_units",
+          actual: Math.max(profitPerUnit, profitQuality),
+          required: 1,
+          message: "Profit signal is non-positive, so the line is not actionable.",
+          severity: 2,
+        });
         continue;
       }
 
@@ -294,6 +401,13 @@ export function buildRadiusCargoBuilds(
       const execution = executionQualityForFlip(row).score;
       if (execution < preset.minExecutionQuality) {
         diagnostics.skippedExecutionQuality += 1;
+        upsertBlocker(blockers, {
+          kind: "execution_quality",
+          actual: execution,
+          required: preset.minExecutionQuality,
+          message: "Execution quality is below the active preset threshold.",
+          severity: 2,
+        });
         continue;
       }
 
@@ -301,6 +415,13 @@ export function buildRadiusCargoBuilds(
       const confidence = Math.max(0, Math.min(100, row.CanFill ? 100 : (row.FilledQty ?? 0) > 0 ? 60 : 30));
       if (confidence < preset.minConfidencePercent) {
         diagnostics.skippedConfidence += 1;
+        upsertBlocker(blockers, {
+          kind: "confidence",
+          actual: confidence,
+          required: preset.minConfidencePercent,
+          message: "Confidence is below the required fill confidence gate.",
+          severity: 2,
+        });
         continue;
       }
 
@@ -354,8 +475,25 @@ export function buildRadiusCargoBuilds(
       const maxUnitsByCapital = Math.floor(remainingCapital / candidate.buyPrice);
       const units = Math.min(candidate.requestedUnits, maxUnitsByCargo, maxUnitsByCapital);
       if (units <= 0) {
-        if (maxUnitsByCargo <= 0) diagnostics.skippedCargoFull += 1;
-        else diagnostics.skippedCapitalFull += 1;
+        if (maxUnitsByCargo <= 0) {
+          diagnostics.skippedCargoFull += 1;
+          upsertBlocker(blockers, {
+            kind: "cargo",
+            actual: remainingCargo,
+            required: candidate.volumePerUnit,
+            message: "Cargo hold is full relative to remaining candidate volume.",
+            severity: 1,
+          });
+        } else {
+          diagnostics.skippedCapitalFull += 1;
+          upsertBlocker(blockers, {
+            kind: "capital",
+            actual: remainingCapital,
+            required: candidate.buyPrice,
+            message: "Remaining capital cannot fund at least one additional unit.",
+            severity: 1,
+          });
+        }
         continue;
       }
       const volume = Math.max(0, units * candidate.volumePerUnit);
@@ -383,33 +521,128 @@ export function buildRadiusCargoBuilds(
       weightTotal += volume;
     }
 
-    if (lines.length === 0) continue;
     const picked = lines.map((line) => line.row);
+    const routeLabel = routeRows[0]
+      ? `${routeRows[0].BuyStation || routeRows[0].BuySystemName} → ${routeRows[0].SellStation || routeRows[0].SellSystemName}`
+      : routeKey;
+    const jumps = explicitRouteJumps(picked.length > 0 ? picked : routeRows, aggregate);
+    const iskPerJump = totalProfit / Math.max(1, jumps);
+    const riskCount = Math.max(0, aggregate?.riskTotalCount ?? 0);
+    const riskDenominator = Math.max(1, lineCandidates.length);
+    const riskRate = riskCount / riskDenominator;
+    const cargoFillPercent = clamp((usedCargo / Math.max(1, preset.cargoCapacityM3)) * 100, 0, 100);
+    const confidencePercent = weightTotal > 0 ? weightedConfidence / weightTotal : 0;
+    const executionQuality = weightTotal > 0 ? weightedExecution / weightTotal : 0;
 
-    const jumps = explicitRouteJumps(picked, aggregate);
-    const iskPerJump = totalProfit / jumps;
+    if (lines.length === 0) {
+      const blockerList = [...blockers.values()];
+      if (blockerList.length > 0) {
+        rejectedBuilds.push({
+          routeKey,
+          routeLabel,
+          totalProfitIsk: totalProfit,
+          totalCapitalIsk: usedCapital,
+          totalCargoM3: usedCargo,
+          cargoFillPercent,
+          confidencePercent,
+          executionQuality,
+          jumps,
+          iskPerJump,
+          riskCount,
+          riskRate,
+          blockers: blockerList,
+          suggestedAction: suggestedActionForBlockers(blockerList),
+        });
+      }
+      continue;
+    }
     // 4) Jump efficiency (route-level)
     if (iskPerJump < preset.minJumpEfficiencyIsk) {
       diagnostics.skippedJumpEfficiency += 1;
+      upsertBlocker(blockers, {
+        kind: "jump_efficiency",
+        actual: iskPerJump,
+        required: preset.minJumpEfficiencyIsk,
+        message: "Route ISK per jump is below the configured floor.",
+        severity: 1,
+      });
+      const blockerList = [...blockers.values()];
+      rejectedBuilds.push({
+        routeKey,
+        routeLabel,
+        totalProfitIsk: totalProfit,
+        totalCapitalIsk: usedCapital,
+        totalCargoM3: usedCargo,
+        cargoFillPercent,
+        confidencePercent,
+        executionQuality,
+        jumps,
+        iskPerJump,
+        riskCount,
+        riskRate,
+        blockers: blockerList,
+        suggestedAction: suggestedActionForBlockers(blockerList),
+      });
       continue;
     }
 
     // 5) Risk gating (route-level): keep absolute count + optional density check.
-    const riskCount = Math.max(0, aggregate?.riskTotalCount ?? 0);
-    const riskDenominator = Math.max(1, lineCandidates.length);
-    const riskRate = riskCount / riskDenominator;
     if (riskCount > preset.maxRiskCount) {
       diagnostics.skippedRisk += 1;
+      upsertBlocker(blockers, {
+        kind: "risk",
+        actual: riskCount,
+        required: preset.maxRiskCount,
+        message: "Risk count exceeds the preset maximum.",
+        severity: 1,
+      });
+      const blockerList = [...blockers.values()];
+      rejectedBuilds.push({
+        routeKey,
+        routeLabel,
+        totalProfitIsk: totalProfit,
+        totalCapitalIsk: usedCapital,
+        totalCargoM3: usedCargo,
+        cargoFillPercent,
+        confidencePercent,
+        executionQuality,
+        jumps,
+        iskPerJump,
+        riskCount,
+        riskRate,
+        blockers: blockerList,
+        suggestedAction: suggestedActionForBlockers(blockerList),
+      });
       continue;
     }
     if (typeof preset.maxRiskRate === "number" && riskRate > preset.maxRiskRate) {
       diagnostics.skippedRisk += 1;
+      upsertBlocker(blockers, {
+        kind: "risk",
+        actual: riskRate,
+        required: preset.maxRiskRate,
+        message: "Risk density exceeds the allowed risk rate.",
+        severity: 1,
+      });
+      const blockerList = [...blockers.values()];
+      rejectedBuilds.push({
+        routeKey,
+        routeLabel,
+        totalProfitIsk: totalProfit,
+        totalCapitalIsk: usedCapital,
+        totalCargoM3: usedCargo,
+        cargoFillPercent,
+        confidencePercent,
+        executionQuality,
+        jumps,
+        iskPerJump,
+        riskCount,
+        riskRate,
+        blockers: blockerList,
+        suggestedAction: suggestedActionForBlockers(blockerList),
+      });
       continue;
     }
-
-    const cargoFillPercent = clamp((usedCargo / Math.max(1, preset.cargoCapacityM3)) * 100, 0, 100);
-    const confidencePercent = weightTotal > 0 ? weightedConfidence / weightTotal : 0;
-    const executionQuality = weightTotal > 0 ? weightedExecution / weightTotal : 0;
     const capitalEfficiency = usedCapital > 0 ? totalProfit / usedCapital : 0;
 
     const fillScore = computeCargoFillScore({
@@ -430,7 +663,7 @@ export function buildRadiusCargoBuilds(
     builds.push({
       id: `${routeKey}:${preset.id}`,
       routeKey,
-      routeLabel: `${picked[0].BuyStation || picked[0].BuySystemName} → ${picked[0].SellStation || picked[0].SellSystemName}`,
+      routeLabel,
       rowCount: picked.length,
       totalProfitIsk: totalProfit,
       totalCapitalIsk: usedCapital,
@@ -462,5 +695,15 @@ export function buildRadiusCargoBuilds(
     })
     .slice(0, Math.max(1, maxBuilds));
 
-  return { builds: rankedBuilds, diagnostics };
+  const rankedRejectedBuilds = rejectedBuilds
+    .sort((left, right) => {
+      if (right.totalProfitIsk !== left.totalProfitIsk) return right.totalProfitIsk - left.totalProfitIsk;
+      if (right.cargoFillPercent !== left.cargoFillPercent) return right.cargoFillPercent - left.cargoFillPercent;
+      const severityCompare = blockerSeverityTotal(left.blockers) - blockerSeverityTotal(right.blockers);
+      if (severityCompare !== 0) return severityCompare;
+      return left.routeKey.localeCompare(right.routeKey);
+    })
+    .slice(0, 5);
+
+  return { builds: rankedBuilds, diagnostics, rejectedBuilds: rankedRejectedBuilds };
 }

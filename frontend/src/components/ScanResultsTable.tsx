@@ -3200,7 +3200,11 @@ export function ScanResultsTable({
     suppressionTelemetry: suppressionTelemetryBase,
     explanationMetaByRouteKey,
   } = routeInsights;
-  const { builds: cargoBuilds, diagnostics: cargoBuildDiagnostics } = useMemo(
+  const {
+    builds: cargoBuilds,
+    diagnostics: cargoBuildDiagnostics,
+    rejectedBuilds: cargoRejectedBuilds,
+  } = useMemo(
     () =>
       buildRadiusCargoBuilds({
         rows: datasetRows.map((item) => item.row),
@@ -8567,6 +8571,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               <RadiusCargoBuildDiagnosticsPanel
                 presetLabel={RADIUS_CARGO_BUILD_PRESETS[cargoBuildPreset].label}
                 diagnostics={cargoBuildDiagnostics}
+                rejectedBuilds={cargoRejectedBuilds}
                 onSwitchPreset={() => setCargoBuildPreset("viator_max_profit")}
                 onRelaxPreset={() => setCargoBuildPreset("viator_max_profit")}
                 onClearFilters={() => setSelectedBadgeFilters(new Set())}
