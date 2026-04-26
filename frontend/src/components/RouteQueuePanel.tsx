@@ -37,7 +37,7 @@ export function RouteQueuePanel({
 }: RouteQueuePanelProps) {
   const [showDone, setShowDone] = useState(false);
   const visibleEntries = useMemo(
-    () => (showDone ? entries : entries.filter((entry) => entry.status !== "done")),
+    () => (showDone ? entries : entries.filter((entry) => entry.status !== "done" && entry.status !== "skipped")),
     [entries, showDone],
   );
   const nextRoute = useMemo(() => getNextQueuedRoute(entries), [entries]);

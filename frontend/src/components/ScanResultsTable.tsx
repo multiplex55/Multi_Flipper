@@ -178,6 +178,8 @@ import {
   loadRouteAssignments,
   type RouteAssignment,
 } from "@/lib/routeAssignments";
+import type { RouteQueueEntry } from "@/lib/routeQueue";
+import { getRadiusRouteExecutionBadge } from "@/lib/radiusRouteStatus";
 import {
   buildRadiusCargoBuilds,
   RADIUS_CARGO_BUILD_PRESETS,
@@ -297,6 +299,12 @@ type HiddenMode = "done" | "ignored";
 type HiddenFilterTab = "all" | "done" | "ignored";
 type TrackedVisibilityMode = "all" | "tracked_only" | "hide_non_tracked";
 type UrgencyFilterMode = "all" | "stable" | "aging" | "fragile";
+type RouteExecutionFilterState = {
+  hideQueued: boolean;
+  unassignedOnly: boolean;
+  needsVerify: boolean;
+  executableNow: boolean;
+};
 type DecisionLensPreset =
   | "recommended"
   | "best_route_pack"
@@ -427,6 +435,7 @@ interface Props {
   onOpenInRoute?: (routeKey: string) => void;
   onOpenInRouteWorkbench?: (routeKey: string) => void;
   onSendToRouteQueue?: (routeKey: string) => void;
+  routeQueueEntries?: RouteQueueEntry[];
   buyHubs?: RadiusHubSummary[];
   sellHubs?: RadiusHubSummary[];
   onOpenHubRows?: (
@@ -1666,6 +1675,7 @@ export function ScanResultsTable({
   onOpenInRoute,
   onOpenInRouteWorkbench,
   onSendToRouteQueue,
+  routeQueueEntries = [],
   buyHubs = [],
   sellHubs = [],
   onOpenHubRows,
@@ -1919,6 +1929,12 @@ export function ScanResultsTable({
     Record<string, RouteState>
   >({});
   const [urgencyFilter, setUrgencyFilter] = useState<UrgencyFilterMode>("all");
+  const [routeExecutionFilters, setRouteExecutionFilters] = useState<RouteExecutionFilterState>({
+    hideQueued: false,
+    unassignedOnly: false,
+    needsVerify: false,
+    executableNow: false,
+  });
   const [oneLegModeEnabled, setOneLegModeEnabled] = useState<boolean>(() => {
     try {
       const stored = localStorage.getItem(ONE_LEG_MODE_STORAGE_KEY);
@@ -3113,6 +3129,15 @@ export function ScanResultsTable({
       rowReasons.set(rowId, new Set([reason]));
     };
     const routeBadgePassByRowId = new Map<number, boolean>();
+    const routeExecutionMatches = (row: FlipResult): boolean => {
+      if (!isRadiusMode) return true;
+      const badge = getRadiusRouteExecutionBadge(routeGroupKey(row), routeQueueEntries, routeAssignmentsByKey);
+      if (routeExecutionFilters.hideQueued && badge.status === "queued") return false;
+      if (routeExecutionFilters.unassignedOnly && Boolean(badge.assignedPilotName)) return false;
+      if (routeExecutionFilters.needsVerify && badge.status !== "needs_verify") return false;
+      if (routeExecutionFilters.executableNow) return false;
+      return true;
+    };
     const routeBadgeMatches = (row: FlipResult): boolean => {
       if (!isRouteGrouped || selectedBadgeFilters.size === 0) return true;
       const routeKey = routeGroupKey(row);
@@ -3195,7 +3220,7 @@ export function ScanResultsTable({
     stageCounts.hidden_row_toggle = stageHiddenPass.filter((entry) => entry.pass).length;
 
     const stageRouteBadgePass = stageHiddenPass.map(({ item, pass }) => {
-      const routeBadgePass = routeBadgeMatches(item.row);
+      const routeBadgePass = routeBadgeMatches(item.row) && routeExecutionMatches(item.row);
       routeBadgePassByRowId.set(item.id, routeBadgePass);
       if (!routeBadgePass) addReason(item.id, "route_badge_filter");
       return { item, pass: pass && routeBadgePass };
@@ -3240,6 +3265,9 @@ export function ScanResultsTable({
     opportunityProfile,
     routeAggregateMetricsByRoute,
     routeBadgeMetadataByRouteGrouped,
+    routeAssignmentsByKey,
+    routeExecutionFilters,
+    routeQueueEntries,
     routeSafetyMap,
     selectedBadgeFilters,
     sessionStationFilters,
@@ -4872,6 +4900,19 @@ export function ScanResultsTable({
       });
     }
 
+    if (routeExecutionFilters.hideQueued || routeExecutionFilters.unassignedOnly || routeExecutionFilters.needsVerify || routeExecutionFilters.executableNow) {
+      const labels: string[] = [];
+      if (routeExecutionFilters.hideQueued) labels.push("hide queued");
+      if (routeExecutionFilters.unassignedOnly) labels.push("unassigned only");
+      if (routeExecutionFilters.needsVerify) labels.push("needs verify");
+      if (routeExecutionFilters.executableNow) labels.push("executable now");
+      chips.push({
+        key: "route-execution-filter",
+        label: `Route exec: ${labels.join(", ")}`,
+        onRemove: () => setRouteExecutionFilters({ hideQueued: false, unassignedOnly: false, needsVerify: false, executableNow: false }),
+      });
+    }
+
     if (sessionStationFilters) {
       const ignoredCount =
         sessionStationFilters.ignoredBuyStationIds.size +
@@ -4897,6 +4938,7 @@ export function ScanResultsTable({
     selectedBadgeFilters,
     sessionStationFilters,
     showHiddenRows,
+    routeExecutionFilters,
     t,
     trackedVisibilityMode,
   ]);
@@ -6179,6 +6221,21 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               <button type="button" onClick={() => setShowHiddenRows((v) => !v)} title={t("showHidden")} className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${showHiddenRows ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10" : "border-eve-border/60 text-eve-text/50 bg-eve-dark/40 hover:border-eve-accent/40 hover:text-eve-accent/70"}`}>
                 {showHiddenRows ? "Hide hidden" : "Show hidden"}
               </button>
+              {[
+                ["hideQueued", "Hide queued"],
+                ["unassignedOnly", "Unassigned only"],
+                ["needsVerify", "Needs verify"],
+                ["executableNow", "Executable now"],
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setRouteExecutionFilters((prev) => ({ ...prev, [key]: !prev[key as keyof RouteExecutionFilterState] }))}
+                  className={`px-1.5 py-0.5 rounded-sm border text-[11px] ${routeExecutionFilters[key as keyof RouteExecutionFilterState] ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10" : "border-eve-border/60 text-eve-dim"}`}
+                >
+                  {label}
+                </button>
+              ))}
               <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
                 {(
                   [
@@ -6734,6 +6791,8 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
             onOpenBatchBuilderForRoute={openBatchBuilderForRoute}
             onOpenRouteWorkbench={openRouteWorkbench}
             insightsOpen={radiusInsightsDrawerOpen}
+            routeQueueEntries={routeQueueEntries}
+            assignmentByRouteKey={routeAssignmentsByKey}
             onOpenInsights={() => setRadiusInsightsDrawerOpen((previous) => !previous)}
           />
           <RadiusInsightsDrawer
@@ -7553,14 +7612,14 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                                   </span>
                                   </button>
                                   <div className="inline-flex items-center gap-1 shrink-0">
-                                    {routeAssignmentsByKey[group.key] && (
+                                    {(() => { const routeBadge = getRadiusRouteExecutionBadge(group.key, routeQueueEntries, routeAssignmentsByKey); return routeBadge.status === "idle" ? null : (
                                       <span
-                                        className="rounded-sm border border-indigo-400/50 px-1.5 py-0.5 text-[10px] text-indigo-200"
+                                        className={`rounded-sm border px-1.5 py-0.5 text-[10px] ${routeBadge.tone}`}
                                         data-testid={`route-assignment-badge:${group.key}`}
                                       >
-                                        {routeAssignmentsByKey[group.key].assignedCharacterName} · {routeAssignmentsByKey[group.key].status}
+                                        {routeBadge.label}
                                       </span>
-                                    )}
+                                    ); })()}
                                     <button
                                       type="button"
                                       onClick={() => onOpenInRoute?.(group.key)}
@@ -7813,6 +7872,8 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                 }
                 onQueue={(routeKey) => onSendToRouteQueue?.(routeKey)}
                 onOpenWorkbench={(routeKey) => openRouteWorkbench(routeKey, "summary")}
+                routeQueueEntries={routeQueueEntries}
+                assignmentByRouteKey={routeAssignmentsByKey}
                 onOpenBatch={(routeKey) =>
                   openBatchBuilderForRoute(routeKey, {
                     intentLabel: "Cargo Build",

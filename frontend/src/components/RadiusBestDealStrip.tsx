@@ -1,6 +1,9 @@
 import { formatISK } from "@/lib/format";
 import { ExplanationPopoverShell } from "@/components/decision/ExplanationPopoverShell";
 import type { RadiusBestDealCard } from "@/lib/radiusBestDealCards";
+import type { RouteQueueEntry } from "@/lib/routeQueue";
+import type { RouteAssignment } from "@/lib/routeAssignments";
+import { getRadiusRouteExecutionBadge } from "@/lib/radiusRouteStatus";
 import {
   classifyVerificationPriority,
   verificationPriorityChipClass,
@@ -15,6 +18,8 @@ type RadiusBestDealStripProps = {
   ) => void;
   onOpenInsights: () => void;
   insightsOpen: boolean;
+  routeQueueEntries?: RouteQueueEntry[];
+  assignmentByRouteKey?: Record<string, RouteAssignment>;
 };
 
 export function RadiusBestDealStrip({
@@ -23,6 +28,8 @@ export function RadiusBestDealStrip({
   onOpenRouteWorkbench,
   onOpenInsights,
   insightsOpen,
+  routeQueueEntries = [],
+  assignmentByRouteKey = {},
 }: RadiusBestDealStripProps) {
   const maxCards = 3;
   const visibleCards = bestDealCards.slice(0, maxCards);
@@ -54,6 +61,7 @@ export function RadiusBestDealStrip({
             {visibleCards.length > 0 ? (
               <div className="mt-0.5 grid gap-1 text-[11px]">
                 {visibleCards.map((card) => {
+                  const routeBadge = getRadiusRouteExecutionBadge(card.routeKey, routeQueueEntries, assignmentByRouteKey);
                   const verification = classifyVerificationPriority({
                     expectedProfitIsk: card.expectedProfitIsk,
                     totalJumps: card.totalJumps,
@@ -76,6 +84,7 @@ export function RadiusBestDealStrip({
                         <span className="text-green-300">{formatISK(card.expectedProfitIsk)}</span>
                         <span className="text-eve-accent">{formatISK(iskPerJump)}/jump</span>
                         <span className="text-eve-dim">{card.metricLabel}</span>
+                        <span className={`rounded-sm border px-1 py-0 text-[10px] ${routeBadge.tone}`}>{routeBadge.label}</span>
                         <span
                           className={`rounded-sm border px-1 py-0 text-[10px] ${verificationPriorityChipClass(verification.priority)}`}
                           title={verification.reason}

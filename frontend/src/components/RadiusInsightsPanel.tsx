@@ -23,6 +23,9 @@ import {
 import { classifyVerificationPriority, verificationPriorityChipClass } from "@/lib/radiusVerificationPriority";
 import { buildRadiusStagingRecommendations, type RadiusCharacterLocation } from "@/lib/radiusStagingAdvisor";
 import type { AuthCharacter, FlipResult } from "@/lib/types";
+import type { RouteQueueEntry } from "@/lib/routeQueue";
+import type { RouteAssignment } from "@/lib/routeAssignments";
+import { getRadiusRouteExecutionBadge } from "@/lib/radiusRouteStatus";
 import { RadiusStagingAdvisorPanel } from "@/components/RadiusStagingAdvisorPanel";
 import {
   ActionButton,
@@ -94,6 +97,8 @@ type RadiusInsightsPanelProps = {
   characters?: AuthCharacter[];
   characterLocations?: RadiusCharacterLocation[];
   fallbackSystemName?: string;
+  routeQueueEntries?: RouteQueueEntry[];
+  assignmentByRouteKey?: Record<string, RouteAssignment>;
 };
 
 function majorHubActionSummary(
@@ -211,6 +216,8 @@ export function RadiusInsightsPanel({
   characters = [],
   characterLocations = [],
   fallbackSystemName = "Unknown",
+  routeQueueEntries = [],
+  assignmentByRouteKey = {},
 }: RadiusInsightsPanelProps) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState<boolean>(() =>
@@ -405,6 +412,7 @@ export function RadiusInsightsPanel({
                   lensJumpDelta: card.lensJumpDelta,
                   urgencyBand: card.urgencyBand ?? "stable",
                 });
+                const routeBadge = getRadiusRouteExecutionBadge(card.routeKey, routeQueueEntries, assignmentByRouteKey);
                 return (
                 <div
                   key={card.kind}
@@ -413,6 +421,7 @@ export function RadiusInsightsPanel({
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-eve-dim">{card.title}</span>
                     <span className="truncate text-eve-text">{card.routeLabel}</span>
+                    <span className={`rounded-sm border px-1 py-0 text-[10px] ${routeBadge.tone}`}>{routeBadge.label}</span>
                   </div>
                   <div className="mt-0.5 flex items-center gap-1 text-[10px] text-eve-dim">
                     <span>{card.metricLabel}</span>
@@ -669,6 +678,7 @@ export function RadiusInsightsPanel({
                           <>
                             <div className="mt-1 flex items-center justify-between gap-2">
                               <div className="text-eve-text font-medium">{pick.routeLabel}</div>
+                              <span className={`rounded-sm border px-1.5 py-0.5 text-[10px] ${getRadiusRouteExecutionBadge(pick.routeKey, routeQueueEntries, assignmentByRouteKey).tone}`}>{getRadiusRouteExecutionBadge(pick.routeKey, routeQueueEntries, assignmentByRouteKey).label}</span>
                               <span className="rounded-sm border border-indigo-400/40 bg-indigo-500/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-indigo-200">
                                 {intentLabel}
                               </span>
@@ -758,6 +768,7 @@ export function RadiusInsightsPanel({
                           <>
                             <div className="flex items-center justify-between gap-2">
                               <div className="font-medium text-eve-text truncate">{item.routeLabel}</div>
+                              <span className={`rounded-sm border px-1 py-0 text-[10px] ${getRadiusRouteExecutionBadge(item.routeKey, routeQueueEntries, assignmentByRouteKey).tone}`}>{getRadiusRouteExecutionBadge(item.routeKey, routeQueueEntries, assignmentByRouteKey).label}</span>
                               <span className="rounded-sm border border-eve-accent/40 bg-eve-accent/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-eve-accent">
                                 {item.action === "loop_return"
                                   ? "Backhaul"

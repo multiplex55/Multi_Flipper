@@ -137,6 +137,19 @@ describe("ScanResultsTable route workspace integration", () => {
             progress=""
             tradeStateTab="region"
             routeWorkspace={workspace}
+            routeQueueEntries={[
+              {
+                routeKey: "loc:60003760->loc:60008494",
+                routeLabel: "Jita → Amarr",
+                status: "needs_verify",
+                priority: 1,
+                assignedPilot: "Pilot Nova",
+                verificationProfileId: "standard",
+                lastVerifiedAt: null,
+                createdAt: "2026-01-01T00:00:00.000Z",
+                updatedAt: "2026-01-01T00:00:00.000Z",
+              },
+            ]}
             featureConfig={{
               allowRouteGrouping: true,
               showRouteInsights: true,

@@ -3210,6 +3210,7 @@ const handleScanAndRefresh = useCallback(async () => {
                   openRouteWorkspaceFromRadius(routeKey, "workbench", "open-workbench")
                 }
                 onSendToRouteQueue={sendRouteToQueueFromRadius}
+                routeQueueEntries={routeQueue}
                 buyHubs={radiusHubSummaries.buyHubs}
                 sellHubs={radiusHubSummaries.sellHubs}
                 onOpenHubRows={handleOpenRadiusHubRows}
