@@ -22,6 +22,7 @@ export type RadiusContextMenuAction =
   | "assign_route_active"
   | "assign_route_best"
   | "verify_route"
+  | "compare_route"
   | "place_draft"
   | "open_everef"
   | "open_jita_space"
@@ -113,6 +114,7 @@ export function buildRadiusContextMenuItems(
     { action: "clear_station_filters", section: "filtering", label: "Clear all temporary station filters", enabled: true, danger: true },
 
     { action: "verify_route", section: "verification", label: "Verify now", enabled: input.canVerifyRoute && hasRouteKey, visible: input.canVerifyRoute },
+    { action: "compare_route", section: "verification", label: "Add route to compare", enabled: hasRouteKey, visible: hasRouteKey },
     { action: "place_draft", section: "verification", label: "Place draft", enabled: canOpenDraft, visible: canOpenDraft },
 
     { action: "open_everef", section: "external_tools", label: "Open in EVE Ref", enabled: hasValidTypeID },

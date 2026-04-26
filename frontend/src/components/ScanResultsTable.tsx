@@ -199,6 +199,11 @@ import {
   formatRadiusCargoBuildSellChecklist,
 } from "@/lib/radiusCargoBuildFormat";
 import { RadiusRowContextMenu } from "@/components/RadiusRowContextMenu";
+import { RadiusBulkActionsBar } from "@/components/RadiusBulkActionsBar";
+import {
+  RadiusRouteCompareDrawer,
+  type RadiusRouteCompareRow,
+} from "@/components/RadiusRouteCompareDrawer";
 import type { RadiusContextMenuAction } from "@/lib/radiusContextMenuItems";
 import { radiusColumnPresetById } from "@/lib/radiusColumnPresets";
 import {
@@ -249,6 +254,20 @@ const ALWAYS_VISIBLE_MODE_COLUMNS = new Set<SortKey>([
 ]);
 const PERFORMANCE_LOG_THRESHOLD_MS = 8;
 const HUB_SCOPE_MODE_STORAGE_KEY = "eve-radius-hub-scope-mode:v1";
+
+export function dedupeRouteKeys(routeKeys: string[]): string[] {
+  return Array.from(new Set(routeKeys.filter((key) => key.length > 0)));
+}
+
+export function addRouteKeyToCompare(
+  existing: string[],
+  routeKey: string,
+  max = 4,
+): string[] {
+  if (!routeKey) return existing;
+  if (existing.includes(routeKey)) return existing;
+  return [...existing, routeKey].slice(0, max);
+}
 
 function buildRouteLegContexts(
   rows: FlipResult[],
@@ -1776,6 +1795,8 @@ export function ScanResultsTable({
   );
   const [hiddenColumns, setHiddenColumns] = useState<Set<SortKey>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Set<string>>(new Set());
+  const [compareRouteKeys, setCompareRouteKeys] = useState<string[]>([]);
   const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
   const savedRoutePacks = routeWorkspace?.savedRoutePacks ?? [];
   const [page, setPage] = useState(0);
@@ -4045,7 +4066,12 @@ export function ScanResultsTable({
 
   // Reset selection/pins/context menu/group limits when results change
   useEffect(() => {
-    setSelectedIds(new Set());
+    const datasetKeys = new Set(results.map((row) => radiusRowKey(row)));
+    setSelectedRowKeys((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Set([...prev].filter((key) => datasetKeys.has(key)));
+      return next.size === prev.size ? prev : next;
+    });
     setPinnedKeys(new Set());
     setContextMenu(null);
     setGroupRowLimit(new Map());
@@ -4054,6 +4080,22 @@ export function ScanResultsTable({
       setLastScanTs(Date.now());
     }
   }, [results]);
+
+  useEffect(() => {
+    if (selectedRowKeys.size === 0) {
+      setSelectedIds((prev) => (prev.size === 0 ? prev : new Set()));
+      return;
+    }
+    const nextIds = selectionScopeRows
+      .filter((entry) => selectedRowKeys.has(radiusRowKey(entry.row)))
+      .map((entry) => entry.id);
+    setSelectedIds((prev) => {
+      if (prev.size === nextIds.length && nextIds.every((id) => prev.has(id))) {
+        return prev;
+      }
+      return new Set(nextIds);
+    });
+  }, [selectedRowKeys, selectionScopeRows]);
 
   // Drop filters for columns that are no longer visible
   useEffect(() => {
@@ -4074,14 +4116,14 @@ export function ScanResultsTable({
 
   // Prune selected rows that are hidden by filters
   useEffect(() => {
-    if (selectedIds.size === 0) return;
-    const scopedIds = new Set(selectionScopeRows.map((ir) => ir.id));
-    setSelectedIds((prev) => {
+    if (selectedRowKeys.size === 0) return;
+    const scopedKeys = new Set(selectionScopeRows.map((ir) => radiusRowKey(ir.row)));
+    setSelectedRowKeys((prev) => {
       if (prev.size === 0) return prev;
-      const next = new Set([...prev].filter((id) => scopedIds.has(id)));
+      const next = new Set([...prev].filter((key) => scopedKeys.has(key)));
       return next.size === prev.size ? prev : next;
     });
-  }, [selectedIds.size, selectionScopeRows]);
+  }, [selectedRowKeys.size, selectionScopeRows]);
 
   useEffect(() => {
     if (!ignoredModalOpen) {
@@ -4302,11 +4344,18 @@ export function ScanResultsTable({
 
   const hasActiveFilters = Object.values(filters).some((v) => !!v);
 
-  const toggleSelect = useCallback((id: number) => {
+  const toggleSelect = useCallback((id: number, row: FlipResult) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      return next;
+    });
+    const key = radiusRowKey(row);
+    setSelectedRowKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }, []);
@@ -4315,6 +4364,10 @@ export function ScanResultsTable({
     setSelectedIds((prev) => {
       if (prev.size === selectionScopeRows.length) return new Set();
       return new Set(selectionScopeRows.map((ir) => ir.id));
+    });
+    setSelectedRowKeys((prev) => {
+      if (prev.size === selectionScopeRows.length) return new Set();
+      return new Set(selectionScopeRows.map((ir) => radiusRowKey(ir.row)));
     });
   }, [selectionScopeRows]);
 
@@ -4929,6 +4982,10 @@ export function ScanResultsTable({
           return;
         case "verify_route":
           if (routeKey && onOpenInRouteWorkbench) onOpenInRouteWorkbench(routeKey);
+          return;
+        case "compare_route":
+          if (!routeKey) return;
+          setCompareRouteKeys((prev) => addRouteKeyToCompare(prev, routeKey, 4));
           return;
         case "place_draft":
           setExecPlanRow(row);
@@ -5644,6 +5701,13 @@ export function ScanResultsTable({
         .map((item) => item.id);
       if (selected.length > 0) {
         setSelectedIds(new Set(selected));
+        setSelectedRowKeys(
+          new Set(
+            routeGroup.rows
+              .filter((item) => selectedLineKeySet.has(routeLineKey(item.row)))
+              .map((item) => radiusRowKey(item.row)),
+          ),
+        );
       }
       setActiveSavedRoutePackRouteKey(pack.routeKey);
       setActiveSavedRoutePackRef(pack);
@@ -5709,6 +5773,54 @@ export function ScanResultsTable({
     }
     return out;
   }, [batchMetricsByRoute, indexed, isRouteGrouped, routeGroups, selectedIds]);
+
+  const selectedRowsForBulk = useMemo(
+    () =>
+      selectionScopeRows
+        .filter((entry) => selectedRowKeys.has(radiusRowKey(entry.row)))
+        .map((entry) => entry.row),
+    [selectedRowKeys, selectionScopeRows],
+  );
+  const selectedRouteKeysForBulk = useMemo(
+    () => dedupeRouteKeys(selectedRowsForBulk.map((row) => routeGroupKey(row))),
+    [selectedRowsForBulk],
+  );
+  const compareRows = useMemo<RadiusRouteCompareRow[]>(
+    () =>
+      compareRouteKeys.map((routeKey) => {
+        const meta = batchMetricsByRoute[routeKey];
+        const aggregate = routeAggregateMetricsByRoute[routeKey];
+        const routeBadge = getRadiusRouteExecutionBadge(
+          routeKey,
+          routeQueueEntries,
+          routeAssignmentsByKey,
+        );
+        return {
+          routeKey,
+          routeLabel: routeGroupByKey[routeKey]?.label ?? routeKey,
+          profit: meta?.routeTotalProfit ?? aggregate?.routeTotalProfit ?? 0,
+          capital: meta?.routeTotalCapital ?? aggregate?.routeTotalCapital ?? 0,
+          roi: meta?.routeDailyProfitOverCapital ?? aggregate?.dailyProfitOverCapital ?? null,
+          cargoUsedPercent: meta?.routeCapacityUsedPercent ?? null,
+          jumps: meta?.routeStopCount ?? 0,
+          iskPerJump: meta?.routeRealIskPerJump ?? aggregate?.fastestIskPerJump ?? 0,
+          executionQuality:
+            meta?.routeWeakestExecutionQuality ?? aggregate?.weakestExecutionQuality ?? 0,
+          verification: routeVerificationByKey[routeKey]?.status ?? "unknown",
+          queueStatus: routeBadge.status,
+          assignedPilot: routeAssignmentsByKey[routeKey]?.assignedCharacterName ?? "",
+        };
+      }),
+    [
+      batchMetricsByRoute,
+      compareRouteKeys,
+      routeAggregateMetricsByRoute,
+      routeAssignmentsByKey,
+      routeGroupByKey,
+      routeQueueEntries,
+      routeVerificationByKey,
+    ],
+  );
 
   const radiusBestDealCards = useMemo(
     () =>
@@ -7402,6 +7514,55 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
           </div>
         </div>
       )}
+      <RadiusBulkActionsBar
+        selectedRows={selectedRowsForBulk}
+        selectedRouteKeys={selectedRouteKeysForBulk}
+        onClear={() => {
+          setSelectedIds(new Set());
+          setSelectedRowKeys(new Set());
+        }}
+        onVerifyRoutes={() => {
+          for (const routeKey of selectedRouteKeysForBulk) {
+            onOpenInRouteWorkbench?.(routeKey);
+          }
+        }}
+        onQueueRoutes={() => {
+          for (const routeKey of selectedRouteKeysForBulk) {
+            onSendToRouteQueue?.(routeKey);
+          }
+        }}
+        onAssignRoutes={() => {
+          for (const routeKey of selectedRouteKeysForBulk) {
+            if (onOpenInRouteWorkbench) onOpenInRouteWorkbench(routeKey);
+            else onOpenInRoute?.(routeKey);
+          }
+        }}
+        onHideRows={() => {
+          selectedRowsForBulk.forEach((row) => {
+            void setRowHiddenState(row, "done");
+          });
+        }}
+        onTrackRows={() => {
+          selectedRowsForBulk.forEach((row) => {
+            void addToWatchlist(row.TypeID, row.TypeName);
+          });
+        }}
+        onExportRows={() => exportCSV()}
+        onCopyRows={() =>
+          copyText(
+            selectedRowsForBulk
+              .map((row) => `${row.TypeName}\t${row.BuyStation} -> ${row.SellStation}`)
+              .join("\n"),
+          )
+        }
+      />
+      <RadiusRouteCompareDrawer
+        rows={compareRows}
+        onRemove={(routeKey) =>
+          setCompareRouteKeys((prev) => prev.filter((entry) => entry !== routeKey))
+        }
+        onClear={() => setCompareRouteKeys([])}
+      />
 
       {/* Table */}
       {!isCargoBuildView ? (
@@ -8639,7 +8800,7 @@ interface DataRowProps {
   ) => void;
   onLmbClick: (row: FlipResult) => void;
   onActivateRow: () => void;
-  onToggleSelect: (id: number) => void;
+  onToggleSelect: (id: number, row: FlipResult) => void;
   onTogglePin: (row: FlipResult) => void;
   tFn: (key: TranslationKey, vars?: Record<string, string | number>) => string;
   onOpenScore: (row: FlipResult) => void;
@@ -8824,7 +8985,7 @@ const DataRow = memo(
           <input
             type="checkbox"
             checked={isSelected}
-            onChange={() => onToggleSelect(ir.id)}
+            onChange={() => onToggleSelect(ir.id, ir.row)}
             className="accent-eve-accent cursor-pointer"
           />
         </td>
