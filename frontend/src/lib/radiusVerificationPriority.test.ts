@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { classifyVerificationPriority } from "@/lib/radiusVerificationPriority";
+import { verificationStateFromPriority } from "@/lib/radiusVerificationStatus";
 
 describe("classifyVerificationPriority", () => {
   it("flags high-profit long-jump aging rows as verify_now", () => {
@@ -50,5 +51,17 @@ describe("classifyVerificationPriority", () => {
     });
     expect(baseline.priority).toBe("normal");
     expect(lensUpdated.priority).toBe("watch");
+  });
+});
+
+
+describe("verificationStateFromPriority", () => {
+  it("maps stale priority to needs-verify state", () => {
+    expect(verificationStateFromPriority("stale")).toBe("stale");
+  });
+
+  it("maps non-stale priorities to fresh state", () => {
+    expect(verificationStateFromPriority("verify_now")).toBe("fresh");
+    expect(verificationStateFromPriority("watch")).toBe("fresh");
   });
 });

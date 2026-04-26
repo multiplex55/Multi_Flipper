@@ -8,6 +8,11 @@ import {
   verificationProfiles,
 } from "@/lib/verificationProfiles";
 import { RoutePilotAssignmentsPanel, type RoutePilotAssignmentEndpoints } from "@/components/RoutePilotAssignmentsPanel";
+import {
+  getRadiusVerificationBadgeMeta,
+  getVerifyActionLabel,
+  verificationStateFromSnapshot,
+} from "@/lib/radiusVerificationStatus";
 import { RouteFillPlannerPanel } from "@/components/RouteFillPlannerPanel";
 import type { RouteFillPlannerSections, RouteFillPlannerSuggestion } from "@/lib/routeFillPlanner";
 
@@ -86,6 +91,12 @@ export function RouteWorkbenchPanel({
     [verificationProfileId],
   );
   const freshness = getVerificationFreshness(pack.lastVerifiedAt, selectedProfile);
+  const verificationState = verificationStateFromSnapshot({
+    snapshot: pack.verificationSnapshot,
+    lastVerifiedAt: pack.lastVerifiedAt,
+    verificationProfileId,
+  });
+  const verificationBadge = getRadiusVerificationBadgeMeta(verificationState);
 
   const lines = Object.values(pack.lines).sort((a, b) => a.typeName.localeCompare(b.typeName));
   const visibleLineSet = new Set(lineFilterKeys);
@@ -133,8 +144,8 @@ export function RouteWorkbenchPanel({
             {assignment.assignedCharacterName} · {assignment.status}
           </span>
         )}
-        <span className="text-eve-dim" data-testid="route-workbench-freshness">
-          Verification: {pack.verificationSnapshot?.status ?? "Unverified"} · {freshness}
+        <span className={`rounded-sm border px-1.5 py-0.5 ${verificationBadge.className}`} data-testid="route-workbench-freshness">
+          Verification: {verificationBadge.label} · {freshness}
         </span>
       </header>
 
@@ -211,7 +222,7 @@ export function RouteWorkbenchPanel({
               className="rounded-sm border border-eve-border/60 px-1 py-0.5"
               data-testid="route-workbench-verify-now"
             >
-              Verify now
+              {getVerifyActionLabel(verificationState)}
             </button>
           </div>
         </section>

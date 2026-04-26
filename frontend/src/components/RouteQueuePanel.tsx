@@ -1,5 +1,12 @@
 import { useMemo, useState } from "react";
 import {
+  getRadiusVerificationBadgeMeta,
+  getVerifyActionLabel,
+  type RadiusVerificationState,
+  dedupeVerificationTargets,
+} from "@/lib/radiusVerificationStatus";
+import { getVerificationFreshness, getVerificationProfileById } from "@/lib/verificationProfiles";
+import {
   getNextQueuedRoute,
   removeRouteQueueEntry,
   type RouteQueueEntry,
@@ -12,6 +19,7 @@ type RouteQueuePanelProps = {
   onChange: (entries: RouteQueueEntry[]) => void;
   onOpenWorkbench?: (routeKey: string) => void;
   onOpenBatchBuilder?: (routeKey: string) => void;
+  onVerifyRoute?: (routeKey: string) => void;
 };
 
 const STATUS_ORDER: RouteQueueStatus[] = [
@@ -29,11 +37,22 @@ function statusLabel(status: RouteQueueStatus): string {
   return status.replace("_", " ");
 }
 
+function queueVerificationState(entry: RouteQueueEntry): RadiusVerificationState {
+  if (!entry.lastVerifiedAt) return "unverified";
+  if (entry.status === "needs_verify") return "stale";
+  const freshness = getVerificationFreshness(
+    entry.lastVerifiedAt,
+    getVerificationProfileById(entry.verificationProfileId),
+  );
+  return freshness === "stale" ? "stale" : "fresh";
+}
+
 export function RouteQueuePanel({
   entries,
   onChange,
   onOpenWorkbench,
   onOpenBatchBuilder,
+  onVerifyRoute,
 }: RouteQueuePanelProps) {
   const [showDone, setShowDone] = useState(false);
   const visibleEntries = useMemo(
@@ -41,6 +60,12 @@ export function RouteQueuePanel({
     [entries, showDone],
   );
   const nextRoute = useMemo(() => getNextQueuedRoute(entries), [entries]);
+
+  const verifyByFilter = (filter: (entry: RouteQueueEntry) => boolean) => {
+    if (!onVerifyRoute) return;
+    const targets = dedupeVerificationTargets(entries.filter(filter).map((entry) => ({ routeKey: entry.routeKey })));
+    for (const target of targets) onVerifyRoute(target.routeKey);
+  };
 
   const promote = (entry: RouteQueueEntry, delta: number) => {
     onChange(
@@ -76,6 +101,11 @@ export function RouteQueuePanel({
           />
           Show done
         </label>
+        <div className="flex flex-wrap gap-1">
+          <button type="button" className="rounded-sm border border-amber-400/60 px-1 py-0.5 text-amber-200" onClick={() => verifyByFilter((entry) => entry.status === "queued")}>Verify queued</button>
+          <button type="button" className="rounded-sm border border-amber-400/60 px-1 py-0.5 text-amber-200" onClick={() => verifyByFilter((entry) => entry.status === "assigned")}>Verify assigned</button>
+          <button type="button" className="rounded-sm border border-amber-400/60 px-1 py-0.5 text-amber-200" onClick={() => verifyByFilter((entry) => queueVerificationState(entry) === "stale")}>Verify stale</button>
+        </div>
       </div>
       <div className="mt-2 space-y-2">
         {visibleEntries.length === 0 ? (
@@ -89,12 +119,24 @@ export function RouteQueuePanel({
                   <div className="text-eve-dim">{entry.routeKey}</div>
                 </div>
                 <div className="text-eve-dim">Priority {entry.priority} · {statusLabel(entry.status)}</div>
+                <span className={`rounded-sm border px-1 py-0 text-[10px] ${getRadiusVerificationBadgeMeta(queueVerificationState(entry)).className}`}>
+                  {getRadiusVerificationBadgeMeta(queueVerificationState(entry)).label}
+                </span>
               </div>
               <div className="mt-1 flex flex-wrap gap-1">
                 <button type="button" className="rounded-sm border border-eve-border/60 px-1 py-0.5" onClick={() => promote(entry, 1)}>Promote</button>
                 <button type="button" className="rounded-sm border border-eve-border/60 px-1 py-0.5" onClick={() => promote(entry, -1)}>Demote</button>
                 <button type="button" className="rounded-sm border border-eve-border/60 px-1 py-0.5" onClick={() => setStatus(entry, "assigned")}>Assign</button>
-                <button type="button" className="rounded-sm border border-eve-border/60 px-1 py-0.5" onClick={() => setStatus(entry, "queued")}>Verify</button>
+                <button
+                  type="button"
+                  className="rounded-sm border border-amber-400/60 px-1 py-0.5 text-amber-200"
+                  onClick={() => {
+                    onVerifyRoute?.(entry.routeKey);
+                    setStatus(entry, "queued");
+                  }}
+                >
+                  {getVerifyActionLabel(queueVerificationState(entry))}
+                </button>
                 <button type="button" className="rounded-sm border border-eve-border/60 px-1 py-0.5" onClick={() => onOpenWorkbench?.(entry.routeKey)}>Open Workbench</button>
                 <button type="button" className="rounded-sm border border-eve-border/60 px-1 py-0.5" onClick={() => onOpenBatchBuilder?.(entry.routeKey)}>Open Batch Builder</button>
                 <button type="button" className="rounded-sm border border-eve-border/60 px-1 py-0.5" onClick={() => setStatus(entry, "buying")}>Mark Buying</button>

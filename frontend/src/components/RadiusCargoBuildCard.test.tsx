@@ -84,7 +84,7 @@ describe("RadiusCargoBuildCard", () => {
       />, 
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Verify" }));
+    fireEvent.click(screen.getByRole("button", { name: /verify/i }));
     fireEvent.click(screen.getByRole("button", { name: "Queue" }));
     fireEvent.click(screen.getByRole("button", { name: "Open workbench" }));
     fireEvent.click(screen.getByRole("button", { name: "Open batch" }));

@@ -72,4 +72,29 @@ describe("RouteQueuePanel", () => {
     expect(onOpenWorkbench).toHaveBeenCalledWith("loc:1->loc:2");
     expect(onOpenBatchBuilder).toHaveBeenCalledWith("loc:1->loc:2");
   });
+
+  it("deduplicates batch verify actions by status", () => {
+    const onVerifyRoute = vi.fn();
+    render(
+      <RouteQueuePanel
+        entries={[
+          makeEntry({ routeKey: "route-a", status: "queued" }),
+          makeEntry({ routeKey: "route-a", status: "queued", priority: 2 }),
+          makeEntry({ routeKey: "route-b", status: "assigned" }),
+          makeEntry({ routeKey: "route-c", status: "needs_verify", lastVerifiedAt: "2026-01-01T00:00:00.000Z", verificationProfileId: "strict" }),
+        ]}
+        onChange={vi.fn()}
+        onVerifyRoute={onVerifyRoute}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Verify queued" }));
+    fireEvent.click(screen.getByRole("button", { name: "Verify assigned" }));
+    fireEvent.click(screen.getByRole("button", { name: "Verify stale" }));
+
+    expect(onVerifyRoute).toHaveBeenCalledWith("route-a");
+    expect(onVerifyRoute).toHaveBeenCalledWith("route-b");
+    expect(onVerifyRoute).toHaveBeenCalledWith("route-c");
+    expect(onVerifyRoute.mock.calls.filter((call) => call[0] === "route-a")).toHaveLength(1);
+  });
 });

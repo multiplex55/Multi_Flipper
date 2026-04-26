@@ -21,6 +21,7 @@ import type {
 } from "@/lib/types";
 import { formatISK, formatMargin } from "@/lib/format";
 import { classifyVerificationPriority, verificationPriorityChipClass } from "@/lib/radiusVerificationPriority";
+import { verificationStateFromSnapshot, verificationStateFromPriority, type RadiusVerificationState } from "@/lib/radiusVerificationStatus";
 import { useI18n, type TranslationKey } from "@/lib/i18n";
 import {
   buildRouteBatchMetadata,
@@ -5042,6 +5043,49 @@ export function ScanResultsTable({
     }, 0);
   }, []);
 
+  const verificationStateByRouteKey = useMemo<Record<string, RadiusVerificationState>>(() => {
+    const out: Record<string, RadiusVerificationState> = {};
+    for (const routeKey of Object.keys(routeGroupByKey)) {
+      const pack = savedRoutePackByKey[routeKey];
+      if (pack) {
+        out[routeKey] = verificationStateFromSnapshot({
+          snapshot: pack.verificationSnapshot,
+          lastVerifiedAt: pack.lastVerifiedAt,
+          verificationProfileId: pack.verificationProfileId,
+        });
+        continue;
+      }
+      const result = routeVerificationByKey[routeKey];
+      if (result) {
+        out[routeKey] = verificationStateFromSnapshot({
+          snapshot: {
+            status: result.status,
+            recommendation: result.recommendation,
+            currentProfitIsk: result.current_profit_isk,
+            minAcceptableProfitIsk: result.min_acceptable_profit_isk,
+            verifiedAt: result.verifiedAt,
+            checkedAt: result.checkedAt,
+            offenderCount: result.offenders.length,
+            buyDriftPct: result.buyDriftPct,
+            sellDriftPct: result.sellDriftPct,
+            profitRetentionPct: result.profitRetentionPct,
+            offenderLines: result.offenderLines,
+            summary: result.summary,
+          },
+          lastVerifiedAt: result.checkedAt,
+          verificationProfileId: routeVerificationProfileByKey[routeKey] ?? "standard",
+        });
+        continue;
+      }
+      const priority = classifyVerificationPriority({
+        expectedProfitIsk: batchMetricsByRoute[routeKey]?.routeTotalProfit,
+        totalJumps: Math.max(0, (batchMetricsByRoute[routeKey]?.routeStopCount ?? 1) - 1),
+      });
+      out[routeKey] = verificationStateFromPriority(priority.priority);
+    }
+    return out;
+  }, [batchMetricsByRoute, routeGroupByKey, routeVerificationByKey, routeVerificationProfileByKey, savedRoutePackByKey]);
+
   const routeRowsByKey = useMemo<Record<string, FlipResult[]>>(() => {
     const out: Record<string, FlipResult[]> = {};
     for (const [routeKey, group] of Object.entries(routeGroupByKey)) {
@@ -6793,6 +6837,15 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
             insightsOpen={radiusInsightsDrawerOpen}
             routeQueueEntries={routeQueueEntries}
             assignmentByRouteKey={routeAssignmentsByKey}
+            verificationStateByRouteKey={verificationStateByRouteKey}
+            onVerifyRoute={(routeKey) =>
+              verifyRouteGroup(
+                routeKey,
+                routeVerificationProfileByKey[routeKey] ??
+                  savedRoutePackByKey[routeKey]?.verificationProfileId ??
+                  "standard",
+              )
+            }
             onOpenInsights={() => setRadiusInsightsDrawerOpen((previous) => !previous)}
           />
           <RadiusInsightsDrawer
@@ -7874,6 +7927,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                 onOpenWorkbench={(routeKey) => openRouteWorkbench(routeKey, "summary")}
                 routeQueueEntries={routeQueueEntries}
                 assignmentByRouteKey={routeAssignmentsByKey}
+                verificationState={verificationStateByRouteKey[build.routeKey]}
                 onOpenBatch={(routeKey) =>
                   openBatchBuilderForRoute(routeKey, {
                     intentLabel: "Cargo Build",
