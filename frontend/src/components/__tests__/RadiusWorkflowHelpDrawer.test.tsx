@@ -33,6 +33,8 @@ function buildCommandBarProps(
       onClearFilters: vi.fn(),
       oneLegEnabled: false,
       onToggleOneLeg: vi.fn(),
+      executableNowEnabled: false,
+      onToggleExecutableNow: vi.fn(),
     },
     actions: {
       onVerifyPrices: vi.fn(),

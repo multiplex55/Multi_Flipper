@@ -14,16 +14,33 @@ const baseInput = {
   cargoUsePercent: 78,
   riskCount: 3,
   staleVerificationPenalty: 8,
+  missingVerification: true,
+  thinDepthCount: 2,
+  exitOverhangDays: 11,
+  jumpBurden: 16,
 };
 
 describe("routeExplanation", () => {
   it("builds deterministic factor decomposition with warnings", () => {
     const explanation = buildRouteDecisionExplanation(baseInput, "recommended");
     expect(explanation.totalScore).toBeCloseTo(61.0, 1);
+    expect(explanation.positiveFactors.length).toBeGreaterThan(0);
+    expect(explanation.negativeFactors.map((entry) => entry.key)).toContain("stale_verification_penalty");
     expect(explanation.positives.length).toBeGreaterThan(0);
-    expect(explanation.negatives.map((entry) => entry.key)).toContain("stale_verification_penalty");
     expect(explanation.warnings).toEqual(
-      expect.arrayContaining(["High weighted slippage", "Elevated route risk flags", "Verification snapshot is stale"]),
+      expect.arrayContaining([
+        "High weighted slippage",
+        "Elevated route risk flags",
+        "Verification snapshot is stale",
+        "Verification snapshot missing",
+        "Thin top-of-book depth on route lines",
+      ]),
+    );
+    expect(explanation.recommendedActions).toEqual(
+      expect.arrayContaining([
+        "Capture a verification snapshot before queueing this route.",
+        "Trim order size or split fills to reduce slippage pressure.",
+      ]),
     );
   });
 

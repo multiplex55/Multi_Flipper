@@ -35,6 +35,8 @@ type RadiusCommandBarProps = {
     onClearFilters: () => void;
     oneLegEnabled: boolean;
     onToggleOneLeg: () => void;
+    executableNowEnabled: boolean;
+    onToggleExecutableNow: () => void;
   };
   actions: {
     onVerifyPrices: () => void;
@@ -54,6 +56,7 @@ type RadiusCommandBarProps = {
   sessionSection?: ReactNode;
   rankingSection?: ReactNode;
   routeActionsSection?: ReactNode;
+  statusSummarySection?: ReactNode;
   decisionModeControl?: {
     value: string;
     options: Array<{ id: string; label: string; description: string }>;
@@ -93,6 +96,7 @@ export function RadiusCommandBar({
   sessionSection,
   rankingSection,
   routeActionsSection,
+  statusSummarySection,
   decisionModeControl,
 }: RadiusCommandBarProps) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -240,6 +244,14 @@ export function RadiusCommandBar({
           >
             Filters
           </ToggleButton>
+          <ToggleButton
+            pressed={tableControls.executableNowEnabled}
+            onClick={tableControls.onToggleExecutableNow}
+            title="Executable now"
+            data-testid="radius-command-bar-executable-toggle"
+          >
+            Executable Now
+          </ToggleButton>
           {tableControls.hasActiveFilters ? (
             <ActionButton
               tone="accent"
@@ -259,6 +271,8 @@ export function RadiusCommandBar({
           </ToggleButton>
         </ControlGroup>
       </section>
+      {statusSummarySection ? statusSummarySection : null}
+
       <RadiusWorkflowHelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
 
       <section

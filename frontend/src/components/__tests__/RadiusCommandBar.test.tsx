@@ -34,6 +34,8 @@ function renderBar(overrides: Partial<ComponentProps<typeof RadiusCommandBar>> =
       onClearFilters: vi.fn(),
       oneLegEnabled: false,
       onToggleOneLeg: vi.fn(),
+      executableNowEnabled: false,
+      onToggleExecutableNow: vi.fn(),
     },
     actions: {
       onVerifyPrices: vi.fn(),
@@ -86,6 +88,8 @@ describe("RadiusCommandBar", () => {
           onClearFilters: vi.fn(),
           oneLegEnabled: false,
           onToggleOneLeg: vi.fn(),
+          executableNowEnabled: false,
+          onToggleExecutableNow: vi.fn(),
         }}
         actions={{
           onVerifyPrices: vi.fn(),
@@ -118,6 +122,8 @@ describe("RadiusCommandBar", () => {
         onClearFilters: vi.fn(),
         oneLegEnabled: false,
         onToggleOneLeg: vi.fn(),
+        executableNowEnabled: false,
+        onToggleExecutableNow: vi.fn(),
       },
     });
     expect(screen.getByTestId("radius-command-bar-filters-active-chip")).toBeInTheDocument();
@@ -172,6 +178,8 @@ describe("RadiusCommandBar", () => {
         onClearFilters: vi.fn(),
         oneLegEnabled: false,
         onToggleOneLeg: vi.fn(),
+        executableNowEnabled: false,
+        onToggleExecutableNow: vi.fn(),
       },
       actions: {
         onVerifyPrices,
@@ -231,6 +239,8 @@ describe("RadiusCommandBar", () => {
         onClearFilters: vi.fn(),
         oneLegEnabled: true,
         onToggleOneLeg: vi.fn(),
+        executableNowEnabled: false,
+        onToggleExecutableNow: vi.fn(),
       },
     });
 

@@ -24,6 +24,10 @@ export type RouteExplanationInput = {
   capitalEfficiency?: number | null;
   riskCount: number;
   staleVerificationPenalty?: number;
+  missingVerification?: boolean;
+  thinDepthCount?: number;
+  exitOverhangDays?: number | null;
+  jumpBurden?: number | null;
 };
 
 export type RouteFactorKey =
@@ -50,9 +54,11 @@ export type RouteDecisionExplanation = {
   totalScore: number;
   summary: string;
   factors: RouteFactorExplanation[];
-  positives: RouteFactorExplanation[];
-  negatives: RouteFactorExplanation[];
+  positiveFactors: RouteFactorExplanation[];
+  negativeFactors: RouteFactorExplanation[];
+  positives: string[];
   warnings: string[];
+  recommendedActions: string[];
   lens: RouteDecisionLens;
 };
 
@@ -104,8 +110,8 @@ function rawFactors(input: RouteExplanationInput): Record<RouteFactorKey, number
 }
 
 function summarize(explanation: RouteDecisionExplanation): string {
-  const topPositive = explanation.positives[0]?.label ?? "mixed factors";
-  const topNegative = explanation.negatives[0]?.label;
+  const topPositive = explanation.positiveFactors[0]?.label ?? "mixed factors";
+  const topNegative = explanation.negativeFactors[0]?.label;
   if (!topNegative) return `Strength led by ${topPositive}.`;
   return `Strength led by ${topPositive}; watch ${topNegative}.`;
 }
@@ -128,20 +134,44 @@ export function buildRouteDecisionExplanation(
     };
   });
 
-  const positives = [...factors]
+  const positiveFactors = [...factors]
     .filter((item) => item.weighted > 0)
     .sort((a, b) => b.weighted - a.weighted)
     .slice(0, 3);
-  const negatives = [...factors]
+  const negativeFactors = [...factors]
     .filter((item) => item.weighted < 0)
     .sort((a, b) => a.weighted - b.weighted)
     .slice(0, 3);
 
   const warnings: string[] = [];
+  const recommendedActions: string[] = [];
   if (safeNumber(input.weightedSlippagePct) >= 8) warnings.push("High weighted slippage");
   if (safeNumber(input.riskCount) >= 3) warnings.push("Elevated route risk flags");
   if (safeNumber(input.confidenceScore) < 50) warnings.push("Low route confidence");
   if (safeNumber(input.staleVerificationPenalty) > 0) warnings.push("Verification snapshot is stale");
+  if (input.missingVerification) warnings.push("Verification snapshot missing");
+  if ((input.thinDepthCount ?? 0) > 0) warnings.push("Thin top-of-book depth on route lines");
+  if (safeNumber(input.exitOverhangDays) >= 9) warnings.push("Slow destination clear time (high overhang)");
+  if (safeNumber(input.jumpBurden) >= 14) warnings.push("High jump burden for repeat runs");
+
+  if (safeNumber(input.staleVerificationPenalty) > 0) {
+    recommendedActions.push("Run route verification before committing capital.");
+  }
+  if (input.missingVerification) {
+    recommendedActions.push("Capture a verification snapshot before queueing this route.");
+  }
+  if (safeNumber(input.weightedSlippagePct) >= 8 || (input.thinDepthCount ?? 0) > 0) {
+    recommendedActions.push("Trim order size or split fills to reduce slippage pressure.");
+  }
+  if (safeNumber(input.exitOverhangDays) >= 9) {
+    recommendedActions.push("Prioritize faster-turnover exits or lower posted size.");
+  }
+  if (safeNumber(input.jumpBurden) >= 14) {
+    recommendedActions.push("Queue this route only if travel time budget allows extra jumps.");
+  }
+  if (safeNumber(input.confidenceScore) < 50) {
+    recommendedActions.push("Use tighter guardrails: smaller size and active repricing.");
+  }
 
   const computed = factors.reduce((sum, factor) => sum + factor.weighted, 0);
   const totalScore = Math.max(0, Math.min(100, 0.35 * safeNumber(input.recommendationScore) + 0.65 * computed));
@@ -151,9 +181,11 @@ export function buildRouteDecisionExplanation(
     routeLabel: input.routeLabel,
     totalScore,
     factors,
-    positives,
-    negatives,
+    positiveFactors,
+    negativeFactors,
+    positives: positiveFactors.map((factor) => `${factor.label} contributes +${Math.abs(factor.weighted).toFixed(1)}`),
     warnings,
+    recommendedActions,
     summary: "",
     lens,
   };

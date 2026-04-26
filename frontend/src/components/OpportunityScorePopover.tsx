@@ -3,11 +3,17 @@ import type { OpportunityExplanation } from "@/lib/opportunityScore";
 import { explainOpportunityScore } from "@/lib/opportunityScore";
 import type { ExecutionQualityBreakdown } from "@/lib/executionQuality";
 import { ExplanationPopoverShell } from "@/components/decision/ExplanationPopoverShell";
+import { RadiusDealExplanationPanel } from "@/components/RadiusDealExplanationPanel";
+import type { RouteDecisionExplanation } from "@/lib/routeExplanation";
 
 interface OpportunityScorePopoverProps {
   explanation: OpportunityExplanation;
   label?: string;
   className?: string;
+  routeExplanation?: RouteDecisionExplanation;
+  routeLabel?: string;
+  queueStatus?: string;
+  assignment?: string;
 }
 
 const factorLabels: Record<string, string> = {
@@ -136,10 +142,27 @@ export function OpportunityScorePopover({
   explanation,
   label = "Why this score?",
   className = "",
+  routeExplanation,
+  routeLabel = "Route context",
+  queueStatus,
+  assignment,
 }: OpportunityScorePopoverProps) {
+  const executionFactor = routeExplanation?.factors.find((item) => item.key === "execution_quality");
   return (
     <ExplanationPopoverShell label={label} className={className}>
       <OpportunityScoreDetails explanation={explanation} />
+      {routeExplanation ? (
+        <div className="mt-3 border-t border-eve-border/40 pt-2">
+          <RadiusDealExplanationPanel
+            routeKey={routeExplanation.routeKey}
+            routeLabel={routeLabel}
+            explanation={routeExplanation}
+            executionQuality={executionFactor ? executionFactor.normalized * 100 : null}
+            queueStatus={queueStatus}
+            assignment={assignment}
+          />
+        </div>
+      ) : null}
     </ExplanationPopoverShell>
   );
 }
