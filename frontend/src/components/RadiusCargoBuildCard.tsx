@@ -34,6 +34,7 @@ type RadiusCargoBuildCardProps = {
   onAssignSpecificPilot?: (routeKey: string, characterId: number) => void;
   onSetStagedSystem?: (routeKey: string, stagedSystem: string) => void;
   movement?: RadiusDealMovement | null;
+  showAssignmentActions?: boolean;
 };
 
 const badgeTone = {
@@ -43,7 +44,12 @@ const badgeTone = {
 };
 
 export function RadiusCargoBuildCard(props: RadiusCargoBuildCardProps) {
-  const { build, routeQueueEntries = [], assignmentByRouteKey = {} } = props;
+  const {
+    build,
+    routeQueueEntries = [],
+    assignmentByRouteKey = {},
+    showAssignmentActions = false,
+  } = props;
   const routeBadge = getRadiusRouteExecutionBadge(build.routeKey, routeQueueEntries, assignmentByRouteKey);
   const verificationBadge = getRadiusVerificationBadgeMeta(props.verificationState ?? "unverified");
   const [expanded, setExpanded] = useState(false);
@@ -112,28 +118,30 @@ export function RadiusCargoBuildCard(props: RadiusCargoBuildCardProps) {
           />
         </ExplanationPopoverShell>
       </div>
-      <div className="mt-1">
-        <RouteAssignmentQuickActions
-          compact
-          context={{
-            routeKey: build.routeKey,
-            routeLabel: build.routeLabel,
-            expectedProfitIsk: build.totalProfitIsk,
-            expectedCapitalIsk: build.totalCapitalIsk,
-            expectedCargoM3: build.totalCargoM3,
-            expectedJumps: build.jumps,
-          }}
-          characters={props.characters}
-          onAssignActive={(ctx) => props.onAssignActive?.(ctx.routeKey)}
-          onAssignBest={(ctx) => props.onAssignBest?.(ctx.routeKey)}
-          onAssignSpecificPilot={(ctx, characterId) =>
-            props.onAssignSpecificPilot?.(ctx.routeKey, characterId)
-          }
-          onSetStagedSystem={(ctx, stagedSystem) =>
-            props.onSetStagedSystem?.(ctx.routeKey, stagedSystem)
-          }
-        />
-      </div>
+      {showAssignmentActions ? (
+        <div className="mt-1">
+          <RouteAssignmentQuickActions
+            compact
+            context={{
+              routeKey: build.routeKey,
+              routeLabel: build.routeLabel,
+              expectedProfitIsk: build.totalProfitIsk,
+              expectedCapitalIsk: build.totalCapitalIsk,
+              expectedCargoM3: build.totalCargoM3,
+              expectedJumps: build.jumps,
+            }}
+            characters={props.characters}
+            onAssignActive={(ctx) => props.onAssignActive?.(ctx.routeKey)}
+            onAssignBest={(ctx) => props.onAssignBest?.(ctx.routeKey)}
+            onAssignSpecificPilot={(ctx, characterId) =>
+              props.onAssignSpecificPilot?.(ctx.routeKey, characterId)
+            }
+            onSetStagedSystem={(ctx, stagedSystem) =>
+              props.onSetStagedSystem?.(ctx.routeKey, stagedSystem)
+            }
+          />
+        </div>
+      ) : null}
 
       <div className="mt-2">
         <button type="button" className="text-[11px] text-eve-dim hover:text-eve-text" onClick={() => setExpanded((current) => !current)}>
