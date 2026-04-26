@@ -201,6 +201,11 @@ import {
   formatRadiusCargoBuildManifest,
   formatRadiusCargoBuildSellChecklist,
 } from "@/lib/radiusCargoBuildFormat";
+import {
+  buildRadiusBuyStationShoppingLists,
+  type RadiusBuyStationShoppingList,
+} from "@/lib/radiusBuyStationShoppingList";
+import { RadiusBuyStationShoppingListView } from "@/components/RadiusBuyStationShoppingList";
 import { RadiusRowContextMenu } from "@/components/RadiusRowContextMenu";
 import { RadiusBulkActionsBar } from "@/components/RadiusBulkActionsBar";
 import {
@@ -246,7 +251,7 @@ const ONE_LEG_MODE_STORAGE_KEY = "eve-radius-one-leg-mode:v1";
 type RadiusTransientModeSnapshot = {
   sortKey: SortKey;
   sortDir: SortDir;
-  routeViewMode: "rows" | "route" | "cargo_builds";
+  routeViewMode: "rows" | "route" | "cargo_builds" | "shopping_list";
   hiddenColumns: Set<SortKey>;
   showAdvancedToolbar: boolean;
   radiusRouteInsightsHidden: boolean;
@@ -417,7 +422,7 @@ type ScanResultsTableRouteHeavyConfig = {
   showRouteWorkbench: true;
   showSavedRoutes: true;
   showLoopPanel: boolean;
-  defaultViewMode: "rows" | "route" | "cargo_builds";
+  defaultViewMode: "rows" | "route" | "cargo_builds" | "shopping_list";
 };
 
 type ScanResultsTableRouteLightConfig = {
@@ -426,7 +431,7 @@ type ScanResultsTableRouteLightConfig = {
   showRouteWorkbench: false;
   showSavedRoutes: false;
   showLoopPanel: false;
-  defaultViewMode: "rows" | "cargo_builds";
+  defaultViewMode: "rows" | "cargo_builds" | "shopping_list";
 };
 
 type ScanResultsTableRowFirstConfig = {
@@ -1857,14 +1862,15 @@ export function ScanResultsTable({
     }
   });
   const [routeViewMode, setRouteViewMode] = useState<
-    "rows" | "route" | "cargo_builds"
+    "rows" | "route" | "cargo_builds" | "shopping_list"
   >(() => {
     try {
       const storedMode = localStorage.getItem(ROUTE_GROUPING_STORAGE_KEY);
       if (
         storedMode === "route" ||
         storedMode === "rows" ||
-        storedMode === "cargo_builds"
+        storedMode === "cargo_builds" ||
+        storedMode === "shopping_list"
       ) {
         return storedMode;
       }
@@ -2071,6 +2077,10 @@ export function ScanResultsTable({
     !isRegionGrouped &&
     allowRouteGrouping &&
     effectiveRouteViewMode === "cargo_builds";
+  const isShoppingListView =
+    !isRegionGrouped &&
+    allowRouteGrouping &&
+    effectiveRouteViewMode === "shopping_list";
 
   const routeBadgeFilterOptions: Array<{
     key: RouteBadgeFilter;
@@ -3236,6 +3246,15 @@ export function ScanResultsTable({
         },
       }),
     [cargoBuildOptimizerMode, cargoBuildPreset, cargoLimit, datasetRows, routeAggregateMetricsByRoute],
+  );
+  const stationShoppingLists = useMemo(
+    () =>
+      buildRadiusBuyStationShoppingLists({
+        rows: datasetRows.map((item) => item.row),
+        cargoCapacityM3: cargoLimit > 0 ? cargoLimit : undefined,
+        maxLists: 12,
+      }),
+    [cargoLimit, datasetRows],
   );
 
 
@@ -4516,6 +4535,35 @@ export function ScanResultsTable({
   const copyCargoBuildSellChecklist = useCallback((build: (typeof cargoBuilds)[number]) => {
     copyText(formatRadiusCargoBuildSellChecklist(build));
   }, [copyText]);
+  const formatStationBuyChecklist = useCallback((list: RadiusBuyStationShoppingList) => {
+    const lines = [`Buy Checklist — ${list.buyStationName}`, ""];
+    list.lines.forEach((line, idx) => {
+      lines.push(`${idx + 1}. [ ] BUY ${line.row.TypeName} x${line.units.toLocaleString("en-US")}`);
+    });
+    return lines.join("\n");
+  }, []);
+  const formatStationSellChecklist = useCallback((list: RadiusBuyStationShoppingList) => {
+    const lines = [`Sell Checklist — ${list.buyStationName} → ${list.primarySellStation}`, ""];
+    list.lines.forEach((line, idx) => {
+      lines.push(`${idx + 1}. [ ] SELL ${line.row.TypeName} x${line.units.toLocaleString("en-US")}`);
+    });
+    return lines.join("\n");
+  }, []);
+  const formatStationManifest = useCallback((list: RadiusBuyStationShoppingList) => {
+    const lines = ["=== Radius Station Manifest ===", `Buy: ${list.buyStationName}`, `Primary sell: ${list.primarySellStation}`, ""];
+    list.lines.forEach((line, idx) => {
+      lines.push(`${idx + 1}. ${line.row.TypeName} | qty ${line.units.toLocaleString("en-US")} | capital ${formatISK(line.capitalIsk)} | profit ${formatISK(line.profitIsk)}`);
+    });
+    return lines.join("\n");
+  }, []);
+  const openRowsForStationGroup = useCallback((stationGroupId: number) => {
+    setRouteViewMode("rows");
+    const stationRows = datasetRows
+      .map((entry) => entry.row)
+      .filter((row) => Math.trunc(row.BuyLocationID ?? row.BuySystemID ?? 0) === stationGroupId);
+    const stationLabel = stationRows[0]?.BuyStation ?? stationRows[0]?.BuySystemName ?? String(stationGroupId);
+    setFilters((prev) => ({ ...prev, BuyStation: stationLabel }));
+  }, [datasetRows]);
 
   const showCargoDiagnosticsPanel = cargoBuilds.length === 0 ||
     cargoBuildDiagnostics.skippedExecutionQuality +
@@ -5763,6 +5811,17 @@ export function ScanResultsTable({
       savedRoutePackByKey,
     ],
   );
+  const verifyStationGroup = useCallback((list: RadiusBuyStationShoppingList) => {
+    const routeKeys = Array.from(new Set(list.lines.map((line) => line.routeKey)));
+    for (const routeKey of routeKeys) {
+      verifyRouteGroup(
+        routeKey,
+        routeVerificationProfileByKey[routeKey] ??
+          savedRoutePackByKey[routeKey]?.verificationProfileId ??
+          "standard",
+      );
+    }
+  }, [routeVerificationProfileByKey, savedRoutePackByKey, verifyRouteGroup]);
   const verifyOneLegBatch = useCallback(() => {
     if (!selectedOneLegAnchor || selectedOneLegBatchRows.length === 0) return;
     const result = verifyOneLegSelection({
@@ -7752,7 +7811,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
       />
 
       {/* Table */}
-      {!isCargoBuildView ? (
+      {!isCargoBuildView && !isShoppingListView ? (
       <div className="flex-1 min-h-0 flex flex-col border border-eve-border rounded-sm overflow-auto table-scroll-container">
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10">
@@ -8526,7 +8585,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
           </tbody>
         </table>
       </div>
-      ) : (
+      ) : isCargoBuildView ? (
         <div className="flex-1 min-h-0 overflow-auto rounded-sm border border-eve-border p-2 text-xs">
           <div className="mb-2 text-eve-dim">
             Ranked cargo build candidates ({RADIUS_CARGO_BUILD_PRESETS[cargoBuildPreset].label})
@@ -8594,6 +8653,26 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               />
             )}
           </div>
+        </div>
+      ) : (
+        <div className="flex-1 min-h-0 overflow-auto rounded-sm border border-eve-border p-2 text-xs">
+          <div className="mb-2 text-eve-dim">Top buy-station shopping lists</div>
+          <RadiusBuyStationShoppingListView
+            lists={stationShoppingLists}
+            onOpenRows={openRowsForStationGroup}
+            onCopyBuyChecklist={(list) => copyText(formatStationBuyChecklist(list))}
+            onCopySellChecklist={(list) => copyText(formatStationSellChecklist(list))}
+            onCopyManifest={(list) => copyText(formatStationManifest(list))}
+            onOpenBatch={(list) => {
+              const routeKey = list.lines[0]?.routeKey;
+              if (!routeKey) return;
+              openBatchBuilderForRoute(routeKey, {
+                intentLabel: "Shopping List",
+                batchEntryMode: "core",
+              });
+            }}
+            onVerifyStationGroup={(list) => verifyStationGroup(list)}
+          />
         </div>
       )}
 
@@ -9835,8 +9914,8 @@ function RadiusRowControls({
 }: {
   allowRouteGrouping: boolean;
   allowCargoBuilds: boolean;
-  routeViewMode: "rows" | "route" | "cargo_builds";
-  setRouteViewMode: (mode: "rows" | "route" | "cargo_builds") => void;
+  routeViewMode: "rows" | "route" | "cargo_builds" | "shopping_list";
+  setRouteViewMode: (mode: "rows" | "route" | "cargo_builds" | "shopping_list") => void;
   groupByItem: boolean;
   setGroupByItem: (next: boolean) => void;
 }) {
@@ -9848,7 +9927,7 @@ function RadiusRowControls({
             ["rows", "Row view"],
             ["route", "Group by route"],
             ...(allowCargoBuilds
-              ? ([["cargo_builds", "Cargo builds"]] as const)
+              ? ([["cargo_builds", "Cargo builds"], ["shopping_list", "Shopping list"]] as const)
               : []),
           ] as const).map(([mode, label]) => {
             const active = routeViewMode === mode;
