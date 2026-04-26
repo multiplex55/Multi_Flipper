@@ -3,6 +3,7 @@ import { routeGroupKey } from "@/lib/batchMetrics";
 import { executionQualityForFlip, requestedUnitsForFlip } from "@/lib/executionQuality";
 import type { RouteAggregateMetrics } from "@/lib/useRadiusRouteInsights";
 import { computeCargoFillScore } from "@/lib/cargoFillScore";
+import { scoreRadiusCargoLine } from "@/lib/radiusCargoLineScore";
 
 export type RadiusCargoBuildPreset =
   | "viator_safe"
@@ -11,6 +12,12 @@ export type RadiusCargoBuildPreset =
   | "low_capital"
   | "fast_turnover"
   | "high_confidence";
+
+export type RadiusCargoBuildOptimizerMode =
+  | "greedy_profit"
+  | "greedy_isk_per_m3"
+  | "balanced_score"
+  | "bounded_knapsack";
 
 export type RadiusCargoBuildPresetConfig = {
   id: RadiusCargoBuildPreset;
@@ -158,6 +165,7 @@ export type BuildRadiusCargoBuildsInput = {
   routeAggregateMetricsByRoute: Record<string, RouteAggregateMetrics>;
   preset: RadiusCargoBuildPresetConfig;
   maxBuilds?: number;
+  optimizerMode?: RadiusCargoBuildOptimizerMode;
 };
 
 export type BuildRadiusCargoBuildsResult = {
@@ -186,10 +194,35 @@ function createRadiusCargoBuildDiagnostics(totalRows: number): RadiusCargoBuildD
   };
 }
 
+export function explicitRouteJumps(
+  picked: FlipResult[],
+  aggregate?: RouteAggregateMetrics,
+): number {
+  const explicit = picked
+    .map((row) => Number(row.TotalJumps))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  if (explicit.length > 0) {
+    return Math.max(1, Math.round(explicit.reduce((sum, value) => sum + value, 0) / explicit.length));
+  }
+  const aggregateJumpHint = aggregate?.dailyIskPerJump && aggregate.dailyIskPerJump > 0
+    ? aggregate.routeTotalProfit / aggregate.dailyIskPerJump
+    : 0;
+  if (Number.isFinite(aggregateJumpHint) && aggregateJumpHint > 0) {
+    return Math.max(1, Math.round(aggregateJumpHint));
+  }
+  return 1;
+}
+
 export function buildRadiusCargoBuilds(
   input: BuildRadiusCargoBuildsInput,
 ): BuildRadiusCargoBuildsResult {
-  const { rows, routeAggregateMetricsByRoute, preset, maxBuilds = 10 } = input;
+  const {
+    rows,
+    routeAggregateMetricsByRoute,
+    preset,
+    maxBuilds = 10,
+    optimizerMode = "balanced_score",
+  } = input;
   const diagnostics = createRadiusCargoBuildDiagnostics(rows.length);
   if (rows.length === 0) return { builds: [], diagnostics };
 
@@ -202,11 +235,19 @@ export function buildRadiusCargoBuilds(
   const builds: RadiusCargoBuild[] = [];
   for (const [routeKey, routeRows] of grouped.entries()) {
     const aggregate = routeAggregateMetricsByRoute[routeKey];
-    const orderedRows = [...routeRows].sort((a, b) => {
-      const profitDiff = (b.RealProfit ?? b.TotalProfit ?? 0) - (a.RealProfit ?? a.TotalProfit ?? 0);
-      if (profitDiff !== 0) return profitDiff;
-      return a.TypeName.localeCompare(b.TypeName);
-    });
+    const lineCandidates: Array<{
+      row: FlipResult;
+      requestedUnits: number;
+      volumePerUnit: number;
+      buyPrice: number;
+      profitPerUnit: number;
+      sellPrice: number;
+      confidence: number;
+      execution: number;
+      score: number;
+      iskPerM3: number;
+      profitQuality: number;
+    }> = [];
 
     const lines: RadiusCargoBuildLine[] = [];
     let usedCargo = 0;
@@ -220,7 +261,7 @@ export function buildRadiusCargoBuilds(
     // Deterministic filter sequence:
     // 1) data validity -> 2) execution quality -> 3) confidence
     // 4) jump efficiency (route-level) -> 5) risk (route-level) -> 6) capacity/capital allocation.
-    for (const row of orderedRows) {
+    for (const row of routeRows) {
       const requestedUnits = Math.max(0, Math.floor(requestedUnitsForFlip(row) || row.UnitsToBuy || 0));
       if (requestedUnits <= 0) {
         diagnostics.skippedNoUnits += 1;
@@ -232,12 +273,20 @@ export function buildRadiusCargoBuilds(
       const buyPrice = Math.max(0, row.ExpectedBuyPrice ?? row.BuyPrice ?? 0);
       const profitPerUnit = Math.max(0, row.ProfitPerUnit ?? 0);
       const sellPrice = Math.max(0, row.SellPrice ?? 0);
+      const profitQuality = Math.max(
+        0,
+        row.RealProfit ?? row.ExpectedProfit ?? row.TotalProfit ?? row.ProfitPerUnit ?? 0,
+      );
       if (volumePerUnit <= 0) {
         diagnostics.skippedNoVolume += 1;
         continue;
       }
       if (buyPrice <= 0) {
         diagnostics.skippedNoCapital += 1;
+        continue;
+      }
+      if (profitPerUnit <= 0 || profitQuality <= 0) {
+        diagnostics.skippedNoUnits += 1;
         continue;
       }
 
@@ -255,34 +304,73 @@ export function buildRadiusCargoBuilds(
         continue;
       }
 
-      // 6) Capacity/capital allocation (route-level gating is handled after candidate line selection)
+      const score = scoreRadiusCargoLine({
+        row,
+        aggregate,
+        profitPerUnit,
+        volumePerUnit,
+        confidence,
+        execution,
+        buyPrice,
+      });
+      const iskPerM3 = volumePerUnit > 0 ? profitPerUnit / volumePerUnit : 0;
+      lineCandidates.push({
+        row,
+        requestedUnits,
+        volumePerUnit,
+        buyPrice,
+        profitPerUnit,
+        sellPrice,
+        confidence,
+        execution,
+        score,
+        iskPerM3,
+        profitQuality,
+      });
+    }
+
+    const orderedRows = [...lineCandidates].sort((a, b) => {
+      if (optimizerMode === "greedy_profit") {
+        if (b.profitPerUnit !== a.profitPerUnit) return b.profitPerUnit - a.profitPerUnit;
+      } else if (optimizerMode === "bounded_knapsack") {
+        const leftValueDensity = a.score / Math.max(1, a.buyPrice + a.volumePerUnit * 1_000);
+        const rightValueDensity = b.score / Math.max(1, b.buyPrice + b.volumePerUnit * 1_000);
+        if (rightValueDensity !== leftValueDensity) return rightValueDensity - leftValueDensity;
+        if (b.score !== a.score) return b.score - a.score;
+      } else if (optimizerMode === "greedy_isk_per_m3") {
+        if (b.iskPerM3 !== a.iskPerM3) return b.iskPerM3 - a.iskPerM3;
+      } else if (b.score !== a.score) {
+        return b.score - a.score;
+      }
+      if (b.profitPerUnit !== a.profitPerUnit) return b.profitPerUnit - a.profitPerUnit;
+      if (a.row.TotalJumps !== b.row.TotalJumps) return a.row.TotalJumps - b.row.TotalJumps;
+      return a.row.TypeName.localeCompare(b.row.TypeName);
+    });
+
+    for (const candidate of orderedRows) {
       const remainingCargo = Math.max(0, preset.cargoCapacityM3 - usedCargo);
       const remainingCapital = Math.max(0, preset.maxCapitalIsk - usedCapital);
-      const maxUnitsByCargo = Math.floor(remainingCargo / volumePerUnit);
-      const maxUnitsByCapital = Math.floor(remainingCapital / buyPrice);
-      const units = Math.min(requestedUnits, maxUnitsByCargo, maxUnitsByCapital);
+      const maxUnitsByCargo = Math.floor(remainingCargo / candidate.volumePerUnit);
+      const maxUnitsByCapital = Math.floor(remainingCapital / candidate.buyPrice);
+      const units = Math.min(candidate.requestedUnits, maxUnitsByCargo, maxUnitsByCapital);
       if (units <= 0) {
-        if (maxUnitsByCargo <= 0) {
-          diagnostics.skippedCargoFull += 1;
-        } else {
-          diagnostics.skippedCapitalFull += 1;
-        }
+        if (maxUnitsByCargo <= 0) diagnostics.skippedCargoFull += 1;
+        else diagnostics.skippedCapitalFull += 1;
         continue;
       }
-
-      const volume = Math.max(0, units * volumePerUnit);
-      const capital = Math.max(0, units * buyPrice);
-      const profit = Math.max(0, units * profitPerUnit);
-      const partial = units < requestedUnits;
+      const volume = Math.max(0, units * candidate.volumePerUnit);
+      const capital = Math.max(0, units * candidate.buyPrice);
+      const profit = Math.max(0, units * candidate.profitPerUnit);
+      const partial = units < candidate.requestedUnits;
       if (partial) diagnostics.partialRowsAvailable += 1;
-      const grossSellIsk = Math.max(0, units * sellPrice);
+      const grossSellIsk = Math.max(0, units * candidate.sellPrice);
 
       usedCargo += volume;
       usedCapital += capital;
       totalProfit += profit;
       grossSell += grossSellIsk;
       lines.push({
-        row,
+        row: candidate.row,
         units,
         volumeM3: volume,
         capitalIsk: capital,
@@ -290,15 +378,15 @@ export function buildRadiusCargoBuilds(
         grossSellIsk,
         partial,
       });
-      weightedConfidence += confidence * volume;
-      weightedExecution += execution * volume;
+      weightedConfidence += candidate.confidence * volume;
+      weightedExecution += candidate.execution * volume;
       weightTotal += volume;
     }
 
     if (lines.length === 0) continue;
     const picked = lines.map((line) => line.row);
 
-    const jumps = Math.max(1, Math.round(aggregate?.dailyIskPerJump ? totalProfit / Math.max(1, aggregate.dailyIskPerJump) : picked[0].TotalJumps ?? 1));
+    const jumps = explicitRouteJumps(picked, aggregate);
     const iskPerJump = totalProfit / jumps;
     // 4) Jump efficiency (route-level)
     if (iskPerJump < preset.minJumpEfficiencyIsk) {
@@ -308,7 +396,7 @@ export function buildRadiusCargoBuilds(
 
     // 5) Risk gating (route-level): keep absolute count + optional density check.
     const riskCount = Math.max(0, aggregate?.riskTotalCount ?? 0);
-    const riskDenominator = Math.max(1, orderedRows.length);
+    const riskDenominator = Math.max(1, lineCandidates.length);
     const riskRate = riskCount / riskDenominator;
     if (riskCount > preset.maxRiskCount) {
       diagnostics.skippedRisk += 1;
