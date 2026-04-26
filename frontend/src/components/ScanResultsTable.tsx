@@ -177,8 +177,11 @@ import {
 import type { RouteExecutionWorkspace } from "@/lib/useRouteExecutionWorkspace";
 import {
   loadRouteAssignments,
+  upsertRouteAssignment,
+  isActiveRouteAssignment,
   type RouteAssignment,
 } from "@/lib/routeAssignments";
+import { recommendBestPilotForRoute } from "@/lib/routePilotRecommendation";
 import type { RouteQueueEntry } from "@/lib/routeQueue";
 import { getRadiusRouteExecutionBadge } from "@/lib/radiusRouteStatus";
 import {
@@ -3495,6 +3498,52 @@ export function ScanResultsTable({
     }
     return out;
   }, [routeGroupByKey]);
+  const activeAssignmentRouteByCharacterId = useMemo(() => {
+    const out: Record<number, string> = {};
+    for (const assignment of Object.values(routeAssignmentsByKey)) {
+      if (
+        assignment.assignedCharacterId &&
+        isActiveRouteAssignment(assignment.status)
+      ) {
+        out[assignment.assignedCharacterId] = assignment.routeKey;
+      }
+    }
+    return out;
+  }, [routeAssignmentsByKey]);
+
+  const assignRouteWithCharacterId = useCallback(
+    (routeKey: string, characterId: number, stagedSystem?: string) => {
+      const pilot = authCharacters.find((entry) => entry.character_id === characterId);
+      if (!pilot) return;
+      const anchor = routeAnchorRowByKey[routeKey];
+      const metrics = routeAggregateMetricsByRoute[routeKey];
+      const next = upsertRouteAssignment({
+        routeKey,
+        assignedCharacterName: pilot.character_name,
+        assignedCharacterId: pilot.character_id,
+        characterId: pilot.character_id,
+        assignedAt: new Date().toISOString(),
+        status: "queued",
+        expectedProfitIsk: Math.trunc(metrics?.routeTotalProfit ?? 0) || undefined,
+        expectedCapitalIsk: Math.trunc(metrics?.routeTotalCapital ?? 0) || undefined,
+        expectedJumps: undefined,
+        verificationStatusAtAssignment:
+          routeAssignmentsByKey[routeKey]?.verificationStatusAtAssignment,
+        buySystemId: anchor?.BuySystemID,
+        sellSystemId: anchor?.SellSystemID,
+        stagedSystem: stagedSystem?.trim() || routeAssignmentsByKey[routeKey]?.stagedSystem,
+      });
+      const assigned = next.find((entry) => entry.routeKey === routeKey);
+      if (!assigned) return;
+      setRouteAssignmentsByKey((prev) => ({ ...prev, [routeKey]: assigned }));
+    },
+    [
+      authCharacters,
+      routeAggregateMetricsByRoute,
+      routeAnchorRowByKey,
+      routeAssignmentsByKey,
+    ],
+  );
   const savedRoutePackByKey = useMemo<Record<string, SavedRoutePack>>(() => {
     const out: Record<string, SavedRoutePack> = {};
     for (const pack of savedRoutePacks) {
@@ -4857,6 +4906,27 @@ export function ScanResultsTable({
             else onOpenInRoute?.(routeKey);
           }
           return;
+        case "assign_route_active":
+          if (!routeKey) return;
+          if (authCharacters[0]) {
+            assignRouteWithCharacterId(routeKey, authCharacters[0].character_id);
+          }
+          return;
+        case "assign_route_best":
+          if (!routeKey) return;
+          const recommendation = recommendBestPilotForRoute(
+            authCharacters.map((character) => ({
+              characterId: character.character_id,
+              characterName: character.character_name,
+              jumpsToBuy: 0,
+              totalRunJumps: 0,
+            })),
+            { activeAssignmentRouteKeysByCharacterId: activeAssignmentRouteByCharacterId },
+          );
+          if (recommendation.bestCandidate) {
+            assignRouteWithCharacterId(routeKey, recommendation.bestCandidate.characterId);
+          }
+          return;
         case "verify_route":
           if (routeKey && onOpenInRouteWorkbench) onOpenInRouteWorkbench(routeKey);
           return;
@@ -4933,6 +5003,9 @@ export function ScanResultsTable({
       addDeprioritizedStation,
       addSellStationIgnore,
       addToast,
+      activeAssignmentRouteByCharacterId,
+      assignRouteWithCharacterId,
+      authCharacters,
       clearTemporaryStationFilters,
       contextHiddenEntry,
       copyText,
@@ -7005,6 +7078,28 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               )
             }
             onOpenInsights={() => setRadiusInsightsDrawerOpen((previous) => !previous)}
+            characters={authCharacters}
+            onAssignActive={(routeKey) => {
+              if (authCharacters[0]) assignRouteWithCharacterId(routeKey, authCharacters[0].character_id);
+            }}
+            onAssignBest={(routeKey) => {
+              const recommendation = recommendBestPilotForRoute(
+                authCharacters.map((character) => ({
+                  characterId: character.character_id,
+                  characterName: character.character_name,
+                  jumpsToBuy: 0,
+                  totalRunJumps: 0,
+                })),
+                { activeAssignmentRouteKeysByCharacterId: activeAssignmentRouteByCharacterId },
+              );
+              if (recommendation.bestCandidate) assignRouteWithCharacterId(routeKey, recommendation.bestCandidate.characterId);
+            }}
+            onAssignSpecificPilot={(routeKey, characterId) => assignRouteWithCharacterId(routeKey, characterId)}
+            onSetStagedSystem={(routeKey, stagedSystem) => {
+              const existing = routeAssignmentsByKey[routeKey];
+              if (!existing?.assignedCharacterId) return;
+              assignRouteWithCharacterId(routeKey, existing.assignedCharacterId, stagedSystem);
+            }}
           />
           <RadiusInsightsDrawer
             open={radiusInsightsDrawerOpen}
@@ -7057,6 +7152,29 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               rows={results}
               characters={authCharacters}
               fallbackSystemName={originSystemName ?? "Unknown"}
+              assignmentByRouteKey={routeAssignmentsByKey}
+              routeQueueEntries={routeQueueEntries}
+              onAssignActive={(routeKey) => {
+                if (authCharacters[0]) assignRouteWithCharacterId(routeKey, authCharacters[0].character_id);
+              }}
+              onAssignBest={(routeKey) => {
+                const recommendation = recommendBestPilotForRoute(
+                  authCharacters.map((character) => ({
+                    characterId: character.character_id,
+                    characterName: character.character_name,
+                    jumpsToBuy: 0,
+                    totalRunJumps: 0,
+                  })),
+                  { activeAssignmentRouteKeysByCharacterId: activeAssignmentRouteByCharacterId },
+                );
+                if (recommendation.bestCandidate) assignRouteWithCharacterId(routeKey, recommendation.bestCandidate.characterId);
+              }}
+              onAssignSpecificPilot={(routeKey, characterId) => assignRouteWithCharacterId(routeKey, characterId)}
+              onSetStagedSystem={(routeKey, stagedSystem) => {
+                const existing = routeAssignmentsByKey[routeKey];
+                if (!existing?.assignedCharacterId) return;
+                assignRouteWithCharacterId(routeKey, existing.assignedCharacterId, stagedSystem);
+              }}
             />
           </RadiusInsightsDrawer>
         </>
@@ -8092,6 +8210,28 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                     batchEntryMode: "core",
                   })
                 }
+                characters={authCharacters}
+                onAssignActive={(routeKey) => {
+                  if (authCharacters[0]) assignRouteWithCharacterId(routeKey, authCharacters[0].character_id);
+                }}
+                onAssignBest={(routeKey) => {
+                  const recommendation = recommendBestPilotForRoute(
+                    authCharacters.map((character) => ({
+                      characterId: character.character_id,
+                      characterName: character.character_name,
+                      jumpsToBuy: 0,
+                      totalRunJumps: 0,
+                    })),
+                    { activeAssignmentRouteKeysByCharacterId: activeAssignmentRouteByCharacterId },
+                  );
+                  if (recommendation.bestCandidate) assignRouteWithCharacterId(routeKey, recommendation.bestCandidate.characterId);
+                }}
+                onAssignSpecificPilot={(routeKey, characterId) => assignRouteWithCharacterId(routeKey, characterId)}
+                onSetStagedSystem={(routeKey, stagedSystem) => {
+                  const existing = routeAssignmentsByKey[routeKey];
+                  if (!existing?.assignedCharacterId) return;
+                  assignRouteWithCharacterId(routeKey, existing.assignedCharacterId, stagedSystem);
+                }}
               />
             ))}
             {showCargoDiagnosticsPanel && (

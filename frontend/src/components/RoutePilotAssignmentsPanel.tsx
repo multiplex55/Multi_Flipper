@@ -3,9 +3,11 @@ import { getCharacterLocation } from "@/lib/api";
 import type { AuthCharacter } from "@/lib/types";
 import {
   getRouteAssignment,
+  loadRouteAssignments,
   removeRouteAssignment,
   type RouteAssignment,
   type RouteAssignmentStatus,
+  isActiveRouteAssignment,
   updateRouteAssignment,
   upsertRouteAssignment,
   VALID_STATUSES,
@@ -15,6 +17,9 @@ import { recommendBestPilotForRoute } from "@/lib/routePilotRecommendation";
 export interface RoutePilotAssignmentEndpoints {
   buySystemName?: string;
   sellSystemName?: string;
+  expectedCapitalIsk?: number;
+  expectedCargoM3?: number;
+  expectedJumps?: number;
   candidateDistancesByCharacterId?: Record<
     number,
     { jumpsToBuy?: number | null; totalRunJumps?: number | null }
@@ -131,6 +136,17 @@ export function RoutePilotAssignmentsPanel({
           routeEndpoints?.candidateDistancesByCharacterId?.[character.character_id]
             ?.totalRunJumps ?? null,
       })),
+      {
+        requiredCapitalIsk: routeEndpoints?.expectedCapitalIsk,
+        requiredCargoM3: routeEndpoints?.expectedCargoM3,
+        expectedJumps: routeEndpoints?.expectedJumps,
+        activeAssignmentRouteKeysByCharacterId: Object.fromEntries(
+          loadRouteAssignments()
+            .filter((entry) => isActiveRouteAssignment(entry.status))
+            .filter((entry) => typeof entry.assignedCharacterId === "number" && entry.assignedCharacterId > 0)
+            .map((entry) => [entry.assignedCharacterId ?? 0, entry.routeKey]),
+        ),
+      },
     );
     if (!recommendation.bestCandidate) return;
     setSelectedCharacterId(String(recommendation.bestCandidate.characterId));

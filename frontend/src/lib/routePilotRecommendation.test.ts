@@ -33,6 +33,44 @@ describe("routePilotRecommendation", () => {
     expect(result.candidates.find((row) => row.characterId === 1)?.eligible).toBe(false);
   });
 
+  it("avoids conflicts from already-active assignments", () => {
+    const result = recommendBestPilotForRoute(
+      [
+        { characterId: 1, characterName: "Alpha", jumpsToBuy: 1, totalRunJumps: 2 },
+        { characterId: 2, characterName: "Bravo", jumpsToBuy: 2, totalRunJumps: 2 },
+      ],
+      { activeAssignmentRouteKeysByCharacterId: { 1: "other-route" } },
+    );
+    expect(result.bestCandidate?.characterId).toBe(2);
+  });
+
+  it("filters out pilots that do not meet capital/cargo/jump requirements", () => {
+    const result = recommendBestPilotForRoute(
+      [
+        {
+          characterId: 1,
+          characterName: "Alpha",
+          jumpsToBuy: 1,
+          totalRunJumps: 2,
+          availableCapitalIsk: 1_000,
+          availableCargoM3: 100,
+          maxComfortableJumps: 3,
+        },
+        {
+          characterId: 2,
+          characterName: "Bravo",
+          jumpsToBuy: 2,
+          totalRunJumps: 2,
+          availableCapitalIsk: 10_000,
+          availableCargoM3: 500,
+          maxComfortableJumps: 20,
+        },
+      ],
+      { requiredCapitalIsk: 5_000, requiredCargoM3: 300, expectedJumps: 6 },
+    );
+    expect(result.bestCandidate?.characterId).toBe(2);
+  });
+
   it("returns no best candidate when none are eligible", () => {
     const result = recommendBestPilotForRoute([
       { characterId: 1, characterName: "Alpha", jumpsToBuy: null, totalRunJumps: null },

@@ -3,7 +3,8 @@ export type RouteAssignmentStatus =
   | "buying"
   | "hauling"
   | "selling"
-  | "done";
+  | "done"
+  | "skipped";
 
 export interface RouteAssignment {
   routeKey: string;
@@ -45,7 +46,12 @@ const VALID_STATUSES: RouteAssignmentStatus[] = [
   "hauling",
   "selling",
   "done",
+  "skipped",
 ];
+
+export function isActiveRouteAssignment(status: RouteAssignmentStatus): boolean {
+  return status !== "done" && status !== "skipped";
+}
 
 function normalizeNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value > 0

@@ -9,6 +9,8 @@ import {
   getVerifyActionLabel,
   type RadiusVerificationState,
 } from "@/lib/radiusVerificationStatus";
+import { RouteAssignmentQuickActions } from "@/components/RouteAssignmentQuickActions";
+import type { AuthCharacter } from "@/lib/types";
 
 type RadiusCargoBuildCardProps = {
   build: RadiusCargoBuild;
@@ -22,6 +24,11 @@ type RadiusCargoBuildCardProps = {
   routeQueueEntries?: RouteQueueEntry[];
   assignmentByRouteKey?: Record<string, RouteAssignment>;
   verificationState?: RadiusVerificationState;
+  characters?: AuthCharacter[];
+  onAssignActive?: (routeKey: string) => void;
+  onAssignBest?: (routeKey: string) => void;
+  onAssignSpecificPilot?: (routeKey: string, characterId: number) => void;
+  onSetStagedSystem?: (routeKey: string, stagedSystem: string) => void;
 };
 
 const badgeTone = {
@@ -74,6 +81,28 @@ export function RadiusCargoBuildCard(props: RadiusCargoBuildCardProps) {
         <button type="button" className="rounded-sm border border-indigo-400/60 px-1.5 py-0.5 text-indigo-200" onClick={() => props.onQueue(build.routeKey)}>Queue</button>
         <button type="button" className="rounded-sm border border-blue-500/60 px-1.5 py-0.5 text-blue-200" onClick={() => props.onOpenWorkbench(build.routeKey)}>Open workbench</button>
         <button type="button" className="rounded-sm border border-eve-accent/60 px-1.5 py-0.5 text-eve-accent" onClick={() => props.onOpenBatch(build.routeKey)}>Open batch</button>
+      </div>
+      <div className="mt-1">
+        <RouteAssignmentQuickActions
+          compact
+          context={{
+            routeKey: build.routeKey,
+            routeLabel: build.routeLabel,
+            expectedProfitIsk: build.totalProfitIsk,
+            expectedCapitalIsk: build.totalCapitalIsk,
+            expectedCargoM3: build.totalCargoM3,
+            expectedJumps: build.jumps,
+          }}
+          characters={props.characters}
+          onAssignActive={(ctx) => props.onAssignActive?.(ctx.routeKey)}
+          onAssignBest={(ctx) => props.onAssignBest?.(ctx.routeKey)}
+          onAssignSpecificPilot={(ctx, characterId) =>
+            props.onAssignSpecificPilot?.(ctx.routeKey, characterId)
+          }
+          onSetStagedSystem={(ctx, stagedSystem) =>
+            props.onSetStagedSystem?.(ctx.routeKey, stagedSystem)
+          }
+        />
       </div>
 
       <div className="mt-2">
