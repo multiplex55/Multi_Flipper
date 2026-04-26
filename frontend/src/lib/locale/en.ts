@@ -310,6 +310,7 @@ export const en = {
 
     // Route finder
     tabRoute: "Route",
+    tabRadiusRoute: "Flipper Radius (Route)",
     routeMinHops: "Min hops",
     routeMaxHops: "Max hops",
     routeMinISKPerJump: "Min ISK/jump",
@@ -1958,7 +1959,7 @@ export const en = {
     cmdSwitchToRegion: "Switch to Regional tab",
     cmdSwitchToContracts: "Switch to Contracts tab",
     cmdSwitchToStation: "Switch to Station tab",
-    cmdSwitchToRoute: "Switch to Route tab",
+    cmdSwitchToRoute: "Switch to Flipper Radius (Route)",
     cmdSwitchToIndustry: "Switch to Industry tab",
     cmdSwitchToDemand: "Switch to Demand tab",
     cmdSwitchToPlex: "Switch to PLEX+ tab",
@@ -1979,7 +1980,7 @@ export const en = {
     shortcutTabRegion: "Switch to Region tab",
     shortcutTabContracts: "Switch to Contracts tab",
     shortcutTabStation: "Switch to Station tab",
-    shortcutTabRoute: "Switch to Route tab",
+    shortcutTabRoute: "Switch to Flipper Radius (Route)",
     shortcutOpenWatchlist: "Open Watchlist",
     shortcutOpenHistory: "Open Scan History",
     shortcutStartScan: "Start / Stop scan",

@@ -310,6 +310,7 @@ export const ru = {
 
     // Route finder
     tabRoute: "Маршрут",
+    tabRadiusRoute: "Flipper Radius (Route)",
     routeMinHops: "Мин. хопов",
     routeMaxHops: "Макс. хопов",
     routeMinISKPerJump: "Мин. ISK/прыжок",
@@ -1958,7 +1959,7 @@ export const ru = {
     cmdSwitchToRegion: "Перейти на вкладку Регион",
     cmdSwitchToContracts: "Перейти на вкладку Контракты",
     cmdSwitchToStation: "Перейти на вкладку Станция",
-    cmdSwitchToRoute: "Перейти на вкладку Маршрут",
+    cmdSwitchToRoute: "Перейти на Flipper Radius (Route)",
     cmdSwitchToIndustry: "Перейти на вкладку Индустрия",
     cmdSwitchToDemand: "Перейти на вкладку Спрос",
     cmdSwitchToPlex: "Перейти на вкладку PLEX+",
@@ -1979,7 +1980,7 @@ export const ru = {
     shortcutTabRegion: "Перейти на вкладку Регион",
     shortcutTabContracts: "Перейти на вкладку Контракты",
     shortcutTabStation: "Перейти на вкладку Станция",
-    shortcutTabRoute: "Перейти на вкладку Маршрут",
+    shortcutTabRoute: "Перейти на Flipper Radius (Route)",
     shortcutOpenWatchlist: "Открыть список наблюдения",
     shortcutOpenHistory: "Открыть историю сканов",
     shortcutStartScan: "Запустить / остановить скан",

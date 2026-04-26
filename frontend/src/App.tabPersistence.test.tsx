@@ -6,23 +6,27 @@ const { mockScan } = vi.hoisted(() => ({
   mockScan: vi.fn(async () => [{ TypeID: 34, TypeName: "Tritanium" }]),
 }));
 
-vi.mock("@/lib/api", () => ({
-  applyAppUpdate: vi.fn(),
-  getUpdateCheckStatus: vi.fn(async () => ({ status: "idle" })),
-  getConfig: vi.fn(async () => ({ system_name: "Jita", cargo_capacity: 10000 })),
-  skipAppUpdateForSession: vi.fn(async () => ({})),
-  updateConfig: vi.fn(async () => ({})),
-  scan: mockScan,
-  scanMultiRegion: vi.fn(async () => []),
-  scanRegionalDayTrader: vi.fn(async () => []),
-  scanContracts: vi.fn(async () => []),
-  testAlertChannels: vi.fn(async () => ({})),
-  getWatchlist: vi.fn(async () => []),
-  getBanlistItems: vi.fn(async () => []),
-  getBannedStations: vi.fn(async () => []),
-  rebootStationCache: vi.fn(async () => ({ ok: true, cleared: 0 })),
-  getCharacterLocation: vi.fn(async () => null),
-}));
+vi.mock("@/lib/api", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api")>();
+  return {
+    ...actual,
+    applyAppUpdate: vi.fn(),
+    getUpdateCheckStatus: vi.fn(async () => ({ status: "idle" })),
+    getConfig: vi.fn(async () => ({ system_name: "Jita", cargo_capacity: 10000 })),
+    skipAppUpdateForSession: vi.fn(async () => ({})),
+    updateConfig: vi.fn(async () => ({})),
+    scan: mockScan,
+    scanMultiRegion: vi.fn(async () => []),
+    scanRegionalDayTrader: vi.fn(async () => []),
+    scanContracts: vi.fn(async () => []),
+    testAlertChannels: vi.fn(async () => ({})),
+    getWatchlist: vi.fn(async () => []),
+    getBanlistItems: vi.fn(async () => []),
+    getBannedStations: vi.fn(async () => []),
+    rebootStationCache: vi.fn(async () => ({ ok: true, cleared: 0 })),
+    getCharacterLocation: vi.fn(async () => null),
+  };
+});
 
 vi.mock("@/lib/radiusScanSession", () => ({
   createEmptyRadiusScanSession: () => ({ hasScan: false, results: [], loopOpportunities: [] }),
@@ -43,7 +47,13 @@ vi.mock("@/lib/useVersionCheck", () => ({ useVersionCheck: () => ({ appVersion: 
 vi.mock("@/lib/useEsiStatus", () => ({ useEsiStatus: () => ({ esiAvailable: true }) }));
 vi.mock("@/lib/useKeyboardShortcuts", () => ({ useKeyboardShortcuts: vi.fn() }));
 vi.mock("@/components/Toast", () => ({ useGlobalToast: () => ({ addToast: vi.fn(), removeToast: vi.fn() }) }));
-vi.mock("@/lib/i18n", () => ({ useI18n: () => ({ t: (key: string) => key, language: "en", setLanguage: vi.fn() }) }));
+vi.mock("@/lib/i18n", () => ({
+  useI18n: () => ({
+    t: (key: string) => (key === "tabRadiusRoute" ? "Flipper Radius (Route)" : key),
+    language: "en",
+    setLanguage: vi.fn(),
+  }),
+}));
 
 vi.mock("@/components/ParametersPanel", () => ({ ParametersPanel: () => null }));
 vi.mock("@/components/StatusBar", () => ({ StatusBar: () => null }));
@@ -90,10 +100,20 @@ describe("App tab persistence", () => {
 
     await waitFor(() => expect(screen.getByTestId("rows-radius")).toHaveTextContent("1"));
 
-    fireEvent.click(screen.getByRole("tab", { name: "tabRoute" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Flipper Radius (Route)" }));
     expect(await screen.findByTestId("route-session-count")).toHaveTextContent("route-session:1");
 
     fireEvent.click(screen.getByRole("tab", { name: "tabRadius" }));
     expect(await screen.findByTestId("rows-radius")).toHaveTextContent("1");
+  });
+
+
+  it("restores persisted route tab value and shows Flipper Radius (Route) label", async () => {
+    localStorage.setItem("eve-flipper-active-tab", "route");
+
+    render(<App />);
+
+    expect(await screen.findByTestId("route-session-count")).toHaveTextContent("route-session:0");
+    expect(screen.getByRole("tab", { name: "Flipper Radius (Route)" })).toBeInTheDocument();
   });
 });
