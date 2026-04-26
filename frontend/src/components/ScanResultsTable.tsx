@@ -191,6 +191,7 @@ import {
   type RadiusCargoBuildPreset,
 } from "@/lib/radiusCargoBuilds";
 import { RadiusCommandBar } from "@/components/RadiusCommandBar";
+import { RadiusStatusSummaryStrip } from "@/components/RadiusStatusSummaryStrip";
 import { RadiusCargoBuildCard } from "@/components/RadiusCargoBuildCard";
 import { RadiusCargoBuildDiagnosticsPanel } from "@/components/RadiusCargoBuildDiagnosticsPanel";
 import { useRouteBatchBuilderController } from "@/lib/useRouteBatchBuilderController";
@@ -212,6 +213,8 @@ import {
   radiusDecisionModes,
   type RadiusDecisionModeId,
 } from "@/lib/radiusDecisionModes";
+import { isRadiusTradeExecutableNow } from "@/lib/radiusExecutableNow";
+import { computeRadiusSessionSummary } from "@/lib/radiusSessionSummary";
 
 export const calcRouteConfidence = calcRouteConfidenceFromInsights;
 
@@ -2953,6 +2956,9 @@ export function ScanResultsTable({
     if (trackedVisibilityMode === "hide_non_tracked") {
       rows = rows.filter((ir) => watchlistIds.has(ir.row.TypeID));
     }
+    if (isRadiusMode) {
+      rows = rows.filter((ir) => routeExecutionMatches(ir.row));
+    }
     return rows;
   }, [
     sorted,
@@ -2965,6 +2971,11 @@ export function ScanResultsTable({
     urgencyFilter,
     trackedVisibilityMode,
     watchlistIds,
+    isRadiusMode,
+    routeAssignmentsByKey,
+    routeExecutionFilters,
+    routeQueueEntries,
+    routeVerificationByKey,
   ]);
 
   const hubScopeRows = useMemo(
@@ -3271,6 +3282,29 @@ export function ScanResultsTable({
     selectedBadgeFilters,
   ]);
 
+  function routeExecutionMatches(row: FlipResult): boolean {
+    if (!isRadiusMode) return true;
+    const routeKey = routeGroupKey(row);
+    const badge = getRadiusRouteExecutionBadge(routeKey, routeQueueEntries, routeAssignmentsByKey);
+    if (routeExecutionFilters.hideQueued && badge.status === "queued") return false;
+    if (routeExecutionFilters.unassignedOnly && Boolean(badge.assignedPilotName)) return false;
+    if (routeExecutionFilters.needsVerify && badge.status !== "needs_verify") return false;
+    if (routeExecutionFilters.executableNow) {
+      const verificationStatus = routeVerificationByKey[routeKey]?.status;
+      if (
+        !isRadiusTradeExecutableNow({
+          row,
+          routeStatus: badge.status,
+          assignedPilotName: badge.assignedPilotName,
+          verificationState: verificationStatus === "Abort" ? "abort" : null,
+        })
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   const filterAudit = useMemo(() => {
     const hasColumnFilters = Object.values(filters).some((value) => !!value);
     const stageCounts: Record<FilterStageKey, number> = {
@@ -3291,15 +3325,6 @@ export function ScanResultsTable({
       rowReasons.set(rowId, new Set([reason]));
     };
     const routeBadgePassByRowId = new Map<number, boolean>();
-    const routeExecutionMatches = (row: FlipResult): boolean => {
-      if (!isRadiusMode) return true;
-      const badge = getRadiusRouteExecutionBadge(routeGroupKey(row), routeQueueEntries, routeAssignmentsByKey);
-      if (routeExecutionFilters.hideQueued && badge.status === "queued") return false;
-      if (routeExecutionFilters.unassignedOnly && Boolean(badge.assignedPilotName)) return false;
-      if (routeExecutionFilters.needsVerify && badge.status !== "needs_verify") return false;
-      if (routeExecutionFilters.executableNow) return false;
-      return true;
-    };
     const routeBadgeMatches = (row: FlipResult): boolean => {
       if (!isRouteGrouped || selectedBadgeFilters.size === 0) return true;
       const routeKey = routeGroupKey(row);
@@ -3431,6 +3456,7 @@ export function ScanResultsTable({
     routeExecutionFilters,
     routeQueueEntries,
     routeSafetyMap,
+    routeVerificationByKey,
     selectedBadgeFilters,
     sessionStationFilters,
     showHiddenRows,
@@ -5361,6 +5387,61 @@ export function ScanResultsTable({
     return out;
   }, [routeGroupByKey]);
 
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    count += Object.values(filters).filter(Boolean).length;
+    if (showHiddenRows) count += 1;
+    if (urgencyFilter !== "all") count += 1;
+    if (trackedVisibilityMode !== "all") count += 1;
+    if (selectedBadgeFilters.size > 0) count += 1;
+    if (routeExecutionFilters.hideQueued) count += 1;
+    if (routeExecutionFilters.unassignedOnly) count += 1;
+    if (routeExecutionFilters.needsVerify) count += 1;
+    if (routeExecutionFilters.executableNow) count += 1;
+    return count;
+  }, [
+    filters,
+    showHiddenRows,
+    urgencyFilter,
+    trackedVisibilityMode,
+    selectedBadgeFilters,
+    routeExecutionFilters,
+  ]);
+
+  const radiusSessionSummary = useMemo(() => {
+    const routeStateByKey = Object.fromEntries(
+      Object.keys(routeGroupByKey).map((routeKey) => {
+        const badge = getRadiusRouteExecutionBadge(routeKey, routeQueueEntries, routeAssignmentsByKey);
+        return [
+          routeKey,
+          {
+            status: badge.status,
+            assignedPilotName: badge.assignedPilotName,
+            verificationState: verificationStateByRouteKey[routeKey] ?? null,
+          },
+        ];
+      }),
+    );
+
+    return computeRadiusSessionSummary({
+      totalRows: indexed.map((entry) => entry.row),
+      visibleRows: datasetRows.map((entry) => entry.row),
+      hiddenRowCount: Math.max(0, sorted.length - datasetRows.length),
+      activeFilterCount,
+      getRouteKey: routeGroupKey,
+      routeStateByKey,
+    });
+  }, [
+    activeFilterCount,
+    datasetRows,
+    indexed,
+    routeAssignmentsByKey,
+    routeGroupByKey,
+    routeQueueEntries,
+    sorted.length,
+    verificationStateByRouteKey,
+  ]);
+
   const { openBatchBuilderForRoute } = useRouteBatchBuilderController({
     routeRowsByKey,
     savedRoutePacks,
@@ -6021,7 +6102,56 @@ export function ScanResultsTable({
               onClearFilters: clearFilters,
               oneLegEnabled: oneLegModeEnabled,
               onToggleOneLeg: () => setOneLegModeEnabled((prev) => !prev),
+              executableNowEnabled: routeExecutionFilters.executableNow,
+              onToggleExecutableNow: () =>
+                setRouteExecutionFilters((prev) => ({
+                  ...prev,
+                  executableNow: !prev.executableNow,
+                })),
             }}
+            statusSummarySection={
+              <RadiusStatusSummaryStrip
+                summary={radiusSessionSummary}
+                filters={{
+                  executableNow: routeExecutionFilters.executableNow,
+                  hideQueued: routeExecutionFilters.hideQueued,
+                  needsVerify: routeExecutionFilters.needsVerify,
+                  showHiddenRows,
+                }}
+                onToggleExecutableNow={() =>
+                  setRouteExecutionFilters((prev) => ({
+                    ...prev,
+                    executableNow: !prev.executableNow,
+                  }))
+                }
+                onToggleHideQueued={() =>
+                  setRouteExecutionFilters((prev) => ({
+                    ...prev,
+                    hideQueued: !prev.hideQueued,
+                  }))
+                }
+                onToggleNeedsVerify={() =>
+                  setRouteExecutionFilters((prev) => ({
+                    ...prev,
+                    needsVerify: !prev.needsVerify,
+                  }))
+                }
+                onToggleHiddenRows={() => setShowHiddenRows((prev) => !prev)}
+                onClearFilters={() => {
+                  clearFilters();
+                  setUrgencyFilter("all");
+                  setTrackedVisibilityMode("all");
+                  setSelectedBadgeFilters(new Set());
+                  setRouteExecutionFilters({
+                    hideQueued: false,
+                    unassignedOnly: false,
+                    needsVerify: false,
+                    executableNow: false,
+                  });
+                  setShowHiddenRows(false);
+                }}
+              />
+            }
             actions={{
               onVerifyPrices: () => onOpenPriceValidation?.(""),
               onExportCsv: exportCSV,
