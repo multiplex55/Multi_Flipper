@@ -1,5 +1,7 @@
 import { formatISK } from "@/lib/format";
 import type { RadiusDealFocusCandidate } from "@/lib/radiusDealFocus";
+import type { RadiusDealMovement } from "@/lib/radiusDealMovement";
+import { RadiusDealMovementBadge } from "@/components/RadiusDealMovementBadge";
 import { getRadiusVerificationBadgeMeta } from "@/lib/radiusVerificationStatus";
 
 type RadiusDealFocusBoardProps = {
@@ -9,6 +11,7 @@ type RadiusDealFocusBoardProps = {
   onCopyChecklist?: (routeKey: string) => void;
   onCopyManifest?: (routeKey: string) => void;
   onOpenRouteWorkbench: (routeKey: string) => void;
+  movementByRouteKey?: Record<string, RadiusDealMovement>;
 };
 
 const ACTION_LABEL: Record<RadiusDealFocusCandidate["recommendedAction"], string> = {
@@ -25,6 +28,7 @@ export function RadiusDealFocusBoard({
   onCopyChecklist,
   onCopyManifest,
   onOpenRouteWorkbench,
+  movementByRouteKey = {},
 }: RadiusDealFocusBoardProps) {
   if (candidates.length === 0) {
     return (
@@ -43,6 +47,7 @@ export function RadiusDealFocusBoard({
         <div className="mt-1 grid gap-1 text-[11px]">
           {candidates.slice(0, 8).map((candidate) => {
             const verificationBadge = getRadiusVerificationBadgeMeta(candidate.verificationState);
+            const movement = movementByRouteKey[candidate.routeKey];
             return (
               <article
                 key={`${candidate.kind}:${candidate.routeKey}`}
@@ -75,6 +80,7 @@ export function RadiusDealFocusBoard({
                   <span className={`rounded-sm border px-1 py-0 ${verificationBadge.className}`}>
                     {verificationBadge.label}
                   </span>
+                  <RadiusDealMovementBadge movement={movement} />
                   <span className="rounded-sm border border-indigo-500/60 bg-indigo-500/10 px-1 py-0 text-indigo-100">
                     {ACTION_LABEL[candidate.recommendedAction]}
                   </span>

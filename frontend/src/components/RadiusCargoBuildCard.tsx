@@ -13,6 +13,8 @@ import { RouteAssignmentQuickActions } from "@/components/RouteAssignmentQuickAc
 import { RadiusDealExplanationPanel } from "@/components/RadiusDealExplanationPanel";
 import { ExplanationPopoverShell } from "@/components/decision/ExplanationPopoverShell";
 import type { AuthCharacter } from "@/lib/types";
+import type { RadiusDealMovement } from "@/lib/radiusDealMovement";
+import { RadiusDealMovementBadge } from "@/components/RadiusDealMovementBadge";
 
 type RadiusCargoBuildCardProps = {
   build: RadiusCargoBuild;
@@ -31,6 +33,7 @@ type RadiusCargoBuildCardProps = {
   onAssignBest?: (routeKey: string) => void;
   onAssignSpecificPilot?: (routeKey: string, characterId: number) => void;
   onSetStagedSystem?: (routeKey: string, stagedSystem: string) => void;
+  movement?: RadiusDealMovement | null;
 };
 
 const badgeTone = {
@@ -65,7 +68,7 @@ export function RadiusCargoBuildCard(props: RadiusCargoBuildCardProps) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="font-semibold text-eve-text">{build.routeLabel}</div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-eve-dim"><span>{build.routeKey}</span><span className={`rounded-sm border px-1 py-0 text-[10px] ${routeBadge.tone}`}>{routeBadge.label}</span><span className={`rounded-sm border px-1 py-0 text-[10px] ${verificationBadge.className}`}>{verificationBadge.label}</span></div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-eve-dim"><span>{build.routeKey}</span><span className={`rounded-sm border px-1 py-0 text-[10px] ${routeBadge.tone}`}>{routeBadge.label}</span><span className={`rounded-sm border px-1 py-0 text-[10px] ${verificationBadge.className}`}>{verificationBadge.label}</span><RadiusDealMovementBadge movement={props.movement} /></div>
         </div>
         <div className="text-eve-accent font-mono">Score {build.finalScore.toFixed(1)}</div>
       </div>

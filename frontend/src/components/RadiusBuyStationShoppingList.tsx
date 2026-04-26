@@ -1,5 +1,7 @@
 import { formatISK } from "@/lib/format";
 import type { RadiusBuyStationShoppingList } from "@/lib/radiusBuyStationShoppingList";
+import type { RadiusDealMovement } from "@/lib/radiusDealMovement";
+import { RadiusDealMovementBadge } from "@/components/RadiusDealMovementBadge";
 
 type Props = {
   lists: RadiusBuyStationShoppingList[];
@@ -9,9 +11,10 @@ type Props = {
   onCopyManifest: (list: RadiusBuyStationShoppingList) => void;
   onOpenBatch: (list: RadiusBuyStationShoppingList) => void;
   onVerifyStationGroup: (list: RadiusBuyStationShoppingList) => void;
+  movementByListId?: Record<string, RadiusDealMovement>;
 };
 
-export function RadiusBuyStationShoppingListView({ lists, ...actions }: Props) {
+export function RadiusBuyStationShoppingListView({ lists, movementByListId = {}, ...actions }: Props) {
   return (
     <div className="grid gap-2" data-testid="radius-buy-station-shopping-list">
       {lists.map((list) => (
@@ -23,7 +26,7 @@ export function RadiusBuyStationShoppingListView({ lists, ...actions }: Props) {
                 {list.buySystemName} • Best sell: <span className="text-eve-text">{list.primarySellStation}</span>
               </div>
             </div>
-            <div className="text-eve-accent font-mono">Score {list.actionableScore.toFixed(1)}</div>
+            <div className="flex items-center gap-1"><RadiusDealMovementBadge movement={movementByListId[list.id]} /><div className="text-eve-accent font-mono">Score {list.actionableScore.toFixed(1)}</div></div>
           </div>
 
           <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-eve-dim">
