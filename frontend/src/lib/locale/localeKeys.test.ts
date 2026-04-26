@@ -62,4 +62,15 @@ describe("localization key sanity", () => {
     expect(dailyProfitOverCapitalColumn?.labelKey).toBe("colDailyProfitOverCapital");
     expect(roiColumn?.labelKey).toBe("colROI");
   });
+
+  it("keeps new route-pack synthetic columns registered in the table model", () => {
+    const routePackColumnKeys = new Set(baseColumnDefs.map((column) => column.key));
+
+    expect(routePackColumnKeys.has("RoutePackProfitPer100M")).toBe(true);
+    expect(routePackColumnKeys.has("RoutePackRemainingCargoM3")).toBe(true);
+    expect(routePackColumnKeys.has("RoutePackWorstFillConfidencePct")).toBe(true);
+    expect(routePackColumnKeys.has("RoutePackAverageFillConfidencePct")).toBe(true);
+    expect(routePackColumnKeys.has("RoutePackProfitConcentrationPct")).toBe(true);
+  });
+
 });

@@ -9,41 +9,7 @@ import {
   type RouteBatchMetadata,
 } from "@/lib/batchMetrics";
 import type { FlipResult } from "@/lib/types";
-
-function makeRow(overrides: Partial<FlipResult> = {}): FlipResult {
-  return {
-    TypeID: overrides.TypeID ?? 1,
-    TypeName: overrides.TypeName ?? `Type ${overrides.TypeID ?? 1}`,
-    Volume: overrides.Volume ?? 2,
-    BuyPrice: overrides.BuyPrice ?? 100,
-    BuyStation: overrides.BuyStation ?? "Buy",
-    BuySystemName: overrides.BuySystemName ?? "BuySys",
-    BuySystemID: overrides.BuySystemID ?? 300001,
-    BuyLocationID: overrides.BuyLocationID ?? 600001,
-    SellPrice: overrides.SellPrice ?? 130,
-    SellStation: overrides.SellStation ?? "Sell",
-    SellSystemName: overrides.SellSystemName ?? "SellSys",
-    SellSystemID: overrides.SellSystemID ?? 300002,
-    SellLocationID: overrides.SellLocationID ?? 600002,
-    ProfitPerUnit: overrides.ProfitPerUnit ?? 20,
-    MarginPercent: overrides.MarginPercent ?? 20,
-    UnitsToBuy: overrides.UnitsToBuy ?? 10,
-    BuyOrderRemain: overrides.BuyOrderRemain ?? 10,
-    SellOrderRemain: overrides.SellOrderRemain ?? 10,
-    TotalProfit: overrides.TotalProfit ?? 200,
-    ProfitPerJump: overrides.ProfitPerJump ?? 50,
-    BuyJumps: overrides.BuyJumps ?? 1,
-    SellJumps: overrides.SellJumps ?? 1,
-    TotalJumps: overrides.TotalJumps ?? 2,
-    DailyVolume: overrides.DailyVolume ?? 100,
-    Velocity: overrides.Velocity ?? 1,
-    PriceTrend: overrides.PriceTrend ?? 1,
-    BuyCompetitors: overrides.BuyCompetitors ?? 1,
-    SellCompetitors: overrides.SellCompetitors ?? 1,
-    DailyProfit: overrides.DailyProfit ?? 10,
-    ...overrides,
-  };
-}
+import { makeFlipResult as makeRow } from "@/lib/testFixtures";
 
 function metadataFor(row: FlipResult, metadataByRow: Record<string, RouteBatchMetadata>) {
   return metadataByRow[
@@ -462,7 +428,7 @@ describe("batchMetrics", () => {
     expect(meta.routeBreakevenBuffer).toBeNull();
   });
 
-  it("computes route profit concentration from largest selected line and returns null for non-positive totals", () => {
+  it("computes route profit concentration for dominant/even lines and nulls on zero-or-negative totals", () => {
     const concentratedA = makeRow({
       TypeID: 8001,
       BuyLocationID: 880001,
@@ -479,21 +445,46 @@ describe("batchMetrics", () => {
       UnitsToBuy: 10,
       Volume: 1,
     });
-    const positiveMeta = buildRouteBatchMetadataByRow(
-      [concentratedA, concentratedB],
-      1_000,
-    );
+    const positiveMeta = buildRouteBatchMetadataByRow([concentratedA, concentratedB], 1_000);
     const concentration = metadataFor(concentratedA, positiveMeta).routeProfitConcentrationPct;
     expect(concentration).toBeCloseTo((400 / 600) * 100, 6);
 
-    const nonPositive = makeRow({
+    const equalA = makeRow({
+      TypeID: 8003,
+      BuyLocationID: 881001,
+      SellLocationID: 881002,
+      ProfitPerUnit: 30,
+      UnitsToBuy: 10,
+      Volume: 1,
+    });
+    const equalB = makeRow({
+      TypeID: 8004,
+      BuyLocationID: equalA.BuyLocationID,
+      SellLocationID: equalA.SellLocationID,
+      ProfitPerUnit: 30,
+      UnitsToBuy: 10,
+      Volume: 1,
+    });
+    const equalMeta = buildRouteBatchMetadataByRow([equalA, equalB], 1_000);
+    expect(metadataFor(equalA, equalMeta).routeProfitConcentrationPct).toBeCloseTo(50, 6);
+
+    const zero = makeRow({
+      TypeID: 8100,
+      BuyLocationID: 889001,
+      SellLocationID: 889002,
+      ProfitPerUnit: 0,
+      UnitsToBuy: 10,
+    });
+    const negative = makeRow({
       TypeID: 8101,
       BuyLocationID: 890001,
       SellLocationID: 890002,
       ProfitPerUnit: -10,
       UnitsToBuy: 10,
     });
-    const nonPositiveMeta = buildRouteBatchMetadataByRow([nonPositive], 1_000);
-    expect(metadataFor(nonPositive, nonPositiveMeta).routeProfitConcentrationPct).toBeNull();
+    const zeroMeta = buildRouteBatchMetadataByRow([zero], 1_000);
+    const negativeMeta = buildRouteBatchMetadataByRow([negative], 1_000);
+    expect(metadataFor(zero, zeroMeta).routeProfitConcentrationPct).toBeNull();
+    expect(metadataFor(negative, negativeMeta).routeProfitConcentrationPct).toBeNull();
   });
 });
