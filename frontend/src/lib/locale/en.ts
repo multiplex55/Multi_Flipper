@@ -1158,6 +1158,8 @@ export const en = {
     colS2BBfSRatio: "S2B/BfS",
     colExecutionQuality: "Exec Q",
     colExecutionQualityHint: radiusColumnHintTextByKey.ExecutionQuality,
+    colTrapRisk: "Trap Risk",
+    colTrapRiskHint: radiusColumnHintTextByKey.TrapRisk,
     colExitOverhangDays: "Exit Overhang",
     colExitOverhangDaysHint: radiusColumnHintTextByKey.ExitOverhangDays,
     colBreakevenBuffer: "BE Buffer",

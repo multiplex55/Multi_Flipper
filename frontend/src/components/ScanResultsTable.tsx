@@ -216,6 +216,7 @@ import {
 } from "@/lib/radiusDecisionModes";
 import { isRadiusTradeExecutableNow } from "@/lib/radiusExecutableNow";
 import { computeRadiusSessionSummary } from "@/lib/radiusSessionSummary";
+import { classifyRadiusDealRisk } from "@/lib/radiusDealRisk";
 
 export const calcRouteConfidence = calcRouteConfidenceFromInsights;
 
@@ -344,7 +345,8 @@ type SyntheticSortKey =
   | "RealIskPerM3PerJump"
   | "TurnoverDays"
   | "SlippageCostIsk"
-  | "UrgencyScore";
+  | "UrgencyScore"
+  | "TrapRisk";
 type SortKey = keyof FlipResult | SyntheticSortKey;
 type RegionGroupSortMode = "period_profit" | "now_profit" | "trade_score";
 type HiddenMode = "done" | "ignored";
@@ -528,6 +530,7 @@ type ColumnDef = {
 const radiusRegistryBackedColumnKeys = [
   "UrgencyScore",
   "OpportunityScore",
+  "TrapRisk",
   "IskPerM3",
   "UnitsToBuy",
   "FilledQty",
@@ -706,6 +709,13 @@ export const baseColumnDefs: ColumnDef[] = [
     numeric: true,
     tooltipKey: "colExecutionQualityHint" as TranslationKey,
   },
+  radiusColumnDef({
+    key: "TrapRisk",
+    labelKey: "colTrapRisk" as TranslationKey,
+    width: "min-w-[120px]",
+    numeric: true,
+    tooltipKey: "colTrapRiskHint" as TranslationKey,
+  }),
   {
     key: "ExitOverhangDays",
     labelKey: "colExitOverhangDays" as TranslationKey,
@@ -1473,6 +1483,7 @@ function getCellValue(
   if (key === "SlippageCostIsk") return slippageCostIsk(row);
   if (key === "UrgencyScore") return classifyFlipUrgency(row).urgency_score;
   if (key === "ExecutionQuality") return executionQualityForFlip(row).score;
+  if (key === "TrapRisk") return classifyRadiusDealRisk(row).score;
   if (key === "ExitOverhangDays")
     return exitOverhangDays(row.TargetSellSupply, rowS2BPerDay(row));
   if (key === "BreakevenBuffer") return breakevenBufferForFlip(row);
@@ -1532,6 +1543,10 @@ function fmtCell(
   if (col.key === "ExecutionQuality") {
     const v = Number(val ?? 0);
     return Number.isFinite(v) ? v.toFixed(1) : "—";
+  }
+  if (col.key === "TrapRisk") {
+    const risk = classifyRadiusDealRisk(row);
+    return `${risk.label} (${risk.score})`;
   }
   if (col.key === "ExitOverhangDays") {
     if (val == null) return "—";
