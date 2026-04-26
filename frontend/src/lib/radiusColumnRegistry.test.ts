@@ -8,6 +8,7 @@ import {
 const expectedTableGuideKeys = [
   "UrgencyScore",
   "OpportunityScore",
+  "TrapRisk",
   "IskPerM3",
   "UnitsToBuy",
   "FilledQty",
@@ -38,6 +39,12 @@ describe("radiusColumnRegistry", () => {
       expect(entry.guideCopy.goodValue).toBeTruthy();
       expect(entry.guideCopy.ideaFlipHeuristic).toBeTruthy();
     }
+  });
+
+  it("includes trap risk metadata", () => {
+    const entry = radiusColumnRegistry.find((item) => item.key === "TrapRisk");
+    expect(entry).toBeDefined();
+    expect(entry?.category).toBe("Risk & Resilience");
   });
 
   it("supports table/guide parity helper", () => {

@@ -1,3 +1,5 @@
+import { radiusColumnHintTextByKey } from "@/lib/radiusColumnGuide";
+
 export const ru = {
     // Header
     appTitle: "EVE Flipper",
@@ -1156,6 +1158,8 @@ export const ru = {
     colS2BBfSRatio: "S2B/BfS",
     colExecutionQuality: "Кач. исп.",
     colExecutionQualityHint: "Сводная оценка качества исполнения (0-100): fill ratio, нагрузка проскальзывания, покрытие стакана, история и флаги spike/stability.",
+    colTrapRisk: "Риск ловушки",
+    colTrapRiskHint: radiusColumnHintTextByKey.TrapRisk,
     colExitOverhangDays: "Выход, дн.",
     colExitOverhangDaysHint: "Оценка дней на разгрузку предложения: TargetSellSupply / S2BPerDay.",
     colBreakevenBuffer: "БУ буфер",

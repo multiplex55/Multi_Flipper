@@ -60,6 +60,7 @@ export const radiusColumnPresets: readonly RadiusColumnPreset[] = [
       "CanFill",
       "BuyOrderRemain",
       "SlippageCostIsk",
+      "TrapRisk",
     ],
     defaultSort: { key: "IskPerM3", dir: "desc" },
   },
@@ -70,6 +71,7 @@ export const radiusColumnPresets: readonly RadiusColumnPreset[] = [
     columns: [
       "UrgencyScore",
       "ExecutionQuality",
+      "TrapRisk",
       "ExpectedBuyPrice",
       "ExpectedSellPrice",
       "FilledQty",
@@ -87,6 +89,7 @@ export const radiusColumnPresets: readonly RadiusColumnPreset[] = [
       "BreakevenBuffer",
       "ExitOverhangDays",
       "SlippageCostIsk",
+      "TrapRisk",
       "ExecutionQuality",
       "S2BBfSRatio",
       "OpportunityScore",

@@ -22,6 +22,12 @@ describe("radiusColumnPresets", () => {
     }
   });
 
+  it("includes TrapRisk in cargo/execute/audit presets", () => {
+    expect(radiusColumnPresetById.cargo.columns).toContain("TrapRisk");
+    expect(radiusColumnPresetById.execute.columns).toContain("TrapRisk");
+    expect(radiusColumnPresetById.audit.columns).toContain("TrapRisk");
+  });
+
   it("indexes presets by id", () => {
     expect(radiusColumnPresetById.execute.label).toBe("Execute");
     expect(radiusColumnPresetById.audit.defaultSort.dir).toBe("asc");

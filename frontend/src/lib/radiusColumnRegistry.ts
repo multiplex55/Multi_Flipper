@@ -260,6 +260,19 @@ export const radiusColumnRegistry: RadiusColumnRegistryEntry[] = [
     },
   },
   {
+    key: "TrapRisk",
+    title: "Trap Risk",
+    tooltip: "Composite 0-100 risk of getting trapped by weak liquidity, depth, or unstable behavior.",
+    category: "Risk & Resilience",
+    applicability: "row",
+    guideCopy: {
+      whatItIs: "Additive 0-100 risk score from missing history, weak flow, slippage, depth imbalance, and instability.",
+      whyImportant: "High trap-risk trades can show big paper margin but fail to fill or unwind cleanly.",
+      goodValue: "0-24 Low, 25-49 Medium, 50-74 High, 75-100 Extreme.",
+      ideaFlipHeuristic: "Treat High/Extreme as size-down-or-skip unless you have a specific execution edge.",
+    },
+  },
+  {
     key: "ExitOverhangDays",
     title: "Exit Overhang (days)",
     tooltip: "Estimated days for destination supply overhang to clear.",
