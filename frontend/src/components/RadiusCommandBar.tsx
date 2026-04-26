@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   ActionButton,
@@ -6,6 +6,7 @@ import {
   MutedLabel,
   ToggleButton,
 } from "@/components/ui/ControlPrimitives";
+import { RadiusWorkflowHelpDrawer } from "@/components/RadiusWorkflowHelpDrawer";
 
 type RadiusCommandBarProps = {
   shortcutScopeActive?: boolean;
@@ -89,6 +90,7 @@ export function RadiusCommandBar({
   routeActionsSection,
 }: RadiusCommandBarProps) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const intentHandlers = useMemo(
     () => ({
       [RADIUS_COMMAND_INTENT_MAP.verify.key]: () => actions.onVerifyPrices(),
@@ -202,6 +204,12 @@ export function RadiusCommandBar({
           <ActionButton selected={tableControls.columnsActive} onClick={tableControls.onToggleColumns} title="Column setup">
             Columns
           </ActionButton>
+          <ActionButton
+            onClick={() => setHelpOpen((previous) => !previous)}
+            title="How to use Radius"
+          >
+            {helpOpen ? "Close Help" : "Help"}
+          </ActionButton>
           <ToggleButton
             pressed={tableControls.filtersActive}
             onClick={tableControls.onToggleFilters}
@@ -228,6 +236,7 @@ export function RadiusCommandBar({
           </ToggleButton>
         </ControlGroup>
       </section>
+      <RadiusWorkflowHelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
 
       <section
         aria-label="Collapsible ranking and advanced controls"

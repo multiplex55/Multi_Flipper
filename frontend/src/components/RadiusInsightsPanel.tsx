@@ -168,7 +168,7 @@ function loadVisibleState(defaultExpanded: boolean): boolean {
 function loadTabState(): InsightsTab {
   try {
     const saved = localStorage.getItem(INSIGHTS_TAB_STORAGE_KEY);
-    return saved === "queue" || saved === "loops" || saved === "picks" || saved === "hubs"
+    return saved === "queue" || saved === "loops" || saved === "picks" || saved === "hubs" || saved === "staging"
       ? saved
       : "picks";
   } catch {
