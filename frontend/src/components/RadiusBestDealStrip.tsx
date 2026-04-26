@@ -4,10 +4,14 @@ import type { RadiusBestDealCard } from "@/lib/radiusBestDealCards";
 import type { RouteQueueEntry } from "@/lib/routeQueue";
 import type { RouteAssignment } from "@/lib/routeAssignments";
 import { getRadiusRouteExecutionBadge } from "@/lib/radiusRouteStatus";
+import { classifyVerificationPriority } from "@/lib/radiusVerificationPriority";
 import {
-  classifyVerificationPriority,
-  verificationPriorityChipClass,
-} from "@/lib/radiusVerificationPriority";
+  getRadiusVerificationBadgeMeta,
+  getVerifyActionLabel,
+  type RadiusVerificationState,
+  verificationStateFromPriority,
+  dedupeVerificationTargets,
+} from "@/lib/radiusVerificationStatus";
 
 type RadiusBestDealStripProps = {
   bestDealCards: RadiusBestDealCard[];
@@ -20,6 +24,8 @@ type RadiusBestDealStripProps = {
   insightsOpen: boolean;
   routeQueueEntries?: RouteQueueEntry[];
   assignmentByRouteKey?: Record<string, RouteAssignment>;
+  verificationStateByRouteKey?: Record<string, RadiusVerificationState>;
+  onVerifyRoute?: (routeKey: string) => void;
 };
 
 export function RadiusBestDealStrip({
@@ -30,6 +36,8 @@ export function RadiusBestDealStrip({
   insightsOpen,
   routeQueueEntries = [],
   assignmentByRouteKey = {},
+  verificationStateByRouteKey = {},
+  onVerifyRoute,
 }: RadiusBestDealStripProps) {
   const maxCards = 3;
   const visibleCards = bestDealCards.slice(0, maxCards);
@@ -41,14 +49,23 @@ export function RadiusBestDealStrip({
       lensJumpDelta: card.lensJumpDelta,
       urgencyBand: card.urgencyBand ?? "stable",
     });
+    const state = verificationStateByRouteKey[card.routeKey] ?? verificationStateFromPriority(priority.priority);
     return {
       key: `${card.kind}:${card.routeKey}`,
+      routeKey: card.routeKey,
       routeLabel: card.routeLabel,
-      label: priority.label,
       reason: priority.reason,
-      priority: priority.priority,
+      state,
+      badge: getRadiusVerificationBadgeMeta(state),
     };
   });
+
+
+  const verifyTopRoutes = () => {
+    if (!onVerifyRoute) return;
+    const targets = dedupeVerificationTargets(visibleCards.map((card) => ({ routeKey: card.routeKey })));
+    for (const target of targets) onVerifyRoute(target.routeKey);
+  };
 
   return (
     <section className="shrink-0 px-2 pb-1" data-testid="radius-best-deal-strip">
@@ -62,13 +79,15 @@ export function RadiusBestDealStrip({
               <div className="mt-0.5 grid gap-1 text-[11px]">
                 {visibleCards.map((card) => {
                   const routeBadge = getRadiusRouteExecutionBadge(card.routeKey, routeQueueEntries, assignmentByRouteKey);
-                  const verification = classifyVerificationPriority({
+                  const verificationPriority = classifyVerificationPriority({
                     expectedProfitIsk: card.expectedProfitIsk,
                     totalJumps: card.totalJumps,
                     scanAgeMinutes: card.scanAgeMinutes,
                     lensJumpDelta: card.lensJumpDelta,
                     urgencyBand: card.urgencyBand ?? "stable",
                   });
+                  const verificationState = verificationStateByRouteKey[card.routeKey] ?? verificationStateFromPriority(verificationPriority.priority);
+                  const verificationBadge = getRadiusVerificationBadgeMeta(verificationState);
                   const iskPerJump =
                     card.totalJumps > 0 ? card.expectedProfitIsk / card.totalJumps : card.expectedProfitIsk;
                   return (
@@ -86,10 +105,10 @@ export function RadiusBestDealStrip({
                         <span className="text-eve-dim">{card.metricLabel}</span>
                         <span className={`rounded-sm border px-1 py-0 text-[10px] ${routeBadge.tone}`}>{routeBadge.label}</span>
                         <span
-                          className={`rounded-sm border px-1 py-0 text-[10px] ${verificationPriorityChipClass(verification.priority)}`}
-                          title={verification.reason}
+                          className={`rounded-sm border px-1 py-0 text-[10px] ${verificationBadge.className}`}
+                          title={verificationPriority.reason}
                         >
-                          {verification.label}
+                          {verificationBadge.label}
                         </span>
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px]">
@@ -109,6 +128,13 @@ export function RadiusBestDealStrip({
                             Fill Cargo
                           </button>
                         ) : null}
+                        <button
+                          type="button"
+                          onClick={() => onVerifyRoute?.(card.routeKey)}
+                          className="rounded-sm border border-amber-400/60 px-1.5 py-0.5 text-amber-200 hover:bg-amber-500/10"
+                        >
+                          {getVerifyActionLabel(verificationState)}
+                        </button>
                         {card.whySummary ? (
                           <ExplanationPopoverShell label="Why?">
                             <div className="text-eve-dim mb-1">{card.whySummary}</div>
@@ -134,6 +160,13 @@ export function RadiusBestDealStrip({
             >
               {insightsOpen ? "Close Insights" : "Open Insights"}
             </button>
+            <button
+              type="button"
+              onClick={verifyTopRoutes}
+              className="rounded-sm border border-amber-400/60 px-1.5 py-0.5 text-amber-200 hover:bg-amber-500/10"
+            >
+              Verify top
+            </button>
           </div>
         </div>
         <div
@@ -149,9 +182,9 @@ export function RadiusBestDealStrip({
               <span
                 key={signal.key}
                 title={`${signal.routeLabel}: ${signal.reason}`}
-                className={`rounded-sm border px-1.5 py-0.5 text-[10px] ${verificationPriorityChipClass(signal.priority)}`}
+                className={`rounded-sm border px-1.5 py-0.5 text-[10px] ${signal.badge.className}`}
               >
-                {signal.routeLabel} · {signal.label}
+                {signal.routeLabel} · {signal.badge.label}
               </span>
             ))
           )}

@@ -108,7 +108,7 @@ export function buildRadiusContextMenuItems(
     { action: "deprioritize_station", section: "filtering", label: "Deprioritize this station", enabled: buyLocationID > 0 || sellLocationID > 0, visible: buyLocationID > 0 || sellLocationID > 0 },
     { action: "clear_station_filters", section: "filtering", label: "Clear all temporary station filters", enabled: true, danger: true },
 
-    { action: "verify_route", section: "verification", label: "Verify route", enabled: input.canVerifyRoute && hasRouteKey, visible: input.canVerifyRoute },
+    { action: "verify_route", section: "verification", label: "Verify now", enabled: input.canVerifyRoute && hasRouteKey, visible: input.canVerifyRoute },
     { action: "place_draft", section: "verification", label: "Place draft", enabled: canOpenDraft, visible: canOpenDraft },
 
     { action: "open_everef", section: "external_tools", label: "Open in EVE Ref", enabled: hasValidTypeID },

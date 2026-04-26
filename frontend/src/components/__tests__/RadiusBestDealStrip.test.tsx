@@ -84,4 +84,29 @@ describe("RadiusBestDealStrip", () => {
     expect(onOpenBatchBuilderForRoute).toHaveBeenCalledWith("route-a");
     expect(onOpenRouteWorkbench).toHaveBeenCalledWith("route-a", "filler");
   });
+
+
+  it("supports verify actions for cards and top routes", () => {
+    const onVerifyRoute = vi.fn();
+    render(
+      <RadiusBestDealStrip
+        bestDealCards={[
+          makeCard({ routeKey: "route-a", routeLabel: "Jita → Amarr", scanAgeMinutes: 99 }),
+          makeCard({ routeKey: "route-a", routeLabel: "Jita → Amarr", title: "Duplicate" }),
+          makeCard({ routeKey: "route-b", routeLabel: "Dodixie → Hek" }),
+        ]}
+        onOpenRouteWorkbench={vi.fn()}
+        onOpenInsights={vi.fn()}
+        insightsOpen={false}
+        onVerifyRoute={onVerifyRoute}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: /verify/i })[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Verify top" }));
+
+    expect(onVerifyRoute).toHaveBeenCalledWith("route-a");
+    expect(onVerifyRoute).toHaveBeenCalledWith("route-b");
+    expect(onVerifyRoute.mock.calls.filter((call) => call[0] === "route-a").length).toBeGreaterThanOrEqual(2);
+  });
 });

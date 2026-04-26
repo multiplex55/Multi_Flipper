@@ -7,6 +7,7 @@ import {
   verifyRouteManifestAgainstRows,
 } from "@/lib/routeManifestVerification";
 import { getVerificationProfileById } from "@/lib/verificationProfiles";
+import { verificationStateFromSnapshot } from "@/lib/radiusVerificationStatus";
 
 function makeRow(overrides: Partial<FlipResult>): FlipResult {
   return {
@@ -184,5 +185,73 @@ describe("verifyRouteManifestAgainstRows", () => {
     expect(diff.removedLineKeys).toEqual(["3:13:24"]);
     expect(diff.degradedLineKeys).toEqual(["2:12:23"]);
     expect(diff.offenderReasonsByLine["2:12:23"]?.[0]).toContain("sell drift high");
+  });
+});
+
+
+describe("verificationStateFromSnapshot", () => {
+  it("distinguishes stale vs reduced edge vs abort", () => {
+    expect(
+      verificationStateFromSnapshot({
+        snapshot: {
+          status: "Good",
+          recommendation: "proceed",
+          currentProfitIsk: 1,
+          minAcceptableProfitIsk: 1,
+          verifiedAt: "2026-01-01T00:00:00.000Z",
+          checkedAt: "2026-01-01T00:00:00.000Z",
+          offenderCount: 0,
+          buyDriftPct: 1,
+          sellDriftPct: 1,
+          profitRetentionPct: 80,
+          offenderLines: [],
+          summary: "ok",
+        },
+        lastVerifiedAt: "2026-01-01T00:00:00.000Z",
+        verificationProfileId: "strict",
+      }),
+    ).toBe("stale");
+
+    expect(
+      verificationStateFromSnapshot({
+        snapshot: {
+          status: "Reduced edge",
+          recommendation: "proceed_reduced",
+          currentProfitIsk: 1,
+          minAcceptableProfitIsk: 1,
+          verifiedAt: "2026-01-01T01:50:00.000Z",
+          checkedAt: "2026-01-01T01:50:00.000Z",
+          offenderCount: 1,
+          buyDriftPct: 1,
+          sellDriftPct: 1,
+          profitRetentionPct: 70,
+          offenderLines: [],
+          summary: "reduced",
+        },
+        lastVerifiedAt: "2026-01-01T01:50:00.000Z",
+        verificationProfileId: "strict",
+      }),
+    ).toBe("reduced_edge");
+
+    expect(
+      verificationStateFromSnapshot({
+        snapshot: {
+          status: "Abort",
+          recommendation: "abort",
+          currentProfitIsk: 1,
+          minAcceptableProfitIsk: 1,
+          verifiedAt: "2026-01-01T01:50:00.000Z",
+          checkedAt: "2026-01-01T01:50:00.000Z",
+          offenderCount: 1,
+          buyDriftPct: 1,
+          sellDriftPct: 1,
+          profitRetentionPct: 70,
+          offenderLines: [],
+          summary: "abort",
+        },
+        lastVerifiedAt: "2026-01-01T01:50:00.000Z",
+        verificationProfileId: "strict",
+      }),
+    ).toBe("abort");
   });
 });

@@ -4,6 +4,11 @@ import type { RadiusCargoBuild } from "@/lib/radiusCargoBuilds";
 import type { RouteQueueEntry } from "@/lib/routeQueue";
 import type { RouteAssignment } from "@/lib/routeAssignments";
 import { getRadiusRouteExecutionBadge } from "@/lib/radiusRouteStatus";
+import {
+  getRadiusVerificationBadgeMeta,
+  getVerifyActionLabel,
+  type RadiusVerificationState,
+} from "@/lib/radiusVerificationStatus";
 
 type RadiusCargoBuildCardProps = {
   build: RadiusCargoBuild;
@@ -16,6 +21,7 @@ type RadiusCargoBuildCardProps = {
   onOpenBatch: (routeKey: string) => void;
   routeQueueEntries?: RouteQueueEntry[];
   assignmentByRouteKey?: Record<string, RouteAssignment>;
+  verificationState?: RadiusVerificationState;
 };
 
 const badgeTone = {
@@ -27,6 +33,7 @@ const badgeTone = {
 export function RadiusCargoBuildCard(props: RadiusCargoBuildCardProps) {
   const { build, routeQueueEntries = [], assignmentByRouteKey = {} } = props;
   const routeBadge = getRadiusRouteExecutionBadge(build.routeKey, routeQueueEntries, assignmentByRouteKey);
+  const verificationBadge = getRadiusVerificationBadgeMeta(props.verificationState ?? "unverified");
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -34,7 +41,7 @@ export function RadiusCargoBuildCard(props: RadiusCargoBuildCardProps) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="font-semibold text-eve-text">{build.routeLabel}</div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-eve-dim"><span>{build.routeKey}</span><span className={`rounded-sm border px-1 py-0 text-[10px] ${routeBadge.tone}`}>{routeBadge.label}</span></div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-eve-dim"><span>{build.routeKey}</span><span className={`rounded-sm border px-1 py-0 text-[10px] ${routeBadge.tone}`}>{routeBadge.label}</span><span className={`rounded-sm border px-1 py-0 text-[10px] ${verificationBadge.className}`}>{verificationBadge.label}</span></div>
         </div>
         <div className="text-eve-accent font-mono">Score {build.finalScore.toFixed(1)}</div>
       </div>
@@ -63,7 +70,7 @@ export function RadiusCargoBuildCard(props: RadiusCargoBuildCardProps) {
         <button type="button" className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-eve-dim hover:text-eve-text" onClick={() => props.onCopyManifest(build)}>Copy manifest</button>
         <button type="button" className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-eve-dim hover:text-eve-text" onClick={() => props.onCopyBuyChecklist(build)}>Buy checklist</button>
         <button type="button" className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-eve-dim hover:text-eve-text" onClick={() => props.onCopySellChecklist(build)}>Sell checklist</button>
-        <button type="button" className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-eve-dim hover:text-eve-text" onClick={() => props.onVerify(build.routeKey)}>Verify</button>
+        <button type="button" className="rounded-sm border border-amber-400/60 px-1.5 py-0.5 text-amber-200" onClick={() => props.onVerify(build.routeKey)}>{getVerifyActionLabel(props.verificationState ?? "unverified")}</button>
         <button type="button" className="rounded-sm border border-indigo-400/60 px-1.5 py-0.5 text-indigo-200" onClick={() => props.onQueue(build.routeKey)}>Queue</button>
         <button type="button" className="rounded-sm border border-blue-500/60 px-1.5 py-0.5 text-blue-200" onClick={() => props.onOpenWorkbench(build.routeKey)}>Open workbench</button>
         <button type="button" className="rounded-sm border border-eve-accent/60 px-1.5 py-0.5 text-eve-accent" onClick={() => props.onOpenBatch(build.routeKey)}>Open batch</button>
