@@ -213,6 +213,15 @@ import {
   type RadiusRouteCompareRow,
 } from "@/components/RadiusRouteCompareDrawer";
 import type { RadiusContextMenuAction } from "@/lib/radiusContextMenuItems";
+import {
+  createRadiusSavedDealPattern,
+  isRadiusSavedDealPattern,
+  loadSavedCandidatePatterns,
+  matchRadiusDealPattern,
+  radiusPatternBoostScore,
+  saveCandidatePattern,
+  type RadiusSavedDealPattern,
+} from "@/lib/savedCandidatePatterns";
 import { radiusColumnPresetById } from "@/lib/radiusColumnPresets";
 import {
   radiusDecisionModeById,
@@ -1834,6 +1843,10 @@ export function ScanResultsTable({
   const [selectedRowKeys, setSelectedRowKeys] = useState<Set<string>>(new Set());
   const [compareRouteKeys, setCompareRouteKeys] = useState<string[]>([]);
   const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
+  const [savedRadiusPatterns, setSavedRadiusPatterns] = useState<RadiusSavedDealPattern[]>(() =>
+    loadSavedCandidatePatterns().filter(isRadiusSavedDealPattern),
+  );
+  const [activeRadiusPatternId, setActiveRadiusPatternId] = useState<string | null>(null);
   const savedRoutePacks = routeWorkspace?.savedRoutePacks ?? [];
   const [page, setPage] = useState(0);
   const [routeGroupPage, setRouteGroupPage] = useState(0);
@@ -2796,6 +2809,12 @@ export function ScanResultsTable({
     [],
   );
 
+  const activeRadiusPattern = useMemo(
+    () =>
+      savedRadiusPatterns.find((pattern) => pattern.id === activeRadiusPatternId) ?? null,
+    [activeRadiusPatternId, savedRadiusPatterns],
+  );
+
   // ── Data pipeline: index → filter → sort ──
   const {
     indexed,
@@ -2804,6 +2823,7 @@ export function ScanResultsTable({
     sorted,
     variantByRowId,
     endpointPreferenceMetaByRowId,
+    savedPatternMatchByRowId,
   } = useMemo(() => {
     const sessionVisibleRows = filterRowsBySessionStationIgnores(
       results,
@@ -2852,7 +2872,7 @@ export function ScanResultsTable({
       trackedVisibilityMode === "tracked_only"
         ? baseFiltered.filter((ir) => watchlistIds.has(ir.row.TypeID))
         : baseFiltered;
-    const lockFiltered = filtered.filter((ir) => {
+    let lockFiltered = filtered.filter((ir) => {
       const buyMatches =
         lockedBuyLocationId == null ||
         getBuyLocationID(ir.row) === lockedBuyLocationId;
@@ -2863,6 +2883,21 @@ export function ScanResultsTable({
         lockedLegKey == null || getExactLegKey(ir.row) === lockedLegKey;
       return buyMatches && sellMatches && legMatches;
     });
+
+    const savedPatternMatchByRowId = new Map<number, { saved: boolean; activeMatch: boolean; boost: number }>();
+    for (const ir of lockFiltered) {
+      const saved = savedRadiusPatterns.some((pattern) => matchRadiusDealPattern(ir.row, pattern).matched);
+      const activeMatch = activeRadiusPattern ? matchRadiusDealPattern(ir.row, activeRadiusPattern).matched : false;
+      const boost =
+        activeRadiusPattern && activeRadiusPattern.applicationMode === "boost" && activeMatch
+          ? radiusPatternBoostScore(activeRadiusPattern)
+          : 0;
+      savedPatternMatchByRowId.set(ir.id, { saved, activeMatch, boost });
+    }
+
+    if (activeRadiusPattern && activeRadiusPattern.applicationMode === "filter") {
+      lockFiltered = lockFiltered.filter((ir) => savedPatternMatchByRowId.get(ir.id)?.activeMatch);
+    }
 
     const sessionScopedRows = lockFiltered.map((item) => item.row);
 
@@ -2885,6 +2920,7 @@ export function ScanResultsTable({
             item.row,
             sessionStationFilters,
           ),
+          patternBoostScore: savedPatternMatchByRowId.get(item.id)?.boost ?? 0,
           endpointScoreDelta: item.endpointPreferences?.scoreDelta ?? 0,
         }),
         getCellValue: (row, key) =>
@@ -2940,6 +2976,7 @@ export function ScanResultsTable({
       sorted,
       variantByRowId,
       endpointPreferenceMetaByRowId,
+      savedPatternMatchByRowId,
     };
   }, [
     results,
@@ -2964,6 +3001,8 @@ export function ScanResultsTable({
     lockedBuyLocationId,
     lockedSellLocationId,
     lockedLegKey,
+    savedRadiusPatterns,
+    activeRadiusPattern,
   ]);
 
   // Available market groups derived from current results (region mode only)
@@ -5097,6 +5136,16 @@ export function ScanResultsTable({
   const hasLegLocks =
     lockedLegKey != null || lockedBuyLocationId != null || lockedSellLocationId != null;
 
+  const persistRadiusPattern = useCallback(
+    (pattern: Omit<RadiusSavedDealPattern, "id" | "updatedAt">) => {
+      const next = saveCandidatePattern(pattern).filter(isRadiusSavedDealPattern);
+      setSavedRadiusPatterns(next);
+      setActiveRadiusPatternId(next[0]?.id ?? null);
+      addToast(`Saved pattern: ${pattern.label}`, "success", 1800);
+    },
+    [addToast],
+  );
+
   const handleRadiusContextAction = useCallback(
     async (action: RadiusContextMenuAction, row: FlipResult, routeKey?: string) => {
       switch (action) {
@@ -5256,6 +5305,80 @@ export function ScanResultsTable({
             addToast(t("actionFailed").replace("{error}", err.message), "error", 3000);
           }
           return;
+        case "save_pattern_item":
+          persistRadiusPattern(
+            createRadiusSavedDealPattern(row, {
+              label: `Item: ${row.TypeName}`,
+              applicationMode: "filter",
+              item: { typeId: row.TypeID, typeName: row.TypeName },
+              minExecutionQuality: 45,
+              maxTrapRisk: 60,
+            }),
+          );
+          return;
+        case "save_pattern_buy_station":
+          persistRadiusPattern(
+            createRadiusSavedDealPattern(row, {
+              label: `Buy: ${row.BuyStation || row.BuySystemName}`,
+              applicationMode: "filter",
+              buy: {
+                locationId: row.BuyLocationID,
+                stationName: row.BuyStation,
+                systemName: row.BuySystemName,
+              },
+              minExecutionQuality: 40,
+              maxTrapRisk: 65,
+              requireHistory: true,
+            }),
+          );
+          return;
+        case "save_pattern_sell_station":
+          persistRadiusPattern(
+            createRadiusSavedDealPattern(row, {
+              label: `Sell: ${row.SellStation || row.SellSystemName}`,
+              applicationMode: "filter",
+              sell: {
+                locationId: row.SellLocationID,
+                stationName: row.SellStation,
+                systemName: row.SellSystemName,
+              },
+              minExecutionQuality: 40,
+              maxTrapRisk: 65,
+              requireHistory: true,
+            }),
+          );
+          return;
+        case "save_pattern_route":
+          persistRadiusPattern(
+            createRadiusSavedDealPattern(row, {
+              label: `${row.BuySystemName} → ${row.SellSystemName}`,
+              applicationMode: "boost",
+              item: { typeId: row.TypeID },
+              buy: { locationId: row.BuyLocationID, stationName: row.BuyStation, systemName: row.BuySystemName },
+              sell: { locationId: row.SellLocationID, stationName: row.SellStation, systemName: row.SellSystemName },
+              minProfit: Math.max(0, (row.ExpectedProfit ?? row.RealProfit ?? row.TotalProfit ?? 0) * 0.5),
+              minIskPerJump: Math.max(0, (row.ProfitPerJump ?? 0) * 0.5),
+              minExecutionQuality: 45,
+              maxTrapRisk: 70,
+              maxTurnoverDays: 30,
+              requireFill: row.CanFill === true,
+              requireHistory: true,
+              boostScore: 22,
+            }),
+          );
+          return;
+        case "apply_saved_pattern": {
+          const direct = savedRadiusPatterns.find((pattern) => matchRadiusDealPattern(row, pattern).matched);
+          const fallback = savedRadiusPatterns[0];
+          const next = direct ?? fallback ?? null;
+          if (!next) {
+            addToast("No saved Radius patterns.", "info", 1800);
+            return;
+          }
+          setActiveRadiusPatternId(next.id);
+          addToast(`Applied pattern: ${next.label} (${next.applicationMode})`, "success", 1800);
+          return;
+        }
         case "pin_toggle":
           togglePin(row);
           return;
@@ -5275,7 +5398,8 @@ export function ScanResultsTable({
       onOpenInRoute,
       onOpenInRouteWorkbench,
       onSendToRouteQueue,
-      results,
+      persistRadiusPattern,
+      savedRadiusPatterns,
       selectionScopeRows,
       setRowHiddenState,
       t,
@@ -5341,6 +5465,13 @@ export function ScanResultsTable({
         onRemove: () => setTrackedVisibilityMode("all"),
       });
     }
+    if (activeRadiusPattern) {
+      chips.push({
+        key: "saved-radius-pattern",
+        label: `Pattern: ${activeRadiusPattern.label} (${activeRadiusPattern.applicationMode})`,
+        onRemove: () => setActiveRadiusPatternId(null),
+      });
+    }
 
     if (urgencyFilter !== "all") {
       chips.push({
@@ -5403,6 +5534,7 @@ export function ScanResultsTable({
     return chips;
   }, [
     clearTemporaryStationFilters,
+    activeRadiusPattern,
     endpointPreferenceMode,
     endpointPreferenceProfile,
     filterAudit,
@@ -6164,6 +6296,8 @@ export function ScanResultsTable({
         endpointPreferenceMeta={endpointPreferenceMetaByRowId.get(ir.id)}
         debugReasonCodes={filterAudit.rowReasonCodes.get(ir.id) ?? []}
         movement={rowMovementByRowId.get(ir.id)}
+        hasSavedPattern={savedPatternMatchByRowId.get(ir.id)?.saved}
+        isActivePatternMatch={savedPatternMatchByRowId.get(ir.id)?.activeMatch}
       />
     ),
     [
@@ -6190,6 +6324,7 @@ export function ScanResultsTable({
       endpointPreferenceMetaByRowId,
       filterAudit.rowReasonCodes,
       rowMovementByRowId,
+      savedPatternMatchByRowId,
     ],
   );
 
@@ -6225,6 +6360,7 @@ export function ScanResultsTable({
     trackedFirst,
     sessionStationFilters,
     endpointPreferenceMode,
+    activeRadiusPattern,
     t,
   ]);
 
@@ -9195,6 +9331,8 @@ interface DataRowProps {
   };
   debugReasonCodes: string[];
   movement?: RadiusDealMovement;
+  hasSavedPattern?: boolean;
+  isActivePatternMatch?: boolean;
 }
 
 /* ─── Trade Score Badge ─── */
@@ -9328,6 +9466,8 @@ const DataRow = memo(
     endpointPreferenceMeta,
     debugReasonCodes,
     movement,
+    hasSavedPattern,
+    isActivePatternMatch,
   }: DataRowProps) {
     return (
       <tr
@@ -9411,6 +9551,16 @@ const DataRow = memo(
                 {showTrackedChip && isTracked && (
                   <span className="shrink-0 inline-flex items-center px-1 py-px rounded-[2px] border border-emerald-300/35 bg-emerald-400/10 text-emerald-200 text-[9px] leading-none font-medium uppercase tracking-normal">
                     Tracked
+                  </span>
+                )}
+                {hasSavedPattern && (
+                  <span className="shrink-0 inline-flex items-center px-1 py-px rounded-[2px] border border-violet-300/40 bg-violet-500/10 text-violet-200 text-[9px] leading-none font-medium uppercase tracking-normal">
+                    Saved Pattern
+                  </span>
+                )}
+                {isActivePatternMatch && (
+                  <span className="shrink-0 inline-flex items-center px-1 py-px rounded-[2px] border border-fuchsia-300/45 bg-fuchsia-500/10 text-fuchsia-200 text-[9px] leading-none font-medium uppercase tracking-normal">
+                    Pattern Match
                   </span>
                 )}
                 {ir.row.DistanceLensUnreachable && (

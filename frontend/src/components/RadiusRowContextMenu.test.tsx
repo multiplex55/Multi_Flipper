@@ -99,4 +99,32 @@ describe("RadiusRowContextMenu", () => {
     expect(onAction).toHaveBeenCalledWith("queue_route", expect.anything(), expect.any(String));
     expect(onAction).toHaveBeenCalledWith("assign_route_best", expect.anything(), expect.any(String));
   });
+
+  it("shows saved-pattern actions and dispatches apply action", () => {
+    const onAction = vi.fn();
+    render(
+      <RadiusRowContextMenu
+        x={10}
+        y={20}
+        row={makeRow()}
+        isLoggedIn={false}
+        isTracked={false}
+        isPinned={false}
+        hasLegLocks={false}
+        canQueueRoute={false}
+        canAssignRoute={false}
+        canVerifyRoute={false}
+        onClose={() => undefined}
+        callbacks={{ onAction }}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Save item pattern" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save buy station pattern" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save sell station pattern" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save route pattern" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Apply saved pattern" }));
+    expect(onAction).toHaveBeenCalledWith("apply_saved_pattern", expect.objectContaining({ TypeID: 501 }), expect.any(String));
+  });
 });

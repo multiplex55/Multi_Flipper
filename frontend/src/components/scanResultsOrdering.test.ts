@@ -77,6 +77,7 @@ function sortIds(
       isPinned: false,
       isTracked: false,
       isSessionDeprioritized: false,
+      patternBoostScore: 0,
       endpointScoreDelta: 0,
     }),
     ...optionsOverride,
@@ -101,10 +102,10 @@ describe("scanResultsOrdering comparator", () => {
     const endpointBoost = makeIndexed(4, 3, makeRow({ TypeID: 4, TypeName: "Endpoint", RealProfit: 50 }));
 
     const signalsById = new Map<number, SmartOrderingSignals>([
-      [1, { isPinned: true, isTracked: false, isSessionDeprioritized: false, endpointScoreDelta: 0 }],
-      [2, { isPinned: false, isTracked: true, isSessionDeprioritized: false, endpointScoreDelta: 0 }],
-      [3, { isPinned: false, isTracked: false, isSessionDeprioritized: true, endpointScoreDelta: 999 }],
-      [4, { isPinned: false, isTracked: false, isSessionDeprioritized: false, endpointScoreDelta: 5 }],
+      [1, { isPinned: true, isTracked: false, isSessionDeprioritized: false, patternBoostScore: 0, endpointScoreDelta: 0 }],
+      [2, { isPinned: false, isTracked: true, isSessionDeprioritized: false, patternBoostScore: 0, endpointScoreDelta: 0 }],
+      [3, { isPinned: false, isTracked: false, isSessionDeprioritized: true, patternBoostScore: 0, endpointScoreDelta: 999 }],
+      [4, { isPinned: false, isTracked: false, isSessionDeprioritized: false, patternBoostScore: 0, endpointScoreDelta: 5 }],
     ]);
 
     expect(sortIds([deprioritized, endpointBoost, tracked, pinned], signalsById)).toEqual(expected);
@@ -118,8 +119,8 @@ describe("scanResultsOrdering comparator", () => {
     const left = makeIndexed(101, 0, makeRow({ TypeID: 1001, RealProfit: 30 }));
     const right = makeIndexed(102, 1, makeRow({ TypeID: 1002, RealProfit: 300 }));
     const signalsById = new Map<number, SmartOrderingSignals>([
-      [101, { isPinned: false, isTracked: false, isSessionDeprioritized: false, endpointScoreDelta: leftDelta }],
-      [102, { isPinned: false, isTracked: false, isSessionDeprioritized: false, endpointScoreDelta: rightDelta }],
+      [101, { isPinned: false, isTracked: false, isSessionDeprioritized: false, patternBoostScore: 0, endpointScoreDelta: leftDelta }],
+      [102, { isPinned: false, isTracked: false, isSessionDeprioritized: false, patternBoostScore: 0, endpointScoreDelta: rightDelta }],
     ]);
 
     expect(sortIds([left, right], signalsById)).toEqual(expected);
@@ -129,8 +130,8 @@ describe("scanResultsOrdering comparator", () => {
     const lowProfitPinned = makeIndexed(10, 0, makeRow({ TypeID: 700, TypeName: "Low", RealProfit: 10 }));
     const highProfitUnpinned = makeIndexed(11, 1, makeRow({ TypeID: 710, TypeName: "High", RealProfit: 500 }));
     const signals = new Map<number, SmartOrderingSignals>([
-      [10, { isPinned: true, isTracked: true, isSessionDeprioritized: false, endpointScoreDelta: 5_000 }],
-      [11, { isPinned: false, isTracked: false, isSessionDeprioritized: true, endpointScoreDelta: -500 }],
+      [10, { isPinned: true, isTracked: true, isSessionDeprioritized: false, patternBoostScore: 0, endpointScoreDelta: 5_000 }],
+      [11, { isPinned: false, isTracked: false, isSessionDeprioritized: true, patternBoostScore: 0, endpointScoreDelta: -500 }],
     ]);
 
     expect(

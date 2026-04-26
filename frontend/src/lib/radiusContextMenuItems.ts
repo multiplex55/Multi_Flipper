@@ -33,7 +33,12 @@ export type RadiusContextMenuAction =
   | "open_market"
   | "set_destination_buy"
   | "set_destination_sell"
-  | "pin_toggle";
+  | "pin_toggle"
+  | "save_pattern_item"
+  | "save_pattern_buy_station"
+  | "save_pattern_sell_station"
+  | "save_pattern_route"
+  | "apply_saved_pattern";
 
 export type RadiusContextMenuSection =
   | "copy"
@@ -46,7 +51,8 @@ export type RadiusContextMenuSection =
   | "tracking"
   | "hidden"
   | "eve_ui"
-  | "pinning";
+  | "pinning"
+  | "saved_patterns";
 
 export type RadiusContextMenuItem = {
   action: RadiusContextMenuAction;
@@ -179,6 +185,13 @@ export function buildRadiusContextMenuItems(
       label: input.isPinned ? "Unpin row" : "Pin row",
       enabled: true,
     },
+
+    { action: "save_pattern_item", section: "saved_patterns", label: "Save item pattern", enabled: hasValidTypeID },
+    { action: "save_pattern_buy_station", section: "saved_patterns", label: "Save buy station pattern", enabled: buyLocationID > 0 || String(row.BuyStation ?? "").length > 0 },
+    { action: "save_pattern_sell_station", section: "saved_patterns", label: "Save sell station pattern", enabled: sellLocationID > 0 || String(row.SellStation ?? "").length > 0 },
+    { action: "save_pattern_route", section: "saved_patterns", label: "Save route pattern", enabled: (buyLocationID > 0 || sellLocationID > 0) && hasValidTypeID },
+    { action: "apply_saved_pattern", section: "saved_patterns", label: "Apply saved pattern", enabled: true },
+
   ];
   return items.map((item) => ({ ...item, routeKey: hasRouteKey ? routeKey : undefined }));
 }

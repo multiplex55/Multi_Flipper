@@ -17,6 +17,7 @@ export interface SmartOrderingSignals {
   isPinned: boolean;
   isTracked: boolean;
   isSessionDeprioritized: boolean;
+  patternBoostScore: number;
   endpointScoreDelta: number;
 }
 
@@ -82,6 +83,10 @@ export function compareScanRows<SortKey extends string>(
       aSignals.isSessionDeprioritized !== bSignals.isSessionDeprioritized
     ) {
       return aSignals.isSessionDeprioritized ? 1 : -1;
+    }
+
+    if (aSignals.patternBoostScore !== bSignals.patternBoostScore) {
+      return bSignals.patternBoostScore - aSignals.patternBoostScore;
     }
 
     if (aSignals.endpointScoreDelta !== bSignals.endpointScoreDelta) {

@@ -37,6 +37,7 @@ const SECTION_ORDER: RadiusContextMenuSection[] = [
   "tracking",
   "hidden",
   "eve_ui",
+  "saved_patterns",
   "pinning",
 ];
 
