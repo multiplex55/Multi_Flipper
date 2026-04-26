@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@/lib/i18n";
 import { RadiusColumnGuideModal } from "@/components/RadiusColumnGuideModal";
 import { radiusColumnRegistry } from "@/lib/radiusColumnRegistry";
+import { radiusColumnPresets } from "@/lib/radiusColumnPresets";
 
 afterEach(() => {
   document.body.innerHTML = "";
@@ -42,6 +43,16 @@ describe("RadiusColumnGuideModal", () => {
     expect(screen.getAllByText(urgency!.title, { exact: false }).length).toBeGreaterThan(0);
   });
 
+
+  it("shows workflow preset guidance", () => {
+    renderModal();
+
+    const presetGrid = screen.getByTestId("radius-column-guide-presets");
+    expect(presetGrid).toBeInTheDocument();
+    for (const preset of radiusColumnPresets) {
+      expect(within(presetGrid).getByText(preset.label)).toBeInTheDocument();
+    }
+  });
   it("closes on escape", () => {
     const { onClose } = renderModal();
 
