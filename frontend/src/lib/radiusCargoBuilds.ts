@@ -32,6 +32,7 @@ export type RadiusCargoBuild = {
   totalProfitIsk: number;
   totalCapitalIsk: number;
   totalCargoM3: number;
+  totalGrossSellIsk: number;
   jumps: number;
   iskPerJump: number;
   jumpEfficiency: number;
@@ -43,7 +44,18 @@ export type RadiusCargoBuild = {
   riskCue: "low" | "moderate" | "high";
   executionCue: "smooth" | "watch" | "fragile";
   finalScore: number;
+  lines: RadiusCargoBuildLine[];
   rows: FlipResult[];
+};
+
+export type RadiusCargoBuildLine = {
+  row: FlipResult;
+  units: number;
+  volumeM3: number;
+  capitalIsk: number;
+  profitIsk: number;
+  grossSellIsk: number;
+  partial: boolean;
 };
 
 export const RADIUS_CARGO_BUILD_PRESETS: Record<
@@ -151,22 +163,23 @@ export function buildRadiusCargoBuilds(
       return a.TypeName.localeCompare(b.TypeName);
     });
 
-    const picked: FlipResult[] = [];
+    const lines: RadiusCargoBuildLine[] = [];
     let usedCargo = 0;
     let usedCapital = 0;
     let totalProfit = 0;
+    let grossSell = 0;
     let weightedConfidence = 0;
     let weightedExecution = 0;
     let weightTotal = 0;
 
     for (const row of orderedRows) {
-      const units = Math.max(0, Math.floor(requestedUnitsForFlip(row) || row.UnitsToBuy || 0));
-      if (units <= 0) continue;
-      const volume = Math.max(0, (row.Volume ?? 0) * units);
-      const capital = Math.max(0, (row.ExpectedBuyPrice ?? row.BuyPrice ?? 0) * units);
-      if (volume <= 0 || capital <= 0) continue;
-      if (usedCargo + volume > preset.cargoCapacityM3) continue;
-      if (usedCapital + capital > preset.maxCapitalIsk) continue;
+      const requestedUnits = Math.max(0, Math.floor(requestedUnitsForFlip(row) || row.UnitsToBuy || 0));
+      if (requestedUnits <= 0) continue;
+      const volumePerUnit = Math.max(0, row.Volume ?? 0);
+      const buyPrice = Math.max(0, row.ExpectedBuyPrice ?? row.BuyPrice ?? 0);
+      const profitPerUnit = Math.max(0, row.ProfitPerUnit ?? 0);
+      const sellPrice = Math.max(0, row.SellPrice ?? 0);
+      if (volumePerUnit <= 0 || buyPrice <= 0) continue;
 
       const execution = executionQualityForFlip(row).score;
       const confidence = Math.max(0, Math.min(100, row.CanFill ? 100 : (row.FilledQty ?? 0) > 0 ? 60 : 30));
@@ -174,17 +187,39 @@ export function buildRadiusCargoBuilds(
         continue;
       }
 
-      const profit = Math.max(0, row.ExpectedProfit ?? row.RealProfit ?? row.TotalProfit ?? 0);
+      const remainingCargo = Math.max(0, preset.cargoCapacityM3 - usedCargo);
+      const remainingCapital = Math.max(0, preset.maxCapitalIsk - usedCapital);
+      const maxUnitsByCargo = volumePerUnit > 0 ? Math.floor(remainingCargo / volumePerUnit) : Number.MAX_SAFE_INTEGER;
+      const maxUnitsByCapital = buyPrice > 0 ? Math.floor(remainingCapital / buyPrice) : Number.MAX_SAFE_INTEGER;
+      const units = Math.min(requestedUnits, maxUnitsByCargo, maxUnitsByCapital);
+      if (units <= 0) continue;
+
+      const volume = Math.max(0, units * volumePerUnit);
+      const capital = Math.max(0, units * buyPrice);
+      const profit = Math.max(0, units * profitPerUnit);
+      const partial = units < requestedUnits;
+      const grossSellIsk = Math.max(0, units * sellPrice);
+
       usedCargo += volume;
       usedCapital += capital;
       totalProfit += profit;
-      picked.push(row);
+      grossSell += grossSellIsk;
+      lines.push({
+        row,
+        units,
+        volumeM3: volume,
+        capitalIsk: capital,
+        profitIsk: profit,
+        grossSellIsk,
+        partial,
+      });
       weightedConfidence += confidence * volume;
       weightedExecution += execution * volume;
       weightTotal += volume;
     }
 
-    if (picked.length === 0) continue;
+    if (lines.length === 0) continue;
+    const picked = lines.map((line) => line.row);
 
     const jumps = Math.max(1, Math.round(aggregate?.dailyIskPerJump ? totalProfit / Math.max(1, aggregate.dailyIskPerJump) : picked[0].TotalJumps ?? 1));
     const iskPerJump = totalProfit / jumps;
@@ -221,6 +256,7 @@ export function buildRadiusCargoBuilds(
       totalProfitIsk: totalProfit,
       totalCapitalIsk: usedCapital,
       totalCargoM3: usedCargo,
+      totalGrossSellIsk: grossSell,
       jumps,
       iskPerJump,
       jumpEfficiency,
@@ -232,6 +268,7 @@ export function buildRadiusCargoBuilds(
       riskCue: riskCount <= 1 ? "low" : riskCount <= 3 ? "moderate" : "high",
       executionCue: executionQuality >= 70 ? "smooth" : executionQuality >= 55 ? "watch" : "fragile",
       finalScore: fillScore,
+      lines,
       rows: picked,
     });
   }
