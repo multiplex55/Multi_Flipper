@@ -79,7 +79,7 @@ describe("buildRadiusCargoBuilds", () => {
     ];
     const key = routeGroupKey(rows[0]);
 
-    const builds = buildRadiusCargoBuilds({
+    const { builds } = buildRadiusCargoBuilds({
       rows,
       routeAggregateMetricsByRoute: { [key]: aggregate },
       preset: {
@@ -114,7 +114,7 @@ describe("buildRadiusCargoBuilds", () => {
       minJumpEfficiencyIsk: 0,
     };
 
-    const builds = buildRadiusCargoBuilds({
+    const { builds } = buildRadiusCargoBuilds({
       rows,
       routeAggregateMetricsByRoute: { [key]: aggregate },
       preset,
@@ -154,7 +154,7 @@ describe("buildRadiusCargoBuilds", () => {
       minJumpEfficiencyIsk: 0,
     };
 
-    const builds = buildRadiusCargoBuilds({
+    const { builds } = buildRadiusCargoBuilds({
       rows: [exactFit, zeroFit],
       routeAggregateMetricsByRoute: {
         [exactKey]: aggregate,
@@ -203,7 +203,7 @@ describe("buildRadiusCargoBuilds", () => {
       minJumpEfficiencyIsk: 0,
     };
 
-    const builds = buildRadiusCargoBuilds({
+    const { builds } = buildRadiusCargoBuilds({
       rows,
       routeAggregateMetricsByRoute: { [key]: aggregate },
       preset,
@@ -233,7 +233,7 @@ describe("buildRadiusCargoBuilds", () => {
     const first = buildRadiusCargoBuilds({ rows, routeAggregateMetricsByRoute: byRoute, preset: RADIUS_CARGO_BUILD_PRESETS.viator_safe });
     const second = buildRadiusCargoBuilds({ rows, routeAggregateMetricsByRoute: byRoute, preset: RADIUS_CARGO_BUILD_PRESETS.viator_safe });
 
-    expect(first.map((b) => b.routeKey)).toEqual(second.map((b) => b.routeKey));
+    expect(first.builds.map((b) => b.routeKey)).toEqual(second.builds.map((b) => b.routeKey));
   });
 
 
@@ -248,7 +248,7 @@ describe("buildRadiusCargoBuilds", () => {
     });
     const key = routeGroupKey(practical);
 
-    const builds = buildRadiusCargoBuilds({
+    const { builds } = buildRadiusCargoBuilds({
       rows: [practical],
       routeAggregateMetricsByRoute: {
         [key]: { ...aggregate, dailyIskPerJump: 0, riskTotalCount: 1 },
@@ -277,13 +277,13 @@ describe("buildRadiusCargoBuilds", () => {
       [key]: { ...aggregate, dailyIskPerJump: 0, riskTotalCount: 4 },
     };
 
-    const allowed = buildRadiusCargoBuilds({
+    const { builds: allowed } = buildRadiusCargoBuilds({
       rows,
       routeAggregateMetricsByRoute: byRoute,
       preset: RADIUS_CARGO_BUILD_PRESETS.dst_bulk,
     });
 
-    const blocked = buildRadiusCargoBuilds({
+    const { builds: blocked } = buildRadiusCargoBuilds({
       rows,
       routeAggregateMetricsByRoute: byRoute,
       preset: { ...RADIUS_CARGO_BUILD_PRESETS.dst_bulk, maxRiskRate: 0.45 },
@@ -298,7 +298,7 @@ describe("buildRadiusCargoBuilds", () => {
     const reliable = row("Reliable", { ProfitPerUnit: 50_000, TotalJumps: 4 });
     const key = routeGroupKey(reliable);
 
-    const builds = buildRadiusCargoBuilds({
+    const { builds } = buildRadiusCargoBuilds({
       rows: [reliable],
       routeAggregateMetricsByRoute: {
         [key]: { ...aggregate, dailyIskPerJump: 0, riskTotalCount: 1 },
@@ -308,6 +308,43 @@ describe("buildRadiusCargoBuilds", () => {
 
     expect(builds).toHaveLength(1);
     expect(builds[0].executionCue).toBe("smooth");
+  });
+
+  it("reports diagnostics for impossible presets", () => {
+    const impossible = row("Impossible", {
+      UnitsToBuy: 0,
+      Volume: 0,
+      BuyPrice: 0,
+      ExpectedBuyPrice: 0,
+      CanFill: false,
+      FilledQty: 0,
+      ProfitPerUnit: 10,
+      TotalProfit: 1000,
+      ExpectedProfit: 1000,
+      RealProfit: 1000,
+    });
+    const lowExecution = row("Low execution", {
+      CanFill: false,
+      FilledQty: 0,
+      BuyCompetitors: 50,
+      SellCompetitors: 50,
+    });
+    const key = routeGroupKey(impossible);
+
+    const { builds, diagnostics } = buildRadiusCargoBuilds({
+      rows: [impossible, lowExecution],
+      routeAggregateMetricsByRoute: { [key]: aggregate },
+      preset: RADIUS_CARGO_BUILD_PRESETS.high_confidence,
+    });
+
+    expect(builds).toHaveLength(0);
+    expect(diagnostics.totalRows).toBe(2);
+    expect(diagnostics.skippedNoUnits).toBe(1);
+    expect(diagnostics.skippedExecutionQuality).toBe(1);
+    expect(diagnostics.skippedNoVolume).toBe(0);
+    expect(diagnostics.skippedNoCapital).toBe(0);
+    expect(diagnostics.skippedJumpEfficiency).toBe(0);
+    expect(diagnostics.skippedRisk).toBe(0);
   });
 
   it("preset switches alter eligible outputs", () => {
@@ -325,12 +362,12 @@ describe("buildRadiusCargoBuilds", () => {
       [riskyKey]: { ...aggregate, riskTotalCount: 4 },
     };
 
-    const highConfidence = buildRadiusCargoBuilds({
+    const { builds: highConfidence } = buildRadiusCargoBuilds({
       rows: [risky],
       routeAggregateMetricsByRoute: byRoute,
       preset: RADIUS_CARGO_BUILD_PRESETS.high_confidence,
     });
-    const maxProfit = buildRadiusCargoBuilds({
+    const { builds: maxProfit } = buildRadiusCargoBuilds({
       rows: [risky],
       routeAggregateMetricsByRoute: byRoute,
       preset: RADIUS_CARGO_BUILD_PRESETS.viator_max_profit,

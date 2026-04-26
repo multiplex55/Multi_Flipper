@@ -682,25 +682,25 @@ export const baseColumnDefs: ColumnDef[] = [
   },
   {
     key: "RoutePackItemCount",
-    labelKey: "colBatchNumber",
+    labelKey: "colRoutePackItemCount",
     width: "min-w-[110px]",
     numeric: true,
   },
   radiusColumnDef({
     key: "RoutePackTotalProfit",
-    labelKey: "colBatchProfit",
+    labelKey: "colRoutePackTotalProfit",
     width: "min-w-[130px]",
     numeric: true,
   }),
   {
     key: "RoutePackTotalCapital",
-    labelKey: "colBatchTotalCapital",
+    labelKey: "colRoutePackTotalCapital",
     width: "min-w-[145px]",
     numeric: true,
   },
   {
     key: "RoutePackTotalVolume",
-    labelKey: "colVolume",
+    labelKey: "colRoutePackTotalVolume",
     width: "min-w-[120px]",
     numeric: true,
   },
@@ -712,25 +712,25 @@ export const baseColumnDefs: ColumnDef[] = [
   },
   radiusColumnDef({
     key: "RoutePackRealIskPerJump",
-    labelKey: "colRealIskPerJump",
+    labelKey: "colRoutePackRealIskPerJump",
     width: "min-w-[140px]",
     numeric: true,
   }),
   {
     key: "RoutePackDailyIskPerJump",
-    labelKey: "colDailyIskPerJump",
+    labelKey: "colRoutePackDailyIskPerJump",
     width: "min-w-[145px]",
     numeric: true,
   },
   {
     key: "RoutePackDailyProfit",
-    labelKey: "colDailyProfit",
+    labelKey: "colRoutePackDailyProfit",
     width: "min-w-[145px]",
     numeric: true,
   },
   {
     key: "RoutePackRealIskPerM3PerJump",
-    labelKey: "colRealIskPerM3PerJump",
+    labelKey: "colRoutePackRealIskPerM3PerJump",
     width: "min-w-[170px]",
     numeric: true,
   },
@@ -748,7 +748,7 @@ export const baseColumnDefs: ColumnDef[] = [
   },
   {
     key: "RoutePackProfitPer100M",
-    labelKey: "colProfit",
+    labelKey: "colRoutePackProfitPer100M",
     width: "min-w-[150px]",
     numeric: true,
   },
@@ -760,55 +760,55 @@ export const baseColumnDefs: ColumnDef[] = [
   },
   radiusColumnDef({
     key: "RoutePackWeakestExecutionQuality",
-    labelKey: "colExecutionQuality" as TranslationKey,
+    labelKey: "colRoutePackWeakestExecutionQuality" as TranslationKey,
     width: "min-w-[150px]",
     numeric: true,
   }),
   radiusColumnDef({
     key: "RoutePackTurnoverDays",
-    labelKey: "colTurnoverDays",
+    labelKey: "colRoutePackTurnoverDays",
     width: "min-w-[130px]",
     numeric: true,
   }),
   {
     key: "RoutePackExitOverhangDays",
-    labelKey: "colExitOverhangDays",
+    labelKey: "colRoutePackExitOverhangDays",
     width: "min-w-[150px]",
     numeric: true,
   },
   radiusColumnDef({
     key: "RoutePackBreakevenBuffer",
-    labelKey: "colBreakevenBuffer",
+    labelKey: "colRoutePackBreakevenBuffer",
     width: "min-w-[150px]",
     numeric: true,
   }),
   {
     key: "RoutePackRemainingCargoM3",
-    labelKey: "colVolume",
+    labelKey: "colRoutePackRemainingCargoM3",
     width: "min-w-[145px]",
     numeric: true,
   },
   {
     key: "RoutePackWorstFillConfidencePct",
-    labelKey: "colCanFill",
+    labelKey: "colRoutePackWorstFillConfidencePct",
     width: "min-w-[145px]",
     numeric: true,
   },
   {
     key: "RoutePackAverageFillConfidencePct",
-    labelKey: "colCanFill",
+    labelKey: "colRoutePackAverageFillConfidencePct",
     width: "min-w-[155px]",
     numeric: true,
   },
   {
     key: "RoutePackThinFillCount",
-    labelKey: "colFilledQty",
+    labelKey: "colRoutePackThinFillCount",
     width: "min-w-[130px]",
     numeric: true,
   },
   {
     key: "RoutePackProfitConcentrationPct",
-    labelKey: "colMargin",
+    labelKey: "colRoutePackProfitConcentrationPct",
     width: "min-w-[170px]",
     numeric: true,
   },
@@ -2989,7 +2989,7 @@ export function ScanResultsTable({
     suppressionTelemetry: suppressionTelemetryBase,
     explanationMetaByRouteKey,
   } = routeInsights;
-  const cargoBuilds = useMemo(
+  const { builds: cargoBuilds, diagnostics: cargoBuildDiagnostics } = useMemo(
     () =>
       buildRadiusCargoBuilds({
         rows: datasetRows.map((item) => item.row),
@@ -7656,7 +7656,38 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
             ))}
             {cargoBuilds.length === 0 && (
               <div className="rounded-sm border border-eve-border/50 bg-eve-dark/30 p-4 text-eve-dim">
-                No cargo builds satisfy the selected preset constraints.
+                <div className="font-semibold text-eve-text">
+                  No cargo builds matched the <span className="text-eve-accent">{RADIUS_CARGO_BUILD_PRESETS[cargoBuildPreset].label}</span> preset.
+                </div>
+                {cargoBuildDiagnostics ? (
+                  <>
+                    <div className="mt-2 text-[11px]">
+                      Top exclusions: {([
+                        ["Execution quality", cargoBuildDiagnostics.skippedExecutionQuality],
+                        ["Confidence", cargoBuildDiagnostics.skippedConfidence],
+                        ["Jump efficiency", cargoBuildDiagnostics.skippedJumpEfficiency],
+                        ["Risk", cargoBuildDiagnostics.skippedRisk],
+                        ["Cargo full", cargoBuildDiagnostics.skippedCargoFull],
+                        ["Capital full", cargoBuildDiagnostics.skippedCapitalFull],
+                        ["Missing units", cargoBuildDiagnostics.skippedNoUnits],
+                        ["Missing volume", cargoBuildDiagnostics.skippedNoVolume],
+                        ["Missing capital", cargoBuildDiagnostics.skippedNoCapital],
+                      ] as const)
+                        .filter((entry) => entry[1] > 0)
+                        .sort((left, right) => right[1] - left[1])
+                        .slice(0, 3)
+                        .map(([label, count]) => `${label} (${count})`)
+                        .join(", ") || "No exclusion diagnostics available"}.
+                    </div>
+                    <ul className="mt-2 list-disc pl-4 text-[11px]">
+                      <li>Try a broader preset like Viator Max Profit.</li>
+                      <li>Lower execution/confidence thresholds for this session.</li>
+                      <li>Enable partial row behavior or increase cargo/capital limits. Partial opportunities seen: {cargoBuildDiagnostics.partialRowsAvailable}.</li>
+                    </ul>
+                  </>
+                ) : (
+                  <div className="mt-2 text-[11px]">Diagnostics unavailable. Try switching presets or relaxing thresholds.</div>
+                )}
               </div>
             )}
           </div>
