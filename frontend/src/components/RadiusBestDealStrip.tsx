@@ -1,5 +1,6 @@
 import { formatISK } from "@/lib/format";
 import { ExplanationPopoverShell } from "@/components/decision/ExplanationPopoverShell";
+import { RadiusDealExplanationPanel } from "@/components/RadiusDealExplanationPanel";
 import type { RadiusBestDealCard } from "@/lib/radiusBestDealCards";
 import type { RouteQueueEntry } from "@/lib/routeQueue";
 import type { RouteAssignment } from "@/lib/routeAssignments";
@@ -149,10 +150,14 @@ export function RadiusBestDealStrip({
                         </button>
                         {card.whySummary ? (
                           <ExplanationPopoverShell label="Why?">
-                            <div className="text-eve-dim mb-1">{card.whySummary}</div>
-                            {card.lensDelta ? (
-                              <div className="text-[10px] text-indigo-200">{card.lensDelta}</div>
-                            ) : null}
+                            <RadiusDealExplanationPanel
+                              routeKey={card.routeKey}
+                              routeLabel={card.routeLabel}
+                              explanation={card.explanation}
+                              queueStatus={routeBadge.label}
+                              assignment={assignmentByRouteKey[card.routeKey]?.assignedCharacterName ?? null}
+                              lensDelta={card.lensDelta}
+                            />
                           </ExplanationPopoverShell>
                         ) : null}
                       </div>

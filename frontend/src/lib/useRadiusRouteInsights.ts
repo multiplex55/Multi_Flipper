@@ -111,6 +111,10 @@ export type RouteExplanationMeta = {
   cargoUsePercent: number | null;
   riskCount: number;
   staleVerificationPenalty: number;
+  missingVerification: boolean;
+  thinDepthCount: number;
+  exitOverhangDays: number | null;
+  jumpBurden: number | null;
 };
 
 export type RadiusRouteInsightInputRow = {
@@ -440,6 +444,10 @@ export function deriveRadiusRouteInsights(
         (summary?.routeRiskThinFillCount ?? 0),
       staleVerificationPenalty:
         params.routeVerificationByKey?.[route.routeKey]?.status === "Abort" ? 12 : 0,
+      missingVerification: !params.routeVerificationByKey?.[route.routeKey],
+      thinDepthCount: summary?.routeRiskThinFillCount ?? 0,
+      exitOverhangDays: summary?.routeExitOverhangDays ?? null,
+      jumpBurden: summary?.routeStopCount ?? null,
     };
   }
 

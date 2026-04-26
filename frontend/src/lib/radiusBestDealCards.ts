@@ -24,6 +24,7 @@ export type RadiusBestDealCard = {
   routeLabel: string;
   metricLabel: string;
   whySummary?: string;
+  explanation?: RouteDecisionExplanation;
   lensDelta?: string;
   hasFillerCandidates: boolean;
   expectedProfitIsk: number;
@@ -121,6 +122,7 @@ export function deriveRadiusBestDealCards(
       routeLabel,
       metricLabel,
       whySummary: explanation?.summary,
+      explanation,
       lensDelta,
       hasFillerCandidates: (filler?.candidates.length ?? 0) > 0,
       expectedProfitIsk: batch?.routeTotalProfit ?? candidate?.totalProfit ?? 0,

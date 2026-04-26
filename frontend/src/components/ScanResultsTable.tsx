@@ -123,6 +123,7 @@ import {
   type RouteDecisionLens,
 } from "@/lib/routeExplanation";
 import { ExplanationPopoverShell } from "@/components/decision/ExplanationPopoverShell";
+import { RadiusDealExplanationPanel } from "@/components/RadiusDealExplanationPanel";
 import {
   verifyRouteManifestAgainstRows,
   type RouteVerificationResult,
@@ -8228,15 +8229,15 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                                         <div className="text-eve-accent font-mono mb-1">
                                           Score {routeExplanationByKey[group.key].totalScore.toFixed(1)}
                                         </div>
-                                        <div className="text-eve-dim mb-1">
-                                          {routeExplanationByKey[group.key].summary}
-                                        </div>
-                                        <div className="text-[10px] text-indigo-200">
-                                          {routeLensDeltaByKey[group.key]}
-                                        </div>
-                                        {routeExplanationByKey[group.key].warnings.map((warning) => (
-                                          <div key={warning} className="text-[10px] text-amber-200">{warning}</div>
-                                        ))}
+                                        <RadiusDealExplanationPanel
+                                          routeKey={group.key}
+                                          routeLabel={group.label}
+                                          explanation={routeExplanationByKey[group.key]}
+                                          executionQuality={explanationMetaByRouteKey[group.key]?.executionQuality ?? null}
+                                          queueStatus={getRadiusRouteExecutionBadge(group.key, routeQueueEntries, routeAssignmentsByKey).label}
+                                          assignment={routeAssignmentsByKey[group.key]?.assignedCharacterName ?? null}
+                                          lensDelta={routeLensDeltaByKey[group.key]}
+                                        />
                                       </ExplanationPopoverShell>
                                     )}
                                   </div>
