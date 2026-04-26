@@ -222,6 +222,15 @@ import {
 import { isRadiusTradeExecutableNow } from "@/lib/radiusExecutableNow";
 import { computeRadiusSessionSummary } from "@/lib/radiusSessionSummary";
 import { classifyRadiusDealRisk } from "@/lib/radiusDealRisk";
+import { RadiusDealMovementBadge } from "@/components/RadiusDealMovementBadge";
+import {
+  buildRadiusDealSnapshotKey,
+  buildRadiusDealSnapshots,
+  compareRadiusDealSnapshots,
+  type RadiusDealMovement,
+  type RadiusDealMovementLabel,
+  type RadiusDealSnapshot,
+} from "@/lib/radiusDealMovement";
 
 export const calcRouteConfidence = calcRouteConfidenceFromInsights;
 
@@ -247,6 +256,7 @@ const RADIUS_ROUTE_INSIGHTS_HIDDEN_STORAGE_KEY =
 const RADIUS_INSIGHTS_DRAWER_OPEN_STORAGE_KEY =
   "eve-radius-insights-drawer-open:v1";
 const ONE_LEG_MODE_STORAGE_KEY = "eve-radius-one-leg-mode:v1";
+const RADIUS_DEAL_SNAPSHOT_STORAGE_KEY = "eve-radius-deal-snapshots:v1";
 
 type RadiusTransientModeSnapshot = {
   sortKey: SortKey;
@@ -1984,6 +1994,17 @@ export function ScanResultsTable({
     {},
   );
   const [focusedRowId, setFocusedRowId] = useState<number | null>(null);
+  const [previousDealSnapshots, setPreviousDealSnapshots] = useState<Map<string, RadiusDealSnapshot>>(() => {
+    if (typeof window === "undefined") return new Map();
+    try {
+      const raw = window.localStorage.getItem(RADIUS_DEAL_SNAPSHOT_STORAGE_KEY);
+      if (!raw) return new Map();
+      const parsed = JSON.parse(raw) as RadiusDealSnapshot[];
+      return new Map(parsed.map((entry) => [entry.key, entry]));
+    } catch {
+      return new Map();
+    }
+  });
   const [lockedBuyLocationId, setLockedBuyLocationId] = useState<number | null>(
     null,
   );
@@ -3257,6 +3278,66 @@ export function ScanResultsTable({
     [cargoLimit, datasetRows],
   );
 
+  const currentDealSnapshots = useMemo(
+    () => buildRadiusDealSnapshots(results),
+    [results],
+  );
+
+  const { movementByKey: radiusDealMovementByKey, disappearedKeys: disappearedDealKeys } = useMemo(
+    () => compareRadiusDealSnapshots(previousDealSnapshots, currentDealSnapshots),
+    [currentDealSnapshots, previousDealSnapshots],
+  );
+
+  useEffect(() => {
+    setPreviousDealSnapshots(currentDealSnapshots);
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        RADIUS_DEAL_SNAPSHOT_STORAGE_KEY,
+        JSON.stringify([...currentDealSnapshots.values()]),
+      );
+    } catch {
+      // Ignore local storage write failures.
+    }
+  }, [currentDealSnapshots]);
+
+  const rowMovementByRowId = useMemo(() => {
+    const out = new Map<number, RadiusDealMovement>();
+    for (const item of sorted) {
+      const movement = radiusDealMovementByKey.get(buildRadiusDealSnapshotKey(item.row));
+      if (movement) out.set(item.id, movement);
+    }
+    return out;
+  }, [radiusDealMovementByKey, sorted]);
+
+  const movementByRouteKey = useMemo(() => {
+    const byRoute = new Map<string, RadiusDealMovement[]>();
+    for (const snapshot of currentDealSnapshots.values()) {
+      const movement = radiusDealMovementByKey.get(snapshot.key);
+      if (!movement) continue;
+      const existing = byRoute.get(snapshot.routeKey);
+      if (existing) existing.push(movement);
+      else byRoute.set(snapshot.routeKey, [movement]);
+    }
+    const out: Record<string, RadiusDealMovement> = {};
+    for (const [routeKey, movements] of byRoute) {
+      const dominant = pickDominantMovement(movements);
+      if (dominant) out[routeKey] = dominant;
+    }
+    return out;
+  }, [currentDealSnapshots, radiusDealMovementByKey]);
+
+  const movementByShoppingListId = useMemo(() => {
+    const out: Record<string, RadiusDealMovement> = {};
+    for (const list of stationShoppingLists) {
+      const movements = list.lines
+        .map((line) => radiusDealMovementByKey.get(buildRadiusDealSnapshotKey(line.row)))
+        .filter((entry): entry is RadiusDealMovement => Boolean(entry));
+      const dominant = pickDominantMovement(movements);
+      if (dominant) out[list.id] = dominant;
+    }
+    return out;
+  }, [radiusDealMovementByKey, stationShoppingLists]);
 
   const routeGroups = useMemo<RouteGroup[]>(() => {
     if (!isRouteGrouped) return [];
@@ -6082,6 +6163,7 @@ export function ScanResultsTable({
         scoreContext={displayScoreContext}
         endpointPreferenceMeta={endpointPreferenceMetaByRowId.get(ir.id)}
         debugReasonCodes={filterAudit.rowReasonCodes.get(ir.id) ?? []}
+        movement={rowMovementByRowId.get(ir.id)}
       />
     ),
     [
@@ -6107,6 +6189,7 @@ export function ScanResultsTable({
       displayScoreContext,
       endpointPreferenceMetaByRowId,
       filterAudit.rowReasonCodes,
+      rowMovementByRowId,
     ],
   );
 
@@ -6151,6 +6234,7 @@ export function ScanResultsTable({
         ref={keyNavRootRef}
         className="relative flex-1 flex flex-col min-h-0"
         data-filter-stage-counts={JSON.stringify(filterAudit.stageCounts)}
+        data-deal-disappeared-count={disappearedDealKeys.size}
       >
       {activeFilterChips.length > 0 && (
         <div
@@ -7438,6 +7522,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
         <>
           <RadiusDealFocusBoard
             candidates={radiusDealFocusCandidates}
+            movementByRouteKey={movementByRouteKey}
             onOpenBatchBuilderForRoute={openBatchBuilderForRoute}
             onOpenRouteWorkbench={(routeKey) => openRouteWorkbench(routeKey, "summary")}
             onVerifyRoute={(routeKey) =>
@@ -8611,6 +8696,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                 routeQueueEntries={routeQueueEntries}
                 assignmentByRouteKey={routeAssignmentsByKey}
                 verificationState={verificationStateByRouteKey[build.routeKey]}
+                movement={movementByRouteKey[build.routeKey] ?? null}
                 onOpenBatch={(routeKey) =>
                   openBatchBuilderForRoute(routeKey, {
                     intentLabel: "Cargo Build",
@@ -8659,6 +8745,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
           <div className="mb-2 text-eve-dim">Top buy-station shopping lists</div>
           <RadiusBuyStationShoppingListView
             lists={stationShoppingLists}
+            movementByListId={movementByShoppingListId}
             onOpenRows={openRowsForStationGroup}
             onCopyBuyChecklist={(list) => copyText(formatStationBuyChecklist(list))}
             onCopySellChecklist={(list) => copyText(formatStationSellChecklist(list))}
@@ -9041,6 +9128,32 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
   );
 }
 
+
+function movementRank(label: RadiusDealMovementLabel): number {
+  switch (label) {
+    case "collapsing":
+      return 5;
+    case "worse":
+      return 4;
+    case "improving":
+      return 3;
+    case "new":
+      return 2;
+    case "stable":
+    default:
+      return 1;
+  }
+}
+
+function pickDominantMovement(movements: RadiusDealMovement[]): RadiusDealMovement | null {
+  if (movements.length === 0) return null;
+  return [...movements].sort((a, b) => {
+    const rankDelta = movementRank(b.label) - movementRank(a.label);
+    if (rankDelta !== 0) return rankDelta;
+    return Math.abs(b.profitDeltaPct) - Math.abs(a.profitDeltaPct);
+  })[0] ?? null;
+}
+
 /* ─── DataRow memo component — renders a single table row ─── */
 
 interface DataRowProps {
@@ -9081,6 +9194,7 @@ interface DataRowProps {
     excludedReasons: string[];
   };
   debugReasonCodes: string[];
+  movement?: RadiusDealMovement;
 }
 
 /* ─── Trade Score Badge ─── */
@@ -9213,6 +9327,7 @@ const DataRow = memo(
     scoreContext,
     endpointPreferenceMeta,
     debugReasonCodes,
+    movement,
   }: DataRowProps) {
     return (
       <tr
@@ -9292,6 +9407,7 @@ const DataRow = memo(
                 >
                   ★
                 </span>
+                <RadiusDealMovementBadge movement={movement} />
                 {showTrackedChip && isTracked && (
                   <span className="shrink-0 inline-flex items-center px-1 py-px rounded-[2px] border border-emerald-300/35 bg-emerald-400/10 text-emerald-200 text-[9px] leading-none font-medium uppercase tracking-normal">
                     Tracked
@@ -9503,7 +9619,8 @@ const DataRow = memo(
     prev.onTogglePin === next.onTogglePin &&
     prev.onOpenScore === next.onOpenScore &&
     prev.opportunityProfile === next.opportunityProfile &&
-    prev.scoreContext === next.scoreContext,
+    prev.scoreContext === next.scoreContext &&
+    prev.movement === next.movement,
 );
 
 /* ─── EVE category name lookup ─── */
