@@ -1,17 +1,20 @@
 import { describe, expect, it } from "vitest";
-import type { FlipResult } from "@/lib/types";
 import {
   buildRadiusCargoBuilds,
   RADIUS_CARGO_BUILD_PRESETS,
 } from "@/lib/radiusCargoBuilds";
-import type { RouteAggregateMetrics } from "@/lib/useRadiusRouteInsights";
 import { routeGroupKey } from "@/lib/batchMetrics";
+import {
+  makeFlipResult,
+  makeRouteAggregateMetrics,
+} from "@/lib/testFixtures";
+import type { FlipResult } from "@/lib/types";
 
-function row(name: string, overrides: Partial<FlipResult> = {}): FlipResult {
+function row(name: string, overrides: Partial<FlipResult> = {}) {
   const typeIdSeed = name
     .split("")
     .reduce((sum, char, index) => sum + char.charCodeAt(0) * (index + 1), 0);
-  return {
+  return makeFlipResult({
     TypeID: typeIdSeed + 1000,
     TypeName: name,
     Volume: 10,
@@ -47,29 +50,10 @@ function row(name: string, overrides: Partial<FlipResult> = {}): FlipResult {
     SellCompetitors: 0,
     DailyProfit: 10000000,
     ...overrides,
-  };
+  });
 }
 
-const aggregate: RouteAggregateMetrics = {
-  routeSafetyRank: 0,
-  dailyIskPerJump: 20_000_000,
-  dailyProfit: 180_000_000,
-  iskPerM3PerJump: 2000,
-  fastestIskPerJump: 20_000_000,
-  weakestExecutionQuality: 70,
-  riskSpikeCount: 0,
-  riskNoHistoryCount: 0,
-  riskUnstableHistoryCount: 0,
-  riskThinFillCount: 0,
-  riskTotalCount: 1,
-  turnoverDays: 1,
-  exitOverhangDays: 1,
-  breakevenBuffer: 12,
-  dailyProfitOverCapital: 0.18,
-  routeTotalProfit: 180_000_000,
-  routeTotalCapital: 800_000_000,
-  weightedSlippagePct: 1,
-};
+const aggregate = makeRouteAggregateMetrics();
 
 describe("buildRadiusCargoBuilds", () => {
   it("includes oversized rows as partial fills when cargo allows only part of the request", () => {
@@ -225,7 +209,7 @@ describe("buildRadiusCargoBuilds", () => {
       row("B route", { BuyLocationID: 11, SellLocationID: 21, BuyStation: "Perimeter", SellStation: "Dodixie", BuySystemName: "Perimeter", SellSystemName: "Dodixie", TotalProfit: 10_000_000, ExpectedProfit: 11_000_000 }),
     ];
 
-    const byRoute: Record<string, RouteAggregateMetrics> = {
+    const byRoute = {
       [routeGroupKey(rows[0])]: aggregate,
       [routeGroupKey(rows[1])]: { ...aggregate },
     };
@@ -273,7 +257,7 @@ describe("buildRadiusCargoBuilds", () => {
       }),
     );
     const key = routeGroupKey(rows[0]);
-    const byRoute: Record<string, RouteAggregateMetrics> = {
+    const byRoute = {
       [key]: { ...aggregate, dailyIskPerJump: 0, riskTotalCount: 4 },
     };
 
@@ -358,7 +342,7 @@ describe("buildRadiusCargoBuilds", () => {
       ProfitPerUnit: 100_000,
     });
     const riskyKey = routeGroupKey(risky);
-    const byRoute: Record<string, RouteAggregateMetrics> = {
+    const byRoute = {
       [riskyKey]: { ...aggregate, riskTotalCount: 4 },
     };
 
@@ -376,4 +360,59 @@ describe("buildRadiusCargoBuilds", () => {
     expect(highConfidence).toHaveLength(0);
     expect(maxProfit).toHaveLength(1);
   });
+
+  it("applies risk count and risk rate gates independently", () => {
+    const risky = row("Risky route", { TypeID: 7101, ProfitPerUnit: 80_000, UnitsToBuy: 20, TotalJumps: 2 });
+    const key = routeGroupKey(risky);
+
+    const countBlocked = buildRadiusCargoBuilds({
+      rows: [risky],
+      routeAggregateMetricsByRoute: { [key]: makeRouteAggregateMetrics({ riskTotalCount: 7 }) },
+      preset: RADIUS_CARGO_BUILD_PRESETS.dst_bulk,
+    });
+    expect(countBlocked.builds).toHaveLength(0);
+    expect(countBlocked.diagnostics.skippedRisk).toBe(1);
+
+    const rateBlocked = buildRadiusCargoBuilds({
+      rows: [risky],
+      routeAggregateMetricsByRoute: { [key]: makeRouteAggregateMetrics({ riskTotalCount: 1 }) },
+      preset: {
+        ...RADIUS_CARGO_BUILD_PRESETS.dst_bulk,
+        maxRiskCount: 10,
+        maxRiskRate: 0.5,
+      },
+    });
+    expect(rateBlocked.builds).toHaveLength(0);
+    expect(rateBlocked.diagnostics.skippedRisk).toBe(1);
+  });
+
+  it("tracks diagnostics counters without double counting", () => {
+    const noUnits = row("No units", { UnitsToBuy: 0 });
+    const noVolume = row("No volume", { Volume: 0 });
+    const noCapital = row("No capital", { BuyPrice: 0, ExpectedBuyPrice: 0 });
+    const lowExecution = row("Low execution", { FilledQty: 0, CanFill: false });
+    const lowConfidence = row("Low confidence", { FilledQty: 0, CanFill: false, PreExecutionUnits: 1, UnitsToBuy: 1, BuyOrderRemain: 1, SellOrderRemain: 1, DayTargetPeriodPrice: 120 });
+    const selected = row("Selected", { TypeID: 7201, ProfitPerUnit: 200_000, UnitsToBuy: 2, TotalJumps: 1 });
+    const key = routeGroupKey(selected);
+
+    const result = buildRadiusCargoBuilds({
+      rows: [noUnits, noVolume, noCapital, lowExecution, lowConfidence, selected],
+      routeAggregateMetricsByRoute: { [key]: makeRouteAggregateMetrics({ dailyIskPerJump: 0, riskTotalCount: 0 }) },
+      preset: {
+        ...RADIUS_CARGO_BUILD_PRESETS.viator_safe,
+        minExecutionQuality: 60,
+        minConfidencePercent: 55,
+      },
+    });
+
+    const { diagnostics } = result;
+    expect(diagnostics.totalRows).toBe(6);
+    expect(diagnostics.skippedNoUnits).toBe(1);
+    expect(diagnostics.skippedNoVolume).toBe(1);
+    expect(diagnostics.skippedNoCapital).toBe(1);
+    expect(diagnostics.skippedExecutionQuality).toBe(1);
+    expect(diagnostics.skippedConfidence).toBe(1);
+    expect(result.builds).toHaveLength(1);
+  });
+
 });

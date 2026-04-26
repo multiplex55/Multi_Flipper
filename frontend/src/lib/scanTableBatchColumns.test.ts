@@ -6,42 +6,7 @@ import {
   getBatchSyntheticValue,
   passesBatchNumericFilter,
 } from "@/lib/scanTableBatchColumns";
-import type { FlipResult } from "@/lib/types";
-
-function makeRow(overrides: Partial<FlipResult> = {}): FlipResult {
-  return {
-    TypeID: overrides.TypeID ?? 1,
-    TypeName: overrides.TypeName ?? `Type ${overrides.TypeID ?? 1}`,
-    Volume: overrides.Volume ?? 2,
-    BuyPrice: overrides.BuyPrice ?? 100,
-    BuyStation: overrides.BuyStation ?? "Buy",
-    BuySystemName: overrides.BuySystemName ?? "BuySys",
-    BuySystemID: overrides.BuySystemID ?? 300001,
-    BuyLocationID: overrides.BuyLocationID ?? 600001,
-    SellPrice: overrides.SellPrice ?? 130,
-    SellStation: overrides.SellStation ?? "Sell",
-    SellSystemName: overrides.SellSystemName ?? "SellSys",
-    SellSystemID: overrides.SellSystemID ?? 300002,
-    SellLocationID: overrides.SellLocationID ?? 600002,
-    ProfitPerUnit: overrides.ProfitPerUnit ?? 20,
-    MarginPercent: overrides.MarginPercent ?? 20,
-    UnitsToBuy: overrides.UnitsToBuy ?? 10,
-    BuyOrderRemain: overrides.BuyOrderRemain ?? 10,
-    SellOrderRemain: overrides.SellOrderRemain ?? 10,
-    TotalProfit: overrides.TotalProfit ?? 200,
-    ProfitPerJump: overrides.ProfitPerJump ?? 50,
-    BuyJumps: overrides.BuyJumps ?? 1,
-    SellJumps: overrides.SellJumps ?? 1,
-    TotalJumps: overrides.TotalJumps ?? 2,
-    DailyVolume: overrides.DailyVolume ?? 100,
-    Velocity: overrides.Velocity ?? 1,
-    PriceTrend: overrides.PriceTrend ?? 1,
-    BuyCompetitors: overrides.BuyCompetitors ?? 1,
-    SellCompetitors: overrides.SellCompetitors ?? 1,
-    DailyProfit: overrides.DailyProfit ?? 10,
-    ...overrides,
-  };
-}
+import { makeFlipResult as makeRow } from "@/lib/testFixtures";
 
 describe("scan-table batch synthetic helpers", () => {
   it("returns synthetic values and fallback rendering for ineligible rows", () => {
@@ -193,4 +158,48 @@ describe("scan-table batch synthetic helpers", () => {
       meta.routeRemainingCargoM3,
     );
   });
+
+  it("passes through profit concentration and returns null when route totals are non-positive", () => {
+    const dominant = makeRow({
+      TypeID: 601,
+      BuyLocationID: 980001,
+      SellLocationID: 980002,
+      ProfitPerUnit: 100,
+      UnitsToBuy: 10,
+      Volume: 1,
+    });
+    const tail = makeRow({
+      TypeID: 602,
+      BuyLocationID: dominant.BuyLocationID,
+      SellLocationID: dominant.SellLocationID,
+      ProfitPerUnit: 25,
+      UnitsToBuy: 4,
+      Volume: 1,
+    });
+    const concentrated = buildRouteBatchMetadataByRow([dominant, tail], 1_000);
+    const concentration = getBatchSyntheticValue(
+      dominant,
+      "RoutePackProfitConcentrationPct",
+      concentrated,
+    );
+    expect(concentration).toBeCloseTo((1_000 / 1_100) * 100, 6);
+
+    const negativeOnly = makeRow({
+      TypeID: 603,
+      BuyLocationID: 980101,
+      SellLocationID: 980102,
+      ProfitPerUnit: -20,
+      UnitsToBuy: 5,
+      Volume: 1,
+    });
+    const nonPositive = buildRouteBatchMetadataByRow([negativeOnly], 1_000);
+    expect(getBatchSyntheticValue(negativeOnly, "RoutePackProfitConcentrationPct", nonPositive)).toBeNull();
+    expect(
+      formatBatchSyntheticCell(
+        "RoutePackProfitConcentrationPct",
+        getBatchSyntheticValue(negativeOnly, "RoutePackProfitConcentrationPct", nonPositive),
+      ),
+    ).toBe("—");
+  });
+
 });
