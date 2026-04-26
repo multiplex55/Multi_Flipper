@@ -1652,7 +1652,7 @@ function App() {
         key: "5",
         modifiers: ["alt"] as const,
         handler: () => setTab("route"),
-        description: "Switch to Route tab",
+        description: "Switch to Flipper Radius (Route)",
       },
       {
         key: "w",
@@ -3089,7 +3089,7 @@ const handleScanAndRefresh = useCallback(async () => {
                 <TabButton
                   active={tab === "route"}
                   onClick={() => setTab("route")}
-                  label={t("tabRoute")}
+                  label={t("tabRadiusRoute")}
                 />
                 {/* Visual separator: scan group vs station/industry */}
                 <div
