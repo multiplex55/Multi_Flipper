@@ -1,0 +1,106 @@
+import { useState } from "react";
+import { formatISK } from "@/lib/format";
+import type { RadiusCargoBuild } from "@/lib/radiusCargoBuilds";
+
+type RadiusCargoBuildCardProps = {
+  build: RadiusCargoBuild;
+  onCopyManifest: (build: RadiusCargoBuild) => void;
+  onCopyBuyChecklist: (build: RadiusCargoBuild) => void;
+  onCopySellChecklist: (build: RadiusCargoBuild) => void;
+  onVerify: (routeKey: string) => void;
+  onQueue: (routeKey: string) => void;
+  onOpenWorkbench: (routeKey: string) => void;
+  onOpenBatch: (routeKey: string) => void;
+};
+
+const badgeTone = {
+  good: "text-emerald-300 border-emerald-400/40",
+  warn: "text-amber-200 border-amber-300/40",
+  bad: "text-rose-300 border-rose-400/40",
+};
+
+export function RadiusCargoBuildCard(props: RadiusCargoBuildCardProps) {
+  const { build } = props;
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="rounded-sm border border-eve-border/60 bg-eve-dark/30 p-2" data-testid="radius-cargo-build-card">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="font-semibold text-eve-text">{build.routeLabel}</div>
+          <div className="text-[11px] text-eve-dim">{build.routeKey}</div>
+        </div>
+        <div className="text-eve-accent font-mono">Score {build.finalScore.toFixed(1)}</div>
+      </div>
+
+      <div className="mt-1 flex flex-wrap gap-3 text-eve-dim">
+        <span>Profit {formatISK(build.totalProfitIsk)}</span>
+        <span>Capital {formatISK(build.totalCapitalIsk)}</span>
+        <span>Gross sell {formatISK(build.totalGrossSellIsk)}</span>
+        <span>Cargo used {build.cargoFillPercent.toFixed(1)}%</span>
+        <span>ISK/jump {formatISK(build.iskPerJump)}</span>
+      </div>
+
+      <div className="mt-1 flex flex-wrap gap-2 text-[10px]">
+        <span className={`rounded-sm border px-1 py-0.5 ${build.confidencePercent >= 70 ? badgeTone.good : build.confidencePercent >= 50 ? badgeTone.warn : badgeTone.bad}`}>
+          Confidence {build.confidencePercent.toFixed(0)}%
+        </span>
+        <span className={`rounded-sm border px-1 py-0.5 ${build.executionCue === "smooth" ? badgeTone.good : build.executionCue === "watch" ? badgeTone.warn : badgeTone.bad}`}>
+          Execution {build.executionCue}
+        </span>
+        <span className={`rounded-sm border px-1 py-0.5 ${build.riskCue === "low" ? badgeTone.good : build.riskCue === "moderate" ? badgeTone.warn : badgeTone.bad}`}>
+          Risk {build.riskCue}
+        </span>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-1 text-[10px]">
+        <button type="button" className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-eve-dim hover:text-eve-text" onClick={() => props.onCopyManifest(build)}>Copy manifest</button>
+        <button type="button" className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-eve-dim hover:text-eve-text" onClick={() => props.onCopyBuyChecklist(build)}>Buy checklist</button>
+        <button type="button" className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-eve-dim hover:text-eve-text" onClick={() => props.onCopySellChecklist(build)}>Sell checklist</button>
+        <button type="button" className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-eve-dim hover:text-eve-text" onClick={() => props.onVerify(build.routeKey)}>Verify</button>
+        <button type="button" className="rounded-sm border border-indigo-400/60 px-1.5 py-0.5 text-indigo-200" onClick={() => props.onQueue(build.routeKey)}>Queue</button>
+        <button type="button" className="rounded-sm border border-blue-500/60 px-1.5 py-0.5 text-blue-200" onClick={() => props.onOpenWorkbench(build.routeKey)}>Open workbench</button>
+        <button type="button" className="rounded-sm border border-eve-accent/60 px-1.5 py-0.5 text-eve-accent" onClick={() => props.onOpenBatch(build.routeKey)}>Open batch</button>
+      </div>
+
+      <div className="mt-2">
+        <button type="button" className="text-[11px] text-eve-dim hover:text-eve-text" onClick={() => setExpanded((current) => !current)}>
+          {expanded ? "Hide lines" : `Show lines (${build.lines.length})`}
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="mt-2 overflow-x-auto">
+          <table className="min-w-full text-[10px]">
+            <thead>
+              <tr className="text-eve-dim">
+                <th className="px-1 py-0.5 text-left">Item</th>
+                <th className="px-1 py-0.5 text-right">Qty</th>
+                <th className="px-1 py-0.5 text-right">Buy total</th>
+                <th className="px-1 py-0.5 text-right">Sell total</th>
+                <th className="px-1 py-0.5 text-right">Profit</th>
+                <th className="px-1 py-0.5 text-right">m3</th>
+                <th className="px-1 py-0.5 text-center">Partial</th>
+                <th className="px-1 py-0.5 text-center">Exec cue</th>
+              </tr>
+            </thead>
+            <tbody>
+              {build.lines.map((line) => (
+                <tr key={`${build.id}:${line.row.TypeID}:${line.units}`} className="border-t border-eve-border/40">
+                  <td className="px-1 py-0.5 text-eve-text">{line.row.TypeName}</td>
+                  <td className="px-1 py-0.5 text-right text-eve-dim">{line.units.toLocaleString()}</td>
+                  <td className="px-1 py-0.5 text-right text-eve-dim">{formatISK(line.capitalIsk)}</td>
+                  <td className="px-1 py-0.5 text-right text-eve-dim">{formatISK(line.grossSellIsk)}</td>
+                  <td className="px-1 py-0.5 text-right text-eve-accent">{formatISK(line.profitIsk)}</td>
+                  <td className="px-1 py-0.5 text-right text-eve-dim">{line.volumeM3.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                  <td className="px-1 py-0.5 text-center text-eve-dim">{line.partial ? "Yes" : "No"}</td>
+                  <td className="px-1 py-0.5 text-center text-eve-dim">{build.executionCue}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}

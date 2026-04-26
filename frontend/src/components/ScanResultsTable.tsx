@@ -184,7 +184,14 @@ import {
   type RadiusCargoBuildPreset,
 } from "@/lib/radiusCargoBuilds";
 import { RadiusCommandBar } from "@/components/RadiusCommandBar";
+import { RadiusCargoBuildCard } from "@/components/RadiusCargoBuildCard";
+import { RadiusCargoBuildDiagnosticsPanel } from "@/components/RadiusCargoBuildDiagnosticsPanel";
 import { useRouteBatchBuilderController } from "@/lib/useRouteBatchBuilderController";
+import {
+  formatRadiusCargoBuildBuyChecklist,
+  formatRadiusCargoBuildManifest,
+  formatRadiusCargoBuildSellChecklist,
+} from "@/lib/radiusCargoBuildFormat";
 import { RadiusRowContextMenu } from "@/components/RadiusRowContextMenu";
 import type { RadiusContextMenuAction } from "@/lib/radiusContextMenuItems";
 
@@ -2992,6 +2999,7 @@ export function ScanResultsTable({
     [cargoBuildPreset, cargoLimit, datasetRows, routeAggregateMetricsByRoute],
   );
 
+
   const routeGroups = useMemo<RouteGroup[]>(() => {
     if (!isRouteGrouped) return [];
     const byRoute = new Map<string, RouteGroup>();
@@ -4151,6 +4159,25 @@ export function ScanResultsTable({
     },
     [addToast, t],
   );
+
+
+  const copyCargoBuildManifest = useCallback((build: (typeof cargoBuilds)[number]) => {
+    copyText(formatRadiusCargoBuildManifest(build));
+  }, [copyText]);
+
+  const copyCargoBuildBuyChecklist = useCallback((build: (typeof cargoBuilds)[number]) => {
+    copyText(formatRadiusCargoBuildBuyChecklist(build));
+  }, [copyText]);
+
+  const copyCargoBuildSellChecklist = useCallback((build: (typeof cargoBuilds)[number]) => {
+    copyText(formatRadiusCargoBuildSellChecklist(build));
+  }, [copyText]);
+
+  const showCargoDiagnosticsPanel = cargoBuilds.length === 0 ||
+    cargoBuildDiagnostics.skippedExecutionQuality +
+      cargoBuildDiagnostics.skippedConfidence +
+      cargoBuildDiagnostics.skippedJumpEfficiency +
+      cargoBuildDiagnostics.skippedRisk > 0;
 
   const saveRoutePack = useCallback(
     (routeKey: string) => {
@@ -7770,72 +7797,39 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
           </div>
           <div className="grid gap-2">
             {cargoBuilds.map((build) => (
-              <div key={build.id} className="rounded-sm border border-eve-border/60 bg-eve-dark/30 p-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="font-semibold text-eve-text">{build.routeLabel}</div>
-                  <div className="text-eve-accent font-mono">Score {build.finalScore.toFixed(1)}</div>
-                </div>
-                <div className="mt-1 flex flex-wrap gap-3 text-eve-dim">
-                  <span>Profit {formatISK(build.totalProfitIsk)}</span>
-                  <span>Cargo {build.totalCargoM3.toLocaleString(undefined, { maximumFractionDigits: 1 })} m³</span>
-                  <span>Capital {formatISK(build.totalCapitalIsk)}</span>
-                  <span>Jumps {build.jumps}</span>
-                  <span>ISK/jump {formatISK(build.iskPerJump)}</span>
-                  <span>Cargo score {build.cargoFillPercent.toFixed(0)}%</span>
-                  <span className={build.riskCue === "high" ? "text-rose-300" : build.riskCue === "moderate" ? "text-amber-200" : "text-emerald-300"}>Risk {build.riskCue}</span>
-                  <span className={build.executionCue === "fragile" ? "text-rose-300" : build.executionCue === "watch" ? "text-amber-200" : "text-emerald-300"}>Execution {build.executionCue}</span>
-                  {(() => {
-                    const priority = classifyVerificationPriority({
-                      expectedProfitIsk: build.totalProfitIsk,
-                      totalJumps: build.jumps,
-                      urgencyBand: build.executionCue === "fragile" ? "fragile" : build.executionCue === "watch" ? "aging" : "stable",
-                    });
-                    return <span className={`rounded-sm border px-1 py-0.5 text-[10px] ${verificationPriorityChipClass(priority.priority)}`}>{priority.label}</span>;
-                  })()}
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-1">
-                  <button type="button" onClick={() => openBatchBuilderForRoute(build.routeKey, { intentLabel: "Cargo Build", batchEntryMode: "core" })} className="rounded-sm border border-eve-accent/60 px-1.5 py-0.5 text-[10px] text-eve-accent">Open Batch</button>
-                  <button type="button" onClick={() => openFillPlannerForRoute(build.routeKey)} className="rounded-sm border border-blue-500/60 px-1.5 py-0.5 text-[10px] text-blue-200">Fill More</button>
-                  <button type="button" onClick={() => onSendToRouteQueue?.(build.routeKey)} className="rounded-sm border border-indigo-400/60 px-1.5 py-0.5 text-[10px] text-indigo-200">Assign Pilot</button>
-                  <button type="button" onClick={() => verifyRouteGroup(build.routeKey, routeVerificationProfileByKey[build.routeKey] ?? savedRoutePackByKey[build.routeKey]?.verificationProfileId ?? "standard")} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-[10px] text-eve-dim hover:text-eve-text">Verify</button>
-                </div>
-              </div>
+              <RadiusCargoBuildCard
+                key={build.id}
+                build={build}
+                onCopyManifest={copyCargoBuildManifest}
+                onCopyBuyChecklist={copyCargoBuildBuyChecklist}
+                onCopySellChecklist={copyCargoBuildSellChecklist}
+                onVerify={(routeKey) =>
+                  verifyRouteGroup(
+                    routeKey,
+                    routeVerificationProfileByKey[routeKey] ??
+                      savedRoutePackByKey[routeKey]?.verificationProfileId ??
+                      "standard",
+                  )
+                }
+                onQueue={(routeKey) => onSendToRouteQueue?.(routeKey)}
+                onOpenWorkbench={(routeKey) => openRouteWorkbench(routeKey, "summary")}
+                onOpenBatch={(routeKey) =>
+                  openBatchBuilderForRoute(routeKey, {
+                    intentLabel: "Cargo Build",
+                    batchEntryMode: "core",
+                  })
+                }
+              />
             ))}
-            {cargoBuilds.length === 0 && (
-              <div className="rounded-sm border border-eve-border/50 bg-eve-dark/30 p-4 text-eve-dim">
-                <div className="font-semibold text-eve-text">
-                  No cargo builds matched the <span className="text-eve-accent">{RADIUS_CARGO_BUILD_PRESETS[cargoBuildPreset].label}</span> preset.
-                </div>
-                {cargoBuildDiagnostics ? (
-                  <>
-                    <div className="mt-2 text-[11px]">
-                      Top exclusions: {([
-                        ["Execution quality", cargoBuildDiagnostics.skippedExecutionQuality],
-                        ["Confidence", cargoBuildDiagnostics.skippedConfidence],
-                        ["Jump efficiency", cargoBuildDiagnostics.skippedJumpEfficiency],
-                        ["Risk", cargoBuildDiagnostics.skippedRisk],
-                        ["Cargo full", cargoBuildDiagnostics.skippedCargoFull],
-                        ["Capital full", cargoBuildDiagnostics.skippedCapitalFull],
-                        ["Missing units", cargoBuildDiagnostics.skippedNoUnits],
-                        ["Missing volume", cargoBuildDiagnostics.skippedNoVolume],
-                        ["Missing capital", cargoBuildDiagnostics.skippedNoCapital],
-                      ] as const)
-                        .filter((entry) => entry[1] > 0)
-                        .sort((left, right) => right[1] - left[1])
-                        .slice(0, 3)
-                        .map(([label, count]) => `${label} (${count})`)
-                        .join(", ") || "No exclusion diagnostics available"}.
-                    </div>
-                    <ul className="mt-2 list-disc pl-4 text-[11px]">
-                      <li>Try a broader preset like Viator Max Profit.</li>
-                      <li>Lower execution/confidence thresholds for this session.</li>
-                      <li>Enable partial row behavior or increase cargo/capital limits. Partial opportunities seen: {cargoBuildDiagnostics.partialRowsAvailable}.</li>
-                    </ul>
-                  </>
-                ) : (
-                  <div className="mt-2 text-[11px]">Diagnostics unavailable. Try switching presets or relaxing thresholds.</div>
-                )}
-              </div>
+            {showCargoDiagnosticsPanel && (
+              <RadiusCargoBuildDiagnosticsPanel
+                presetLabel={RADIUS_CARGO_BUILD_PRESETS[cargoBuildPreset].label}
+                diagnostics={cargoBuildDiagnostics}
+                onSwitchPreset={() => setCargoBuildPreset("viator_max_profit")}
+                onRelaxPreset={() => setCargoBuildPreset("viator_max_profit")}
+                onClearFilters={() => setSelectedBadgeFilters(new Set())}
+                onShowPartialRows={() => setCargoBuildPreset("viator_max_profit")}
+              />
             )}
           </div>
         </div>
