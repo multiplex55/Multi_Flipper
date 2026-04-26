@@ -109,8 +109,8 @@ import {
 } from "@/lib/endpointPreferences";
 import { RadiusInsightsPanel } from "./RadiusInsightsPanel";
 import { RadiusInsightsDrawer } from "./RadiusInsightsDrawer";
-import { RadiusBestDealStrip } from "./RadiusBestDealStrip";
-import { deriveRadiusBestDealCards } from "@/lib/radiusBestDealCards";
+import { RadiusDealFocusBoard } from "./RadiusDealFocusBoard";
+import { deriveRadiusDealFocusCandidates } from "@/lib/radiusDealFocus";
 import {
   buildRadiusMajorHubInsights,
 } from "@/lib/radiusMajorHubInsights";
@@ -5904,27 +5904,33 @@ export function ScanResultsTable({
     ],
   );
 
-  const radiusBestDealCards = useMemo(
+  const radiusDealFocusCandidates = useMemo(
     () =>
-      deriveRadiusBestDealCards({
+      deriveRadiusDealFocusCandidates({
+        rows: datasetRows.map((entry) => entry.row),
+        cargoBuilds,
         topRoutePicks,
         actionQueue,
         batchMetricsByRoute,
         routeAggregateMetricsByRoute,
         routeExplanationByKey,
         routeFillerCandidatesByKey,
-        lensDeltaByRouteKey: routeLensDeltaByKey,
-        lensActive: decisionLens !== "recommended",
+        verificationStateByRouteKey,
+        routeQueueEntries,
+        cargoCapacityM3: cargoLimit,
       }),
     [
       actionQueue,
       batchMetricsByRoute,
-      decisionLens,
+      cargoBuilds,
+      cargoLimit,
+      datasetRows,
       routeAggregateMetricsByRoute,
       routeExplanationByKey,
       routeFillerCandidatesByKey,
-      routeLensDeltaByKey,
+      routeQueueEntries,
       topRoutePicks,
+      verificationStateByRouteKey,
     ],
   );
 
@@ -7304,14 +7310,10 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
 
       {!isRegionGrouped && isRadiusMode && !radiusRouteInsightsHidden && (
         <>
-          <RadiusBestDealStrip
-            bestDealCards={radiusBestDealCards}
+          <RadiusDealFocusBoard
+            candidates={radiusDealFocusCandidates}
             onOpenBatchBuilderForRoute={openBatchBuilderForRoute}
-            onOpenRouteWorkbench={openRouteWorkbench}
-            insightsOpen={radiusInsightsDrawerOpen}
-            routeQueueEntries={routeQueueEntries}
-            assignmentByRouteKey={routeAssignmentsByKey}
-            verificationStateByRouteKey={verificationStateByRouteKey}
+            onOpenRouteWorkbench={(routeKey) => openRouteWorkbench(routeKey, "summary")}
             onVerifyRoute={(routeKey) =>
               verifyRouteGroup(
                 routeKey,
@@ -7320,28 +7322,15 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                   "standard",
               )
             }
-            onOpenInsights={() => setRadiusInsightsDrawerOpen((previous) => !previous)}
-            characters={authCharacters}
-            onAssignActive={(routeKey) => {
-              if (authCharacters[0]) assignRouteWithCharacterId(routeKey, authCharacters[0].character_id);
+            onCopyChecklist={(routeKey) => {
+              const build = cargoBuilds.find((entry) => entry.routeKey === routeKey);
+              if (!build) return;
+              copyCargoBuildBuyChecklist(build);
             }}
-            onAssignBest={(routeKey) => {
-              const recommendation = recommendBestPilotForRoute(
-                authCharacters.map((character) => ({
-                  characterId: character.character_id,
-                  characterName: character.character_name,
-                  jumpsToBuy: 0,
-                  totalRunJumps: 0,
-                })),
-                { activeAssignmentRouteKeysByCharacterId: activeAssignmentRouteByCharacterId },
-              );
-              if (recommendation.bestCandidate) assignRouteWithCharacterId(routeKey, recommendation.bestCandidate.characterId);
-            }}
-            onAssignSpecificPilot={(routeKey, characterId) => assignRouteWithCharacterId(routeKey, characterId)}
-            onSetStagedSystem={(routeKey, stagedSystem) => {
-              const existing = routeAssignmentsByKey[routeKey];
-              if (!existing?.assignedCharacterId) return;
-              assignRouteWithCharacterId(routeKey, existing.assignedCharacterId, stagedSystem);
+            onCopyManifest={(routeKey) => {
+              const build = cargoBuilds.find((entry) => entry.routeKey === routeKey);
+              if (!build) return;
+              copyCargoBuildManifest(build);
             }}
           />
           <RadiusInsightsDrawer
