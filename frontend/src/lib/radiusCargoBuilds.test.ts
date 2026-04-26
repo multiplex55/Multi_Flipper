@@ -219,6 +219,28 @@ describe("buildRadiusCargoBuilds", () => {
     const second = buildRadiusCargoBuilds({ rows, routeAggregateMetricsByRoute: byRoute, preset: RADIUS_CARGO_BUILD_PRESETS.viator_safe });
 
     expect(first.builds.map((b) => b.routeKey)).toEqual(second.builds.map((b) => b.routeKey));
+    expect(first.builds).toEqual(second.builds);
+  });
+
+  it("does not throw for sparse legacy row shapes", () => {
+    const sparse = row("Sparse", {
+      BuyLocationID: undefined,
+      SellLocationID: undefined,
+      BuyStation: "",
+      SellStation: "",
+      BuySystemName: "",
+      SellSystemName: "",
+      HistoryAvailable: undefined,
+      FilledQty: undefined,
+      TotalJumps: Number.NaN,
+    });
+    expect(() =>
+      buildRadiusCargoBuilds({
+        rows: [sparse],
+        routeAggregateMetricsByRoute: {},
+        preset: { ...RADIUS_CARGO_BUILD_PRESETS.viator_safe, minExecutionQuality: 0, minConfidencePercent: 0, minJumpEfficiencyIsk: 0 },
+      }),
+    ).not.toThrow();
   });
 
 

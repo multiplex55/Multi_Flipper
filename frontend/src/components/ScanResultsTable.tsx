@@ -256,6 +256,7 @@ const COLUMN_PREFS_STORAGE_PREFIX = "eve-scan-columns:v1:";
 const ITEM_GROUPING_STORAGE_KEY = "eve-radius-group-by-item:v1";
 const ROUTE_GROUPING_STORAGE_KEY = "eve-radius-route-view-mode:v1";
 const RADIUS_CARGO_BUILD_OPTIMIZER_STORAGE_KEY = "eve-radius-cargo-build-optimizer:v1";
+const RADIUS_FEATURE_PREFS_STORAGE_KEY = "eve-radius-feature-prefs:v1";
 const ENDPOINT_PREFS_STORAGE_KEY = "eve-radius-endpoint-preferences:v1";
 const ADVANCED_TOOLBAR_VISIBLE_STORAGE_KEY =
   "eve-radius-advanced-toolbar-visible:v1";
@@ -442,6 +443,10 @@ type ScanResultsTableRouteHeavyConfig = {
   showSavedRoutes: true;
   showLoopPanel: boolean;
   defaultViewMode: "rows" | "route" | "cargo_builds" | "shopping_list";
+  enableDealFocusBoard?: boolean;
+  enableOptimizerModeSelector?: boolean;
+  enableMovementBadges?: boolean;
+  enableSavedPatternMode?: boolean;
 };
 
 type ScanResultsTableRouteLightConfig = {
@@ -451,6 +456,10 @@ type ScanResultsTableRouteLightConfig = {
   showSavedRoutes: false;
   showLoopPanel: false;
   defaultViewMode: "rows" | "cargo_builds" | "shopping_list";
+  enableDealFocusBoard?: boolean;
+  enableOptimizerModeSelector?: boolean;
+  enableMovementBadges?: boolean;
+  enableSavedPatternMode?: boolean;
 };
 
 type ScanResultsTableRowFirstConfig = {
@@ -460,6 +469,10 @@ type ScanResultsTableRowFirstConfig = {
   showSavedRoutes: false;
   showLoopPanel: false;
   defaultViewMode: "rows";
+  enableDealFocusBoard?: boolean;
+  enableOptimizerModeSelector?: boolean;
+  enableMovementBadges?: boolean;
+  enableSavedPatternMode?: boolean;
 };
 
 export type ScanResultsTableFeatureConfig =
@@ -474,6 +487,10 @@ const DEFAULT_SCAN_RESULTS_TABLE_FEATURE_CONFIG: ScanResultsTableFeatureConfig =
   showSavedRoutes: true,
   showLoopPanel: true,
   defaultViewMode: "rows",
+  enableDealFocusBoard: true,
+  enableOptimizerModeSelector: true,
+  enableMovementBadges: true,
+  enableSavedPatternMode: true,
 };
 
 interface Props {
@@ -1847,6 +1864,30 @@ export function ScanResultsTable({
     loadSavedCandidatePatterns().filter(isRadiusSavedDealPattern),
   );
   const [activeRadiusPatternId, setActiveRadiusPatternId] = useState<string | null>(null);
+  const [radiusFeaturePrefs, setRadiusFeaturePrefs] = useState<{
+    dealFocusBoard: boolean;
+    optimizerModeSelector: boolean;
+    movementBadges: boolean;
+    savedPatternMode: boolean;
+  }>(() => {
+    try {
+      const raw = localStorage.getItem(RADIUS_FEATURE_PREFS_STORAGE_KEY);
+      const parsed = raw ? (JSON.parse(raw) as Partial<Record<string, boolean>>) : {};
+      return {
+        dealFocusBoard: parsed.dealFocusBoard ?? true,
+        optimizerModeSelector: parsed.optimizerModeSelector ?? true,
+        movementBadges: parsed.movementBadges ?? true,
+        savedPatternMode: parsed.savedPatternMode ?? true,
+      };
+    } catch {
+      return {
+        dealFocusBoard: true,
+        optimizerModeSelector: true,
+        movementBadges: true,
+        savedPatternMode: true,
+      };
+    }
+  });
   const savedRoutePacks = routeWorkspace?.savedRoutePacks ?? [];
   const [page, setPage] = useState(0);
   const [routeGroupPage, setRouteGroupPage] = useState(0);
@@ -2095,6 +2136,11 @@ export function ScanResultsTable({
   const showRouteWorkbench = featureConfig.showRouteWorkbench;
   const showSavedRoutes = featureConfig.showSavedRoutes;
   const showLoopPanel = featureConfig.showLoopPanel;
+  const dealFocusBoardEnabled = (featureConfig.enableDealFocusBoard ?? true) && radiusFeaturePrefs.dealFocusBoard;
+  const optimizerModeSelectorEnabled =
+    (featureConfig.enableOptimizerModeSelector ?? true) && radiusFeaturePrefs.optimizerModeSelector;
+  const movementBadgesEnabled = (featureConfig.enableMovementBadges ?? true) && radiusFeaturePrefs.movementBadges;
+  const savedPatternModeEnabled = (featureConfig.enableSavedPatternMode ?? true) && radiusFeaturePrefs.savedPatternMode;
   const isRadiusMode = tradeStateTab === "radius";
   const useRadiusCommandBar = isRadiusMode && !isRegionGrouped;
   const effectiveRouteViewMode =
@@ -2540,6 +2586,15 @@ export function ScanResultsTable({
   }, [cargoBuildOptimizerMode]);
 
   useEffect(() => {
+    try {
+      // Storage boundary: staged Radius feature toggles persist locally so rollouts can be enabled/disabled without server state.
+      localStorage.setItem(RADIUS_FEATURE_PREFS_STORAGE_KEY, JSON.stringify(radiusFeaturePrefs));
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [radiusFeaturePrefs]);
+
+  useEffect(() => {
     if (!allowRouteGrouping && routeViewMode !== "rows") {
       setRouteViewMode("rows");
     }
@@ -2884,18 +2939,19 @@ export function ScanResultsTable({
       return buyMatches && sellMatches && legMatches;
     });
 
+    // Derivation integration point: feature-flagged saved-pattern filtering/boosting plugs into the shared ordering pipeline below.
     const savedPatternMatchByRowId = new Map<number, { saved: boolean; activeMatch: boolean; boost: number }>();
     for (const ir of lockFiltered) {
       const saved = savedRadiusPatterns.some((pattern) => matchRadiusDealPattern(ir.row, pattern).matched);
       const activeMatch = activeRadiusPattern ? matchRadiusDealPattern(ir.row, activeRadiusPattern).matched : false;
       const boost =
-        activeRadiusPattern && activeRadiusPattern.applicationMode === "boost" && activeMatch
+        savedPatternModeEnabled && activeRadiusPattern && activeRadiusPattern.applicationMode === "boost" && activeMatch
           ? radiusPatternBoostScore(activeRadiusPattern)
           : 0;
       savedPatternMatchByRowId.set(ir.id, { saved, activeMatch, boost });
     }
 
-    if (activeRadiusPattern && activeRadiusPattern.applicationMode === "filter") {
+    if (savedPatternModeEnabled && activeRadiusPattern && activeRadiusPattern.applicationMode === "filter") {
       lockFiltered = lockFiltered.filter((ir) => savedPatternMatchByRowId.get(ir.id)?.activeMatch);
     }
 
@@ -3003,6 +3059,7 @@ export function ScanResultsTable({
     lockedLegKey,
     savedRadiusPatterns,
     activeRadiusPattern,
+    savedPatternModeEnabled,
   ]);
 
   // Available market groups derived from current results (region mode only)
@@ -3331,6 +3388,7 @@ export function ScanResultsTable({
     setPreviousDealSnapshots(currentDealSnapshots);
     if (typeof window === "undefined") return;
     try {
+      // Storage boundary: movement snapshots are persisted locally so next scans can compute deltas safely after reload.
       window.localStorage.setItem(
         RADIUS_DEAL_SNAPSHOT_STORAGE_KEY,
         JSON.stringify([...currentDealSnapshots.values()]),
@@ -6295,7 +6353,7 @@ export function ScanResultsTable({
         scoreContext={displayScoreContext}
         endpointPreferenceMeta={endpointPreferenceMetaByRowId.get(ir.id)}
         debugReasonCodes={filterAudit.rowReasonCodes.get(ir.id) ?? []}
-        movement={rowMovementByRowId.get(ir.id)}
+        movement={movementBadgesEnabled ? rowMovementByRowId.get(ir.id) : undefined}
         hasSavedPattern={savedPatternMatchByRowId.get(ir.id)?.saved}
         isActivePatternMatch={savedPatternMatchByRowId.get(ir.id)?.activeMatch}
       />
@@ -6324,6 +6382,7 @@ export function ScanResultsTable({
       endpointPreferenceMetaByRowId,
       filterAudit.rowReasonCodes,
       rowMovementByRowId,
+      movementBadgesEnabled,
       savedPatternMatchByRowId,
     ],
   );
@@ -6691,22 +6750,50 @@ export function ScanResultsTable({
                       ))}
                     </select>
                   </label>
-                  <label className="inline-flex items-center gap-1 rounded-sm border border-eve-border/60 bg-eve-dark/40 px-2 py-0.5 text-[11px]">
-                    <span className="text-eve-dim">Optimizer</span>
-                    <select
-                      value={cargoBuildOptimizerMode}
-                      onChange={(event) =>
-                        setCargoBuildOptimizerMode(event.target.value as RadiusCargoBuildOptimizerMode)
-                      }
-                      className="rounded-sm border border-eve-border/50 bg-eve-dark px-1 py-0.5 text-eve-text"
-                    >
-                      <option value="balanced_score">Balanced Score</option>
-                      <option value="greedy_profit">Greedy Profit</option>
-                      <option value="greedy_isk_per_m3">Greedy ISK/m³</option>
-                      <option value="bounded_knapsack">Bounded Knapsack</option>
-                    </select>
-                  </label>
+                  {optimizerModeSelectorEnabled && (
+                    <label className="inline-flex items-center gap-1 rounded-sm border border-eve-border/60 bg-eve-dark/40 px-2 py-0.5 text-[11px]">
+                      <span className="text-eve-dim">Optimizer</span>
+                      <select
+                        value={cargoBuildOptimizerMode}
+                        onChange={(event) =>
+                          setCargoBuildOptimizerMode(event.target.value as RadiusCargoBuildOptimizerMode)
+                        }
+                        className="rounded-sm border border-eve-border/50 bg-eve-dark px-1 py-0.5 text-eve-text"
+                      >
+                        <option value="balanced_score">Balanced Score</option>
+                        <option value="greedy_profit">Greedy Profit</option>
+                        <option value="greedy_isk_per_m3">Greedy ISK/m³</option>
+                        <option value="bounded_knapsack">Bounded Knapsack</option>
+                      </select>
+                    </label>
+                  )}
                 </>
+              )}
+              {isRadiusMode && (
+                <div className="inline-flex items-center gap-1 rounded-sm border border-eve-border/60 bg-eve-dark/40 px-1.5 py-0.5 text-[11px]">
+                  <span className="text-eve-dim">Radius flags</span>
+                  {([
+                    ["dealFocusBoard", "Focus board"],
+                    ["optimizerModeSelector", "Optimizer mode"],
+                    ["movementBadges", "Movement badges"],
+                    ["savedPatternMode", "Pattern mode"],
+                  ] as const).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() =>
+                        setRadiusFeaturePrefs((prev) => ({ ...prev, [key]: !prev[key] }))
+                      }
+                      className={`rounded-sm border px-1.5 py-0.5 ${
+                        radiusFeaturePrefs[key]
+                          ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent"
+                          : "border-eve-border/50 text-eve-dim"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               )}
 
               {!useRadiusCommandBar && (
@@ -7656,30 +7743,32 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
 
       {!isRegionGrouped && isRadiusMode && !radiusRouteInsightsHidden && (
         <>
-          <RadiusDealFocusBoard
-            candidates={radiusDealFocusCandidates}
-            movementByRouteKey={movementByRouteKey}
-            onOpenBatchBuilderForRoute={openBatchBuilderForRoute}
-            onOpenRouteWorkbench={(routeKey) => openRouteWorkbench(routeKey, "summary")}
-            onVerifyRoute={(routeKey) =>
-              verifyRouteGroup(
-                routeKey,
-                routeVerificationProfileByKey[routeKey] ??
-                  savedRoutePackByKey[routeKey]?.verificationProfileId ??
-                  "standard",
-              )
-            }
-            onCopyChecklist={(routeKey) => {
-              const build = cargoBuilds.find((entry) => entry.routeKey === routeKey);
-              if (!build) return;
-              copyCargoBuildBuyChecklist(build);
-            }}
-            onCopyManifest={(routeKey) => {
-              const build = cargoBuilds.find((entry) => entry.routeKey === routeKey);
-              if (!build) return;
-              copyCargoBuildManifest(build);
-            }}
-          />
+          {dealFocusBoardEnabled && (
+            <RadiusDealFocusBoard
+              candidates={radiusDealFocusCandidates}
+              movementByRouteKey={movementBadgesEnabled ? movementByRouteKey : {}}
+              onOpenBatchBuilderForRoute={openBatchBuilderForRoute}
+              onOpenRouteWorkbench={(routeKey) => openRouteWorkbench(routeKey, "summary")}
+              onVerifyRoute={(routeKey) =>
+                verifyRouteGroup(
+                  routeKey,
+                  routeVerificationProfileByKey[routeKey] ??
+                    savedRoutePackByKey[routeKey]?.verificationProfileId ??
+                    "standard",
+                )
+              }
+              onCopyChecklist={(routeKey) => {
+                const build = cargoBuilds.find((entry) => entry.routeKey === routeKey);
+                if (!build) return;
+                copyCargoBuildBuyChecklist(build);
+              }}
+              onCopyManifest={(routeKey) => {
+                const build = cargoBuilds.find((entry) => entry.routeKey === routeKey);
+                if (!build) return;
+                copyCargoBuildManifest(build);
+              }}
+            />
+          )}
           <RadiusInsightsDrawer
             open={radiusInsightsDrawerOpen}
             onClose={() => setRadiusInsightsDrawerOpen(false)}
@@ -8832,7 +8921,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                 routeQueueEntries={routeQueueEntries}
                 assignmentByRouteKey={routeAssignmentsByKey}
                 verificationState={verificationStateByRouteKey[build.routeKey]}
-                movement={movementByRouteKey[build.routeKey] ?? null}
+                movement={movementBadgesEnabled ? movementByRouteKey[build.routeKey] ?? null : null}
                 onOpenBatch={(routeKey) =>
                   openBatchBuilderForRoute(routeKey, {
                     intentLabel: "Cargo Build",
@@ -8882,7 +8971,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
           <div className="mb-2 text-eve-dim">Top buy-station shopping lists</div>
           <RadiusBuyStationShoppingListView
             lists={stationShoppingLists}
-            movementByListId={movementByShoppingListId}
+            movementByListId={movementBadgesEnabled ? movementByShoppingListId : {}}
             onOpenRows={openRowsForStationGroup}
             onCopyBuyChecklist={(list) => copyText(formatStationBuyChecklist(list))}
             onCopySellChecklist={(list) => copyText(formatStationSellChecklist(list))}

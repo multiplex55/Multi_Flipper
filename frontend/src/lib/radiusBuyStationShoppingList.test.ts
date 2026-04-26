@@ -121,4 +121,18 @@ describe("buildRadiusBuyStationShoppingLists", () => {
     expect(first.map((l) => l.id)).toEqual(second.map((l) => l.id));
     expect(first[0].buyGroupId).toBe(1);
   });
+
+  it("handles sparse legacy rows without runtime exceptions", () => {
+    const sparse = row("Sparse", {
+      BuyLocationID: undefined,
+      BuySystemID: undefined,
+      BuyStation: undefined,
+      SellStation: undefined,
+      HistoryAvailable: undefined,
+      FilledQty: undefined,
+      SlippageBuyPct: Number.NaN,
+      SlippageSellPct: Number.NaN,
+    });
+    expect(() => buildRadiusBuyStationShoppingLists({ rows: [sparse] })).not.toThrow();
+  });
 });

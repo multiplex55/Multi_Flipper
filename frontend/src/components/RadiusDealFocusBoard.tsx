@@ -1,8 +1,13 @@
-import { formatISK } from "@/lib/format";
 import type { RadiusDealFocusCandidate } from "@/lib/radiusDealFocus";
 import type { RadiusDealMovement } from "@/lib/radiusDealMovement";
 import { RadiusDealMovementBadge } from "@/components/RadiusDealMovementBadge";
 import { getRadiusVerificationBadgeMeta } from "@/lib/radiusVerificationStatus";
+import {
+  formatIskLabel,
+  formatIskPerJumpLabel,
+  formatM3Label,
+  formatRiskLabel,
+} from "@/lib/radiusDecisionGuardrails";
 
 type RadiusDealFocusBoardProps = {
   candidates: RadiusDealFocusCandidate[];
@@ -61,10 +66,10 @@ export function RadiusDealFocusBoard({
                   </span>
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px]">
-                  <span className="text-green-300">{formatISK(candidate.expectedProfitIsk)}</span>
-                  <span className="text-eve-accent">{formatISK(candidate.capitalIsk)} cap</span>
-                  <span className="text-eve-dim">{Math.round(candidate.cargoM3).toLocaleString()} m3</span>
-                  <span className="text-eve-accent">{formatISK(candidate.iskPerJump)}/jump</span>
+                  <span className="text-green-300">{formatIskLabel(candidate.expectedProfitIsk)}</span>
+                  <span className="text-eve-accent">{formatIskLabel(candidate.capitalIsk)} cap</span>
+                  <span className="text-eve-dim">{formatM3Label(candidate.cargoM3)}</span>
+                  <span className="text-eve-accent">{formatIskPerJumpLabel(candidate.iskPerJump)}</span>
                   <span className="text-eve-dim">{candidate.itemSummary}</span>
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[10px]">
@@ -75,7 +80,7 @@ export function RadiusDealFocusBoard({
                     exec {candidate.executionQuality.toFixed(0)}
                   </span>
                   <span className="rounded-sm border border-eve-border/60 px-1 py-0 text-eve-dim">
-                    risk {candidate.trapRisk.toFixed(0)}
+                    {formatRiskLabel(candidate.trapRisk)}
                   </span>
                   <span className={`rounded-sm border px-1 py-0 ${verificationBadge.className}`}>
                     {verificationBadge.label}

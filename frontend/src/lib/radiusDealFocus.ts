@@ -8,6 +8,14 @@ import type { FlipResult } from "@/lib/types";
 import type { RouteAggregateMetrics } from "@/lib/useRadiusRouteInsights";
 import type { RadiusVerificationState } from "@/lib/radiusVerificationStatus";
 import { routeGroupKey, safeNumber } from "@/lib/batchMetrics";
+import {
+  combineComparators,
+  compareNumberAsc,
+  compareNumberDesc,
+  compareTextAsc,
+  createMetricNormalizer,
+  finiteNumber,
+} from "@/lib/radiusDecisionGuardrails";
 
 export type RadiusDealFocusKind =
   | "best_buy_now"
@@ -122,14 +130,15 @@ function deriveAction(facts: RouteFacts): RadiusDealFocusAction {
 }
 
 function compareFacts(left: RouteFacts, right: RouteFacts, scoreLeft: number, scoreRight: number): number {
-  if (scoreRight !== scoreLeft) return scoreRight - scoreLeft;
-  const freshDelta = VERIFICATION_FRESHNESS[right.verificationState] - VERIFICATION_FRESHNESS[left.verificationState];
-  if (freshDelta !== 0) return freshDelta;
-  if (left.trapRisk !== right.trapRisk) return left.trapRisk - right.trapRisk;
-  if (right.executionQuality !== left.executionQuality) return right.executionQuality - left.executionQuality;
-  if (right.expectedProfitIsk !== left.expectedProfitIsk) return right.expectedProfitIsk - left.expectedProfitIsk;
-  if (left.routeKey !== right.routeKey) return left.routeKey.localeCompare(right.routeKey);
-  return left.topItemName.localeCompare(right.topItemName);
+  return combineComparators<RouteFacts>(
+    () => compareNumberDesc(scoreLeft, scoreRight),
+    (a, b) => compareNumberDesc(VERIFICATION_FRESHNESS[a.verificationState], VERIFICATION_FRESHNESS[b.verificationState]),
+    (a, b) => compareNumberAsc(a.trapRisk, b.trapRisk),
+    (a, b) => compareNumberDesc(a.executionQuality, b.executionQuality),
+    (a, b) => compareNumberDesc(a.expectedProfitIsk, b.expectedProfitIsk),
+    (a, b) => compareTextAsc(a.routeKey, b.routeKey),
+    (a, b) => compareTextAsc(a.topItemName, b.topItemName),
+  )(left, right);
 }
 
 function buildRouteFacts(input: DeriveRadiusDealFocusCandidatesInput): RouteFacts[] {
@@ -240,27 +249,34 @@ function pickKind(
 export function deriveRadiusDealFocusCandidates(
   input: DeriveRadiusDealFocusCandidatesInput,
 ): RadiusDealFocusCandidate[] {
+  // Integration point: ScanResultsTable derives focus board cards through this entrypoint.
   const facts = buildRouteFacts(input);
   if (facts.length === 0) return [];
+
+  const normalizeProfit = createMetricNormalizer(facts.map((fact) => fact.expectedProfitIsk));
+  const normalizeVolume = createMetricNormalizer(facts.map((fact) => fact.cargoM3));
+  const normalizeJumps = createMetricNormalizer(facts.map((fact) => fact.iskPerJump));
+  const normalizeQuality = createMetricNormalizer(facts.map((fact) => fact.executionQuality));
+  const normalizeRisk = createMetricNormalizer(facts.map((fact) => fact.trapRisk), true);
 
   const candidates = [
     pickKind(
       "best_buy_now",
       "Best Buy Now",
       facts,
-      (fact) => fact.expectedProfitIsk * 0.45 + fact.iskPerJump * 0.35 + fact.executionQuality * 500_000,
+      (fact) =>
+        finiteNumber(normalizeProfit(fact.expectedProfitIsk) * 45 + normalizeJumps(fact.iskPerJump) * 35 + normalizeQuality(fact.executionQuality) * 20, 0),
       (fact) => !(fact.trapRisk >= 75 && fact.confidenceScore < 45),
     ),
     pickKind("best_full_cargo", "Best Full Cargo", facts, (fact) => {
-      const capacity = Math.max(1, input.cargoCapacityM3 ?? 1);
-      return (fact.cargoM3 / capacity) * 100;
+      return normalizeVolume(fact.cargoM3) * 100;
     }),
     pickKind("best_single_item", "Best Single Item", facts, (fact) => {
       const perItemProfit = fact.rowCount > 0 ? fact.expectedProfitIsk / fact.rowCount : 0;
       return perItemProfit;
     }),
-    pickKind("best_safe_depth", "Best Safe Depth", facts, (fact) => fact.confidenceScore * 3 + (100 - fact.trapRisk) * 2 + fact.executionQuality),
-    pickKind("best_fast_turnover", "Best Fast Turnover", facts, (fact) => fact.iskPerJump * 0.8 + fact.executionQuality * 100_000 - fact.capitalIsk * 0.0001),
+    pickKind("best_safe_depth", "Best Safe Depth", facts, (fact) => normalizeQuality(fact.confidenceScore) * 45 + normalizeRisk(fact.trapRisk) * 35 + normalizeQuality(fact.executionQuality) * 20),
+    pickKind("best_fast_turnover", "Best Fast Turnover", facts, (fact) => normalizeJumps(fact.iskPerJump) * 60 + normalizeQuality(fact.executionQuality) * 25 + normalizeProfit(fact.expectedProfitIsk) * 15),
     pickKind(
       "best_low_capital",
       "Best Low Capital",

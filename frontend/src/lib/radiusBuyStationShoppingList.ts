@@ -2,6 +2,13 @@ import { routeGroupKey } from "@/lib/batchMetrics";
 import { executionQualityForFlip, requestedUnitsForFlip } from "@/lib/executionQuality";
 import { classifyRadiusDealRisk } from "@/lib/radiusDealRisk";
 import type { FlipResult } from "@/lib/types";
+import {
+  combineComparators,
+  compareNumberDesc,
+  compareTextAsc,
+  createMetricNormalizer,
+  finiteNumber,
+} from "@/lib/radiusDecisionGuardrails";
 
 export type RadiusBuyStationShoppingListLine = {
   row: FlipResult;
@@ -108,15 +115,17 @@ function isThinFakeSpread(row: FlipResult): boolean {
 }
 
 function compareLists(a: RadiusBuyStationShoppingList, b: RadiusBuyStationShoppingList): number {
-  if (a.actionableScore !== b.actionableScore) return b.actionableScore - a.actionableScore;
-  const stationCmp = a.buyStationName.localeCompare(b.buyStationName);
-  if (stationCmp !== 0) return stationCmp;
-  return a.buyGroupId - b.buyGroupId;
+  return combineComparators<RadiusBuyStationShoppingList>(
+    (left, right) => compareNumberDesc(left.actionableScore, right.actionableScore),
+    (left, right) => compareTextAsc(left.buyStationName, right.buyStationName),
+    (left, right) => left.buyGroupId - right.buyGroupId,
+  )(a, b);
 }
 
 export function buildRadiusBuyStationShoppingLists(
   input: BuildRadiusBuyStationShoppingListsInput,
 ): RadiusBuyStationShoppingList[] {
+  // Integration point: ScanResultsTable shopping-list view depends on this entrypoint staying sparse-row safe.
   const byStation = new Map<number, RadiusBuyStationShoppingListLine[]>();
 
   for (const row of input.rows) {
@@ -204,15 +213,20 @@ export function buildRadiusBuyStationShoppingLists(
       (avgExecutionQuality / 100) *
       (confidence / 100) *
       (1 - clamp(worstTrapRisk / 100, 0, 0.95));
-    const actionableScore =
-      executableProfit * 0.000001 +
-      cargoFillPercent * 0.3 +
-      bestIskPerJump * 0.000002 +
-      avgExecutionQuality * 0.2 +
-      confidence * 0.15 -
-      worstTrapRisk * 1.5 +
-      capitalEfficiency * 100 -
-      selected.filter((line) => isThinFakeSpread(line.row)).length * 5000;
+    const normalizeProfit = createMetricNormalizer([totalProfitIsk, executableProfit]);
+    const normalizeVolume = createMetricNormalizer([volumeM3, input.cargoCapacityM3 ?? volumeM3]);
+    const normalizeJumps = createMetricNormalizer(selected.map((line) => line.row.TotalJumps), true);
+    const normalizeQuality = createMetricNormalizer([avgExecutionQuality, confidence, capitalEfficiency * 100]);
+    const normalizeRisk = createMetricNormalizer([worstTrapRisk], true);
+    const actionableScore = finiteNumber(
+      normalizeProfit(executableProfit) * 45 +
+        normalizeVolume(volumeM3) * 10 +
+        normalizeJumps(selected[0]?.row.TotalJumps ?? 0) * 10 +
+        normalizeQuality((avgExecutionQuality + confidence) / 2) * 20 +
+        normalizeRisk(worstTrapRisk) * 15 -
+        selected.filter((line) => isThinFakeSpread(line.row)).length * 5,
+      0,
+    );
 
     out.push({
       id: `buy:${buyGroupId}`,
