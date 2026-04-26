@@ -72,10 +72,10 @@ const aggregate: RouteAggregateMetrics = {
 };
 
 describe("buildRadiusCargoBuilds", () => {
-  it("respects capacity and capital constraints", () => {
+  it("includes oversized rows as partial fills when cargo allows only part of the request", () => {
     const rows = [
-      row("Fits", { Volume: 5, UnitsToBuy: 200, BuyPrice: 200000 }),
-      row("Too big", { Volume: 600, UnitsToBuy: 100, BuyPrice: 500000 }),
+      row("Fits", { Volume: 10, UnitsToBuy: 100, BuyPrice: 100000, ProfitPerUnit: 5000 }),
+      row("Too big", { Volume: 600, UnitsToBuy: 100, BuyPrice: 500000, ProfitPerUnit: 20000 }),
     ];
     const key = routeGroupKey(rows[0]);
 
@@ -91,10 +91,132 @@ describe("buildRadiusCargoBuilds", () => {
     });
 
     expect(builds).toHaveLength(1);
-    expect(builds[0].rows.some((r) => r.TypeName === "Too big")).toBe(false);
+    const tooBigLine = builds[0].lines.find((line) => line.row.TypeName === "Too big");
+    expect(tooBigLine).toBeDefined();
+    expect(tooBigLine?.partial).toBe(true);
+    expect(tooBigLine?.units).toBe(25);
+    expect(tooBigLine?.volumeM3).toBe(15000);
     expect(builds[0].totalCapitalIsk).toBeLessThanOrEqual(
       RADIUS_CARGO_BUILD_PRESETS.low_capital.maxCapitalIsk,
     );
+    expect(builds[0].rows).toEqual(builds[0].lines.map((line) => line.row));
+  });
+
+  it("partially fills rows when limited by capital", () => {
+    const rows = [row("Capital capped", { Volume: 1, UnitsToBuy: 1000, BuyPrice: 1000000, ProfitPerUnit: 100000, ExpectedBuyPrice: 1000000 })];
+    const key = routeGroupKey(rows[0]);
+    const preset = {
+      ...RADIUS_CARGO_BUILD_PRESETS.low_capital,
+      cargoCapacityM3: 100_000,
+      maxCapitalIsk: 350_000_000,
+      minExecutionQuality: 0,
+      minConfidencePercent: 0,
+      minJumpEfficiencyIsk: 0,
+    };
+
+    const builds = buildRadiusCargoBuilds({
+      rows,
+      routeAggregateMetricsByRoute: { [key]: aggregate },
+      preset,
+    });
+
+    expect(builds).toHaveLength(1);
+    expect(builds[0].lines[0]?.units).toBe(350);
+    expect(builds[0].lines[0]?.partial).toBe(true);
+    expect(builds[0].totalCapitalIsk).toBe(350_000_000);
+  });
+
+  it("handles exact-fit and zero-fit boundaries", () => {
+    const exactFit = row("Exact fit", {
+      Volume: 100,
+      UnitsToBuy: 100,
+      BuyPrice: 1_000_000,
+      ExpectedBuyPrice: 1_000_000,
+      ProfitPerUnit: 10_000,
+    });
+    const zeroFit = row("Zero fit", {
+      Volume: 100,
+      UnitsToBuy: 100,
+      BuyPrice: 1_000_000,
+      ExpectedBuyPrice: 1_000_000,
+      ProfitPerUnit: 10_000,
+      TotalProfit: 1_000_000,
+      ExpectedProfit: 1_000_000,
+      RealProfit: 1_000_000,
+    });
+    const exactKey = routeGroupKey(exactFit);
+    const preset = {
+      ...RADIUS_CARGO_BUILD_PRESETS.low_capital,
+      cargoCapacityM3: 10_000,
+      maxCapitalIsk: 100_000_000,
+      minExecutionQuality: 0,
+      minConfidencePercent: 0,
+      minJumpEfficiencyIsk: 0,
+    };
+
+    const builds = buildRadiusCargoBuilds({
+      rows: [exactFit, zeroFit],
+      routeAggregateMetricsByRoute: {
+        [exactKey]: aggregate,
+      },
+      preset,
+    });
+
+    expect(builds).toHaveLength(1);
+    expect(builds[0].routeKey).toBe(exactKey);
+    expect(builds[0].lines[0]?.units).toBe(100);
+    expect(builds[0].lines[0]?.partial).toBe(false);
+  });
+
+  it("computes totals from selected line units", () => {
+    const rows = [
+      row("Line one", {
+        Volume: 5,
+        UnitsToBuy: 100,
+        BuyPrice: 10_000,
+        ExpectedBuyPrice: 10_000,
+        SellPrice: 12_000,
+        ProfitPerUnit: 2_000,
+        TotalProfit: 10_000_000,
+        ExpectedProfit: 10_000_000,
+        RealProfit: 10_000_000,
+      }),
+      row("Line two partial", {
+        Volume: 20,
+        UnitsToBuy: 300,
+        BuyPrice: 100_000,
+        ExpectedBuyPrice: 100_000,
+        SellPrice: 115_000,
+        ProfitPerUnit: 15_000,
+        TotalProfit: 40_000_000,
+        ExpectedProfit: 40_000_000,
+        RealProfit: 40_000_000,
+      }),
+    ];
+    const key = routeGroupKey(rows[0]);
+    const preset = {
+      ...RADIUS_CARGO_BUILD_PRESETS.low_capital,
+      cargoCapacityM3: 5_000,
+      maxCapitalIsk: 350_000_000,
+      minExecutionQuality: 0,
+      minConfidencePercent: 0,
+      minJumpEfficiencyIsk: 0,
+    };
+
+    const builds = buildRadiusCargoBuilds({
+      rows,
+      routeAggregateMetricsByRoute: { [key]: aggregate },
+      preset,
+    });
+
+    expect(builds).toHaveLength(1);
+    const expectedCapital = builds[0].lines.reduce((sum, line) => sum + line.capitalIsk, 0);
+    const expectedProfit = builds[0].lines.reduce((sum, line) => sum + line.profitIsk, 0);
+    const expectedGrossSell = builds[0].lines.reduce((sum, line) => sum + line.grossSellIsk, 0);
+    expect(builds[0].lines.some((line) => line.partial)).toBe(true);
+    expect(builds[0].totalCapitalIsk).toBe(expectedCapital);
+    expect(builds[0].totalProfitIsk).toBe(expectedProfit);
+    expect(builds[0].totalGrossSellIsk).toBe(expectedGrossSell);
   });
 
   it("ranks deterministically with tie-break rules", () => {
@@ -115,7 +237,15 @@ describe("buildRadiusCargoBuilds", () => {
   });
 
   it("preset switches alter eligible outputs", () => {
-    const risky = row("Risky", { BuyLocationID: 77, SellLocationID: 88, BuyStation: "Hek", SellStation: "Rens", BuySystemName: "Hek", SellSystemName: "Rens" });
+    const risky = row("Risky", {
+      BuyLocationID: 77,
+      SellLocationID: 88,
+      BuyStation: "Hek",
+      SellStation: "Rens",
+      BuySystemName: "Hek",
+      SellSystemName: "Rens",
+      ProfitPerUnit: 100_000,
+    });
     const riskyKey = routeGroupKey(risky);
     const byRoute: Record<string, RouteAggregateMetrics> = {
       [riskyKey]: { ...aggregate, riskTotalCount: 4 },
