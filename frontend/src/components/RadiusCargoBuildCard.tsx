@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { formatISK } from "@/lib/format";
 import type { RadiusCargoBuild } from "@/lib/radiusCargoBuilds";
+import type { RouteQueueEntry } from "@/lib/routeQueue";
+import type { RouteAssignment } from "@/lib/routeAssignments";
+import { getRadiusRouteExecutionBadge } from "@/lib/radiusRouteStatus";
 
 type RadiusCargoBuildCardProps = {
   build: RadiusCargoBuild;
@@ -11,6 +14,8 @@ type RadiusCargoBuildCardProps = {
   onQueue: (routeKey: string) => void;
   onOpenWorkbench: (routeKey: string) => void;
   onOpenBatch: (routeKey: string) => void;
+  routeQueueEntries?: RouteQueueEntry[];
+  assignmentByRouteKey?: Record<string, RouteAssignment>;
 };
 
 const badgeTone = {
@@ -20,7 +25,8 @@ const badgeTone = {
 };
 
 export function RadiusCargoBuildCard(props: RadiusCargoBuildCardProps) {
-  const { build } = props;
+  const { build, routeQueueEntries = [], assignmentByRouteKey = {} } = props;
+  const routeBadge = getRadiusRouteExecutionBadge(build.routeKey, routeQueueEntries, assignmentByRouteKey);
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -28,7 +34,7 @@ export function RadiusCargoBuildCard(props: RadiusCargoBuildCardProps) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="font-semibold text-eve-text">{build.routeLabel}</div>
-          <div className="text-[11px] text-eve-dim">{build.routeKey}</div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-eve-dim"><span>{build.routeKey}</span><span className={`rounded-sm border px-1 py-0 text-[10px] ${routeBadge.tone}`}>{routeBadge.label}</span></div>
         </div>
         <div className="text-eve-accent font-mono">Score {build.finalScore.toFixed(1)}</div>
       </div>

@@ -20,11 +20,12 @@ function makeEntry(overrides: Partial<RouteQueueEntry> = {}): RouteQueueEntry {
 
 describe("RouteQueuePanel", () => {
   afterEach(() => cleanup());
-  it("hides done entries by default", () => {
+  it("hides done and skipped entries by default", () => {
     render(
       <RouteQueuePanel
         entries={[
           makeEntry({ routeKey: "loc:done->loc:done", routeLabel: "Done route", status: "done" }),
+          makeEntry({ routeKey: "loc:skip->loc:skip", routeLabel: "Skipped route", status: "skipped" }),
           makeEntry({ routeKey: "loc:active->loc:active", routeLabel: "Active route", status: "queued" }),
         ]}
         onChange={vi.fn()}
@@ -32,9 +33,11 @@ describe("RouteQueuePanel", () => {
     );
 
     expect(screen.queryByText("Done route")).not.toBeInTheDocument();
+    expect(screen.queryByText("Skipped route")).not.toBeInTheDocument();
     expect(screen.getByText("Active route")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Show done"));
     expect(screen.getByText("Done route")).toBeInTheDocument();
+    expect(screen.getByText("Skipped route")).toBeInTheDocument();
   });
 
   it("renders next action from the next non-skipped route", () => {
