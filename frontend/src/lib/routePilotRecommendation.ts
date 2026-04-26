@@ -3,6 +3,9 @@ export interface RoutePilotRecommendationCandidate {
   characterName: string;
   jumpsToBuy: number | null;
   totalRunJumps: number | null;
+  availableCapitalIsk?: number | null;
+  availableCargoM3?: number | null;
+  maxComfortableJumps?: number | null;
 }
 
 export interface RoutePilotRecommendationRow
@@ -16,6 +19,13 @@ export interface RoutePilotRecommendationResult {
   bestCandidate: RoutePilotRecommendationCandidate | null;
   rationale: string;
   candidates: RoutePilotRecommendationRow[];
+}
+
+export interface RoutePilotRecommendationOptions {
+  requiredCapitalIsk?: number;
+  requiredCargoM3?: number;
+  expectedJumps?: number;
+  activeAssignmentRouteKeysByCharacterId?: Record<number, string | undefined>;
 }
 
 function normalizeJumps(value: number | null | undefined): number | null {
@@ -40,6 +50,7 @@ function compareCandidate(
 
 export function recommendBestPilotForRoute(
   candidates: RoutePilotRecommendationCandidate[],
+  options: RoutePilotRecommendationOptions = {},
 ): RoutePilotRecommendationResult {
   const normalized = candidates.map((candidate) => ({
     ...candidate,
@@ -47,9 +58,37 @@ export function recommendBestPilotForRoute(
     totalRunJumps: normalizeJumps(candidate.totalRunJumps),
   }));
 
-  const eligible = normalized.filter(
-    (candidate) => candidate.jumpsToBuy != null && candidate.totalRunJumps != null,
-  );
+  const eligible = normalized.filter((candidate) => {
+    if (candidate.jumpsToBuy == null || candidate.totalRunJumps == null) return false;
+    if (
+      typeof options.requiredCapitalIsk === "number" &&
+      Number.isFinite(options.requiredCapitalIsk) &&
+      typeof candidate.availableCapitalIsk === "number" &&
+      Number.isFinite(candidate.availableCapitalIsk) &&
+      candidate.availableCapitalIsk < options.requiredCapitalIsk
+    ) {
+      return false;
+    }
+    if (
+      typeof options.requiredCargoM3 === "number" &&
+      Number.isFinite(options.requiredCargoM3) &&
+      typeof candidate.availableCargoM3 === "number" &&
+      Number.isFinite(candidate.availableCargoM3) &&
+      candidate.availableCargoM3 < options.requiredCargoM3
+    ) {
+      return false;
+    }
+    if (
+      typeof options.expectedJumps === "number" &&
+      Number.isFinite(options.expectedJumps) &&
+      typeof candidate.maxComfortableJumps === "number" &&
+      Number.isFinite(candidate.maxComfortableJumps) &&
+      candidate.maxComfortableJumps < options.expectedJumps
+    ) {
+      return false;
+    }
+    return true;
+  });
 
   if (eligible.length === 0) {
     return {
@@ -64,7 +103,16 @@ export function recommendBestPilotForRoute(
     };
   }
 
-  const sortedEligible = [...eligible].sort(compareCandidate);
+  const sortedEligible = [...eligible].sort((left, right) => {
+    const leftConflict = Boolean(
+      options.activeAssignmentRouteKeysByCharacterId?.[left.characterId],
+    );
+    const rightConflict = Boolean(
+      options.activeAssignmentRouteKeysByCharacterId?.[right.characterId],
+    );
+    if (leftConflict !== rightConflict) return leftConflict ? 1 : -1;
+    return compareCandidate(left, right);
+  });
   const bestCandidate = sortedEligible[0] ?? null;
 
   const rankByCharacterId = new Map<number, number>();

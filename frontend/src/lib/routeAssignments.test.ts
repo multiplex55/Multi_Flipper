@@ -109,6 +109,8 @@ describe("routeAssignments", () => {
     updateRouteAssignment("route-2", { status: "selling" });
     updateRouteAssignment("route-2", { status: "done" });
     expect(getRouteAssignment("route-2")?.status).toBe("done");
+    updateRouteAssignment("route-2", { status: "skipped" });
+    expect(getRouteAssignment("route-2")?.status).toBe("skipped");
   });
 
   it("supports route-key lookup and filtering", () => {

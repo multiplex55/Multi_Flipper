@@ -134,4 +134,36 @@ describe("RoutePilotAssignmentsPanel", () => {
     });
     expect(screen.getByLabelText("Assignment notes")).toHaveValue("legacy edited");
   });
+
+  it("recommend avoids pilots with active assignment conflicts", () => {
+    localStorage.setItem(
+      "eve-route-assignments:v1",
+      JSON.stringify([
+        {
+          routeKey: "other-route",
+          assignedCharacterName: "Pilot One",
+          assignedCharacterId: 101,
+          status: "buying",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      ]),
+    );
+
+    render(
+      <RoutePilotAssignmentsPanel
+        routeKey="route-recommend"
+        characters={characters}
+        routeEndpoints={{
+          candidateDistancesByCharacterId: {
+            101: { jumpsToBuy: 1, totalRunJumps: 2 },
+            102: { jumpsToBuy: 2, totalRunJumps: 3 },
+          },
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Recommend" }));
+    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+
+    expect(screen.getByLabelText("Assigned character")).toHaveValue("102");
+  });
 });

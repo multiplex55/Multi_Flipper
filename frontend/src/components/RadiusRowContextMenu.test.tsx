@@ -86,7 +86,7 @@ describe("RadiusRowContextMenu", () => {
         isPinned={false}
         hasLegLocks={false}
         canQueueRoute
-        canAssignRoute={false}
+        canAssignRoute
         canVerifyRoute={false}
         onClose={() => undefined}
         callbacks={{ onAction }}
@@ -95,6 +95,8 @@ describe("RadiusRowContextMenu", () => {
 
     expect(screen.queryByRole("button", { name: "Ignore this buy station (session)" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Queue route" }));
+    fireEvent.click(screen.getByRole("button", { name: "Assign best pilot" }));
     expect(onAction).toHaveBeenCalledWith("queue_route", expect.anything(), expect.any(String));
+    expect(onAction).toHaveBeenCalledWith("assign_route_best", expect.anything(), expect.any(String));
   });
 });

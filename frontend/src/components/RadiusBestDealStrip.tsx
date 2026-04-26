@@ -12,6 +12,8 @@ import {
   verificationStateFromPriority,
   dedupeVerificationTargets,
 } from "@/lib/radiusVerificationStatus";
+import { RouteAssignmentQuickActions } from "@/components/RouteAssignmentQuickActions";
+import type { AuthCharacter } from "@/lib/types";
 
 type RadiusBestDealStripProps = {
   bestDealCards: RadiusBestDealCard[];
@@ -26,6 +28,11 @@ type RadiusBestDealStripProps = {
   assignmentByRouteKey?: Record<string, RouteAssignment>;
   verificationStateByRouteKey?: Record<string, RadiusVerificationState>;
   onVerifyRoute?: (routeKey: string) => void;
+  characters?: AuthCharacter[];
+  onAssignActive?: (routeKey: string) => void;
+  onAssignBest?: (routeKey: string) => void;
+  onAssignSpecificPilot?: (routeKey: string, characterId: number) => void;
+  onSetStagedSystem?: (routeKey: string, stagedSystem: string) => void;
 };
 
 export function RadiusBestDealStrip({
@@ -38,6 +45,11 @@ export function RadiusBestDealStrip({
   assignmentByRouteKey = {},
   verificationStateByRouteKey = {},
   onVerifyRoute,
+  characters = [],
+  onAssignActive,
+  onAssignBest,
+  onAssignSpecificPilot,
+  onSetStagedSystem,
 }: RadiusBestDealStripProps) {
   const maxCards = 3;
   const visibleCards = bestDealCards.slice(0, maxCards);
@@ -143,6 +155,34 @@ export function RadiusBestDealStrip({
                             ) : null}
                           </ExplanationPopoverShell>
                         ) : null}
+                      </div>
+                      <div className="mt-1">
+                        <RouteAssignmentQuickActions
+                          compact
+                          context={{
+                            routeKey: card.routeKey,
+                            routeLabel: card.routeLabel,
+                            expectedProfitIsk: card.expectedProfitIsk,
+                            expectedJumps: card.totalJumps,
+                            verificationStatusAtAssignment:
+                              verificationState === "fresh"
+                                ? "Good"
+                                : verificationState === "reduced_edge"
+                                  ? "Reduced edge"
+                                  : verificationState === "abort"
+                                    ? "Abort"
+                                    : undefined,
+                          }}
+                          characters={characters}
+                          onAssignActive={(ctx) => onAssignActive?.(ctx.routeKey)}
+                          onAssignBest={(ctx) => onAssignBest?.(ctx.routeKey)}
+                          onAssignSpecificPilot={(ctx, characterId) =>
+                            onAssignSpecificPilot?.(ctx.routeKey, characterId)
+                          }
+                          onSetStagedSystem={(ctx, stagedSystem) =>
+                            onSetStagedSystem?.(ctx.routeKey, stagedSystem)
+                          }
+                        />
                       </div>
                     </div>
                   );

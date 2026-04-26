@@ -19,6 +19,8 @@ export type RadiusContextMenuAction =
   | "clear_station_filters"
   | "queue_route"
   | "assign_route"
+  | "assign_route_active"
+  | "assign_route_best"
   | "verify_route"
   | "place_draft"
   | "open_everef"
@@ -96,6 +98,8 @@ export function buildRadiusContextMenuItems(
 
     { action: "queue_route", section: "route_workflow", label: "Queue route", enabled: input.canQueueRoute && hasRouteKey, visible: input.canQueueRoute },
     { action: "assign_route", section: "route_workflow", label: "Assign route", enabled: input.canAssignRoute && hasRouteKey, visible: input.canAssignRoute },
+    { action: "assign_route_active", section: "route_workflow", label: "Assign active pilot", enabled: input.canAssignRoute && hasRouteKey, visible: input.canAssignRoute },
+    { action: "assign_route_best", section: "route_workflow", label: "Assign best pilot", enabled: input.canAssignRoute && hasRouteKey, visible: input.canAssignRoute },
 
     { action: "filter_leg", section: "lens", label: "Filter to this leg", enabled: buyLocationID > 0 && sellLocationID > 0 },
     { action: "lock_buy", section: "lens", label: "Lock this buy", enabled: buyLocationID > 0 },

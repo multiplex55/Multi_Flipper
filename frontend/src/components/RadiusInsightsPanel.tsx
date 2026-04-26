@@ -27,6 +27,7 @@ import type { RouteQueueEntry } from "@/lib/routeQueue";
 import type { RouteAssignment } from "@/lib/routeAssignments";
 import { getRadiusRouteExecutionBadge } from "@/lib/radiusRouteStatus";
 import { RadiusStagingAdvisorPanel } from "@/components/RadiusStagingAdvisorPanel";
+import { RouteAssignmentQuickActions } from "@/components/RouteAssignmentQuickActions";
 import {
   ActionButton,
   ControlGroup,
@@ -99,6 +100,10 @@ type RadiusInsightsPanelProps = {
   fallbackSystemName?: string;
   routeQueueEntries?: RouteQueueEntry[];
   assignmentByRouteKey?: Record<string, RouteAssignment>;
+  onAssignActive?: (routeKey: string) => void;
+  onAssignBest?: (routeKey: string) => void;
+  onAssignSpecificPilot?: (routeKey: string, characterId: number) => void;
+  onSetStagedSystem?: (routeKey: string, stagedSystem: string) => void;
 };
 
 function majorHubActionSummary(
@@ -218,6 +223,10 @@ export function RadiusInsightsPanel({
   fallbackSystemName = "Unknown",
   routeQueueEntries = [],
   assignmentByRouteKey = {},
+  onAssignActive,
+  onAssignBest,
+  onAssignSpecificPilot,
+  onSetStagedSystem,
 }: RadiusInsightsPanelProps) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState<boolean>(() =>
@@ -735,6 +744,21 @@ export function RadiusInsightsPanel({
                                 </ExplanationPopoverShell>
                               )}
                             </div>
+                            <div className="mt-1">
+                              <RouteAssignmentQuickActions
+                                compact
+                                context={{ routeKey: pick.routeKey, routeLabel: pick.routeLabel }}
+                                characters={characters}
+                                onAssignActive={(ctx) => onAssignActive?.(ctx.routeKey)}
+                                onAssignBest={(ctx) => onAssignBest?.(ctx.routeKey)}
+                                onAssignSpecificPilot={(ctx, characterId) =>
+                                  onAssignSpecificPilot?.(ctx.routeKey, characterId)
+                                }
+                                onSetStagedSystem={(ctx, stagedSystem) =>
+                                  onSetStagedSystem?.(ctx.routeKey, stagedSystem)
+                                }
+                              />
+                            </div>
                           </>
                         ) : (
                           <div className="mt-1 text-[11px] text-eve-dim">—</div>
@@ -838,6 +862,21 @@ export function RadiusInsightsPanel({
                               >
                                 Send to Route Queue
                               </button>
+                            </div>
+                            <div className="mt-1">
+                              <RouteAssignmentQuickActions
+                                compact
+                                context={{ routeKey: item.routeKey, routeLabel: item.routeLabel }}
+                                characters={characters}
+                                onAssignActive={(ctx) => onAssignActive?.(ctx.routeKey)}
+                                onAssignBest={(ctx) => onAssignBest?.(ctx.routeKey)}
+                                onAssignSpecificPilot={(ctx, characterId) =>
+                                  onAssignSpecificPilot?.(ctx.routeKey, characterId)
+                                }
+                                onSetStagedSystem={(ctx, stagedSystem) =>
+                                  onSetStagedSystem?.(ctx.routeKey, stagedSystem)
+                                }
+                              />
                             </div>
                           </>
                         ) : (
