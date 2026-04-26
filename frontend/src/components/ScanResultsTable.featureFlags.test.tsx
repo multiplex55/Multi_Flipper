@@ -108,6 +108,8 @@ describe("ScanResultsTable feature flags", () => {
     });
 
     expect(screen.queryByRole("button", { name: "Group by route" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Cargo builds" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Shopping list" })).not.toBeInTheDocument();
     expect(screen.queryByText("Insights")).not.toBeInTheDocument();
     expect(screen.queryByTestId("saved-route-packs-panel")).not.toBeInTheDocument();
   });

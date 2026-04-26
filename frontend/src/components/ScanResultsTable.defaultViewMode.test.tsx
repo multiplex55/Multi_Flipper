@@ -63,32 +63,38 @@ afterEach(() => {
 });
 
 describe("ScanResultsTable default view mode", () => {
-  it("starts in rows mode for Radius row-first config even when route mode was persisted", () => {
-    localStorage.setItem("eve-radius-route-view-mode:v1", "route");
+  it.each(["route", "cargo_builds", "shopping_list"] as const)(
+    "sanitizes persisted %s mode to rows for Radius row-first config",
+    (storedMode) => {
+      localStorage.setItem("eve-radius-route-view-mode:v1", storedMode);
 
-    const { asFragment } = render(
-      <I18nProvider>
-        <ToastProvider>
-          <ScanResultsTable
-            results={[makeRow()]}
-            scanning={false}
-            progress=""
-            tradeStateTab="radius"
-            featureConfig={{
-              allowRouteGrouping: false,
-              showRouteInsights: false,
-              showRouteWorkbench: false,
-              showSavedRoutes: false,
-              showLoopPanel: false,
-              defaultViewMode: "rows",
-            }}
-          />
-        </ToastProvider>
-      </I18nProvider>,
-    );
+      const { asFragment } = render(
+        <I18nProvider>
+          <ToastProvider>
+            <ScanResultsTable
+              results={[makeRow()]}
+              scanning={false}
+              progress=""
+              tradeStateTab="radius"
+              featureConfig={{
+                allowRouteGrouping: false,
+                showRouteInsights: false,
+                showRouteWorkbench: false,
+                showSavedRoutes: false,
+                showLoopPanel: false,
+                defaultViewMode: "rows",
+              }}
+            />
+          </ToastProvider>
+        </I18nProvider>,
+      );
 
-    expect(screen.getByText("Group by item")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Group by route" })).not.toBeInTheDocument();
-    expect(asFragment()).toMatchSnapshot();
-  });
+      expect(screen.getByText("Group by item")).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Group by route" }),
+      ).not.toBeInTheDocument();
+      expect(localStorage.getItem("eve-radius-route-view-mode:v1")).toBe("rows");
+      expect(asFragment()).toMatchSnapshot();
+    },
+  );
 });
