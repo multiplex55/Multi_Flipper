@@ -24,7 +24,7 @@ vi.mock("@/lib/api", () => ({
   setWaypointInGame: vi.fn(async () => undefined),
 }));
 
-function row(): FlipResult {
+function row(overrides: Partial<FlipResult> = {}): FlipResult {
   return {
     TypeID: 200,
     TypeName: "Cargo Item",
@@ -59,6 +59,7 @@ function row(): FlipResult {
     BuyCompetitors: 0,
     SellCompetitors: 0,
     DailyProfit: 25000,
+    ...overrides,
   };
 }
 
@@ -101,4 +102,44 @@ describe("ScanResultsTable cargo builds toggle", () => {
     const groupByItemAgain = screen.getByLabelText("Group by item") as HTMLInputElement;
     expect(groupByItemAgain.checked).toBe(true);
   });
+
+  it("shows diagnostics summary when cargo preset yields no builds", () => {
+    render(
+      <I18nProvider>
+        <ToastProvider>
+          <ScanResultsTable
+            results={[
+              row({
+                TypeName: "No units",
+                UnitsToBuy: 0,
+              }),
+              row({
+                TypeID: 201,
+                TypeName: "No volume",
+                Volume: 0,
+              }),
+            ]}
+            scanning={false}
+            progress=""
+            tradeStateTab="radius"
+            featureConfig={{
+              allowRouteGrouping: true,
+              showRouteInsights: false,
+              showRouteWorkbench: false,
+              showSavedRoutes: false,
+              showLoopPanel: false,
+              defaultViewMode: "rows",
+            }}
+          />
+        </ToastProvider>
+      </I18nProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Cargo builds" }));
+
+    expect(screen.getByText(/No cargo builds matched the/i)).toBeInTheDocument();
+    expect(screen.getByText(/Top exclusions:/i)).toBeInTheDocument();
+    expect(screen.getByText(/Try a broader preset like Viator Max Profit/i)).toBeInTheDocument();
+  });
+
 });
