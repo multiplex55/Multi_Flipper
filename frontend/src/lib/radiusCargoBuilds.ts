@@ -19,6 +19,7 @@ export type RadiusCargoBuildPresetConfig = {
   maxCapitalIsk: number;
   minExecutionQuality: number;
   maxRiskCount: number;
+  maxRiskRate?: number;
   minConfidencePercent: number;
   minJumpEfficiencyIsk: number;
   preferLowJumps: boolean;
@@ -41,6 +42,7 @@ export type RadiusCargoBuild = {
   confidencePercent: number;
   executionQuality: number;
   riskCount: number;
+  riskRate: number;
   riskCue: "low" | "moderate" | "high";
   executionCue: "smooth" | "watch" | "fragile";
   finalScore: number;
@@ -62,6 +64,8 @@ export const RADIUS_CARGO_BUILD_PRESETS: Record<
   RadiusCargoBuildPreset,
   RadiusCargoBuildPresetConfig
 > = {
+  // Moderate constraints for common null/lowsec Viator hauling: keep quality bars high,
+  // but allow low six-figure ISK/jump opportunities so ranking can pick the cleanest subset.
   viator_safe: {
     id: "viator_safe",
     label: "Viator Safe",
@@ -70,29 +74,34 @@ export const RADIUS_CARGO_BUILD_PRESETS: Record<
     minExecutionQuality: 62,
     maxRiskCount: 2,
     minConfidencePercent: 55,
-    minJumpEfficiencyIsk: 8_000_000,
+    minJumpEfficiencyIsk: 150_000,
     preferLowJumps: true,
   },
+  // Profit-first Viator preset for broader market regimes: moderate gates avoid hard dropping
+  // viable routes and let scoring/ranking sort by expected edge.
   viator_max_profit: {
     id: "viator_max_profit",
     label: "Viator Max Profit",
     cargoCapacityM3: 10_000,
     maxCapitalIsk: 2_400_000_000,
     minExecutionQuality: 45,
-    maxRiskCount: 4,
+    maxRiskCount: 5,
     minConfidencePercent: 35,
-    minJumpEfficiencyIsk: 5_000_000,
+    minJumpEfficiencyIsk: 120_000,
     preferLowJumps: false,
   },
+  // DST bulk hauling operates on larger baskets with mixed quality; thresholds are intentionally
+  // moderate so batch-level ranking can prefer dense, practical cargo plans.
   dst_bulk: {
     id: "dst_bulk",
     label: "DST Bulk",
     cargoCapacityM3: 62_000,
     maxCapitalIsk: 4_000_000_000,
     minExecutionQuality: 40,
-    maxRiskCount: 5,
+    maxRiskCount: 6,
+    maxRiskRate: 0.65,
     minConfidencePercent: 30,
-    minJumpEfficiencyIsk: 3_000_000,
+    minJumpEfficiencyIsk: 100_000,
     preferLowJumps: false,
   },
   low_capital: {
@@ -172,21 +181,29 @@ export function buildRadiusCargoBuilds(
     let weightedExecution = 0;
     let weightTotal = 0;
 
+    // Deterministic filter sequence:
+    // 1) data validity -> 2) execution quality -> 3) confidence
+    // 4) jump efficiency (route-level) -> 5) risk (route-level) -> 6) capacity/capital allocation.
     for (const row of orderedRows) {
       const requestedUnits = Math.max(0, Math.floor(requestedUnitsForFlip(row) || row.UnitsToBuy || 0));
       if (requestedUnits <= 0) continue;
+
+      // 1) Data validity
       const volumePerUnit = Math.max(0, row.Volume ?? 0);
       const buyPrice = Math.max(0, row.ExpectedBuyPrice ?? row.BuyPrice ?? 0);
       const profitPerUnit = Math.max(0, row.ProfitPerUnit ?? 0);
       const sellPrice = Math.max(0, row.SellPrice ?? 0);
       if (volumePerUnit <= 0 || buyPrice <= 0) continue;
 
+      // 2) Execution quality
       const execution = executionQualityForFlip(row).score;
-      const confidence = Math.max(0, Math.min(100, row.CanFill ? 100 : (row.FilledQty ?? 0) > 0 ? 60 : 30));
-      if (execution < preset.minExecutionQuality || confidence < preset.minConfidencePercent) {
-        continue;
-      }
+      if (execution < preset.minExecutionQuality) continue;
 
+      // 3) Confidence
+      const confidence = Math.max(0, Math.min(100, row.CanFill ? 100 : (row.FilledQty ?? 0) > 0 ? 60 : 30));
+      if (confidence < preset.minConfidencePercent) continue;
+
+      // 6) Capacity/capital allocation (route-level gating is handled after candidate line selection)
       const remainingCargo = Math.max(0, preset.cargoCapacityM3 - usedCargo);
       const remainingCapital = Math.max(0, preset.maxCapitalIsk - usedCapital);
       const maxUnitsByCargo = volumePerUnit > 0 ? Math.floor(remainingCargo / volumePerUnit) : Number.MAX_SAFE_INTEGER;
@@ -223,10 +240,15 @@ export function buildRadiusCargoBuilds(
 
     const jumps = Math.max(1, Math.round(aggregate?.dailyIskPerJump ? totalProfit / Math.max(1, aggregate.dailyIskPerJump) : picked[0].TotalJumps ?? 1));
     const iskPerJump = totalProfit / jumps;
+    // 4) Jump efficiency (route-level)
     if (iskPerJump < preset.minJumpEfficiencyIsk) continue;
 
-    const riskCount = aggregate?.riskTotalCount ?? 0;
+    // 5) Risk gating (route-level): keep absolute count + optional density check.
+    const riskCount = Math.max(0, aggregate?.riskTotalCount ?? 0);
+    const riskDenominator = Math.max(1, orderedRows.length);
+    const riskRate = riskCount / riskDenominator;
     if (riskCount > preset.maxRiskCount) continue;
+    if (typeof preset.maxRiskRate === "number" && riskRate > preset.maxRiskRate) continue;
 
     const cargoFillPercent = clamp((usedCargo / Math.max(1, preset.cargoCapacityM3)) * 100, 0, 100);
     const confidencePercent = weightTotal > 0 ? weightedConfidence / weightTotal : 0;
@@ -265,6 +287,7 @@ export function buildRadiusCargoBuilds(
       confidencePercent,
       executionQuality,
       riskCount,
+      riskRate,
       riskCue: riskCount <= 1 ? "low" : riskCount <= 3 ? "moderate" : "high",
       executionCue: executionQuality >= 70 ? "smooth" : executionQuality >= 55 ? "watch" : "fragile",
       finalScore: fillScore,
