@@ -41,7 +41,7 @@ function makeFlip(partial: Partial<FlipResult>): FlipResult {
 }
 
 function makeRouteMeta(partial: Partial<RouteBatchMetadata>): RouteBatchMetadata {
-  return {
+  const merged = {
     batchNumber: 1,
     batchProfit: 1,
     batchTotalCapital: 1,
@@ -73,10 +73,15 @@ function makeRouteMeta(partial: Partial<RouteBatchMetadata>): RouteBatchMetadata
     routeSellStopCount: 1,
     routeWorstFillConfidencePct: 80,
     routeAverageFillConfidencePct: 90,
+    routeProfitConcentrationPct: null,
     routeRemainingCargoM3: null,
     routeComplexity: "Clean",
     ...partial,
   };
+  return {
+    ...merged,
+    routeProfitConcentrationPct: merged.routeProfitConcentrationPct ?? null,
+  } as RouteBatchMetadata;
 }
 
 function run(rows: RadiusRouteInsightInputRow[], byRoute: Record<string, RouteBatchMetadata>) {
