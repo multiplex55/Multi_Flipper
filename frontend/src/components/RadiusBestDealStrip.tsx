@@ -24,7 +24,8 @@ export function RadiusBestDealStrip({
   onOpenInsights,
   insightsOpen,
 }: RadiusBestDealStripProps) {
-  const bestDeal = bestDealCards[0] ?? null;
+  const maxCards = 3;
+  const visibleCards = bestDealCards.slice(0, maxCards);
   const verificationSignals = bestDealCards.slice(0, 3).map((card) => {
     const priority = classifyVerificationPriority({
       expectedProfitIsk: card.expectedProfitIsk,
@@ -50,48 +51,73 @@ export function RadiusBestDealStrip({
             <h3 className="text-[11px] uppercase tracking-wider text-eve-dim">
               Radius route insights
             </h3>
-            {bestDeal ? (
-              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
-                <span className="truncate text-eve-text" title={bestDeal.routeLabel}>
-                  {bestDeal.routeLabel}
-                </span>
-                <span className="text-green-300">{formatISK(bestDeal.expectedProfitIsk)}</span>
-                <span className="text-eve-accent">
-                  {bestDeal.totalJumps > 0
-                    ? formatISK(bestDeal.expectedProfitIsk / bestDeal.totalJumps)
-                    : formatISK(bestDeal.expectedProfitIsk)}
-                  /jump
-                </span>
+            {visibleCards.length > 0 ? (
+              <div className="mt-0.5 grid gap-1 text-[11px]">
+                {visibleCards.map((card) => {
+                  const verification = classifyVerificationPriority({
+                    expectedProfitIsk: card.expectedProfitIsk,
+                    totalJumps: card.totalJumps,
+                    scanAgeMinutes: card.scanAgeMinutes,
+                    lensJumpDelta: card.lensJumpDelta,
+                    urgencyBand: card.urgencyBand ?? "stable",
+                  });
+                  const iskPerJump =
+                    card.totalJumps > 0 ? card.expectedProfitIsk / card.totalJumps : card.expectedProfitIsk;
+                  return (
+                    <div
+                      key={`${card.kind}:${card.routeKey}`}
+                      className="rounded-sm border border-eve-border/50 bg-eve-panel/20 px-1.5 py-1"
+                    >
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <span className="text-eve-accent">{card.title}</span>
+                        <span className="truncate text-eve-text" title={card.routeLabel}>
+                          {card.routeLabel}
+                        </span>
+                        <span className="text-green-300">{formatISK(card.expectedProfitIsk)}</span>
+                        <span className="text-eve-accent">{formatISK(iskPerJump)}/jump</span>
+                        <span className="text-eve-dim">{card.metricLabel}</span>
+                        <span
+                          className={`rounded-sm border px-1 py-0 text-[10px] ${verificationPriorityChipClass(verification.priority)}`}
+                          title={verification.reason}
+                        >
+                          {verification.label}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-1 text-[10px]">
+                        <button
+                          type="button"
+                          onClick={() => onOpenBatchBuilderForRoute?.(card.routeKey)}
+                          className="rounded-sm border border-eve-border/70 px-1.5 py-0.5 text-eve-accent hover:border-eve-accent/60 hover:bg-eve-accent/10"
+                        >
+                          Open Batch
+                        </button>
+                        {card.hasFillerCandidates ? (
+                          <button
+                            type="button"
+                            onClick={() => onOpenRouteWorkbench(card.routeKey, "filler")}
+                            className="rounded-sm border border-indigo-400/60 px-1.5 py-0.5 text-indigo-200 hover:bg-indigo-500/10"
+                          >
+                            Fill Cargo
+                          </button>
+                        ) : null}
+                        {card.whySummary ? (
+                          <ExplanationPopoverShell label="Why?">
+                            <div className="text-eve-dim mb-1">{card.whySummary}</div>
+                            {card.lensDelta ? (
+                              <div className="text-[10px] text-indigo-200">{card.lensDelta}</div>
+                            ) : null}
+                          </ExplanationPopoverShell>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="mt-0.5 text-[11px] text-eve-dim">No best route yet.</div>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-1 text-[10px]">
-            <button
-              type="button"
-              disabled={!bestDeal}
-              onClick={() => bestDeal && onOpenBatchBuilderForRoute?.(bestDeal.routeKey)}
-              className="rounded-sm border border-eve-border/70 px-1.5 py-0.5 text-eve-accent hover:border-eve-accent/60 hover:bg-eve-accent/10 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Open Batch
-            </button>
-            <button
-              type="button"
-              disabled={!bestDeal?.hasFillerCandidates}
-              onClick={() => bestDeal && onOpenRouteWorkbench(bestDeal.routeKey, "filler")}
-              className="rounded-sm border border-indigo-400/60 px-1.5 py-0.5 text-indigo-200 hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Fill Cargo
-            </button>
-            {bestDeal?.whySummary ? (
-              <ExplanationPopoverShell label="Why?">
-                <div className="text-eve-dim mb-1">{bestDeal.whySummary}</div>
-                {bestDeal.lensDelta ? (
-                  <div className="text-[10px] text-indigo-200">{bestDeal.lensDelta}</div>
-                ) : null}
-              </ExplanationPopoverShell>
-            ) : null}
             <button
               type="button"
               onClick={onOpenInsights}
