@@ -490,7 +490,7 @@ function radiusColumnDef(def: ColumnDef): ColumnDef {
 
 /* ─── Column definitions ─── */
 
-const baseColumnDefs: ColumnDef[] = [
+export const baseColumnDefs: ColumnDef[] = [
   {
     key: "TypeName",
     labelKey: "colItem",
@@ -706,7 +706,7 @@ const baseColumnDefs: ColumnDef[] = [
   },
   {
     key: "RoutePackCapacityUsedPercent",
-    labelKey: "colCanFill",
+    labelKey: "colCargoUsedPct",
     width: "min-w-[120px]",
     numeric: true,
   },
@@ -736,7 +736,7 @@ const baseColumnDefs: ColumnDef[] = [
   },
   {
     key: "RoutePackDailyProfitOverCapital",
-    labelKey: "colROI",
+    labelKey: "colDailyProfitOverCapital",
     width: "min-w-[160px]",
     numeric: true,
   },
