@@ -128,28 +128,32 @@ describe("ScanResultsTable radius insights visibility", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows compact strip by default, hides it, and restores with show toggle", () => {
+  it("hides all radius insights entry points and restores them with show toggle", () => {
     renderTable([makeRow()]);
 
     expect(screen.getByTestId("radius-best-deal-strip")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open insights/i })).toBeInTheDocument();
     const hideButton = screen.getByRole("button", {
-      name: /hide radius route insights/i,
+      name: /hide route insights/i,
     });
 
     fireEvent.click(hideButton);
 
     expect(screen.queryByTestId("radius-best-deal-strip")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /open insights/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("radius-insights-drawer")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /show radius route insights/i }),
+      screen.getByRole("button", { name: /show route insights/i }),
     ).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: /show radius route insights/i }),
+      screen.getByRole("button", { name: /show route insights/i }),
     );
 
     expect(screen.getByTestId("radius-best-deal-strip")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open insights/i })).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /hide radius route insights/i }),
+      screen.getByRole("button", { name: /hide route insights/i }),
     ).toBeInTheDocument();
   });
 
@@ -157,7 +161,7 @@ describe("ScanResultsTable radius insights visibility", () => {
     const firstRender = renderTable([makeRow()]);
 
     fireEvent.click(
-      screen.getByRole("button", { name: /hide radius route insights/i }),
+      screen.getByRole("button", { name: /hide route insights/i }),
     );
     expect(localStorage.getItem(RADIUS_ROUTE_INSIGHTS_HIDDEN_STORAGE_KEY)).toBe(
       "1",
@@ -168,7 +172,7 @@ describe("ScanResultsTable radius insights visibility", () => {
 
     expect(screen.queryByTestId("radius-best-deal-strip")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /show radius route insights/i }),
+      screen.getByRole("button", { name: /show route insights/i }),
     ).toBeInTheDocument();
   });
 
@@ -181,5 +185,20 @@ describe("ScanResultsTable radius insights visibility", () => {
     const headings = screen.getAllByText("Top Buy Hubs");
     expect(headings).toHaveLength(1);
     expect(screen.getAllByText("Jita IV - Moon 4").length).toBeGreaterThan(0);
+  });
+
+  it("closes an open drawer immediately when insights are hidden and shortcut does not reopen drawer", () => {
+    renderTable([makeRow()]);
+
+    fireEvent.click(screen.getByRole("button", { name: /open insights/i }));
+    expect(screen.getByTestId("radius-insights-drawer")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /hide route insights/i }));
+    expect(screen.queryByTestId("radius-insights-drawer")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("radius-best-deal-strip")).not.toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "i" });
+    expect(screen.getByTestId("radius-best-deal-strip")).toBeInTheDocument();
+    expect(screen.queryByTestId("radius-insights-drawer")).not.toBeInTheDocument();
   });
 });

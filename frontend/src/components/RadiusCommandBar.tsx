@@ -15,8 +15,13 @@ type RadiusCommandBarProps = {
     resultLabel: string;
     ariaLabel: string;
   };
-  insightsToggle: {
-    pressed: boolean;
+  insightsVisibilityToggle: {
+    hidden: boolean;
+    label: string;
+    onToggle: () => void;
+  };
+  compactLayoutToggle?: {
+    compact: boolean;
     label: string;
     onToggle: () => void;
   };
@@ -74,7 +79,8 @@ function isTextEntryTarget(target: EventTarget | null): boolean {
 export function RadiusCommandBar({
   shortcutScopeActive = true,
   metrics,
-  insightsToggle,
+  insightsVisibilityToggle,
+  compactLayoutToggle,
   tableControls,
   actions,
   moreControls,
@@ -93,12 +99,13 @@ export function RadiusCommandBar({
         if (!actions.exportDisabled) actions.onExportCsv();
       },
       [RADIUS_COMMAND_INTENT_MAP.filters.key]: () => tableControls.onToggleFilters(),
-      [RADIUS_COMMAND_INTENT_MAP.insights.key]: () => insightsToggle.onToggle(),
+      [RADIUS_COMMAND_INTENT_MAP.insights.key]: () =>
+        insightsVisibilityToggle.onToggle(),
       [RADIUS_COMMAND_INTENT_MAP.recalc.key]: () => {
         if (!actions.recalcDisabled) actions.onRecalcLens?.();
       },
     }),
-    [actions, insightsToggle, tableControls],
+    [actions, insightsVisibilityToggle, tableControls],
   );
 
   useEffect(() => {
@@ -177,12 +184,21 @@ export function RadiusCommandBar({
       >
         <ControlGroup zone="analysis">
           <ToggleButton
-            pressed={insightsToggle.pressed}
-            onClick={insightsToggle.onToggle}
-            title={`${insightsToggle.label} (I)`}
+            pressed={!insightsVisibilityToggle.hidden}
+            onClick={insightsVisibilityToggle.onToggle}
+            title={`${insightsVisibilityToggle.label} (I)`}
           >
-            {insightsToggle.label}
+            {insightsVisibilityToggle.label}
           </ToggleButton>
+          {compactLayoutToggle ? (
+            <ToggleButton
+              pressed={compactLayoutToggle.compact}
+              onClick={compactLayoutToggle.onToggle}
+              title={compactLayoutToggle.label}
+            >
+              {compactLayoutToggle.label}
+            </ToggleButton>
+          ) : null}
           <ActionButton selected={tableControls.columnsActive} onClick={tableControls.onToggleColumns} title="Column setup">
             Columns
           </ActionButton>

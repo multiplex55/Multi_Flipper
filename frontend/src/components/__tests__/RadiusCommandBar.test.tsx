@@ -15,9 +15,14 @@ function renderBar(overrides: Partial<ComponentProps<typeof RadiusCommandBar>> =
       resultLabel: "Found 42",
       ariaLabel: "Scan progress: 3 of 10",
     },
-    insightsToggle: {
-      pressed: false,
-      label: "Compact Insights",
+    insightsVisibilityToggle: {
+      hidden: false,
+      label: "Hide Route Insights",
+      onToggle: vi.fn(),
+    },
+    compactLayoutToggle: {
+      compact: false,
+      label: "Compact Dashboard",
       onToggle: vi.fn(),
     },
     tableControls: {
@@ -62,9 +67,14 @@ describe("RadiusCommandBar", () => {
           resultLabel: "Showing 8 of 20",
           ariaLabel: "Scan results: 8 visible from 20 total",
         }}
-        insightsToggle={{
-          pressed: false,
-          label: "Compact Insights",
+        insightsVisibilityToggle={{
+          hidden: false,
+          label: "Hide Route Insights",
+          onToggle: vi.fn(),
+        }}
+        compactLayoutToggle={{
+          compact: false,
+          label: "Compact Dashboard",
           onToggle: vi.fn(),
         }}
         tableControls={{
@@ -202,9 +212,14 @@ describe("RadiusCommandBar", () => {
 
   it("sets aria-pressed states for toggle controls", () => {
     renderBar({
-      insightsToggle: {
-        pressed: true,
-        label: "Compact Insights",
+      insightsVisibilityToggle: {
+        hidden: false,
+        label: "Hide Route Insights",
+        onToggle: vi.fn(),
+      },
+      compactLayoutToggle: {
+        compact: true,
+        label: "Compact Dashboard",
         onToggle: vi.fn(),
       },
       tableControls: {
@@ -219,7 +234,11 @@ describe("RadiusCommandBar", () => {
       },
     });
 
-    expect(screen.getByRole("button", { name: "Compact Insights" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Hide Route Insights" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Compact Dashboard" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );

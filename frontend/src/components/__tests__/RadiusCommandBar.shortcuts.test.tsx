@@ -18,9 +18,14 @@ function buildProps(
       resultLabel: "Found 12",
       ariaLabel: "Scan results",
     },
-    insightsToggle: {
-      pressed: false,
-      label: "Compact Insights",
+    insightsVisibilityToggle: {
+      hidden: false,
+      label: "Hide Route Insights",
+      onToggle: vi.fn(),
+    },
+    compactLayoutToggle: {
+      compact: false,
+      label: "Compact Dashboard",
       onToggle: vi.fn(),
     },
     tableControls: {
@@ -68,7 +73,7 @@ describe("RadiusCommandBar shortcuts", () => {
     expect(props.actions.onCopyTable).toHaveBeenCalledTimes(1);
     expect(props.actions.onExportCsv).toHaveBeenCalledTimes(1);
     expect(props.tableControls.onToggleFilters).toHaveBeenCalledTimes(1);
-    expect(props.insightsToggle.onToggle).toHaveBeenCalledTimes(1);
+    expect(props.insightsVisibilityToggle.onToggle).toHaveBeenCalledTimes(1);
     expect(props.actions.onRecalcLens).toHaveBeenCalledTimes(1);
   });
 
@@ -87,7 +92,7 @@ describe("RadiusCommandBar shortcuts", () => {
     expect(props.actions.onCopyTable).not.toHaveBeenCalled();
     expect(props.actions.onExportCsv).not.toHaveBeenCalled();
     expect(props.tableControls.onToggleFilters).not.toHaveBeenCalled();
-    expect(props.insightsToggle.onToggle).not.toHaveBeenCalled();
+    expect(props.insightsVisibilityToggle.onToggle).not.toHaveBeenCalled();
     expect(props.actions.onRecalcLens).not.toHaveBeenCalled();
   });
 
@@ -113,7 +118,7 @@ describe("RadiusCommandBar shortcuts", () => {
     expect(props.actions.onCopyTable).not.toHaveBeenCalled();
     expect(props.actions.onExportCsv).not.toHaveBeenCalled();
     expect(props.tableControls.onToggleFilters).not.toHaveBeenCalled();
-    expect(props.insightsToggle.onToggle).not.toHaveBeenCalled();
+    expect(props.insightsVisibilityToggle.onToggle).not.toHaveBeenCalled();
     expect(props.actions.onRecalcLens).not.toHaveBeenCalled();
   });
 
@@ -171,9 +176,9 @@ describe("RadiusCommandBar shortcuts", () => {
       "title",
       "Filters (F)",
     );
-    expect(screen.getByRole("button", { name: "Compact Insights" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Hide Route Insights" })).toHaveAttribute(
       "title",
-      "Compact Insights (I)",
+      "Hide Route Insights (I)",
     );
     expect(screen.getByRole("button", { name: "Recalc Lens" })).toHaveAttribute(
       "title",
@@ -184,7 +189,7 @@ describe("RadiusCommandBar shortcuts", () => {
       screen.getByRole("button", { name: "Verify Prices" }),
       screen.getByRole("button", { name: "Export CSV" }),
       screen.getByRole("button", { name: "Copy Table" }),
-      screen.getByRole("button", { name: "Compact Insights" }),
+      screen.getByRole("button", { name: "Hide Route Insights" }),
       screen.getByRole("button", { name: "Filters" }),
       screen.getByRole("button", { name: "Recalc Lens" }),
     ];

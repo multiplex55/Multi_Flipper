@@ -2365,6 +2365,12 @@ export function ScanResultsTable({
   }, [radiusInsightsDrawerOpen]);
 
   useEffect(() => {
+    if (radiusRouteInsightsHidden && radiusInsightsDrawerOpen) {
+      setRadiusInsightsDrawerOpen(false);
+    }
+  }, [radiusInsightsDrawerOpen, radiusRouteInsightsHidden]);
+
+  useEffect(() => {
     if (!isRouteGrouped && selectedBadgeFilters.size > 0) {
       setSelectedBadgeFilters(new Set());
     }
@@ -5355,9 +5361,17 @@ export function ScanResultsTable({
                 ? `Scan progress: ${progress}`
                 : `Scan results: ${filtered.length} visible from ${indexed.length} total`,
             }}
-            insightsToggle={{
-              pressed: compactDashboard,
-              label: "Compact Insights",
+            insightsVisibilityToggle={{
+              hidden: radiusRouteInsightsHidden,
+              label: radiusRouteInsightsHidden
+                ? t("showRadiusRouteInsights")
+                : t("hideRadiusRouteInsights"),
+              onToggle: () =>
+                setRadiusRouteInsightsHidden((previous) => !previous),
+            }}
+            compactLayoutToggle={{
+              compact: compactDashboard,
+              label: "Compact Dashboard",
               onToggle: () => setCompactDashboard((previous) => !previous),
             }}
             tableControls={{
@@ -5588,24 +5602,6 @@ export function ScanResultsTable({
                     Compact Dashboard
                   </button>
                 </>
-              )}
-              {useRadiusCommandBar && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setRadiusRouteInsightsHidden((previous) => !previous)
-                  }
-                  className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${
-                    radiusRouteInsightsHidden
-                      ? "border-eve-border/60 bg-eve-dark/40 text-eve-dim hover:border-eve-accent/50 hover:text-eve-accent"
-                      : "border-eve-accent/60 text-eve-accent bg-eve-accent/10"
-                  }`}
-                  aria-pressed={radiusRouteInsightsHidden}
-                >
-                  {radiusRouteInsightsHidden
-                    ? t("showRadiusRouteInsights")
-                    : t("hideRadiusRouteInsights")}
-                </button>
               )}
             </>
           )}
