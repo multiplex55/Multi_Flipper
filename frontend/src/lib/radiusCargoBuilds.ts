@@ -4,6 +4,14 @@ import { executionQualityForFlip, requestedUnitsForFlip } from "@/lib/executionQ
 import type { RouteAggregateMetrics } from "@/lib/useRadiusRouteInsights";
 import { computeCargoFillScore } from "@/lib/cargoFillScore";
 import { scoreRadiusCargoLine } from "@/lib/radiusCargoLineScore";
+import {
+  combineComparators,
+  compareNumberAsc,
+  compareNumberDesc,
+  compareTextAsc,
+  createMetricNormalizer,
+  finiteNumber,
+} from "@/lib/radiusDecisionGuardrails";
 
 export type RadiusCargoBuildPreset =
   | "viator_safe"
@@ -293,6 +301,7 @@ export function explicitRouteJumps(
 export function buildRadiusCargoBuilds(
   input: BuildRadiusCargoBuildsInput,
 ): BuildRadiusCargoBuildsResult {
+  // Integration point: ScanResultsTable cargo optimizer mode selector routes all ranked builds through this entrypoint.
   const {
     rows,
     routeAggregateMetricsByRoute,
@@ -450,6 +459,12 @@ export function buildRadiusCargoBuilds(
       });
     }
 
+    const normalizeCandidateProfit = createMetricNormalizer(lineCandidates.map((candidate) => candidate.profitPerUnit));
+    const normalizeCandidateVolume = createMetricNormalizer(lineCandidates.map((candidate) => candidate.volumePerUnit), true);
+    const normalizeCandidateJumps = createMetricNormalizer(lineCandidates.map((candidate) => candidate.row.TotalJumps), true);
+    const normalizeCandidateQuality = createMetricNormalizer(lineCandidates.map((candidate) => candidate.execution));
+    const normalizeCandidateRisk = createMetricNormalizer(lineCandidates.map(() => aggregate?.riskTotalCount ?? 0), true);
+
     const orderedRows = [...lineCandidates].sort((a, b) => {
       if (optimizerMode === "greedy_profit") {
         if (b.profitPerUnit !== a.profitPerUnit) return b.profitPerUnit - a.profitPerUnit;
@@ -460,8 +475,21 @@ export function buildRadiusCargoBuilds(
         if (b.score !== a.score) return b.score - a.score;
       } else if (optimizerMode === "greedy_isk_per_m3") {
         if (b.iskPerM3 !== a.iskPerM3) return b.iskPerM3 - a.iskPerM3;
-      } else if (b.score !== a.score) {
-        return b.score - a.score;
+      } else {
+        if (b.score !== a.score) return b.score - a.score;
+        const leftNormalized =
+          normalizeCandidateProfit(a.profitPerUnit) * 0.4 +
+          normalizeCandidateVolume(a.volumePerUnit) * 0.1 +
+          normalizeCandidateJumps(a.row.TotalJumps) * 0.15 +
+          normalizeCandidateQuality(a.execution) * 0.25 +
+          normalizeCandidateRisk(aggregate?.riskTotalCount ?? 0) * 0.1;
+        const rightNormalized =
+          normalizeCandidateProfit(b.profitPerUnit) * 0.4 +
+          normalizeCandidateVolume(b.volumePerUnit) * 0.1 +
+          normalizeCandidateJumps(b.row.TotalJumps) * 0.15 +
+          normalizeCandidateQuality(b.execution) * 0.25 +
+          normalizeCandidateRisk(aggregate?.riskTotalCount ?? 0) * 0.1;
+        if (rightNormalized !== leftNormalized) return rightNormalized - leftNormalized;
       }
       if (b.profitPerUnit !== a.profitPerUnit) return b.profitPerUnit - a.profitPerUnit;
       if (a.row.TotalJumps !== b.row.TotalJumps) return a.row.TotalJumps - b.row.TotalJumps;
@@ -686,22 +714,48 @@ export function buildRadiusCargoBuilds(
     });
   }
 
+  const normalizeBuildProfit = createMetricNormalizer(builds.map((build) => build.totalProfitIsk));
+  const normalizeBuildVolume = createMetricNormalizer(builds.map((build) => build.totalCargoM3));
+  const normalizeBuildJumps = createMetricNormalizer(builds.map((build) => build.jumps), true);
+  const normalizeBuildQuality = createMetricNormalizer(builds.map((build) => build.executionQuality));
+  const normalizeBuildRisk = createMetricNormalizer(builds.map((build) => build.riskCount), true);
+
   const rankedBuilds = builds
     .sort((left, right) => {
-      if (right.finalScore !== left.finalScore) return right.finalScore - left.finalScore;
-      if (right.totalProfitIsk !== left.totalProfitIsk) return right.totalProfitIsk - left.totalProfitIsk;
-      if (right.cargoFillPercent !== left.cargoFillPercent) return right.cargoFillPercent - left.cargoFillPercent;
-      return left.routeKey.localeCompare(right.routeKey);
+      const leftComposite = finiteNumber(
+        normalizeBuildProfit(left.totalProfitIsk) * 0.35 +
+          normalizeBuildVolume(left.totalCargoM3) * 0.15 +
+          normalizeBuildJumps(left.jumps) * 0.15 +
+          normalizeBuildQuality(left.executionQuality) * 0.2 +
+          normalizeBuildRisk(left.riskCount) * 0.15,
+        0,
+      );
+      const rightComposite = finiteNumber(
+        normalizeBuildProfit(right.totalProfitIsk) * 0.35 +
+          normalizeBuildVolume(right.totalCargoM3) * 0.15 +
+          normalizeBuildJumps(right.jumps) * 0.15 +
+          normalizeBuildQuality(right.executionQuality) * 0.2 +
+          normalizeBuildRisk(right.riskCount) * 0.15,
+        0,
+      );
+      return combineComparators<RadiusCargoBuild>(
+        () => compareNumberDesc(leftComposite, rightComposite),
+        (a, b) => compareNumberDesc(a.finalScore, b.finalScore),
+        (a, b) => compareNumberDesc(a.totalProfitIsk, b.totalProfitIsk),
+        (a, b) => compareNumberDesc(a.cargoFillPercent, b.cargoFillPercent),
+        (a, b) => compareTextAsc(a.routeKey, b.routeKey),
+      )(left, right);
     })
     .slice(0, Math.max(1, maxBuilds));
 
   const rankedRejectedBuilds = rejectedBuilds
     .sort((left, right) => {
-      if (right.totalProfitIsk !== left.totalProfitIsk) return right.totalProfitIsk - left.totalProfitIsk;
-      if (right.cargoFillPercent !== left.cargoFillPercent) return right.cargoFillPercent - left.cargoFillPercent;
-      const severityCompare = blockerSeverityTotal(left.blockers) - blockerSeverityTotal(right.blockers);
-      if (severityCompare !== 0) return severityCompare;
-      return left.routeKey.localeCompare(right.routeKey);
+      return combineComparators<RadiusRejectedCargoBuild>(
+        (a, b) => compareNumberDesc(a.totalProfitIsk, b.totalProfitIsk),
+        (a, b) => compareNumberDesc(a.cargoFillPercent, b.cargoFillPercent),
+        (a, b) => compareNumberAsc(blockerSeverityTotal(a.blockers), blockerSeverityTotal(b.blockers)),
+        (a, b) => compareTextAsc(a.routeKey, b.routeKey),
+      )(left, right);
     })
     .slice(0, 5);
 

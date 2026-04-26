@@ -118,4 +118,38 @@ describe("deriveRadiusDealFocusCandidates", () => {
 
     expect(cards.find((card) => card.kind === "best_full_cargo")?.routeKey).toBe("loc:10->loc:20");
   });
+
+  it("remains stable with sparse rows and missing queue/verification payloads", () => {
+    const sparseRows = [
+      row({ BuyLocationID: 44, SellLocationID: 55, TypeName: "Sparse", HistoryAvailable: undefined, FilledQty: undefined }),
+    ];
+    expect(() =>
+      deriveRadiusDealFocusCandidates({
+        rows: sparseRows,
+        cargoBuilds: [],
+        topRoutePicks,
+        actionQueue: [],
+        batchMetricsByRoute: {},
+        routeAggregateMetricsByRoute: {},
+      }),
+    ).not.toThrow();
+  });
+
+  it("does not hide all candidates when routes are high-risk or abort-marked", () => {
+    const rows = [row({ BuyLocationID: 1, SellLocationID: 2, TypeName: "Extreme" })];
+    const cards = deriveRadiusDealFocusCandidates({
+      rows,
+      cargoBuilds: [],
+      topRoutePicks,
+      actionQueue: [],
+      batchMetricsByRoute: {
+        "loc:1->loc:2": { ...( {} as RouteBatchMetadata), routeTotalProfit: 5_000_000, routeTotalCapital: 500_000_000, routeTotalVolume: 1000, routeDailyIskPerJump: 100_000, routeWeakestExecutionQuality: 20, routeAverageFillConfidencePct: 10, routeRiskSpikeCount: 8, routeRiskNoHistoryCount: 4, routeRiskUnstableHistoryCount: 3, routeRiskThinFillCount: 2 },
+      },
+      routeAggregateMetricsByRoute: {},
+      verificationStateByRouteKey: { "loc:1->loc:2": "abort" },
+    });
+
+    expect(cards.length).toBeGreaterThan(0);
+    expect(cards.some((card) => card.kind === "best_safe_depth")).toBe(true);
+  });
 });

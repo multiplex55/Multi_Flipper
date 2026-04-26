@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { formatISK } from "@/lib/format";
 import type { RadiusCargoBuild } from "@/lib/radiusCargoBuilds";
 import type { RouteQueueEntry } from "@/lib/routeQueue";
 import type { RouteAssignment } from "@/lib/routeAssignments";
@@ -15,6 +14,7 @@ import { ExplanationPopoverShell } from "@/components/decision/ExplanationPopove
 import type { AuthCharacter } from "@/lib/types";
 import type { RadiusDealMovement } from "@/lib/radiusDealMovement";
 import { RadiusDealMovementBadge } from "@/components/RadiusDealMovementBadge";
+import { formatIskLabel, formatIskPerJumpLabel, formatM3Label } from "@/lib/radiusDecisionGuardrails";
 
 type RadiusCargoBuildCardProps = {
   build: RadiusCargoBuild;
@@ -54,9 +54,9 @@ export function RadiusCargoBuildCard(props: RadiusCargoBuildCardProps) {
   const verificationBadge = getRadiusVerificationBadgeMeta(props.verificationState ?? "unverified");
   const [expanded, setExpanded] = useState(false);
   const buildExplanation = {
-    summary: `Cargo build ranks ${build.finalScore.toFixed(1)} with ${build.cargoFillPercent.toFixed(1)}% fill and ${formatISK(build.iskPerJump)}/jump.`,
+    summary: `Cargo build ranks ${build.finalScore.toFixed(1)} with ${build.cargoFillPercent.toFixed(1)}% fill and ${formatIskPerJumpLabel(build.iskPerJump)}.`,
     positives: [
-      `Profit potential ${formatISK(build.totalProfitIsk)} with ${build.rowCount} rows`,
+      `Profit potential ${formatIskLabel(build.totalProfitIsk)} with ${build.rowCount} rows`,
       `Cargo utilization ${build.cargoFillPercent.toFixed(1)}%`,
     ],
     warnings: [
@@ -80,11 +80,11 @@ export function RadiusCargoBuildCard(props: RadiusCargoBuildCardProps) {
       </div>
 
       <div className="mt-1 flex flex-wrap gap-3 text-eve-dim">
-        <span>Profit {formatISK(build.totalProfitIsk)}</span>
-        <span>Capital {formatISK(build.totalCapitalIsk)}</span>
-        <span>Gross sell {formatISK(build.totalGrossSellIsk)}</span>
+        <span>Profit {formatIskLabel(build.totalProfitIsk)}</span>
+        <span>Capital {formatIskLabel(build.totalCapitalIsk)}</span>
+        <span>Gross sell {formatIskLabel(build.totalGrossSellIsk)}</span>
         <span>Cargo used {build.cargoFillPercent.toFixed(1)}%</span>
-        <span>ISK/jump {formatISK(build.iskPerJump)}</span>
+        <span>ISK/jump {formatIskPerJumpLabel(build.iskPerJump)}</span>
       </div>
 
       <div className="mt-1 flex flex-wrap gap-2 text-[10px]">
@@ -169,10 +169,10 @@ export function RadiusCargoBuildCard(props: RadiusCargoBuildCardProps) {
                 <tr key={`${build.id}:${line.row.TypeID}:${line.units}`} className="border-t border-eve-border/40">
                   <td className="px-1 py-0.5 text-eve-text">{line.row.TypeName}</td>
                   <td className="px-1 py-0.5 text-right text-eve-dim">{line.units.toLocaleString()}</td>
-                  <td className="px-1 py-0.5 text-right text-eve-dim">{formatISK(line.capitalIsk)}</td>
-                  <td className="px-1 py-0.5 text-right text-eve-dim">{formatISK(line.grossSellIsk)}</td>
-                  <td className="px-1 py-0.5 text-right text-eve-accent">{formatISK(line.profitIsk)}</td>
-                  <td className="px-1 py-0.5 text-right text-eve-dim">{line.volumeM3.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                  <td className="px-1 py-0.5 text-right text-eve-dim">{formatIskLabel(line.capitalIsk)}</td>
+                  <td className="px-1 py-0.5 text-right text-eve-dim">{formatIskLabel(line.grossSellIsk)}</td>
+                  <td className="px-1 py-0.5 text-right text-eve-accent">{formatIskLabel(line.profitIsk)}</td>
+                  <td className="px-1 py-0.5 text-right text-eve-dim">{formatM3Label(line.volumeM3).replace(" m3", "")}</td>
                   <td className="px-1 py-0.5 text-center text-eve-dim">{line.partial ? "Yes" : "No"}</td>
                   <td className="px-1 py-0.5 text-center text-eve-dim">{build.executionCue}</td>
                 </tr>

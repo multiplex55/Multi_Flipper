@@ -129,6 +129,7 @@ function sanitizePattern(value: unknown): SavedCandidatePattern | null {
 
 export function loadSavedCandidatePatterns(): SavedCandidatePattern[] {
   try {
+    // Storage boundary: ScanResultsTable reads staged saved-pattern boost/filter state from this local-storage entrypoint.
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown[];
@@ -142,6 +143,7 @@ export function loadSavedCandidatePatterns(): SavedCandidatePattern[] {
 }
 
 export function saveCandidatePattern(input: Omit<SavedCandidatePattern, "id" | "updatedAt">): SavedCandidatePattern[] {
+  // Storage boundary: Pattern writes stay local and deterministic so staged UI toggles can safely opt-in/out of boost/filter behavior.
   const current = loadSavedCandidatePatterns();
   const id = `${input.tab}:${toSlug(input.label)}:${toSlug(input.query || "pattern")}`;
   const nextPattern: SavedCandidatePattern = {

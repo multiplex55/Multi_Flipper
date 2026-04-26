@@ -1,7 +1,7 @@
-import { formatISK } from "@/lib/format";
 import type { RadiusBuyStationShoppingList } from "@/lib/radiusBuyStationShoppingList";
 import type { RadiusDealMovement } from "@/lib/radiusDealMovement";
 import { RadiusDealMovementBadge } from "@/components/RadiusDealMovementBadge";
+import { formatIskLabel, formatIskPerJumpLabel, formatRiskLabel } from "@/lib/radiusDecisionGuardrails";
 
 type Props = {
   lists: RadiusBuyStationShoppingList[];
@@ -30,13 +30,13 @@ export function RadiusBuyStationShoppingListView({ lists, movementByListId = {},
           </div>
 
           <div className="mt-1 flex flex-wrap gap-3 text-[11px] text-eve-dim">
-            <span>Profit {formatISK(list.totalProfitIsk)}</span>
-            <span>Capital {formatISK(list.capitalIsk)}</span>
+            <span>Profit {formatIskLabel(list.totalProfitIsk)}</span>
+            <span>Capital {formatIskLabel(list.capitalIsk)}</span>
             <span>Fill {list.cargoFillPercent.toFixed(1)}%</span>
-            <span>ISK/jump {formatISK(list.bestIskPerJump)}</span>
+            <span>ISK/jump {formatIskPerJumpLabel(list.bestIskPerJump)}</span>
             <span>Exec {list.avgExecutionQuality.toFixed(0)}%</span>
             <span>Confidence {list.confidence.toFixed(0)}%</span>
-            <span>Trap risk {list.worstTrapRisk.toFixed(0)}</span>
+            <span>{formatRiskLabel(list.worstTrapRisk)}</span>
           </div>
 
           <div className="mt-2 flex flex-wrap gap-1 text-[10px]">
