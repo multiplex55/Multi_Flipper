@@ -10,6 +10,8 @@ import {
   type RadiusVerificationState,
 } from "@/lib/radiusVerificationStatus";
 import { RouteAssignmentQuickActions } from "@/components/RouteAssignmentQuickActions";
+import { RadiusDealExplanationPanel } from "@/components/RadiusDealExplanationPanel";
+import { ExplanationPopoverShell } from "@/components/decision/ExplanationPopoverShell";
 import type { AuthCharacter } from "@/lib/types";
 
 type RadiusCargoBuildCardProps = {
@@ -42,6 +44,21 @@ export function RadiusCargoBuildCard(props: RadiusCargoBuildCardProps) {
   const routeBadge = getRadiusRouteExecutionBadge(build.routeKey, routeQueueEntries, assignmentByRouteKey);
   const verificationBadge = getRadiusVerificationBadgeMeta(props.verificationState ?? "unverified");
   const [expanded, setExpanded] = useState(false);
+  const buildExplanation = {
+    summary: `Cargo build ranks ${build.finalScore.toFixed(1)} with ${build.cargoFillPercent.toFixed(1)}% fill and ${formatISK(build.iskPerJump)}/jump.`,
+    positives: [
+      `Profit potential ${formatISK(build.totalProfitIsk)} with ${build.rowCount} rows`,
+      `Cargo utilization ${build.cargoFillPercent.toFixed(1)}%`,
+    ],
+    warnings: [
+      ...(build.executionCue !== "smooth" ? [`Execution cue is ${build.executionCue}`] : []),
+      ...(build.riskCue !== "low" ? [`Risk cue is ${build.riskCue}`] : []),
+    ],
+    recommendedActions: [
+      ...(build.executionCue !== "smooth" ? ["Sequence fills by depth and verify top lines before buy."] : []),
+      ...(build.riskCue !== "low" ? ["Keep capital split and stage exits at safer hubs."] : []),
+    ],
+  };
 
   return (
     <div className="rounded-sm border border-eve-border/60 bg-eve-dark/30 p-2" data-testid="radius-cargo-build-card">
@@ -81,6 +98,16 @@ export function RadiusCargoBuildCard(props: RadiusCargoBuildCardProps) {
         <button type="button" className="rounded-sm border border-indigo-400/60 px-1.5 py-0.5 text-indigo-200" onClick={() => props.onQueue(build.routeKey)}>Queue</button>
         <button type="button" className="rounded-sm border border-blue-500/60 px-1.5 py-0.5 text-blue-200" onClick={() => props.onOpenWorkbench(build.routeKey)}>Open workbench</button>
         <button type="button" className="rounded-sm border border-eve-accent/60 px-1.5 py-0.5 text-eve-accent" onClick={() => props.onOpenBatch(build.routeKey)}>Open batch</button>
+        <ExplanationPopoverShell label="Why this build?">
+          <RadiusDealExplanationPanel
+            routeKey={build.routeKey}
+            routeLabel={build.routeLabel}
+            explanation={buildExplanation}
+            executionQuality={build.executionQuality}
+            queueStatus={routeBadge.label}
+            assignment={assignmentByRouteKey[build.routeKey]?.assignedCharacterName ?? null}
+          />
+        </ExplanationPopoverShell>
       </div>
       <div className="mt-1">
         <RouteAssignmentQuickActions

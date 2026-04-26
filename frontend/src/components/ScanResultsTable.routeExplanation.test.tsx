@@ -54,6 +54,8 @@ function row(overrides: Partial<FlipResult> = {}): FlipResult {
     SellCompetitors: 0,
     DailyProfit: 600,
     RealProfit: 800,
+    SlippageBuyPct: 12,
+    SlippageSellPct: 8,
     ...overrides,
   };
 }
@@ -61,7 +63,7 @@ function row(overrides: Partial<FlipResult> = {}): FlipResult {
 describe("ScanResultsTable route explanation", () => {
   afterEach(() => cleanup());
 
-  it("shows route popover content with lens delta", async () => {
+  it("shows route popover content with warnings and lens delta", async () => {
     render(
       <I18nProvider>
         <ToastProvider>
@@ -77,5 +79,7 @@ describe("ScanResultsTable route explanation", () => {
     const buttons = await screen.findAllByRole("button", { name: "Why this route?" });
     fireEvent.click(buttons[0]);
     expect(await screen.findByText(/Lens change/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Verification snapshot missing/i)).toBeInTheDocument();
+    expect(await screen.findByText(/High weighted slippage|Thin top-of-book depth/i)).toBeInTheDocument();
   });
 });
