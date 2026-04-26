@@ -149,4 +149,48 @@ describe("scan-table batch synthetic helpers", () => {
     expect(formatBatchSyntheticCell("RoutePackRealIskPerM3PerJump", 1200)).toBe("1.2 K");
     expect(formatBatchSyntheticCell("RoutePackTotalVolume", 20)).toBe("20 m³");
   });
+
+  it("computes ROI and profit-per-100M formulas from route-pack metadata", () => {
+    const row = makeRow({
+      TypeID: 401,
+      ProfitPerUnit: 50,
+      UnitsToBuy: 10,
+      ExpectedBuyPrice: 100,
+      DailyProfit: 80,
+    });
+    const metadata = buildRouteBatchMetadataByRow([row], 1_000);
+
+    const roi = getBatchSyntheticValue(row, "RoutePackROI", metadata);
+    const profitPer100M = getBatchSyntheticValue(row, "RoutePackProfitPer100M", metadata);
+    const totalProfit = getBatchSyntheticValue(row, "RoutePackTotalProfit", metadata) ?? 0;
+    const totalCapital = getBatchSyntheticValue(row, "RoutePackTotalCapital", metadata) ?? 0;
+
+    expect(roi).toBe(8);
+    expect(profitPer100M).toBe((totalProfit / totalCapital) * 100_000_000);
+  });
+
+  it("passes through confidence and remaining cargo route-pack values", () => {
+    const row = makeRow({
+      TypeID: 501,
+      BuyLocationID: 970001,
+      SellLocationID: 970002,
+      UnitsToBuy: 100,
+      FilledQty: 30,
+      Volume: 3,
+      ProfitPerUnit: 20,
+    });
+    const metadata = buildRouteBatchMetadataByRow([row], 200);
+    const key = rowBatchIdentityKey(row);
+    const meta = metadata[key];
+
+    expect(getBatchSyntheticValue(row, "RoutePackWorstFillConfidencePct", metadata)).toBe(
+      meta.routeWorstFillConfidencePct,
+    );
+    expect(getBatchSyntheticValue(row, "RoutePackAverageFillConfidencePct", metadata)).toBe(
+      meta.routeAverageFillConfidencePct,
+    );
+    expect(getBatchSyntheticValue(row, "RoutePackRemainingCargoM3", metadata)).toBe(
+      meta.routeRemainingCargoM3,
+    );
+  });
 });

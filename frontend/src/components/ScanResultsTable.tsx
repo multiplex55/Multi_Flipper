@@ -255,11 +255,18 @@ type SyntheticSortKey =
   | "RoutePackDailyProfit"
   | "RoutePackRealIskPerM3PerJump"
   | "RoutePackDailyProfitOverCapital"
+  | "RoutePackROI"
+  | "RoutePackProfitPer100M"
   | "RoutePackWeightedSlippagePct"
   | "RoutePackWeakestExecutionQuality"
   | "RoutePackTurnoverDays"
   | "RoutePackExitOverhangDays"
   | "RoutePackBreakevenBuffer"
+  | "RoutePackRemainingCargoM3"
+  | "RoutePackWorstFillConfidencePct"
+  | "RoutePackAverageFillConfidencePct"
+  | "RoutePackThinFillCount"
+  | "RoutePackProfitConcentrationPct"
   | "RoutePackRiskSpikeCount"
   | "RoutePackRiskNoHistoryCount"
   | "RoutePackRiskUnstableHistoryCount"
@@ -734,6 +741,18 @@ const baseColumnDefs: ColumnDef[] = [
     numeric: true,
   },
   {
+    key: "RoutePackROI",
+    labelKey: "colROI",
+    width: "min-w-[120px]",
+    numeric: true,
+  },
+  {
+    key: "RoutePackProfitPer100M",
+    labelKey: "colProfit",
+    width: "min-w-[150px]",
+    numeric: true,
+  },
+  {
     key: "RoutePackWeightedSlippagePct",
     labelKey: "colWeightedSlippagePct",
     width: "min-w-[145px]",
@@ -763,6 +782,36 @@ const baseColumnDefs: ColumnDef[] = [
     width: "min-w-[150px]",
     numeric: true,
   }),
+  {
+    key: "RoutePackRemainingCargoM3",
+    labelKey: "colVolume",
+    width: "min-w-[145px]",
+    numeric: true,
+  },
+  {
+    key: "RoutePackWorstFillConfidencePct",
+    labelKey: "colCanFill",
+    width: "min-w-[145px]",
+    numeric: true,
+  },
+  {
+    key: "RoutePackAverageFillConfidencePct",
+    labelKey: "colCanFill",
+    width: "min-w-[155px]",
+    numeric: true,
+  },
+  {
+    key: "RoutePackThinFillCount",
+    labelKey: "colFilledQty",
+    width: "min-w-[130px]",
+    numeric: true,
+  },
+  {
+    key: "RoutePackProfitConcentrationPct",
+    labelKey: "colMargin",
+    width: "min-w-[170px]",
+    numeric: true,
+  },
   radiusColumnDef({
     key: "OpportunityScore",
     labelKey: "colTradeScore",
@@ -1212,11 +1261,18 @@ const BATCH_SYNTHETIC_KEYS: Set<SortKey> = new Set([
   "RoutePackDailyProfit",
   "RoutePackRealIskPerM3PerJump",
   "RoutePackDailyProfitOverCapital",
+  "RoutePackROI",
+  "RoutePackProfitPer100M",
   "RoutePackWeightedSlippagePct",
   "RoutePackWeakestExecutionQuality",
   "RoutePackTurnoverDays",
   "RoutePackExitOverhangDays",
   "RoutePackBreakevenBuffer",
+  "RoutePackRemainingCargoM3",
+  "RoutePackWorstFillConfidencePct",
+  "RoutePackAverageFillConfidencePct",
+  "RoutePackThinFillCount",
+  "RoutePackProfitConcentrationPct",
   "RoutePackRiskSpikeCount",
   "RoutePackRiskNoHistoryCount",
   "RoutePackRiskUnstableHistoryCount",

@@ -461,4 +461,39 @@ describe("batchMetrics", () => {
     expect(meta.routeExitOverhangDays).toBeNull();
     expect(meta.routeBreakevenBuffer).toBeNull();
   });
+
+  it("computes route profit concentration from largest selected line and returns null for non-positive totals", () => {
+    const concentratedA = makeRow({
+      TypeID: 8001,
+      BuyLocationID: 880001,
+      SellLocationID: 880002,
+      ProfitPerUnit: 40,
+      UnitsToBuy: 10,
+      Volume: 1,
+    });
+    const concentratedB = makeRow({
+      TypeID: 8002,
+      BuyLocationID: concentratedA.BuyLocationID,
+      SellLocationID: concentratedA.SellLocationID,
+      ProfitPerUnit: 20,
+      UnitsToBuy: 10,
+      Volume: 1,
+    });
+    const positiveMeta = buildRouteBatchMetadataByRow(
+      [concentratedA, concentratedB],
+      1_000,
+    );
+    const concentration = metadataFor(concentratedA, positiveMeta).routeProfitConcentrationPct;
+    expect(concentration).toBeCloseTo((400 / 600) * 100, 6);
+
+    const nonPositive = makeRow({
+      TypeID: 8101,
+      BuyLocationID: 890001,
+      SellLocationID: 890002,
+      ProfitPerUnit: -10,
+      UnitsToBuy: 10,
+    });
+    const nonPositiveMeta = buildRouteBatchMetadataByRow([nonPositive], 1_000);
+    expect(metadataFor(nonPositive, nonPositiveMeta).routeProfitConcentrationPct).toBeNull();
+  });
 });

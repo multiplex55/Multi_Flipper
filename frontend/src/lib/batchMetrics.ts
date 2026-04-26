@@ -77,6 +77,7 @@ export type RouteBatchMetadata = {
   routeSellStopCount: number;
   routeWorstFillConfidencePct: number;
   routeAverageFillConfidencePct: number;
+  routeProfitConcentrationPct: number | null;
   routeRemainingCargoM3: number | null;
   routeComplexity: "Clean" | "Moderate" | "Busy";
 };
@@ -476,6 +477,12 @@ export function buildRouteBatchMetadata(
       (sum, routeRow) => sum + Math.max(1, requestedUnitsForFlip(routeRow)),
       0,
     );
+    const highestLineProfit = selectedPackLines.reduce(
+      (maxProfit, line) => Math.max(maxProfit, line.profit),
+      0,
+    );
+    const routeProfitConcentrationPct =
+      batch.totalProfit > 0 ? (highestLineProfit / batch.totalProfit) * 100 : null;
 
     const metadata: RouteBatchMetadata = {
       batchNumber: batch.lines.length,
@@ -522,6 +529,7 @@ export function buildRouteBatchMetadata(
         weightedFillDenominator > 0
           ? weightedFillNumerator / weightedFillDenominator
           : 0,
+      routeProfitConcentrationPct,
       routeRemainingCargoM3: batch.remainingM3,
       routeComplexity: classifyRouteComplexity(stopCount),
     };
