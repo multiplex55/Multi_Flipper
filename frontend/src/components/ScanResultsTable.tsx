@@ -197,6 +197,12 @@ import {
 } from "@/lib/radiusCargoBuildFormat";
 import { RadiusRowContextMenu } from "@/components/RadiusRowContextMenu";
 import type { RadiusContextMenuAction } from "@/lib/radiusContextMenuItems";
+import { radiusColumnPresetById } from "@/lib/radiusColumnPresets";
+import {
+  radiusDecisionModeById,
+  radiusDecisionModes,
+  type RadiusDecisionModeId,
+} from "@/lib/radiusDecisionModes";
 
 export const calcRouteConfidence = calcRouteConfidenceFromInsights;
 
@@ -221,6 +227,23 @@ const RADIUS_ROUTE_INSIGHTS_HIDDEN_STORAGE_KEY =
 const RADIUS_INSIGHTS_DRAWER_OPEN_STORAGE_KEY =
   "eve-radius-insights-drawer-open:v1";
 const ONE_LEG_MODE_STORAGE_KEY = "eve-radius-one-leg-mode:v1";
+
+type RadiusTransientModeSnapshot = {
+  sortKey: SortKey;
+  sortDir: SortDir;
+  routeViewMode: "rows" | "route" | "cargo_builds";
+  hiddenColumns: Set<SortKey>;
+  showAdvancedToolbar: boolean;
+  radiusRouteInsightsHidden: boolean;
+};
+
+const ALWAYS_VISIBLE_MODE_COLUMNS = new Set<SortKey>([
+  "TypeName",
+  "BuyStation",
+  "SellStation",
+  "TotalJumps",
+  "RealProfit",
+]);
 const PERFORMANCE_LOG_THRESHOLD_MS = 8;
 const HUB_SCOPE_MODE_STORAGE_KEY = "eve-radius-hub-scope-mode:v1";
 
@@ -1720,6 +1743,13 @@ export function ScanResultsTable({
     columnProfile === "region_eveguru" ? "DayPeriodProfit" : "RealProfit",
   );
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [activeDecisionMode, setActiveDecisionMode] = useState<
+    RadiusDecisionModeId | "custom"
+  >("custom");
+  const [modeBaselineSnapshot, setModeBaselineSnapshot] =
+    useState<RadiusTransientModeSnapshot | null>(null);
+  const [modeAppliedLayout, setModeAppliedLayout] =
+    useState<RadiusTransientModeSnapshot | null>(null);
   const [orderingMode, setOrderingMode] = useState<OrderingMode>("smart");
   const [pinsFirst, setPinsFirst] = useState(true);
   const [decisionLens, setDecisionLens] = useState<
@@ -1948,6 +1978,15 @@ export function ScanResultsTable({
   const [oneLegVerificationResult, setOneLegVerificationResult] =
     useState<RouteVerificationResult | null>(null);
 
+  const effectiveSortKey = modeAppliedLayout?.sortKey ?? sortKey;
+  const effectiveSortDir = modeAppliedLayout?.sortDir ?? sortDir;
+  const effectiveHiddenColumns = modeAppliedLayout?.hiddenColumns ?? hiddenColumns;
+  const effectiveShowAdvancedToolbar =
+    modeAppliedLayout?.showAdvancedToolbar ?? showAdvancedToolbar;
+  const effectiveRadiusRouteInsightsHidden =
+    modeAppliedLayout?.radiusRouteInsightsHidden ?? radiusRouteInsightsHidden;
+  const routeViewModeForDisplay = modeAppliedLayout?.routeViewMode ?? routeViewMode;
+
   const isRegionGrouped = columnProfile === "region_eveguru";
   const allowRouteGrouping = featureConfig.allowRouteGrouping;
   const showRouteInsights = featureConfig.showRouteInsights;
@@ -1957,7 +1996,9 @@ export function ScanResultsTable({
   const isRadiusMode = tradeStateTab === "radius";
   const useRadiusCommandBar = isRadiusMode && !isRegionGrouped;
   const effectiveRouteViewMode =
-    allowRouteGrouping && routeViewMode !== "rows" ? routeViewMode : "rows";
+    allowRouteGrouping && routeViewModeForDisplay !== "rows"
+      ? routeViewModeForDisplay
+      : "rows";
   const isItemGrouped =
     !isRegionGrouped && groupByItem && effectiveRouteViewMode === "rows";
   const isRouteGrouped =
@@ -2026,8 +2067,8 @@ export function ScanResultsTable({
   }, [allColumnDefs, columnOrder]);
 
   const columnDefs = useMemo(
-    () => orderedColumnDefs.filter((col) => !hiddenColumns.has(col.key)),
-    [orderedColumnDefs, hiddenColumns],
+    () => orderedColumnDefs.filter((col) => !effectiveHiddenColumns.has(col.key)),
+    [effectiveHiddenColumns, orderedColumnDefs],
   );
 
   const { batchMetricsByRow, batchMetricsByRoute } = useMemo(() => {
@@ -2274,7 +2315,7 @@ export function ScanResultsTable({
       setShowTrackedPanel(false);
       setShowCachePanel(false);
     }
-  }, [showAdvancedToolbar]);
+  }, [modeAppliedLayout, showAdvancedToolbar]);
 
   useEffect(() => {
     if (!showEndpointPrefsPanel && !showTrackedPanel && !showCachePanel) return;
@@ -2341,6 +2382,7 @@ export function ScanResultsTable({
   }, [columnPrefsKey, allColumnDefs]);
 
   useEffect(() => {
+    if (modeAppliedLayout) return;
     if (columnOrder.length === 0) return;
     try {
       localStorage.setItem(
@@ -2353,7 +2395,7 @@ export function ScanResultsTable({
     } catch {
       // Ignore storage quota errors.
     }
-  }, [columnPrefsKey, columnOrder, hiddenColumns]);
+  }, [columnPrefsKey, columnOrder, hiddenColumns, modeAppliedLayout]);
 
   useEffect(() => {
     try {
@@ -2372,12 +2414,13 @@ export function ScanResultsTable({
   }, [groupByItem]);
 
   useEffect(() => {
+    if (modeAppliedLayout) return;
     try {
       localStorage.setItem(ROUTE_GROUPING_STORAGE_KEY, effectiveRouteViewMode);
     } catch {
       // ignore storage quota errors
     }
-  }, [effectiveRouteViewMode]);
+  }, [effectiveRouteViewMode, modeAppliedLayout]);
 
   useEffect(() => {
     if (!allowRouteGrouping && routeViewMode !== "rows") {
@@ -2386,6 +2429,7 @@ export function ScanResultsTable({
   }, [allowRouteGrouping, routeViewMode]);
 
   useEffect(() => {
+    if (modeAppliedLayout) return;
     try {
       localStorage.setItem(
         ADVANCED_TOOLBAR_VISIBLE_STORAGE_KEY,
@@ -2394,7 +2438,7 @@ export function ScanResultsTable({
     } catch {
       // ignore storage quota errors
     }
-  }, [showAdvancedToolbar]);
+  }, [modeAppliedLayout, showAdvancedToolbar]);
 
   useEffect(() => {
     try {
@@ -2408,6 +2452,7 @@ export function ScanResultsTable({
   }, [compactDashboard]);
 
   useEffect(() => {
+    if (modeAppliedLayout) return;
     try {
       localStorage.setItem(
         RADIUS_ROUTE_INSIGHTS_HIDDEN_STORAGE_KEY,
@@ -2416,7 +2461,7 @@ export function ScanResultsTable({
     } catch {
       // ignore storage quota errors
     }
-  }, [radiusRouteInsightsHidden]);
+  }, [modeAppliedLayout, radiusRouteInsightsHidden]);
 
   useEffect(() => {
     try {
@@ -2430,10 +2475,10 @@ export function ScanResultsTable({
   }, [radiusInsightsDrawerOpen]);
 
   useEffect(() => {
-    if (radiusRouteInsightsHidden && radiusInsightsDrawerOpen) {
+    if (effectiveRadiusRouteInsightsHidden && radiusInsightsDrawerOpen) {
       setRadiusInsightsDrawerOpen(false);
     }
-  }, [radiusInsightsDrawerOpen, radiusRouteInsightsHidden]);
+  }, [effectiveRadiusRouteInsightsHidden, radiusInsightsDrawerOpen]);
 
   useEffect(() => {
     if (!isRouteGrouped && selectedBadgeFilters.size > 0) {
@@ -2540,6 +2585,97 @@ export function ScanResultsTable({
     setColumnOrder(allColumnDefs.map((col) => col.key));
   }, [allColumnDefs]);
 
+  const applyDecisionMode = useCallback(
+    (nextMode: RadiusDecisionModeId | "custom") => {
+      if (nextMode === "custom") {
+        if (modeBaselineSnapshot) {
+          setSortKey(modeBaselineSnapshot.sortKey);
+          setSortDir(modeBaselineSnapshot.sortDir);
+          setRouteViewMode(modeBaselineSnapshot.routeViewMode);
+          setHiddenColumns(new Set(modeBaselineSnapshot.hiddenColumns));
+          setShowAdvancedToolbar(modeBaselineSnapshot.showAdvancedToolbar);
+          setRadiusRouteInsightsHidden(modeBaselineSnapshot.radiusRouteInsightsHidden);
+        }
+        setModeAppliedLayout(null);
+        setModeBaselineSnapshot(null);
+        setActiveDecisionMode("custom");
+        return;
+      }
+
+      if (!modeBaselineSnapshot) {
+        setModeBaselineSnapshot({
+          sortKey,
+          sortDir,
+          routeViewMode,
+          hiddenColumns: new Set(hiddenColumns),
+          showAdvancedToolbar,
+          radiusRouteInsightsHidden,
+        });
+      }
+
+      const mode = radiusDecisionModeById[nextMode];
+      const preset = radiusColumnPresetById[mode.presetId];
+      const availableColumnKeys = new Set(allColumnDefs.map((col) => col.key));
+      const keepVisible = new Set<SortKey>([...ALWAYS_VISIBLE_MODE_COLUMNS]);
+      for (const key of preset.columns) {
+        if (availableColumnKeys.has(key as SortKey)) {
+          keepVisible.add(key as SortKey);
+        }
+      }
+      const nextHidden = new Set<SortKey>();
+      for (const key of availableColumnKeys) {
+        if (!keepVisible.has(key)) nextHidden.add(key);
+      }
+
+      const preferredSortKey =
+        availableColumnKeys.has(mode.sort.key as SortKey)
+          ? (mode.sort.key as SortKey)
+          : availableColumnKeys.has(preset.defaultSort.key as SortKey)
+            ? (preset.defaultSort.key as SortKey)
+            : (allColumnDefs[0]?.key ?? "TypeName");
+
+      const preferredView =
+        allowRouteGrouping || mode.preferredView === "rows"
+          ? mode.preferredView
+          : "rows";
+
+      const snapshot: RadiusTransientModeSnapshot = {
+        sortKey: preferredSortKey,
+        sortDir: mode.sort.dir,
+        routeViewMode: preferredView,
+        hiddenColumns: nextHidden,
+        showAdvancedToolbar: mode.visibility.advanced === "show",
+        radiusRouteInsightsHidden: mode.visibility.insights === "hide",
+      };
+      setModeAppliedLayout(snapshot);
+      setSortKey(snapshot.sortKey);
+      setSortDir(snapshot.sortDir);
+      setRouteViewMode(snapshot.routeViewMode);
+      setHiddenColumns(new Set(snapshot.hiddenColumns));
+      setShowAdvancedToolbar(snapshot.showAdvancedToolbar);
+      setRadiusRouteInsightsHidden(snapshot.radiusRouteInsightsHidden);
+      setActiveDecisionMode(nextMode);
+    },
+    [
+      allColumnDefs,
+      allowRouteGrouping,
+      hiddenColumns,
+      modeBaselineSnapshot,
+      radiusRouteInsightsHidden,
+      routeViewMode,
+      showAdvancedToolbar,
+      sortDir,
+      sortKey,
+    ],
+  );
+
+  const saveModeLayout = useCallback(() => {
+    setModeBaselineSnapshot(null);
+    setModeAppliedLayout(null);
+    setActiveDecisionMode("custom");
+    addToast("Layout saved", "success", 1400);
+  }, [addToast]);
+
   const insertColumn = useCallback(
     (fromKey: SortKey, toKey: SortKey, side: "before" | "after") => {
       if (fromKey === toKey) return;
@@ -2634,8 +2770,8 @@ export function ScanResultsTable({
         orderingMode,
         pinsFirst,
         trackedFirst,
-        sortKey,
-        sortDir,
+        sortKey: effectiveSortKey,
+        sortDir: effectiveSortDir,
         getSmartSignals: (item) => ({
           isPinned: pinnedKeys.has(
             mapScanRowToPinnedOpportunity(item.row).opportunity_key,
@@ -2705,8 +2841,8 @@ export function ScanResultsTable({
     results,
     filters,
     columnDefs,
-    sortKey,
-    sortDir,
+    effectiveSortKey,
+    effectiveSortDir,
     orderingMode,
     pinsFirst,
     pinnedKeys,
@@ -3041,33 +3177,33 @@ export function ScanResultsTable({
       const rightAggregate = routeAggregateMetricsByRoute[b.key];
       const leftAggregateValue = routeAggregateValueForSortKey(
         leftAggregate,
-        sortKey,
+        effectiveSortKey,
       );
       const rightAggregateValue = routeAggregateValueForSortKey(
         rightAggregate,
-        sortKey,
+        effectiveSortKey,
       );
       if (leftAggregateValue != null || rightAggregateValue != null) {
         const cmp = compareBatchSyntheticValues(
           leftAggregateValue,
           rightAggregateValue,
-          sortDir,
+          effectiveSortDir,
         );
         if (cmp !== 0) return cmp;
       }
 
-      if (isBatchSyntheticKey(sortKey)) {
+      if (isBatchSyntheticKey(effectiveSortKey)) {
         const left = getBatchSyntheticValue(
           a.rows[0].row,
-          sortKey,
+          effectiveSortKey,
           batchMetricsByRow,
         );
         const right = getBatchSyntheticValue(
           b.rows[0].row,
-          sortKey,
+          effectiveSortKey,
           batchMetricsByRow,
         );
-        const cmp = compareBatchSyntheticValues(left, right, sortDir);
+        const cmp = compareBatchSyntheticValues(left, right, effectiveSortDir);
         if (cmp !== 0) return cmp;
       }
       const labelCmp = a.label.localeCompare(b.label);
@@ -3848,8 +3984,8 @@ export function ScanResultsTable({
   }, [
     results,
     filters,
-    sortKey,
-    sortDir,
+    effectiveSortKey,
+    effectiveSortDir,
     showHiddenRows,
     selectedBadgeFilters,
     trackedVisibilityMode,
@@ -5593,9 +5729,9 @@ export function ScanResultsTable({
   );
 
   const activeSortLabel = useMemo(() => {
-    const activeColumn = columnDefs.find((col) => col.key === sortKey);
+    const activeColumn = columnDefs.find((col) => col.key === effectiveSortKey);
     return activeColumn ? t(activeColumn.labelKey) : String(sortKey);
-  }, [columnDefs, sortKey, t]);
+  }, [columnDefs, effectiveSortKey, t]);
 
   const activeOrderingReasons = useMemo(() => {
     const reasons: string[] = [];
@@ -5678,7 +5814,7 @@ export function ScanResultsTable({
                 : `Scan results: ${filtered.length} visible from ${indexed.length} total`,
             }}
             insightsVisibilityToggle={{
-              hidden: radiusRouteInsightsHidden,
+              hidden: effectiveRadiusRouteInsightsHidden,
               label: radiusRouteInsightsHidden
                 ? t("showRadiusRouteInsights")
                 : t("hideRadiusRouteInsights"),
@@ -5710,7 +5846,7 @@ export function ScanResultsTable({
               recalcDisabled: recalcLensDisabled,
             }}
             moreControls={{
-              expanded: showAdvancedToolbar,
+              expanded: effectiveShowAdvancedToolbar,
               controlsId: "scan-results-advanced-toolbar",
               onToggleExpanded: () => setShowAdvancedToolbar((v) => !v),
               content: (
@@ -5770,6 +5906,19 @@ export function ScanResultsTable({
               </>
             )}
             sessionSection={radiusSessionControls}
+            decisionModeControl={{
+              value: activeDecisionMode,
+              options: [
+                { id: "custom", label: "Custom", description: "Restore your saved layout" },
+                ...radiusDecisionModes.map((mode) => ({
+                  id: mode.id,
+                  label: mode.label,
+                  description: mode.description,
+                })),
+              ],
+              onChange: (modeId) =>
+                applyDecisionMode(modeId as RadiusDecisionModeId | "custom"),
+            }}
           />
         </div>
       )}
@@ -5868,7 +6017,7 @@ export function ScanResultsTable({
                   allowRouteGrouping={allowRouteGrouping}
                   allowCargoBuilds={isRadiusMode}
                   routeViewMode={effectiveRouteViewMode}
-                  setRouteViewMode={setRouteViewMode}
+                  setRouteViewMode={(mode) => setRouteViewMode(mode)}
                   groupByItem={groupByItem}
                   setGroupByItem={setGroupByItem}
                 />
@@ -6700,6 +6849,15 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               >
                 {t("columnsReset")}
               </button>
+              {modeAppliedLayout ? (
+                <button
+                  type="button"
+                  onClick={saveModeLayout}
+                  className="px-2 py-0.5 rounded-sm border border-emerald-500/60 text-emerald-300 hover:bg-emerald-900/20 transition-colors"
+                >
+                  Save Layout
+                </button>
+              ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-y-2">
               {orderedColumnDefs.map((col) => {

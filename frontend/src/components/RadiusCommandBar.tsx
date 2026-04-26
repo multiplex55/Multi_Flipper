@@ -54,6 +54,11 @@ type RadiusCommandBarProps = {
   sessionSection?: ReactNode;
   rankingSection?: ReactNode;
   routeActionsSection?: ReactNode;
+  decisionModeControl?: {
+    value: string;
+    options: Array<{ id: string; label: string; description: string }>;
+    onChange: (modeId: string) => void;
+  };
 };
 
 const RADIUS_COMMAND_INTENT_MAP = {
@@ -88,6 +93,7 @@ export function RadiusCommandBar({
   sessionSection,
   rankingSection,
   routeActionsSection,
+  decisionModeControl,
 }: RadiusCommandBarProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -150,6 +156,23 @@ export function RadiusCommandBar({
           </MutedLabel>
           <div className="flex-1" />
           {routeActionsSection ? <div>{routeActionsSection}</div> : null}
+          {decisionModeControl ? (
+            <label className="inline-flex items-center gap-1 rounded-sm border border-eve-border/60 bg-eve-dark/40 px-1.5 py-0.5 text-[10px] text-eve-dim">
+              Mode
+              <select
+                aria-label="Decision mode"
+                value={decisionModeControl.value}
+                onChange={(event) => decisionModeControl.onChange(event.target.value)}
+                className="rounded-sm border border-eve-border/60 bg-eve-dark px-1 py-0.5 text-eve-text"
+              >
+                {decisionModeControl.options.map((option) => (
+                  <option key={option.id} value={option.id} title={option.description}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
           <ActionButton
             tone="accent"
             size="xs"

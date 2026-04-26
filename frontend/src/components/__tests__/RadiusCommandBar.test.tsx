@@ -248,4 +248,24 @@ describe("RadiusCommandBar", () => {
     );
     expect(screen.getByTestId("one-leg-mode-toggle")).toHaveAttribute("aria-pressed", "true");
   });
+
+  it("renders decision mode selector when provided", () => {
+    const onChange = vi.fn();
+    renderBar({
+      decisionModeControl: {
+        value: "scout",
+        options: [
+          { id: "custom", label: "Custom", description: "Custom" },
+          { id: "scout", label: "Scout", description: "Scout mode" },
+        ],
+        onChange,
+      },
+    });
+
+    fireEvent.change(screen.getByLabelText("Decision mode"), {
+      target: { value: "custom" },
+    });
+
+    expect(onChange).toHaveBeenCalledWith("custom");
+  });
 });
