@@ -33,6 +33,7 @@ describe("RadiusRowContextMenu", () => {
         x={10}
         y={20}
         row={makeRow()}
+        surface="radius_route"
         isLoggedIn
         isTracked={false}
         isPinned={false}
@@ -58,7 +59,8 @@ describe("RadiusRowContextMenu", () => {
         x={10}
         y={20}
         row={makeRow()}
-        isLoggedIn={false}
+        surface="radius_table"
+        isLoggedIn
         isTracked={false}
         isPinned={false}
         hasLegLocks={false}
@@ -81,7 +83,8 @@ describe("RadiusRowContextMenu", () => {
         x={10}
         y={20}
         row={makeRow({ BuyLocationID: 0, SellLocationID: 0 })}
-        isLoggedIn={false}
+        surface="radius_route"
+        isLoggedIn
         isTracked={false}
         isPinned={false}
         hasLegLocks={false}
@@ -107,7 +110,8 @@ describe("RadiusRowContextMenu", () => {
         x={10}
         y={20}
         row={makeRow()}
-        isLoggedIn={false}
+        surface="radius_table"
+        isLoggedIn
         isTracked={false}
         isPinned={false}
         hasLegLocks={false}
@@ -126,5 +130,97 @@ describe("RadiusRowContextMenu", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Apply saved pattern" }));
     expect(onAction).toHaveBeenCalledWith("apply_saved_pattern", expect.objectContaining({ TypeID: 501 }), expect.any(String));
+  });
+
+  it("shows route workflow actions only on route surface", () => {
+    const onAction = vi.fn();
+    const onClose = vi.fn();
+    const row = makeRow();
+
+    const { rerender } = render(
+      <RadiusRowContextMenu
+        x={10}
+        y={20}
+        row={row}
+        surface="radius_table"
+        isLoggedIn
+        isTracked={false}
+        isPinned={false}
+        hasLegLocks={false}
+        canQueueRoute
+        canAssignRoute
+        canVerifyRoute
+        onClose={onClose}
+        callbacks={{ onAction }}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Queue route" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Assign route" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Assign active pilot" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Assign best pilot" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Verify now" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add route to compare" })).toBeNull();
+
+    rerender(
+      <RadiusRowContextMenu
+        x={10}
+        y={20}
+        row={row}
+        surface="radius_route"
+        isLoggedIn={false}
+        isTracked={false}
+        isPinned={false}
+        hasLegLocks={false}
+        canQueueRoute
+        canAssignRoute
+        canVerifyRoute
+        onClose={onClose}
+        callbacks={{ onAction }}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Queue route" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Assign route" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Assign active pilot" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Assign best pilot" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Verify now" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Add route to compare" })).toBeEnabled();
+  });
+
+  it("keeps scanner triage actions available on table surface", () => {
+    const onAction = vi.fn();
+    render(
+      <RadiusRowContextMenu
+        x={10}
+        y={20}
+        row={makeRow()}
+        surface="radius_table"
+        isLoggedIn
+        isTracked={false}
+        isPinned={false}
+        hasLegLocks
+        canQueueRoute={false}
+        canAssignRoute={false}
+        canVerifyRoute={false}
+        onClose={() => undefined}
+        callbacks={{ onAction }}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Copy item" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Build batch" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Fill Cargo" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Lock this buy" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Lock this sell" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Clear locks" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Ignore this buy station (session)" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Ignore this sell station (session)" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "🎯 Set destination (Buy)" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "🎯 Set destination (Sell)" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Pin row" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save item pattern" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save route pattern" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Apply saved pattern" })).toBeEnabled();
   });
 });

@@ -4,6 +4,7 @@ import {
   buildRadiusContextMenuItems,
   type RadiusContextMenuAction,
   type RadiusContextMenuSection,
+  type RadiusContextMenuSurface,
 } from "@/lib/radiusContextMenuItems";
 
 type RadiusRowContextMenuCallbacks = {
@@ -22,6 +23,7 @@ type Props = {
   canQueueRoute: boolean;
   canAssignRoute: boolean;
   canVerifyRoute: boolean;
+  surface: RadiusContextMenuSurface;
   onClose: () => void;
   callbacks: RadiusRowContextMenuCallbacks;
 };
@@ -53,6 +55,7 @@ export function RadiusRowContextMenu({
   canQueueRoute,
   canAssignRoute,
   canVerifyRoute,
+  surface,
   onClose,
   callbacks,
 }: Props) {
@@ -60,6 +63,7 @@ export function RadiusRowContextMenu({
   const items = useMemo(
     () =>
       buildRadiusContextMenuItems({
+        surface,
         row,
         isLoggedIn,
         isTracked,
@@ -72,6 +76,7 @@ export function RadiusRowContextMenu({
       }),
     [
       row,
+      surface,
       isLoggedIn,
       isTracked,
       isPinned,
