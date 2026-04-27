@@ -6513,16 +6513,25 @@ export function ScanResultsTable({
               ["optimizerModeSelector", "Optimizer mode"],
               ["movementBadges", "Movement badges"],
               ["savedPatternMode", "Pattern mode"],
-            ] as const).map(([key, label]) => (
+            ] as const).map(([key, label]) => {
+              const enabled = radiusFeaturePrefs[key];
+              return (
               <button
                 key={key}
                 type="button"
                 onClick={() => setRadiusFeaturePrefs((prev) => ({ ...prev, [key]: !prev[key] }))}
-                className="rounded-sm border border-eve-border/60 px-1.5 py-0.5"
+                className={`rounded-sm border px-1.5 py-0.5 ${
+                  enabled
+                    ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent"
+                    : "border-eve-border/50 text-eve-dim"
+                }`}
+                aria-pressed={enabled}
+                title={`${label}: ${enabled ? "On" : "Off"}`}
               >
                 {label}
               </button>
-            ))}
+              );
+            })}
           </div>
         ),
       },
@@ -6537,7 +6546,9 @@ export function ScanResultsTable({
     resetImplicitOrdering,
     setEndpointPreferenceMode,
     setEndpointPresetSelection,
+    setRadiusFeaturePrefs,
     showHiddenRows,
+    radiusFeaturePrefs,
     t,
     toggleSort,
     trackedVisibilityMode,
@@ -6851,33 +6862,6 @@ export function ScanResultsTable({
                   )}
                 </>
               )}
-              {isRadiusMode && (
-                <div className="inline-flex items-center gap-1 rounded-sm border border-eve-border/60 bg-eve-dark/40 px-1.5 py-0.5 text-[11px]">
-                  <span className="text-eve-dim">Radius flags</span>
-                  {([
-                    ["dealFocusBoard", "Focus board"],
-                    ["optimizerModeSelector", "Optimizer mode"],
-                    ["movementBadges", "Movement badges"],
-                    ["savedPatternMode", "Pattern mode"],
-                  ] as const).map(([key, label]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() =>
-                        setRadiusFeaturePrefs((prev) => ({ ...prev, [key]: !prev[key] }))
-                      }
-                      className={`rounded-sm border px-1.5 py-0.5 ${
-                        radiusFeaturePrefs[key]
-                          ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent"
-                          : "border-eve-border/50 text-eve-dim"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              )}
-
               {!isRadiusMode && (
                 <>
                   <button
