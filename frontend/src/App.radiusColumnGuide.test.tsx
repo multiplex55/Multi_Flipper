@@ -95,6 +95,10 @@ vi.mock("@/components/RadiusColumnGuideModal", () => ({
   RadiusColumnGuideModal: ({ open }: { open: boolean }) =>
     open ? (
       <div data-testid="radius-guide-modal">
+        <h2>Radius Controls and Filters</h2>
+        <h2>Flipper Radius (Route) Guide</h2>
+        <p>Smart ordering vs column-only ordering</p>
+        <p>Queue routes in Flipper Radius (Route)</p>
         {Array.from(
           new Set(radiusColumnRegistry.map((entry) => entry.category)),
         ).map((category) => (
@@ -143,6 +147,9 @@ describe("App radius column guide entry points", () => {
     render(<App />);
     fireEvent.click((await screen.findAllByRole("button", { name: "radiusGuideButtonLabel" }))[0]);
 
+    expect(screen.getByText("Radius Controls and Filters")).toBeInTheDocument();
+    expect(screen.getByText("Flipper Radius (Route) Guide")).toBeInTheDocument();
+    expect(screen.getByText("Smart ordering vs column-only ordering")).toBeInTheDocument();
     expect(screen.getByText("Market Depth")).toBeInTheDocument();
     expect(screen.getByText("Route Pack Aggregates")).toBeInTheDocument();
     expect(screen.getByText("Prioritization")).toBeInTheDocument();
