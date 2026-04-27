@@ -7,6 +7,7 @@ import {
   useMemo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
 } from "react";
 import type {
@@ -1930,6 +1931,9 @@ export function ScanResultsTable({
   >(() => {
     try {
       const storedMode = localStorage.getItem(ROUTE_GROUPING_STORAGE_KEY);
+      if (!featureConfig.allowRouteGrouping) {
+        return "rows";
+      }
       if (
         storedMode === "route" ||
         storedMode === "rows" ||
@@ -2594,9 +2598,14 @@ export function ScanResultsTable({
     }
   }, [radiusFeaturePrefs]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!allowRouteGrouping && routeViewMode !== "rows") {
       setRouteViewMode("rows");
+      try {
+        localStorage.setItem(ROUTE_GROUPING_STORAGE_KEY, "rows");
+      } catch {
+        // ignore storage quota errors
+      }
     }
   }, [allowRouteGrouping, routeViewMode]);
 

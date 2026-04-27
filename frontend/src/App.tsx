@@ -170,12 +170,15 @@ const patronsDataURL =
   defaultPatronsURL;
 
 const RADIUS_SCAN_RESULTS_FEATURE_CONFIG = {
-  allowRouteGrouping: true,
-  showRouteInsights: true,
-  showRouteWorkbench: true,
-  showSavedRoutes: true,
-  showLoopPanel: true,
+  allowRouteGrouping: false,
+  showRouteInsights: false,
+  showRouteWorkbench: false,
+  showSavedRoutes: false,
+  showLoopPanel: false,
   defaultViewMode: "rows",
+  enableDealFocusBoard: true,
+  enableMovementBadges: true,
+  enableSavedPatternMode: true,
 } satisfies ScanResultsTableFeatureConfig;
 
 const REGION_SCAN_RESULTS_FEATURE_CONFIG = {
