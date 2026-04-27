@@ -86,7 +86,7 @@ describe("ScanResultsTable executable now filter", () => {
     localStorage.clear();
   });
 
-  it("filters to executable rows when executable toggle is enabled", async () => {
+  it("does not filter scanner rows outside grouped-route workspace context", async () => {
     const executable = makeRow(1, "Executable Item");
     const weak = makeRow(2, "Weak Item", { FilledQty: 10, PreExecutionUnits: 100, DailyProfit: 1 });
 
@@ -98,6 +98,6 @@ describe("ScanResultsTable executable now filter", () => {
     fireEvent.click(screen.getByTestId("radius-command-bar-executable-toggle"));
 
     expect(screen.getByText("Executable Item")).toBeInTheDocument();
-    expect(screen.queryByText("Weak Item")).not.toBeInTheDocument();
+    expect(screen.getByText("Weak Item")).toBeInTheDocument();
   });
 });

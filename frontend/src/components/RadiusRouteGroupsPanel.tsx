@@ -9,6 +9,15 @@ import type { RadiusRouteInsights } from "@/lib/useRadiusRouteInsights";
 import type { RouteExecutionWorkspace } from "@/lib/useRouteExecutionWorkspace";
 import type { AuthCharacter, FlipResult } from "@/lib/types";
 
+export type RouteExecutionFilterState = {
+  hideQueued: boolean;
+  unassignedOnly: boolean;
+  needsVerify: boolean;
+  executableNow: boolean;
+  activePilotOnly: boolean;
+  staleVerifyOnly: boolean;
+};
+
 type RadiusRouteGroupsPanelProps = {
   results: FlipResult[];
   routeInsightsSnapshot?: RadiusRouteInsights;
@@ -21,6 +30,8 @@ type RadiusRouteGroupsPanelProps = {
   onQueueRoute?: (routeKey: string, routeLabel: string) => void;
   onValidateRoute?: (routeKey: string) => void;
   onCompareRoute?: (routeKey: string) => void;
+  routeExecutionFilters?: RouteExecutionFilterState;
+  onRouteExecutionFiltersChange?: (next: RouteExecutionFilterState) => void;
   onAssignActivePilot?: (routeKey: string, characterId: number) => void;
   onAssignBestPilot?: (routeKey: string, characterId: number) => void;
   onOpenBatchBuilderForRoute?: (routeKey: string) => void;
@@ -42,6 +53,15 @@ export function RadiusRouteGroupsPanel({
   onQueueRoute,
   onValidateRoute,
   onCompareRoute,
+  routeExecutionFilters = {
+    hideQueued: false,
+    unassignedOnly: false,
+    needsVerify: false,
+    executableNow: false,
+    activePilotOnly: false,
+    staleVerifyOnly: false,
+  },
+  onRouteExecutionFiltersChange,
   onAssignActivePilot,
   onAssignBestPilot,
   onOpenBatchBuilderForRoute,
@@ -65,6 +85,26 @@ export function RadiusRouteGroupsPanel({
         cargoCapacityM3,
       }),
     [cargoCapacityM3, results, routeAssignmentsByKey, routeInsightsSnapshot, routeQueueEntries],
+  );
+  const filteredRoutes = useMemo(
+    () =>
+      groupedRoutes.filter((route) => {
+        if (routeExecutionFilters.hideQueued && route.status === "queued") return false;
+        if (routeExecutionFilters.unassignedOnly && Boolean(route.assignedPilot)) return false;
+        if (routeExecutionFilters.needsVerify && route.status !== "needs_verify") return false;
+        if (routeExecutionFilters.activePilotOnly && !route.assignedPilot) return false;
+        if (
+          routeExecutionFilters.staleVerifyOnly &&
+          route.verificationStatus.toLowerCase() !== "stale" &&
+          route.status !== "needs_verify"
+        ) return false;
+        if (routeExecutionFilters.executableNow) {
+          const staleVerification = route.verificationStatus.toLowerCase() === "stale";
+          if (route.status === "queued" || route.status === "needs_verify" || staleVerification) return false;
+        }
+        return true;
+      }),
+    [groupedRoutes, routeExecutionFilters],
   );
 
   const activePilot = useMemo(
@@ -100,6 +140,31 @@ export function RadiusRouteGroupsPanel({
   }
 
   return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-1 text-[11px]">
+        {[
+          ["hideQueued", "Hide queued"],
+          ["unassignedOnly", "Unassigned only"],
+          ["needsVerify", "Needs verify"],
+          ["executableNow", "Executable now"],
+          ["activePilotOnly", "Active-pilot only"],
+          ["staleVerifyOnly", "Stale verify"],
+        ].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() =>
+              onRouteExecutionFiltersChange?.({
+                ...routeExecutionFilters,
+                [key]: !routeExecutionFilters[key as keyof RouteExecutionFilterState],
+              })
+            }
+            className={`px-1.5 py-0.5 rounded-sm border ${routeExecutionFilters[key as keyof RouteExecutionFilterState] ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10" : "border-eve-border/60 text-eve-dim"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
     <div className="overflow-auto rounded-sm border border-eve-border/50" data-testid="radius-route-groups-panel">
       <table className="min-w-full text-[11px]">
         <thead className="bg-eve-panel/50 text-eve-dim">
@@ -125,7 +190,7 @@ export function RadiusRouteGroupsPanel({
           </tr>
         </thead>
         <tbody>
-          {groupedRoutes.map((route) => (
+          {filteredRoutes.map((route) => (
             <tr key={route.routeKey} className="border-t border-eve-border/40 align-top">
               <td className="px-2 py-1 text-eve-text whitespace-nowrap">{route.routeLabel}</td>
               <td className="px-2 py-1 whitespace-nowrap">{formatISK(route.totalProfit)}</td>
@@ -192,6 +257,7 @@ export function RadiusRouteGroupsPanel({
           ))}
         </tbody>
       </table>
+    </div>
     </div>
   );
 }

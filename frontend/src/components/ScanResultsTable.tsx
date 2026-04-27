@@ -209,10 +209,6 @@ import {
 import { RadiusBuyStationShoppingListView } from "@/components/RadiusBuyStationShoppingList";
 import { RadiusRowContextMenu } from "@/components/RadiusRowContextMenu";
 import { RadiusBulkActionsBar } from "@/components/RadiusBulkActionsBar";
-import {
-  RadiusRouteCompareDrawer,
-  type RadiusRouteCompareRow,
-} from "@/components/RadiusRouteCompareDrawer";
 import type { RadiusContextMenuAction } from "@/lib/radiusContextMenuItems";
 import {
   createRadiusSavedDealPattern,
@@ -1859,7 +1855,6 @@ export function ScanResultsTable({
   const [hiddenColumns, setHiddenColumns] = useState<Set<SortKey>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [selectedRowKeys, setSelectedRowKeys] = useState<Set<string>>(new Set());
-  const [compareRouteKeys, setCompareRouteKeys] = useState<string[]>([]);
   const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
   const [savedRadiusPatterns, setSavedRadiusPatterns] = useState<RadiusSavedDealPattern[]>(() =>
     loadSavedCandidatePatterns().filter(isRadiusSavedDealPattern),
@@ -3539,7 +3534,7 @@ export function ScanResultsTable({
   ]);
 
   function routeExecutionMatches(row: FlipResult): boolean {
-    if (!isRadiusMode) return true;
+    if (!isRadiusMode || !isRouteGrouped) return true;
     const routeKey = routeGroupKey(row);
     const badge = getRadiusRouteExecutionBadge(routeKey, routeQueueEntries, routeAssignmentsByKey);
     if (routeExecutionFilters.hideQueued && badge.status === "queued") return false;
@@ -5306,8 +5301,6 @@ export function ScanResultsTable({
           if (routeKey && onOpenInRouteWorkbench) onOpenInRouteWorkbench(routeKey);
           return;
         case "compare_route":
-          if (!routeKey) return;
-          setCompareRouteKeys((prev) => addRouteKeyToCompare(prev, routeKey, 4));
           return;
         case "place_draft":
           setExecPlanRow(row);
@@ -6256,43 +6249,6 @@ export function ScanResultsTable({
     () => dedupeRouteKeys(selectedRowsForBulk.map((row) => routeGroupKey(row))),
     [selectedRowsForBulk],
   );
-  const compareRows = useMemo<RadiusRouteCompareRow[]>(
-    () =>
-      compareRouteKeys.map((routeKey) => {
-        const meta = batchMetricsByRoute[routeKey];
-        const aggregate = routeAggregateMetricsByRoute[routeKey];
-        const routeBadge = getRadiusRouteExecutionBadge(
-          routeKey,
-          routeQueueEntries,
-          routeAssignmentsByKey,
-        );
-        return {
-          routeKey,
-          routeLabel: routeGroupByKey[routeKey]?.label ?? routeKey,
-          profit: meta?.routeTotalProfit ?? aggregate?.routeTotalProfit ?? 0,
-          capital: meta?.routeTotalCapital ?? aggregate?.routeTotalCapital ?? 0,
-          roi: meta?.routeDailyProfitOverCapital ?? aggregate?.dailyProfitOverCapital ?? null,
-          cargoUsedPercent: meta?.routeCapacityUsedPercent ?? null,
-          jumps: meta?.routeStopCount ?? 0,
-          iskPerJump: meta?.routeRealIskPerJump ?? aggregate?.fastestIskPerJump ?? 0,
-          executionQuality:
-            meta?.routeWeakestExecutionQuality ?? aggregate?.weakestExecutionQuality ?? 0,
-          verification: routeVerificationByKey[routeKey]?.status ?? "unknown",
-          queueStatus: routeBadge.status,
-          assignedPilot: routeAssignmentsByKey[routeKey]?.assignedCharacterName ?? "",
-        };
-      }),
-    [
-      batchMetricsByRoute,
-      compareRouteKeys,
-      routeAggregateMetricsByRoute,
-      routeAssignmentsByKey,
-      routeGroupByKey,
-      routeQueueEntries,
-      routeVerificationByKey,
-    ],
-  );
-
   const radiusDealFocusCandidates = useMemo(
     () =>
       deriveRadiusDealFocusCandidates({
@@ -7178,21 +7134,6 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               <button type="button" onClick={() => setShowHiddenRows((v) => !v)} title={t("showHidden")} className={`px-2 py-0.5 rounded-sm border text-[11px] transition-colors ${showHiddenRows ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10" : "border-eve-border/60 text-eve-text/50 bg-eve-dark/40 hover:border-eve-accent/40 hover:text-eve-accent/70"}`}>
                 {showHiddenRows ? "Hide hidden" : "Show hidden"}
               </button>
-              {[
-                ["hideQueued", "Hide queued"],
-                ["unassignedOnly", "Unassigned only"],
-                ["needsVerify", "Needs verify"],
-                ["executableNow", "Executable now"],
-              ].map(([key, label]) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setRouteExecutionFilters((prev) => ({ ...prev, [key]: !prev[key as keyof RouteExecutionFilterState] }))}
-                  className={`px-1.5 py-0.5 rounded-sm border text-[11px] ${routeExecutionFilters[key as keyof RouteExecutionFilterState] ? "border-eve-accent/60 text-eve-accent bg-eve-accent/10" : "border-eve-border/60 text-eve-dim"}`}
-                >
-                  {label}
-                </button>
-              ))}
               <div className="inline-flex items-center rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px] overflow-hidden">
                 {(
                   [
@@ -8120,13 +8061,6 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               .join("\n"),
           )
         }
-      />
-      <RadiusRouteCompareDrawer
-        rows={compareRows}
-        onRemove={(routeKey) =>
-          setCompareRouteKeys((prev) => prev.filter((entry) => entry !== routeKey))
-        }
-        onClear={() => setCompareRouteKeys([])}
       />
 
       {/* Table */}

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { I18nProvider } from "@/lib/i18n";
@@ -8,6 +8,7 @@ import { deriveRadiusScanSession } from "@/lib/radiusScanSession";
 import type { RadiusScanSession } from "@/lib/radiusScanSession";
 import type { FlipResult, ScanParams } from "@/lib/types";
 import type { RouteHandoffContext } from "@/lib/routeHandoff";
+import type { RouteQueueEntry } from "@/lib/routeQueue";
 import { createSessionStationFilters } from "@/lib/banlistFilters";
 import { useRouteExecutionWorkspace } from "@/lib/useRouteExecutionWorkspace";
 import { ROUTE_WORKSPACE_MODE_STORAGE_KEY } from "@/lib/routeWorkspaceModeResolver";
@@ -52,6 +53,7 @@ function makeFlip(overrides: Partial<FlipResult> = {}): FlipResult {
 function renderWorkspace(
   session: RadiusScanSession | null = null,
   activeRouteKey: string | null = null,
+  routeQueue: RouteQueueEntry[] = [],
 ) {
   const Wrapper = () => {
     const workspace = useRouteExecutionWorkspace();
@@ -64,6 +66,7 @@ function renderWorkspace(
         params={params}
         radiusScanSession={session}
         routeWorkspace={workspace}
+        routeQueue={routeQueue}
       />
     );
   };
@@ -197,5 +200,54 @@ describe("RadiusRouteWorkspace rendering", () => {
     expect(screen.getByRole("button", { name: "Build Batch" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy Manifest" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy Summary" })).toBeInTheDocument();
+  });
+
+  it("opens compare panel from grouped-route selections and enforces compare cap", async () => {
+    const session = deriveRadiusScanSession({
+      results: [
+        makeFlip({ TypeID: 1, BuyLocationID: 60000001, BuyStation: "A", SellLocationID: 60000011, SellStation: "B" }),
+        makeFlip({ TypeID: 2, BuyLocationID: 60000002, BuyStation: "C", SellLocationID: 60000012, SellStation: "D" }),
+        makeFlip({ TypeID: 3, BuyLocationID: 60000003, BuyStation: "E", SellLocationID: 60000013, SellStation: "F" }),
+        makeFlip({ TypeID: 4, BuyLocationID: 60000004, BuyStation: "G", SellLocationID: 60000014, SellStation: "H" }),
+        makeFlip({ TypeID: 5, BuyLocationID: 60000005, BuyStation: "I", SellLocationID: 60000015, SellStation: "J" }),
+      ],
+      scanParams: params,
+      sessionStationFilters: createSessionStationFilters(),
+    });
+
+    renderWorkspace(session, null);
+
+    const compareButtons = await screen.findAllByRole("button", { name: "Compare" });
+    compareButtons.forEach((button) => fireEvent.click(button));
+
+    expect(screen.getByTestId("radius-route-compare-panel")).toBeInTheDocument();
+    expect(screen.getByText("Route Compare (4/4)")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Remove I/i })).not.toBeInTheDocument();
+  });
+
+  it("applies execution filters in grouped routes panel", async () => {
+    const session = deriveRadiusScanSession({
+      results: [makeFlip()],
+      scanParams: params,
+      sessionStationFilters: createSessionStationFilters(),
+    });
+    renderWorkspace(session, null, [
+      {
+        routeKey: "loc:60003760->loc:60008494",
+        routeLabel: "Jita → Amarr",
+        status: "queued",
+        priority: 1,
+        assignedPilot: "",
+        verificationProfileId: "standard",
+        lastVerifiedAt: null,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+
+    const groupsPanel = await screen.findByTestId("radius-route-groups-panel");
+    expect(within(groupsPanel).getByText("Jita IV → Amarr VIII")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Hide queued" }));
+    expect(within(groupsPanel).queryByText("Jita IV → Amarr VIII")).not.toBeInTheDocument();
   });
 });
