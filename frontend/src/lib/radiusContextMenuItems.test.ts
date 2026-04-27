@@ -23,6 +23,7 @@ function makeRow(overrides: Partial<FlipResult> = {}): FlipResult {
 describe("buildRadiusContextMenuItems", () => {
   it("hides login-gated actions when logged out", () => {
     const items = buildRadiusContextMenuItems({
+      surface: "radius_table",
       row: makeRow(),
       isLoggedIn: false,
       isTracked: false,
@@ -39,6 +40,7 @@ describe("buildRadiusContextMenuItems", () => {
 
   it("switches hide/unhide actions based on hidden entry", () => {
     const visibleItems = buildRadiusContextMenuItems({
+      surface: "radius_table",
       row: makeRow(),
       isLoggedIn: true,
       isTracked: false,
@@ -52,6 +54,7 @@ describe("buildRadiusContextMenuItems", () => {
     expect(visibleItems.find((item) => item.action === "unhide")?.visible).toBe(false);
 
     const hiddenItems = buildRadiusContextMenuItems({
+      surface: "radius_table",
       row: makeRow(),
       isLoggedIn: true,
       isTracked: false,
@@ -68,6 +71,7 @@ describe("buildRadiusContextMenuItems", () => {
 
   it("suppresses station actions for invalid station IDs", () => {
     const items = buildRadiusContextMenuItems({
+      surface: "radius_table",
       row: makeRow({ BuyLocationID: 0, SellLocationID: 0 }),
       isLoggedIn: true,
       isTracked: false,
@@ -85,6 +89,7 @@ describe("buildRadiusContextMenuItems", () => {
 
   it("enables route actions only when callbacks are available", () => {
     const items = buildRadiusContextMenuItems({
+      surface: "radius_route",
       row: makeRow(),
       isLoggedIn: true,
       isTracked: false,

@@ -9068,21 +9068,31 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
 
       {/* Context menu */}
       {contextMenu && (
+        (() => {
+          const contextSurface =
+            isRadiusMode && effectiveRouteViewMode === "route"
+              ? "radius_route"
+              : "radius_table";
+          const routeWorkflowEnabled = contextSurface === "radius_route";
+          return (
         <RadiusRowContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
           row={contextMenu.row}
+          surface={contextSurface}
           isLoggedIn={isLoggedIn}
           isTracked={watchlistIds.has(contextMenu.row.TypeID)}
           isPinned={pinnedKeys.has(mapScanRowToPinnedOpportunity(contextMenu.row).opportunity_key)}
           hiddenEntryKey={contextHiddenEntry?.key}
           hasLegLocks={hasLegLocks}
-          canQueueRoute={Boolean(onSendToRouteQueue)}
-          canAssignRoute={Boolean(onOpenInRouteWorkbench || onOpenInRoute)}
-          canVerifyRoute
+          canQueueRoute={routeWorkflowEnabled && Boolean(onSendToRouteQueue)}
+          canAssignRoute={routeWorkflowEnabled && Boolean(onOpenInRouteWorkbench || onOpenInRoute)}
+          canVerifyRoute={routeWorkflowEnabled}
           onClose={() => setContextMenu(null)}
           callbacks={{ onAction: (action, row, routeKey) => void handleRadiusContextAction(action, row, routeKey) }}
         />
+          );
+        })()
       )}
 
       {ignoredModalOpen && (

@@ -40,6 +40,8 @@ export type RadiusContextMenuAction =
   | "save_pattern_route"
   | "apply_saved_pattern";
 
+export type RadiusContextMenuSurface = "radius_table" | "radius_route";
+
 export type RadiusContextMenuSection =
   | "copy"
   | "route_workflow"
@@ -66,6 +68,7 @@ export type RadiusContextMenuItem = {
 };
 
 export type BuildRadiusContextMenuInput = {
+  surface: RadiusContextMenuSurface;
   row: FlipResult;
   isLoggedIn: boolean;
   isTracked: boolean;
@@ -85,6 +88,7 @@ export function buildRadiusContextMenuItems(
   input: BuildRadiusContextMenuInput,
 ): RadiusContextMenuItem[] {
   const { row } = input;
+  const isRouteSurface = input.surface === "radius_route";
   const buyLocationID = Math.trunc(row.BuyLocationID ?? 0);
   const sellLocationID = Math.trunc(row.SellLocationID ?? 0);
   const routeKey = routeGroupKey(row);
@@ -103,10 +107,10 @@ export function buildRadiusContextMenuItems(
     { action: "build_batch", section: "cargo", label: "Build batch", enabled: true, accent: true },
     { action: "fill_cargo", section: "cargo", label: "Fill Cargo", enabled: true },
 
-    { action: "queue_route", section: "route_workflow", label: "Queue route", enabled: input.canQueueRoute && hasRouteKey, visible: input.canQueueRoute },
-    { action: "assign_route", section: "route_workflow", label: "Assign route", enabled: input.canAssignRoute && hasRouteKey, visible: input.canAssignRoute },
-    { action: "assign_route_active", section: "route_workflow", label: "Assign active pilot", enabled: input.canAssignRoute && hasRouteKey, visible: input.canAssignRoute },
-    { action: "assign_route_best", section: "route_workflow", label: "Assign best pilot", enabled: input.canAssignRoute && hasRouteKey, visible: input.canAssignRoute },
+    { action: "queue_route", section: "route_workflow", label: "Queue route", enabled: isRouteSurface && input.canQueueRoute && hasRouteKey, visible: isRouteSurface && input.canQueueRoute },
+    { action: "assign_route", section: "route_workflow", label: "Assign route", enabled: isRouteSurface && input.canAssignRoute && hasRouteKey, visible: isRouteSurface && input.canAssignRoute },
+    { action: "assign_route_active", section: "route_workflow", label: "Assign active pilot", enabled: isRouteSurface && input.canAssignRoute && hasRouteKey, visible: isRouteSurface && input.canAssignRoute },
+    { action: "assign_route_best", section: "route_workflow", label: "Assign best pilot", enabled: isRouteSurface && input.canAssignRoute && hasRouteKey, visible: isRouteSurface && input.canAssignRoute },
 
     { action: "filter_leg", section: "lens", label: "Filter to this leg", enabled: buyLocationID > 0 && sellLocationID > 0 },
     { action: "lock_buy", section: "lens", label: "Lock this buy", enabled: buyLocationID > 0 },
@@ -119,8 +123,8 @@ export function buildRadiusContextMenuItems(
     { action: "deprioritize_station", section: "filtering", label: "Deprioritize this station", enabled: buyLocationID > 0 || sellLocationID > 0, visible: buyLocationID > 0 || sellLocationID > 0 },
     { action: "clear_station_filters", section: "filtering", label: "Clear all temporary station filters", enabled: true, danger: true },
 
-    { action: "verify_route", section: "verification", label: "Verify now", enabled: input.canVerifyRoute && hasRouteKey, visible: input.canVerifyRoute },
-    { action: "compare_route", section: "verification", label: "Add route to compare", enabled: hasRouteKey, visible: hasRouteKey },
+    { action: "verify_route", section: "verification", label: "Verify now", enabled: isRouteSurface && input.canVerifyRoute && hasRouteKey, visible: isRouteSurface && input.canVerifyRoute },
+    { action: "compare_route", section: "verification", label: "Add route to compare", enabled: isRouteSurface && hasRouteKey, visible: isRouteSurface && hasRouteKey },
     { action: "place_draft", section: "verification", label: "Place draft", enabled: canOpenDraft, visible: canOpenDraft },
 
     { action: "open_everef", section: "external_tools", label: "Open in EVE Ref", enabled: hasValidTypeID },
