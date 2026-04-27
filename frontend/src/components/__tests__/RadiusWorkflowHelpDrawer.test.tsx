@@ -31,10 +31,6 @@ function buildCommandBarProps(
       hasActiveFilters: false,
       onToggleFilters: vi.fn(),
       onClearFilters: vi.fn(),
-      oneLegEnabled: false,
-      onToggleOneLeg: vi.fn(),
-      executableNowEnabled: false,
-      onToggleExecutableNow: vi.fn(),
     },
     actions: {
       onVerifyPrices: vi.fn(),
@@ -47,7 +43,8 @@ function buildCommandBarProps(
       expanded: false,
       controlsId: "more-controls",
       onToggleExpanded: vi.fn(),
-      content: <div>Advanced controls</div>,
+      groups: [{ id: "filters", label: "Filters", content: <div>Advanced controls</div> }],
+      activeGroupId: null,
     },
     ...overrides,
   };

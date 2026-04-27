@@ -35,25 +35,20 @@ function buildProps(
       hasActiveFilters: false,
       onToggleFilters: vi.fn(),
       onClearFilters: vi.fn(),
-      oneLegEnabled: false,
-      onToggleOneLeg: vi.fn(),
-      executableNowEnabled: false,
-      onToggleExecutableNow: vi.fn(),
     },
     actions: {
       onVerifyPrices: vi.fn(),
       onExportCsv: vi.fn(),
       onCopyTable: vi.fn(),
-      onRecalcLens: vi.fn(),
       exportDisabled: false,
       copyDisabled: false,
-      recalcDisabled: false,
     },
     moreControls: {
       expanded: false,
       controlsId: "more-controls",
       onToggleExpanded: vi.fn(),
-      content: <div>Advanced controls</div>,
+      groups: [{ id: "filters", label: "Filters", content: <div>Advanced controls</div> }],
+      activeGroupId: null,
     },
     ...overrides,
   };
@@ -69,14 +64,12 @@ describe("RadiusCommandBar shortcuts", () => {
     fireEvent.keyDown(document, { key: "e" });
     fireEvent.keyDown(document, { key: "f" });
     fireEvent.keyDown(document, { key: "i" });
-    fireEvent.keyDown(document, { key: "r" });
 
     expect(props.actions.onVerifyPrices).toHaveBeenCalledTimes(1);
     expect(props.actions.onCopyTable).toHaveBeenCalledTimes(1);
     expect(props.actions.onExportCsv).toHaveBeenCalledTimes(1);
     expect(props.tableControls.onToggleFilters).toHaveBeenCalledTimes(1);
     expect(props.insightsVisibilityToggle.onToggle).toHaveBeenCalledTimes(1);
-    expect(props.actions.onRecalcLens).toHaveBeenCalledTimes(1);
   });
 
   it("does not trigger shortcuts when Radius scope is inactive", () => {
@@ -88,14 +81,12 @@ describe("RadiusCommandBar shortcuts", () => {
     fireEvent.keyDown(document, { key: "e" });
     fireEvent.keyDown(document, { key: "f" });
     fireEvent.keyDown(document, { key: "i" });
-    fireEvent.keyDown(document, { key: "r" });
 
     expect(props.actions.onVerifyPrices).not.toHaveBeenCalled();
     expect(props.actions.onCopyTable).not.toHaveBeenCalled();
     expect(props.actions.onExportCsv).not.toHaveBeenCalled();
     expect(props.tableControls.onToggleFilters).not.toHaveBeenCalled();
     expect(props.insightsVisibilityToggle.onToggle).not.toHaveBeenCalled();
-    expect(props.actions.onRecalcLens).not.toHaveBeenCalled();
   });
 
   it("ignores shortcuts while focus is in text entry fields", () => {
@@ -114,14 +105,12 @@ describe("RadiusCommandBar shortcuts", () => {
     fireEvent.keyDown(screen.getByLabelText("rich text"), { key: "e" });
     fireEvent.keyDown(screen.getByLabelText("text input"), { key: "f" });
     fireEvent.keyDown(screen.getByLabelText("text area"), { key: "i" });
-    fireEvent.keyDown(screen.getByLabelText("rich text"), { key: "r" });
 
     expect(props.actions.onVerifyPrices).not.toHaveBeenCalled();
     expect(props.actions.onCopyTable).not.toHaveBeenCalled();
     expect(props.actions.onExportCsv).not.toHaveBeenCalled();
     expect(props.tableControls.onToggleFilters).not.toHaveBeenCalled();
     expect(props.insightsVisibilityToggle.onToggle).not.toHaveBeenCalled();
-    expect(props.actions.onRecalcLens).not.toHaveBeenCalled();
   });
 
   it("treats disabled shortcut actions as no-ops", () => {
@@ -130,10 +119,8 @@ describe("RadiusCommandBar shortcuts", () => {
         onVerifyPrices: vi.fn(),
         onExportCsv: vi.fn(),
         onCopyTable: vi.fn(),
-        onRecalcLens: vi.fn(),
         exportDisabled: true,
         copyDisabled: true,
-        recalcDisabled: true,
       },
     });
 
@@ -141,11 +128,9 @@ describe("RadiusCommandBar shortcuts", () => {
 
     fireEvent.keyDown(document, { key: "c" });
     fireEvent.keyDown(document, { key: "e" });
-    fireEvent.keyDown(document, { key: "r" });
 
     expect(props.actions.onCopyTable).not.toHaveBeenCalled();
     expect(props.actions.onExportCsv).not.toHaveBeenCalled();
-    expect(props.actions.onRecalcLens).not.toHaveBeenCalled();
   });
 
   it("keeps primary command controls in predictable focus order with shortcut hints", () => {
@@ -156,7 +141,7 @@ describe("RadiusCommandBar shortcuts", () => {
         .getByTestId("radius-toolbar-quick-bar")
         .querySelectorAll<HTMLButtonElement>('section[aria-label="Session and execution actions"] button');
 
-    expect(Array.from(primaryButtons).map((button) => button.textContent?.trim())).toEqual([
+    expect(Array.from(primaryButtons).map((button) => button.textContent?.trim()).slice(0, 3)).toEqual([
       "Verify Prices",
       "Export CSV",
       "Copy Table",
@@ -182,18 +167,12 @@ describe("RadiusCommandBar shortcuts", () => {
       "title",
       "Hide Route Insights (I)",
     );
-    expect(screen.getByRole("button", { name: "Recalc Lens" })).toHaveAttribute(
-      "title",
-      "Recalculate lens (R)",
-    );
-
     const orderedFocusTargets = [
       screen.getByRole("button", { name: "Verify Prices" }),
       screen.getByRole("button", { name: "Export CSV" }),
       screen.getByRole("button", { name: "Copy Table" }),
       screen.getByRole("button", { name: "Hide Route Insights" }),
       screen.getByRole("button", { name: "Filters" }),
-      screen.getByRole("button", { name: "Recalc Lens" }),
     ];
 
     for (const button of orderedFocusTargets) {

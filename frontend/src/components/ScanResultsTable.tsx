@@ -2085,6 +2085,7 @@ export function ScanResultsTable({
   const [showEndpointPrefsPanel, setShowEndpointPrefsPanel] = useState(false);
   const [showTrackedPanel, setShowTrackedPanel] = useState(false);
   const [showCachePanel, setShowCachePanel] = useState(false);
+  const [activeControlMenuSection, setActiveControlMenuSection] = useState<string | null>(null);
   const [collapsedRegionGroups, setCollapsedRegionGroups] = useState<
     Set<string>
   >(new Set());
@@ -2141,7 +2142,7 @@ export function ScanResultsTable({
   const movementBadgesEnabled = (featureConfig.enableMovementBadges ?? true) && radiusFeaturePrefs.movementBadges;
   const savedPatternModeEnabled = (featureConfig.enableSavedPatternMode ?? true) && radiusFeaturePrefs.savedPatternMode;
   const isRadiusMode = tradeStateTab === "radius";
-  const useRadiusCommandBar = isRadiusMode && !isRegionGrouped;
+  const useRadiusCommandBar = isRadiusMode;
   const effectiveRouteViewMode =
     allowRouteGrouping && routeViewModeForDisplay !== "rows"
       ? routeViewModeForDisplay
@@ -2465,6 +2466,7 @@ export function ScanResultsTable({
       setShowEndpointPrefsPanel(false);
       setShowTrackedPanel(false);
       setShowCachePanel(false);
+      setActiveControlMenuSection(null);
     }
   }, [modeAppliedLayout, showAdvancedToolbar]);
 
@@ -6388,6 +6390,188 @@ export function ScanResultsTable({
     t,
   ]);
 
+
+  const radiusActiveControlChips = useMemo(() => {
+    if (!isRadiusMode) return [];
+    const chips = [
+      { id: "filters-count", label: `Filters: ${activeFilterCount}`, sectionId: "filters" },
+      { id: "endpoint", label: `Endpoint: ${endpointPreferenceMode}${endpointPresetSelection ? ` • ${endpointPresetSelection}` : ""}`, sectionId: "endpoint-prefs" },
+      { id: "tracked", label: `Tracked: ${trackedVisibilityMode}`, sectionId: "filters" },
+      { id: "urgency", label: `Urgency: ${urgencyFilter}`, sectionId: "filters" },
+      { id: "lens", label: `Lens: ${decisionLens}`, sectionId: "ordering" },
+      { id: "hidden", label: showHiddenRows ? "Hidden: shown" : "Hidden: hidden", sectionId: "display-flags" },
+    ];
+    return chips;
+  }, [
+    isRadiusMode,
+    activeFilterCount,
+    endpointPreferenceMode,
+    endpointPresetSelection,
+    trackedVisibilityMode,
+    urgencyFilter,
+    decisionLens,
+    showHiddenRows,
+  ]);
+
+  const radiusControlMenuGroups = useMemo(() => {
+    return [
+      {
+        id: "session",
+        label: "Session",
+        content: (
+          <div className="space-y-1">
+            <button
+              type="button"
+              onClick={() => { void handleRebootCache(); }}
+              disabled={cacheRebooting}
+              className="w-full rounded-sm border border-eve-border/60 bg-eve-dark/40 px-2 py-0.5 text-left"
+            >
+              {cacheRebooting ? t("cacheRebooting") : t("cacheReboot")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setIgnoredModalOpen(true)}
+              className="w-full rounded-sm border border-eve-border/60 bg-eve-dark/40 px-2 py-0.5 text-left"
+            >
+              {t("hiddenButton", { count: hiddenCounts.total })}
+            </button>
+          </div>
+        ),
+      },
+      {
+        id: "table",
+        label: "Table",
+        content: (
+          <div className="flex flex-wrap items-center gap-1">
+            <button type="button" onClick={() => setOneLegModeEnabled((prev) => !prev)} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5">
+              One-leg mode {oneLegModeEnabled ? "On" : "Off"}
+            </button>
+            {SCORING_RECIPE_OPTIONS.map((recipe) => (
+              <button key={recipe.id} type="button" onClick={() => applyScoringRecipe(recipe.id)} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5">
+                {recipe.label}
+              </button>
+            ))}
+          </div>
+        ),
+      },
+      {
+        id: "filters",
+        label: "Filters",
+        content: (
+          <div className="space-y-1">
+            <button type="button" onClick={() => setShowHiddenRows((v) => !v)} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5">
+              {showHiddenRows ? "Hide hidden" : "Show hidden"}
+            </button>
+            <div className="inline-flex rounded-sm border border-eve-border/60">
+              {([
+                ["all", t("urgencyFilterAll")],
+                ["stable", t("urgencyStable")],
+                ["aging", t("urgencyAging")],
+                ["fragile", t("urgencyFragile")],
+              ] as const).map(([mode, label]) => (
+                <button key={mode} type="button" onClick={() => setUrgencyFilter(mode)} className="border-r last:border-r-0 border-eve-border/40 px-1.5 py-0.5">
+                  {label}
+                </button>
+              ))}
+            </div>
+            <select value={trackedVisibilityMode} onChange={(e) => setTrackedVisibilityMode(e.target.value as typeof trackedVisibilityMode)} className="w-full rounded-sm border border-eve-border/60 bg-eve-input px-1 py-0.5">
+              <option value="all">All</option>
+              <option value="tracked_only">Tracked only</option>
+              <option value="hide_non_tracked">Hide non-tracked</option>
+            </select>
+          </div>
+        ),
+      },
+      {
+        id: "endpoint-prefs",
+        label: "Endpoint Prefs",
+        content: (
+          <div className="space-y-1">
+            <select
+              value={endpointPreferenceMode}
+              onChange={(e) =>
+                setEndpointPreferenceMode(
+                  e.target.value === EndpointPreferenceApplicationMode.Disabled
+                    ? EndpointPreferenceApplicationMode.Disabled
+                    : e.target.value === EndpointPreferenceApplicationMode.Hide
+                      ? EndpointPreferenceApplicationMode.Hide
+                      : EndpointPreferenceApplicationMode.RankOnly,
+                )
+              }
+              className="w-full rounded-sm border border-eve-border/60 bg-eve-input px-1 py-0.5"
+            >
+              <option value={EndpointPreferenceApplicationMode.Disabled}>{t("endpointPreferenceModeDisabled")}</option>
+              <option value={EndpointPreferenceApplicationMode.RankOnly}>{t("endpointPreferenceModeRankOnly")}</option>
+              <option value={EndpointPreferenceApplicationMode.Hide}>{t("endpointPreferenceModeHide")}</option>
+            </select>
+            <select value={endpointPresetSelection} onChange={(e) => setEndpointPresetSelection((e.target.value || "") as "" | keyof typeof ENDPOINT_PREFERENCE_PRESETS)} className="w-full rounded-sm border border-eve-border/60 bg-eve-input px-1 py-0.5">
+              <option value="">{t("endpointPreferencePresetPlaceholder")}</option>
+              <option value="neutral">{t("endpointPreferencePresetNeutral")}</option>
+              <option value="safe_arbitrage">{t("endpointPreferencePresetSafeArbitrage")}</option>
+              <option value="structure_exit">{t("endpointPreferencePresetStructureExit")}</option>
+              <option value="low_attention">{t("endpointPreferencePresetLowAttention")}</option>
+            </select>
+          </div>
+        ),
+      },
+      {
+        id: "ordering",
+        label: "Ordering",
+        content: (
+          <div className="flex flex-wrap items-center gap-1">
+            <button type="button" onClick={() => toggleSort("UrgencyScore")} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5">
+              {t("colUrgency")}
+            </button>
+            <button type="button" onClick={() => setOrderingMode("smart")} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5">{t("orderingModeSmartLabel")}</button>
+            <button type="button" onClick={() => setOrderingMode("column_only")} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5">{t("orderingModeColumnOnlyLabel")}</button>
+            <button type="button" onClick={resetImplicitOrdering} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5">{t("resetImplicitOrderingLabel")}</button>
+            <button type="button" onClick={onRecalculateLens} disabled={recalcLensDisabled} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 disabled:opacity-50">
+              Recalc Lens
+            </button>
+          </div>
+        ),
+      },
+      {
+        id: "display-flags",
+        label: "Display Flags",
+        content: (
+          <div className="flex flex-wrap items-center gap-1">
+            {([
+              ["dealFocusBoard", "Focus board"],
+              ["optimizerModeSelector", "Optimizer mode"],
+              ["movementBadges", "Movement badges"],
+              ["savedPatternMode", "Pattern mode"],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setRadiusFeaturePrefs((prev) => ({ ...prev, [key]: !prev[key] }))}
+                className="rounded-sm border border-eve-border/60 px-1.5 py-0.5"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        ),
+      },
+    ];
+  }, [
+    applyScoringRecipe,
+    cacheRebooting,
+    endpointPreferenceMode,
+    endpointPresetSelection,
+    hiddenCounts.total,
+    oneLegModeEnabled,
+    resetImplicitOrdering,
+    setEndpointPreferenceMode,
+    setEndpointPresetSelection,
+    showHiddenRows,
+    t,
+    toggleSort,
+    trackedVisibilityMode,
+    urgencyFilter,
+  ]);
+
   // ── Render ──
   return (
       <div
@@ -6459,14 +6643,6 @@ export function ScanResultsTable({
               hasActiveFilters,
               onToggleFilters: () => setShowFilters((v) => !v),
               onClearFilters: clearFilters,
-              oneLegEnabled: oneLegModeEnabled,
-              onToggleOneLeg: () => setOneLegModeEnabled((prev) => !prev),
-              executableNowEnabled: routeExecutionFilters.executableNow,
-              onToggleExecutableNow: () =>
-                setRouteExecutionFilters((prev) => ({
-                  ...prev,
-                  executableNow: !prev.executableNow,
-                })),
             }}
             statusSummarySection={
               <RadiusStatusSummaryStrip
@@ -6515,49 +6691,18 @@ export function ScanResultsTable({
               onVerifyPrices: () => onOpenPriceValidation?.(""),
               onExportCsv: exportCSV,
               onCopyTable: copyTable,
-              onRecalcLens: onRecalculateLens,
               exportDisabled: results.length === 0,
               copyDisabled: results.length === 0,
-              recalcDisabled: recalcLensDisabled,
             }}
             moreControls={{
               expanded: effectiveShowAdvancedToolbar,
               controlsId: "scan-results-advanced-toolbar",
               onToggleExpanded: () => setShowAdvancedToolbar((v) => !v),
-              content: (
-                <div className="inline-flex items-center gap-1">
-                  <span>{t("decisionLensTitle")}</span>
-                  {(
-                    [
-                      "recommended",
-                      "fastest_isk",
-                      "cargo",
-                      "safest",
-                      "capital_efficient",
-                    ] as const
-                  ).map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => applyDecisionLens(preset)}
-                      className="rounded-sm border border-eve-border/50 px-1.5 py-0.5 text-[10px]"
-                    >
-                      {t(
-                        preset === "recommended"
-                          ? "decisionLensTitle"
-                          : preset === "fastest_isk"
-                            ? "decisionLensFastest"
-                            : preset === "cargo"
-                              ? "decisionLensCargo"
-                              : preset === "safest"
-                                ? "decisionLensSafest"
-                                : "decisionLensCapital",
-                      )}
-                    </button>
-                  ))}
-                </div>
-              ),
+              groups: radiusControlMenuGroups,
+              activeGroupId: activeControlMenuSection,
             }}
+            activeControlChips={radiusActiveControlChips}
+            onOpenControlSection={(sectionId) => setActiveControlMenuSection(sectionId)}
             routeActionsSection={(
               <>
                 {lockedBuyLocationId != null && (
@@ -6761,7 +6906,7 @@ export function ScanResultsTable({
                 </div>
               )}
 
-              {!useRadiusCommandBar && (
+              {!isRadiusMode && (
                 <>
                   <button
                     type="button"
@@ -6791,7 +6936,7 @@ export function ScanResultsTable({
             </>
           )}
 
-          {!useRadiusCommandBar && (
+          {!isRadiusMode && (
             <>
               <div data-testid="radius-toolbar-primary-controls" className="flex flex-wrap items-center gap-1">
                 <ToolbarBtn
@@ -6887,13 +7032,13 @@ export function ScanResultsTable({
             </>
           )}
         </div>
-        {!useRadiusCommandBar && !compactDashboard && results.length > 0 && !scanning && (
+        {!isRadiusMode && !compactDashboard && results.length > 0 && !scanning && (
           <div className="mt-1 text-[11px] text-eve-dim/80">
             Use More Controls for endpoint preferences, tracked visibility, and cache controls.
           </div>
         )}
 
-        {showAdvancedToolbar && results.length > 0 && !scanning && (
+        {(!useRadiusCommandBar && showAdvancedToolbar && results.length > 0 && !scanning) && (
           <div id="scan-results-advanced-toolbar" className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
             <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/30 text-[11px]">
               <span className="text-eve-dim px-1">Recipes</span>
