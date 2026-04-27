@@ -31,6 +31,10 @@ import { RouteQueuePanel } from "@/components/RouteQueuePanel";
 import { getNextQueuedRoute, type RouteQueueEntry } from "@/lib/routeQueue";
 import type { RouteAssignment } from "@/lib/routeAssignments";
 import { RadiusRouteGroupsPanel } from "@/components/RadiusRouteGroupsPanel";
+import type { RouteExecutionFilterState } from "@/components/RadiusRouteGroupsPanel";
+import { RadiusRouteComparePanel } from "@/components/RadiusRouteComparePanel";
+import type { RadiusRouteCompareRow } from "@/components/RadiusRouteCompareDrawer";
+import { getRadiusRouteExecutionBadge } from "@/lib/radiusRouteStatus";
 
 export type RadiusRouteWorkspaceTab = "discover" | "workbench" | "finder" | "validate";
 
@@ -50,7 +54,6 @@ type RadiusRouteWorkspaceProps = {
   onRouteQueueChange?: (entries: RouteQueueEntry[]) => void;
   routeAssignmentsByKey?: Record<string, RouteAssignment>;
   onQueueRoute?: (routeKey: string, routeLabel: string) => void;
-  onCompareRoute?: (routeKey: string) => void;
   onAssignActivePilot?: (routeKey: string, characterId: number) => void;
   onAssignBestPilot?: (routeKey: string, characterId: number) => void;
   pendingRouteContext?: RouteHandoffContext | null;
@@ -105,7 +108,6 @@ export function RadiusRouteWorkspace({
   onRouteQueueChange,
   routeAssignmentsByKey = {},
   onQueueRoute,
-  onCompareRoute,
   onAssignActivePilot,
   onAssignBestPilot,
   pendingRouteContext = null,
@@ -238,6 +240,15 @@ export function RadiusRouteWorkspace({
   const [validateScope, setValidateScope] = useState<"active_route" | "saved_pack" | "queue">("active_route");
   const [profileSelectionByRoute, setProfileSelectionByRoute] = useState<Record<string, string>>({});
   const [activeWorkbenchSection, setActiveWorkbenchSection] = useState<"summary" | "filler" | "verification" | "execution">("summary");
+  const [compareRouteKeys, setCompareRouteKeys] = useState<string[]>([]);
+  const [routeExecutionFilters, setRouteExecutionFilters] = useState<RouteExecutionFilterState>({
+    hideQueued: false,
+    unassignedOnly: false,
+    needsVerify: false,
+    executableNow: false,
+    activePilotOnly: false,
+    staleVerifyOnly: false,
+  });
   const activeRouteRows = activePack ? routeRowsByKey.get(activePack.routeKey) ?? [] : [];
   const routeFillSections = useMemo(() => {
     if (!activePack || activeRouteRows.length === 0) {
@@ -406,6 +417,31 @@ export function RadiusRouteWorkspace({
     if (!validateTarget.pack || !routeWorkspace) return;
     routeWorkspace.removePack(validateTarget.pack.routeKey);
   };
+  const compareRows = useMemo<RadiusRouteCompareRow[]>(
+    () =>
+      compareRouteKeys.map((routeKey) => {
+        const route = routeInsights?.routeSummaries.find((entry) => entry.routeKey === routeKey) ?? null;
+        const routeRows = routeRowsByKey.get(routeKey) ?? [];
+        const jumps = routeRows.reduce((max, row) => Math.max(max, safeNumber(row.TotalJumps)), 0);
+        const totalVolume = routeRows.reduce((sum, row) => sum + Math.max(0, safeNumber(row.Volume) * safeNumber(row.UnitsToBuy)), 0);
+        const queueStatus = getRadiusRouteExecutionBadge(routeKey, routeQueue, routeAssignmentsByKey);
+        return {
+          routeKey,
+          routeLabel: route?.routeLabel ?? routeKey,
+          profit: route?.aggregate.routeTotalProfit ?? 0,
+          capital: route?.aggregate.routeTotalCapital ?? 0,
+          roi: route?.aggregate.dailyProfitOverCapital ?? null,
+          cargoUsedPercent: params.cargo_capacity ? (totalVolume / params.cargo_capacity) * 100 : null,
+          jumps,
+          iskPerJump: route?.aggregate.fastestIskPerJump ?? 0,
+          executionQuality: route?.aggregate.weakestExecutionQuality ?? 0,
+          verification: route?.verificationStatus ?? "unknown",
+          queueStatus: queueStatus.status,
+          assignedPilot: routeAssignmentsByKey[routeKey]?.assignedCharacterName ?? "",
+        };
+      }),
+    [compareRouteKeys, params.cargo_capacity, routeAssignmentsByKey, routeInsights?.routeSummaries, routeQueue, routeRowsByKey],
+  );
 
   useEffect(() => {
     if (activeTab !== "workbench") return;
@@ -504,6 +540,8 @@ export function RadiusRouteWorkspace({
                   cargoCapacityM3={params.cargo_capacity ?? 0}
                   characters={characters}
                   characterLocations={characterLocations}
+                  routeExecutionFilters={routeExecutionFilters}
+                  onRouteExecutionFiltersChange={setRouteExecutionFilters}
                   onQueueRoute={onQueueRoute}
                   onValidateRoute={(routeKey) => {
                     routeWorkspace?.openRoute(routeKey, "validate");
@@ -511,8 +549,17 @@ export function RadiusRouteWorkspace({
                   }}
                   onAssignActivePilot={onAssignActivePilot}
                   onAssignBestPilot={onAssignBestPilot}
-                  onCompareRoute={onCompareRoute}
+                  onCompareRoute={(routeKey) =>
+                    setCompareRouteKeys((prev) => (prev.includes(routeKey) ? prev : [...prev, routeKey].slice(0, 4)))
+                  }
                   onOpenBatchBuilderForRoute={onOpenBatchBuilderForRoute}
+                />
+                <RadiusRouteComparePanel
+                  rows={compareRows}
+                  onRemove={(routeKey) =>
+                    setCompareRouteKeys((prev) => prev.filter((entry) => entry !== routeKey))
+                  }
+                  onClear={() => setCompareRouteKeys([])}
                 />
                 {topRouteRows.length > 0 && (
                   <div className="space-y-1">
