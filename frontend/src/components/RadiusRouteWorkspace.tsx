@@ -29,6 +29,8 @@ import { classifyVerificationPriority, verificationPriorityChipClass } from "@/l
 import type { RouteWorkbenchMode } from "@/components/RouteWorkbenchPanel";
 import { RouteQueuePanel } from "@/components/RouteQueuePanel";
 import { getNextQueuedRoute, type RouteQueueEntry } from "@/lib/routeQueue";
+import type { RouteAssignment } from "@/lib/routeAssignments";
+import { RadiusRouteGroupsPanel } from "@/components/RadiusRouteGroupsPanel";
 
 export type RadiusRouteWorkspaceTab = "discover" | "workbench" | "finder" | "validate";
 
@@ -46,6 +48,11 @@ type RadiusRouteWorkspaceProps = {
   workspaceSource?: "radius" | "finder";
   routeQueue?: RouteQueueEntry[];
   onRouteQueueChange?: (entries: RouteQueueEntry[]) => void;
+  routeAssignmentsByKey?: Record<string, RouteAssignment>;
+  onQueueRoute?: (routeKey: string, routeLabel: string) => void;
+  onCompareRoute?: (routeKey: string) => void;
+  onAssignActivePilot?: (routeKey: string, characterId: number) => void;
+  onAssignBestPilot?: (routeKey: string, characterId: number) => void;
   pendingRouteContext?: RouteHandoffContext | null;
   handoffIntent?: RouteWorkspaceIntent | null;
   pendingRadiusManifest?: string;
@@ -96,6 +103,11 @@ export function RadiusRouteWorkspace({
   workspaceSource = "radius",
   routeQueue = [],
   onRouteQueueChange,
+  routeAssignmentsByKey = {},
+  onQueueRoute,
+  onCompareRoute,
+  onAssignActivePilot,
+  onAssignBestPilot,
   pendingRouteContext = null,
   handoffIntent = null,
   pendingRadiusManifest = "",
@@ -114,15 +126,16 @@ export function RadiusRouteWorkspace({
   const hasActiveRouteContext = Boolean(routeWorkspace?.activeRouteKey ?? activeRouteKey);
   const hasSavedPack = Boolean(routeWorkspace && routeWorkspace.savedRoutePacks.length > 0);
   const persistedMode = useMemo(() => loadPersistedRouteWorkspaceMode(), []);
-  const [uncontrolledActiveTab, setUncontrolledActiveTab] = useState<RadiusRouteWorkspaceTab>(() =>
-    resolveRouteWorkspaceMode({
+  const [uncontrolledActiveTab, setUncontrolledActiveTab] = useState<RadiusRouteWorkspaceTab>(() => {
+    if (radiusScanSession?.hasScan) return "discover";
+    return resolveRouteWorkspaceMode({
       explicitIntent: handoffIntent,
       openedFromRadiusOrSavedRoute: workspaceSource === "radius" && hasActiveRouteContext,
       hasActiveRoute: hasActiveRouteContext,
       hasSelectedOrSavedPack: hasActiveRouteContext || hasSavedPack,
       persistedMode,
-    }),
-  );
+    });
+  });
   const activeTab = workspaceMode ?? uncontrolledActiveTab;
   const setActiveTab = (next: RadiusRouteWorkspaceTab) => {
     onWorkspaceModeChange?.(next);
@@ -131,6 +144,12 @@ export function RadiusRouteWorkspace({
       routeWorkspace?.setMode(next);
     }
   };
+  useEffect(() => {
+    if (!workspaceMode && radiusScanSession?.hasScan && uncontrolledActiveTab === "finder") {
+      setUncontrolledActiveTab("discover");
+    }
+  }, [radiusScanSession?.hasScan, uncontrolledActiveTab, workspaceMode]);
+
   useEffect(() => {
     if (activeTab === "discover") return;
     if (canUseModeInCurrentContext(activeTab, hasActiveRouteContext)) return;
@@ -150,9 +169,9 @@ export function RadiusRouteWorkspace({
   }, [activeTab, hasActiveRouteContext]);
 
   const tabs: Array<{ id: RadiusRouteWorkspaceTab; label: string; hint: string }> = [
-    { id: "discover", label: "Discover", hint: "Grouped routes, top picks, queue, loops" },
+    { id: "discover", label: "Grouped Routes", hint: "Grouped routes, top picks, queue, loops" },
     { id: "workbench", label: "Workbench", hint: "Selected route, saved routes, execution state, filler options" },
-    { id: "finder", label: "Finder", hint: "Route search flow" },
+    { id: "finder", label: "Route Finder", hint: "Route search flow" },
     { id: "validate", label: "Validate", hint: "Route and batch readiness checks" },
   ];
   const routeInsights = radiusScanSession?.routeInsightsSnapshot;
@@ -476,21 +495,38 @@ export function RadiusRouteWorkspace({
                     onOpenBatchBuilderForRoute?.(routeKey);
                   }}
                 />
-                <div className="space-y-1">
-                  <h3 className="text-xs uppercase tracking-wide text-eve-dim">Top grouped routes</h3>
-                  {topRouteRows.length === 0 ? (
-                    <div className="text-xs text-eve-dim">No route summaries in current session.</div>
-                  ) : (
-                    topRouteRows.map((route) => (
+                <RadiusRouteGroupsPanel
+                  results={radiusScanSession.results}
+                  routeInsightsSnapshot={radiusScanSession.routeInsightsSnapshot}
+                  routeWorkspace={routeWorkspace}
+                  routeQueueEntries={routeQueue}
+                  routeAssignmentsByKey={routeAssignmentsByKey}
+                  cargoCapacityM3={params.cargo_capacity ?? 0}
+                  characters={characters}
+                  characterLocations={characterLocations}
+                  onQueueRoute={onQueueRoute}
+                  onValidateRoute={(routeKey) => {
+                    routeWorkspace?.openRoute(routeKey, "validate");
+                    setActiveTab("validate");
+                  }}
+                  onAssignActivePilot={onAssignActivePilot}
+                  onAssignBestPilot={onAssignBestPilot}
+                  onCompareRoute={onCompareRoute}
+                  onOpenBatchBuilderForRoute={onOpenBatchBuilderForRoute}
+                />
+                {topRouteRows.length > 0 && (
+                  <div className="space-y-1">
+                    <h3 className="text-xs uppercase tracking-wide text-eve-dim">Top grouped routes</h3>
+                    {topRouteRows.map((route) => (
                       <div key={route.key} className="grid grid-cols-1 lg:grid-cols-4 gap-1 rounded-sm border border-eve-border/50 px-2 py-1 text-xs">
                         <div className="text-eve-text">{route.label}</div>
                         <div className="text-eve-dim">Daily {formatISK(route.dailyProfit)}</div>
                         <div className="text-eve-dim">ISK/jump {formatISK(route.dailyIskPerJump)}</div>
                         <div className="text-eve-dim">Confidence {route.confidence.toFixed(0)}</div>
                       </div>
-                    ))
-                  )}
-                </div>
+                    ))}
+                  </div>
+                )}
               </>
             )}
           </div>
