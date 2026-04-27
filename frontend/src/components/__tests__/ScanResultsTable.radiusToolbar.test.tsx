@@ -118,4 +118,28 @@ describe("ScanResultsTable radius toolbar exclusivity", () => {
     expect(within(quickBar).getAllByRole("button", { name: /^Filters$/i })).toHaveLength(1);
     expect(within(quickBar).getAllByRole("button", { name: /One-leg mode/i })).toHaveLength(1);
   });
+
+  it("manages Radius display flags only under More Controls → Display Flags", () => {
+    renderTable("radius");
+
+    expect(screen.queryByText("Radius flags")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /More Controls/i }));
+    const displayFlagsGroup = screen.getByTestId("radius-control-menu-group:display-flags");
+    expect(within(displayFlagsGroup).getByRole("heading", { name: "Display Flags" })).toBeInTheDocument();
+
+    const expectedFlags = [
+      "Focus board",
+      "Optimizer mode",
+      "Movement badges",
+      "Pattern mode",
+    ] as const;
+
+    for (const label of expectedFlags) {
+      const button = within(displayFlagsGroup).getByRole("button", { name: label });
+      expect(button).toHaveAttribute("aria-pressed", "true");
+      expect(button).toHaveAttribute("title", `${label}: On`);
+      expect(screen.getAllByRole("button", { name: label })).toHaveLength(1);
+    }
+  });
 });
