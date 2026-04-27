@@ -110,7 +110,7 @@ describe("RadiusRouteWorkspace rendering", () => {
     renderWorkspace(session, "loc:60003760->loc:60008494");
 
     const beforeDiscover = localStorage.getItem(ROUTE_WORKSPACE_MODE_STORAGE_KEY);
-    fireEvent.click(screen.getByRole("tab", { name: "Discover" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Grouped Routes" }));
     expect(localStorage.getItem(ROUTE_WORKSPACE_MODE_STORAGE_KEY)).toBe(beforeDiscover);
 
     fireEvent.click(screen.getByRole("tab", { name: "Workbench" }));
@@ -164,5 +164,38 @@ describe("RadiusRouteWorkspace rendering", () => {
     );
 
     expect(await screen.findByTestId("route-workbench-section-filler")).toBeInTheDocument();
+  });
+
+  it("defaults to Grouped Routes tab after a scan session exists", async () => {
+    const session = deriveRadiusScanSession({
+      results: [makeFlip()],
+      scanParams: params,
+      sessionStationFilters: createSessionStationFilters(),
+    });
+
+    renderWorkspace(session, null);
+
+    expect(await screen.findByTestId("radius-route-groups-panel")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Grouped Routes" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("shows grouped-route actions in grouped routes tab", async () => {
+    const session = deriveRadiusScanSession({
+      results: [makeFlip()],
+      scanParams: params,
+      sessionStationFilters: createSessionStationFilters(),
+    });
+
+    renderWorkspace(session, null);
+
+    expect(await screen.findByRole("button", { name: "Open Workbench" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Validate" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Queue" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Assign Active Pilot" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Assign Best Pilot" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Compare" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Build Batch" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy Manifest" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy Summary" })).toBeInTheDocument();
   });
 });
