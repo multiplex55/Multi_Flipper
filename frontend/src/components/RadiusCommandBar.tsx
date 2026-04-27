@@ -7,6 +7,11 @@ import {
   ToggleButton,
 } from "@/components/ui/ControlPrimitives";
 import { RadiusWorkflowHelpDrawer } from "@/components/RadiusWorkflowHelpDrawer";
+import { RadiusControlMenu, type RadiusControlMenuGroup } from "@/components/RadiusControlMenu";
+import {
+  RadiusActiveControlChips,
+  type RadiusActiveControlChip,
+} from "@/components/RadiusActiveControlChips";
 
 type RadiusCommandBarProps = {
   shortcutScopeActive?: boolean;
@@ -33,28 +38,24 @@ type RadiusCommandBarProps = {
     hasActiveFilters: boolean;
     onToggleFilters: () => void;
     onClearFilters: () => void;
-    oneLegEnabled: boolean;
-    onToggleOneLeg: () => void;
-    executableNowEnabled: boolean;
-    onToggleExecutableNow: () => void;
   };
   actions: {
     onVerifyPrices: () => void;
     onExportCsv: () => void;
     onCopyTable: () => void;
-    onRecalcLens?: () => void;
     exportDisabled: boolean;
     copyDisabled: boolean;
-    recalcDisabled?: boolean;
   };
   moreControls: {
     expanded: boolean;
     controlsId: string;
     onToggleExpanded: () => void;
-    content: ReactNode;
+    groups: RadiusControlMenuGroup[];
+    activeGroupId: string | null;
   };
+  activeControlChips?: RadiusActiveControlChip[];
+  onOpenControlSection?: (sectionId: string) => void;
   sessionSection?: ReactNode;
-  rankingSection?: ReactNode;
   routeActionsSection?: ReactNode;
   statusSummarySection?: ReactNode;
   decisionModeControl?: {
@@ -70,7 +71,6 @@ const RADIUS_COMMAND_INTENT_MAP = {
   export: { key: "e", label: "Export CSV" },
   filters: { key: "f", label: "Toggle filters" },
   insights: { key: "i", label: "Toggle insights" },
-  recalc: { key: "r", label: "Recalculate lens" },
 } as const;
 
 function isTextEntryTarget(target: EventTarget | null): boolean {
@@ -93,8 +93,9 @@ export function RadiusCommandBar({
   tableControls,
   actions,
   moreControls,
+  activeControlChips = [],
+  onOpenControlSection,
   sessionSection,
-  rankingSection,
   routeActionsSection,
   statusSummarySection,
   decisionModeControl,
@@ -113,9 +114,6 @@ export function RadiusCommandBar({
       [RADIUS_COMMAND_INTENT_MAP.filters.key]: () => tableControls.onToggleFilters(),
       [RADIUS_COMMAND_INTENT_MAP.insights.key]: () =>
         insightsVisibilityToggle.onToggle(),
-      [RADIUS_COMMAND_INTENT_MAP.recalc.key]: () => {
-        if (!actions.recalcDisabled) actions.onRecalcLens?.();
-      },
     }),
     [actions, insightsVisibilityToggle, tableControls],
   );
@@ -177,12 +175,7 @@ export function RadiusCommandBar({
               </select>
             </label>
           ) : null}
-          <ActionButton
-            tone="accent"
-            size="xs"
-            onClick={actions.onVerifyPrices}
-            title="Verify Prices (V)"
-          >
+          <ActionButton tone="accent" size="xs" onClick={actions.onVerifyPrices} title="Verify Prices (V)">
             Verify Prices
           </ActionButton>
           <ActionButton
@@ -203,7 +196,52 @@ export function RadiusCommandBar({
           >
             Copy Table
           </ActionButton>
+          <ActionButton
+            onClick={tableControls.onToggleColumns}
+            selected={tableControls.columnsActive}
+            title="Column setup"
+          >
+            Columns
+          </ActionButton>
+          <ToggleButton
+            pressed={tableControls.filtersActive}
+            onClick={tableControls.onToggleFilters}
+            title="Filters (F)"
+          >
+            Filters
+          </ToggleButton>
+          <ActionButton onClick={() => setHelpOpen((previous) => !previous)} title="How to use Radius">
+            {helpOpen ? "Close Help" : "Help"}
+          </ActionButton>
+          {compactLayoutToggle ? (
+            <ToggleButton
+              pressed={compactLayoutToggle.compact}
+              onClick={compactLayoutToggle.onToggle}
+              title={compactLayoutToggle.label}
+            >
+              {compactLayoutToggle.label}
+            </ToggleButton>
+          ) : null}
+          <ActionButton
+            onClick={moreControls.onToggleExpanded}
+            aria-expanded={moreControls.expanded}
+            aria-controls={moreControls.controlsId}
+            title="Toggle more controls"
+          >
+            More Controls {moreControls.expanded ? "▾" : "▸"}
+          </ActionButton>
         </ControlGroup>
+        {activeControlChips.length > 0 ? (
+          <RadiusActiveControlChips
+            chips={activeControlChips}
+            onChipClick={(sectionId) => {
+              if (!moreControls.expanded) {
+                moreControls.onToggleExpanded();
+              }
+              onOpenControlSection?.(sectionId);
+            }}
+          />
+        ) : null}
       </section>
 
       <section
@@ -219,39 +257,6 @@ export function RadiusCommandBar({
           >
             {insightsVisibilityToggle.label}
           </ToggleButton>
-          {compactLayoutToggle ? (
-            <ToggleButton
-              pressed={compactLayoutToggle.compact}
-              onClick={compactLayoutToggle.onToggle}
-              title={compactLayoutToggle.label}
-            >
-              {compactLayoutToggle.label}
-            </ToggleButton>
-          ) : null}
-          <ActionButton selected={tableControls.columnsActive} onClick={tableControls.onToggleColumns} title="Column setup">
-            Columns
-          </ActionButton>
-          <ActionButton
-            onClick={() => setHelpOpen((previous) => !previous)}
-            title="How to use Radius"
-          >
-            {helpOpen ? "Close Help" : "Help"}
-          </ActionButton>
-          <ToggleButton
-            pressed={tableControls.filtersActive}
-            onClick={tableControls.onToggleFilters}
-            title="Filters (F)"
-          >
-            Filters
-          </ToggleButton>
-          <ToggleButton
-            pressed={tableControls.executableNowEnabled}
-            onClick={tableControls.onToggleExecutableNow}
-            title="Executable now"
-            data-testid="radius-command-bar-executable-toggle"
-          >
-            Executable Now
-          </ToggleButton>
           {tableControls.hasActiveFilters ? (
             <ActionButton
               tone="accent"
@@ -262,48 +267,18 @@ export function RadiusCommandBar({
               Active ✕
             </ActionButton>
           ) : null}
-          <ToggleButton
-            pressed={tableControls.oneLegEnabled}
-            onClick={tableControls.onToggleOneLeg}
-            data-testid="one-leg-mode-toggle"
-          >
-            One-leg mode {tableControls.oneLegEnabled ? "On" : "Off"}
-          </ToggleButton>
         </ControlGroup>
+        {moreControls.expanded ? (
+          <RadiusControlMenu
+            menuId={moreControls.controlsId}
+            groups={moreControls.groups}
+            activeGroupId={moreControls.activeGroupId}
+          />
+        ) : null}
       </section>
       {statusSummarySection ? statusSummarySection : null}
 
       <RadiusWorkflowHelpDrawer open={helpOpen} onClose={() => setHelpOpen(false)} />
-
-      <section
-        aria-label="Collapsible ranking and advanced controls"
-        className="mt-1 rounded-sm border border-eve-border/40 bg-eve-dark/20 px-1.5 py-1"
-        data-testid="radius-toolbar-secondary-actions"
-      >
-        <ControlGroup zone="status" className="items-center">
-          {rankingSection ? <div>{rankingSection}</div> : null}
-          <ActionButton
-            onClick={actions.onRecalcLens}
-            title="Recalculate lens (R)"
-            disabled={actions.recalcDisabled}
-          >
-            Recalc Lens
-          </ActionButton>
-          <ActionButton
-            onClick={moreControls.onToggleExpanded}
-            aria-expanded={moreControls.expanded}
-            aria-controls={moreControls.controlsId}
-            title="Toggle more controls"
-          >
-            More Controls {moreControls.expanded ? "▾" : "▸"}
-          </ActionButton>
-        </ControlGroup>
-        {moreControls.expanded ? (
-          <ControlGroup id={moreControls.controlsId} zone="analysis" className="mt-1.5 text-[11px]">
-            {moreControls.content}
-          </ControlGroup>
-        ) : null}
-      </section>
     </div>
   );
 }
