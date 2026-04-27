@@ -48,6 +48,58 @@ export function RadiusColumnGuideModal({ open, onClose }: Props) {
             ))}
           </div>
         </section>
+        <section className="rounded-sm border border-eve-border bg-eve-dark/20 p-3 space-y-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-eve-dim">
+            Radius Controls and Filters
+          </h2>
+          <ul className="list-disc space-y-1 pl-4 text-xs text-eve-text">
+            <li>
+              <span className="font-semibold">Endpoint prefs modes:</span> Disabled keeps every endpoint visible,
+              Rank only biases ordering toward preferred endpoints, and Hide removes non-preferred endpoints from
+              visible candidates.
+            </li>
+            <li>
+              <span className="font-semibold">Tracked visibility:</span> Show all keeps tracked and untracked rows,
+              Tracked only narrows to watchlisted endpoints, and Hide tracked excludes tracked rows to hunt fresh
+              opportunities.
+            </li>
+            <li>
+              <span className="font-semibold">Urgency semantics:</span> High urgency indicates edge decay risk and
+              should be validated first, medium urgency is still actionable, and low urgency is usually stable enough
+              to defer.
+            </li>
+            <li>
+              <span className="font-semibold">Smart ordering vs column-only ordering:</span> Smart ordering blends lens
+              priorities with route quality signals, while column-only ordering follows only your active column sort.
+            </li>
+            <li>
+              <span className="font-semibold">Lens recalculation effect:</span> Recalc lens reruns the active lens
+              scoring and can reshuffle top picks, especially after filtering, route edits, or assignment changes.
+            </li>
+          </ul>
+        </section>
+        <section className="rounded-sm border border-eve-border bg-eve-dark/20 p-3 space-y-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-eve-dim">
+            Flipper Radius (Route) Guide
+          </h2>
+          <ul className="list-disc space-y-1 pl-4 text-xs text-eve-text">
+            <li>
+              Queue routes to stage execution order in <span className="font-semibold">Flipper Radius (Route)</span>.
+            </li>
+            <li>
+              Assign pilots from Route queue and Workbench panels to avoid duplicate hauling across characters.
+            </li>
+            <li>
+              Verify prices right before undock from the route queue when spread or depth confidence is borderline.
+            </li>
+            <li>
+              Compare routes in the route tab to decide whether to keep current cargo plans or re-prioritize.
+            </li>
+            <li>
+              Use Workbench to lock route composition, then run cargo refill actions to consume remaining m³ cleanly.
+            </li>
+          </ul>
+        </section>
         <div
           className="max-h-[60vh] overflow-y-auto space-y-3 pr-1"
           data-testid="radius-column-guide-scroll"

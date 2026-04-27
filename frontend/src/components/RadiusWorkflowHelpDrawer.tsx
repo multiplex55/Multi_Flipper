@@ -30,21 +30,21 @@ const HELP_SECTIONS: Array<{ title: string; bullets: string[] }> = [
   {
     title: "Cargo builds",
     bullets: [
-      "Open Batch to lock the primary route composition first.",
-      "Use Fill Cargo when available to consume remaining m³ with compatible fillers.",
+      "Open Batch to lock the primary route composition first in Flipper (Radius).",
+      "Use Flipper Radius (Route) > Workbench for cargo refill when remaining m³ needs fillers.",
     ],
   },
   {
     title: "Queue + pilot assignment",
     bullets: [
-      "Queue routes in execution order so pilots run highest-confidence batches first.",
-      "Keep route ownership clear to avoid duplicate buys across characters.",
+      "Queue and assign routes from Flipper Radius (Route) so pilots run highest-confidence batches first.",
+      "Keep route ownership clear in the Route tab to avoid duplicate buys across characters.",
     ],
   },
   {
     title: "Price verification before undock",
     bullets: [
-      "Run Verify Prices immediately before departure on high-value or fragile routes.",
+      "Run Verify Prices in Flipper Radius (Route) immediately before departure on high-value or fragile routes.",
       "Abort or rebuild if spread, fill depth, or destination demand changed materially.",
     ],
   },

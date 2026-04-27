@@ -63,6 +63,7 @@ describe("RadiusWorkflowHelpDrawer", () => {
     expect(screen.getByTestId("radius-workflow-help-drawer")).toBeInTheDocument();
     expect(screen.getByText("Recommended workflow")).toBeInTheDocument();
     expect(screen.getByText("Price verification before undock")).toBeInTheDocument();
+    expect(screen.getAllByText(/Flipper Radius \(Route\)/).length).toBeGreaterThan(0);
   });
 
   it("closes via close control", () => {
@@ -81,5 +82,6 @@ describe("RadiusWorkflowHelpDrawer", () => {
     expect(within(drawer).getByText("Recommended workflow")).toBeInTheDocument();
     expect(within(drawer).getByText("Finding trades")).toBeInTheDocument();
     expect(within(drawer).getByText("Price verification before undock")).toBeInTheDocument();
+    expect(within(drawer).getByText(/Queue and assign routes from Flipper Radius \(Route\)/)).toBeInTheDocument();
   });
 });
