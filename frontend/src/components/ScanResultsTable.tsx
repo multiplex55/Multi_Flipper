@@ -228,6 +228,7 @@ import {
 import { isRadiusTradeExecutableNow } from "@/lib/radiusExecutableNow";
 import { computeRadiusSessionSummary } from "@/lib/radiusSessionSummary";
 import { classifyRadiusDealRisk } from "@/lib/radiusDealRisk";
+import { passesNumericFilter, passesTextFilter } from "@/lib/tableFilters";
 import { RadiusDealMovementBadge } from "@/components/RadiusDealMovementBadge";
 import {
   buildRadiusDealSnapshotKey,
@@ -1404,48 +1405,6 @@ function isBatchSyntheticKey(key: SortKey): key is BatchSyntheticKey {
 }
 
 /* ─── Filter helpers ─── */
-
-function passesNumericFilter(num: number, fval: string): boolean {
-  const trimmed = fval.trim();
-  if (!trimmed) return true;
-  // Range: "100-500"
-  if (trimmed.includes("-") && !trimmed.startsWith("-")) {
-    const [minS, maxS] = trimmed.split("-");
-    const mn = parseFloat(minS);
-    const mx = parseFloat(maxS);
-    if (!isNaN(mn) && !isNaN(mx) && (num < mn || num > mx)) return false;
-    return true;
-  }
-  if (trimmed.startsWith(">=")) {
-    const v = parseFloat(trimmed.slice(2));
-    return isNaN(v) || num >= v;
-  }
-  if (trimmed.startsWith(">")) {
-    const v = parseFloat(trimmed.slice(1));
-    return isNaN(v) || num > v;
-  }
-  if (trimmed.startsWith("<=")) {
-    const v = parseFloat(trimmed.slice(2));
-    return isNaN(v) || num <= v;
-  }
-  if (trimmed.startsWith("<")) {
-    const v = parseFloat(trimmed.slice(1));
-    return isNaN(v) || num < v;
-  }
-  if (trimmed.startsWith("=")) {
-    const v = parseFloat(trimmed.slice(1));
-    return isNaN(v) || num === v;
-  }
-  // Plain number: >= threshold
-  const mn = parseFloat(trimmed);
-  return isNaN(mn) || num >= mn;
-}
-
-function passesTextFilter(val: unknown, fval: string): boolean {
-  return String(val ?? "")
-    .toLowerCase()
-    .includes(fval.toLowerCase());
-}
 
 function rowProfitPerUnit(row: FlipResult): number {
   if (row.RealProfit != null && row.FilledQty != null && row.FilledQty > 0) {

@@ -501,7 +501,7 @@ export function RadiusRouteWorkspace({
 
       <div className="flex-1 min-h-0 overflow-auto rounded-sm border border-eve-border bg-eve-dark/30 p-3">
         {activeTab === "discover" && (
-          <div data-testid="route-workspace-discover" className="space-y-3">
+          <div data-testid="route-workspace-discover" className="flex min-h-0 flex-col gap-3">
             {!radiusScanSession?.hasScan ? (
               renderSessionState()
             ) : (
