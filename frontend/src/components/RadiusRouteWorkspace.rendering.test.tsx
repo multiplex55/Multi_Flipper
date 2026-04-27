@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { useEffect } from "react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nProvider } from "@/lib/i18n";
 import { ToastProvider } from "@/components/Toast";
 import { RadiusRouteWorkspace } from "@/components/RadiusRouteWorkspace";
@@ -250,4 +250,39 @@ describe("RadiusRouteWorkspace rendering", () => {
     fireEvent.click(screen.getByRole("button", { name: "Hide queued" }));
     expect(within(groupsPanel).queryByText("Jita IV → Amarr VIII")).not.toBeInTheDocument();
   });
+  it("uses workspace batch open path once when fallback callback is also provided", async () => {
+    const session = deriveRadiusScanSession({
+      results: [makeFlip()],
+      scanParams: params,
+      sessionStationFilters: createSessionStationFilters(),
+    });
+    const workspaceOpenSpy = vi.fn();
+    const fallbackSpy = vi.fn();
+
+    const Wrapper = () => {
+      const workspace = useRouteExecutionWorkspace({ onOpenBatchBuilder: workspaceOpenSpy });
+      return (
+        <RadiusRouteWorkspace
+          params={params}
+          radiusScanSession={session}
+          routeWorkspace={workspace}
+          onOpenBatchBuilderForRoute={fallbackSpy}
+        />
+      );
+    };
+
+    render(
+      <I18nProvider>
+        <ToastProvider>
+          <Wrapper />
+        </ToastProvider>
+      </I18nProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Build Batch" }));
+
+    expect(workspaceOpenSpy).toHaveBeenCalledTimes(1);
+    expect(fallbackSpy).not.toHaveBeenCalled();
+  });
+
 });

@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { RadiusRouteGroupsPanel } from "@/components/RadiusRouteGroupsPanel";
 import type { FlipResult } from "@/lib/types";
 
@@ -30,6 +30,7 @@ function makeFlip(overrides: Partial<FlipResult> = {}): FlipResult {
 }
 
 describe("RadiusRouteGroupsPanel", () => {
+  afterEach(() => cleanup());
   it("renders grouped route columns and actions", () => {
     const onQueueRoute = vi.fn();
     const onValidateRoute = vi.fn();
@@ -74,4 +75,23 @@ describe("RadiusRouteGroupsPanel", () => {
     expect(screen.getByRole("button", { name: "Copy Manifest" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy Summary" })).toBeInTheDocument();
   });
+  it("uses routeWorkspace batch open path once when both callbacks are provided", () => {
+    const workspaceOpenBatchBuilder = vi.fn();
+    const fallbackOpenBatchBuilder = vi.fn();
+
+    render(
+      <RadiusRouteGroupsPanel
+        results={[makeFlip()]}
+        routeWorkspace={{ openBatchBuilder: workspaceOpenBatchBuilder } as any}
+        onOpenBatchBuilderForRoute={fallbackOpenBatchBuilder}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Build Batch" })[0]!);
+
+    expect(workspaceOpenBatchBuilder).toHaveBeenCalledTimes(1);
+    expect(workspaceOpenBatchBuilder).toHaveBeenCalledWith("loc:60003760->loc:60008494");
+    expect(fallbackOpenBatchBuilder).not.toHaveBeenCalled();
+  });
+
 });

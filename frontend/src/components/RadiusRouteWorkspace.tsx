@@ -347,6 +347,14 @@ export function RadiusRouteWorkspace({
     });
   };
 
+  const openBatchBuilderForRoute = (routeKey: string) => {
+    if (routeWorkspace) {
+      routeWorkspace.openBatchBuilder(routeKey);
+      return;
+    }
+    onOpenBatchBuilderForRoute?.(routeKey);
+  };
+
   const handleOpenSuggestionInBatchBuilder = (suggestion: RouteFillPlannerSuggestion) => {
     if (!activePack || !routeWorkspace) return;
     const lineKeySet = new Set([...activePack.selectedLineKeys, ...suggestion.sourceLineKeys]);
@@ -357,15 +365,13 @@ export function RadiusRouteWorkspace({
       entryMode,
       launchIntent: "radius-fill-planner",
     });
-    routeWorkspace?.openBatchBuilder(activePack.routeKey);
-    onOpenBatchBuilderForRoute?.(activePack.routeKey);
+    openBatchBuilderForRoute(activePack.routeKey);
   };
 
   const handleKeepBatch = () => {
     if (!validateTarget.pack) return;
     routeWorkspace?.selectPack(validateTarget.pack.routeKey);
-    routeWorkspace?.openBatchBuilder(validateTarget.pack.routeKey);
-    onOpenBatchBuilderForRoute?.(validateTarget.pack.routeKey);
+    openBatchBuilderForRoute(validateTarget.pack.routeKey);
     setActiveTab("workbench");
   };
 
@@ -408,8 +414,7 @@ export function RadiusRouteWorkspace({
       updatedAt: new Date().toISOString(),
       launchIntent: "radius-validate-remove-refill",
     });
-    routeWorkspace.openBatchBuilder(validateTarget.pack.routeKey);
-    onOpenBatchBuilderForRoute?.(validateTarget.pack.routeKey);
+    openBatchBuilderForRoute(validateTarget.pack.routeKey);
     setActiveTab("workbench");
   };
 
@@ -527,8 +532,7 @@ export function RadiusRouteWorkspace({
                     setActiveTab("workbench");
                   }}
                   onOpenBatchBuilder={(routeKey) => {
-                    routeWorkspace?.openBatchBuilder(routeKey);
-                    onOpenBatchBuilderForRoute?.(routeKey);
+                    openBatchBuilderForRoute(routeKey);
                   }}
                 />
                 <RadiusRouteGroupsPanel
@@ -633,8 +637,7 @@ export function RadiusRouteWorkspace({
                       routeWorkspace?.upsertPack(activePack);
                     }}
                     onOpenBatchBuilder={() => {
-                      routeWorkspace?.openBatchBuilder(activePack.routeKey);
-                      onOpenBatchBuilderForRoute?.(activePack.routeKey);
+                      openBatchBuilderForRoute(activePack.routeKey);
                     }}
                     onScrollToTable={() => undefined}
                     routeFillSections={routeFillSections}

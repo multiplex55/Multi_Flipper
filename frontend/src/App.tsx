@@ -855,14 +855,19 @@ function App() {
     (routeKey: string) => {
       const resolvedRouteKey = resolveBestRouteKey(routeKey, "active_route");
       if (!resolvedRouteKey) return;
-      setTab("radius");
       setBatchBuilderRouteRequest({
         routeKey: resolvedRouteKey,
         requestId: Date.now(),
       });
     },
-    [resolveBestRouteKey, setTab],
+    [resolveBestRouteKey],
   );
+
+  const consumeBatchBuilderRouteRequest = useCallback((requestId: number) => {
+    setBatchBuilderRouteRequest((current) =>
+      current && current.requestId === requestId ? null : current,
+    );
+  }, []);
   const routeWorkspace = useRouteExecutionWorkspace({
     onOpenBatchBuilder: openBatchBuilderForRoute,
   });
@@ -3223,6 +3228,7 @@ const handleScanAndRefresh = useCallback(async () => {
                 featureConfig={RADIUS_SCAN_RESULTS_FEATURE_CONFIG}
                 routeWorkspace={routeWorkspace}
                 batchBuilderRouteRequest={batchBuilderRouteRequest}
+                onBatchBuilderRouteRequestConsumed={consumeBatchBuilderRouteRequest}
                 authCharacters={authStatus.characters ?? []}
                 onRecalculateLensFromCharacter={recalculateRadiusLensFromCharacter}
                 onRecalculateLens={() => void handleRecalculateRadiusDistanceLens()}

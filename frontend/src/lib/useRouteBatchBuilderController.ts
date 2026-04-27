@@ -32,8 +32,12 @@ export function resolveRouteBatchBuilderRouteKey(input: {
   routeRowsByKey: Record<string, FlipResult[]>;
   savedRoutePacks?: SavedRoutePack[];
 }): string | null {
+  if (input.routeKey) {
+    const directRows = input.routeRowsByKey[input.routeKey] ?? [];
+    return directRows.length > 0 ? input.routeKey : null;
+  }
+
   const candidates = [
-    input.routeKey,
     input.preferredRouteKey,
     ...(input.savedRoutePacks ?? []).map((pack) => pack.routeKey),
     firstRouteWithRows(input.routeRowsByKey),
@@ -47,29 +51,53 @@ export function resolveRouteBatchBuilderRouteKey(input: {
 }
 
 export function useRouteBatchBuilderController(input: RouteBatchBuilderControllerInput) {
+  const {
+    routeRowsByKey,
+    savedRoutePacks,
+    preferredRouteKey,
+    setBatchPlanRow,
+    setBatchPlanRows,
+    setActiveRouteGroupKey,
+    setBatchBuilderEntryMode,
+    setBatchBuilderLaunchIntent,
+    setBatchBuilderMode,
+    setBatchBuilderInitialSelectedLineKeys,
+  } = input;
+
   const openBatchBuilderForRoute = useCallback(
     (routeKey: string, context?: RouteBatchBuilderLaunchContext): boolean => {
       const resolvedRouteKey = resolveRouteBatchBuilderRouteKey({
         routeKey,
-        preferredRouteKey: input.preferredRouteKey,
-        routeRowsByKey: input.routeRowsByKey,
-        savedRoutePacks: input.savedRoutePacks,
+        preferredRouteKey,
+        routeRowsByKey,
+        savedRoutePacks,
       });
       if (!resolvedRouteKey) return false;
-      const rows = input.routeRowsByKey[resolvedRouteKey] ?? [];
+      const rows = routeRowsByKey[resolvedRouteKey] ?? [];
       const anchor = rows[0] ?? null;
       if (!anchor) return false;
 
-      input.setBatchPlanRow(anchor);
-      input.setBatchPlanRows(rows);
-      input.setActiveRouteGroupKey(resolvedRouteKey);
-      input.setBatchBuilderEntryMode(context?.batchEntryMode ?? "core");
-      input.setBatchBuilderLaunchIntent(context?.intentLabel ?? null);
-      input.setBatchBuilderMode("single_anchor");
-      input.setBatchBuilderInitialSelectedLineKeys(undefined);
+      setBatchPlanRow(anchor);
+      setBatchPlanRows(rows);
+      setActiveRouteGroupKey(resolvedRouteKey);
+      setBatchBuilderEntryMode(context?.batchEntryMode ?? "core");
+      setBatchBuilderLaunchIntent(context?.intentLabel ?? null);
+      setBatchBuilderMode("single_anchor");
+      setBatchBuilderInitialSelectedLineKeys(undefined);
       return true;
     },
-    [input],
+    [
+      preferredRouteKey,
+      routeRowsByKey,
+      savedRoutePacks,
+      setActiveRouteGroupKey,
+      setBatchBuilderEntryMode,
+      setBatchBuilderInitialSelectedLineKeys,
+      setBatchBuilderLaunchIntent,
+      setBatchBuilderMode,
+      setBatchPlanRow,
+      setBatchPlanRows,
+    ],
   );
 
   return { openBatchBuilderForRoute };

@@ -117,4 +117,12 @@ describe("RouteWorkbenchPanel", () => {
     expect(screen.getByText(/50% expected profit captured/)).toBeInTheDocument();
     vi.useRealTimers();
   });
+  it("invokes open batch action once per click", () => {
+    const callbacks = renderPanel("summary");
+
+    fireEvent.click(screen.getByTestId("route-workbench-action-open-batch"));
+
+    expect(callbacks.onOpenBatchBuilder).toHaveBeenCalledTimes(1);
+  });
+
 });

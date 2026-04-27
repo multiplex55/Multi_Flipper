@@ -97,4 +97,19 @@ describe("RouteQueuePanel", () => {
     expect(onVerifyRoute).toHaveBeenCalledWith("route-c");
     expect(onVerifyRoute.mock.calls.filter((call) => call[0] === "route-a")).toHaveLength(1);
   });
+  it("invokes batch builder action exactly once per click", () => {
+    const onOpenBatchBuilder = vi.fn();
+    render(
+      <RouteQueuePanel
+        entries={[makeEntry()]}
+        onChange={vi.fn()}
+        onOpenBatchBuilder={onOpenBatchBuilder}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Batch Builder" }));
+
+    expect(onOpenBatchBuilder).toHaveBeenCalledTimes(1);
+  });
+
 });

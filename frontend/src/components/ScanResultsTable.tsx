@@ -553,6 +553,7 @@ interface Props {
   onRecalculateLens?: () => void;
   recalcLensDisabled?: boolean;
   batchBuilderRouteRequest?: { routeKey: string; requestId: number } | null;
+  onBatchBuilderRouteRequestConsumed?: (requestId: number) => void;
   radiusSessionControls?: ReactNode;
 }
 
@@ -1794,6 +1795,7 @@ export function ScanResultsTable({
   onRecalculateLens,
   recalcLensDisabled = false,
   batchBuilderRouteRequest = null,
+  onBatchBuilderRouteRequestConsumed,
   radiusSessionControls,
 }: Props) {
   const { t } = useI18n();
@@ -5815,6 +5817,8 @@ export function ScanResultsTable({
     verificationStateByRouteKey,
   ]);
 
+  const consumedBatchBuilderRequestIdRef = useRef<number | null>(null);
+
   const { openBatchBuilderForRoute } = useRouteBatchBuilderController({
     routeRowsByKey,
     savedRoutePacks,
@@ -5830,11 +5834,20 @@ export function ScanResultsTable({
 
   useEffect(() => {
     if (!batchBuilderRouteRequest) return;
+    if (consumedBatchBuilderRequestIdRef.current === batchBuilderRouteRequest.requestId) {
+      return;
+    }
+    consumedBatchBuilderRequestIdRef.current = batchBuilderRouteRequest.requestId;
     openBatchBuilderForRoute(batchBuilderRouteRequest.routeKey, {
       intentLabel: "Route workspace",
       batchEntryMode: "core",
     });
-  }, [batchBuilderRouteRequest, openBatchBuilderForRoute]);
+    onBatchBuilderRouteRequestConsumed?.(batchBuilderRouteRequest.requestId);
+  }, [
+    batchBuilderRouteRequest,
+    onBatchBuilderRouteRequestConsumed,
+    openBatchBuilderForRoute,
+  ]);
 
   const getWorkbenchPackForRoute = useCallback(
     (routeKey: string): SavedRoutePack | null => {
