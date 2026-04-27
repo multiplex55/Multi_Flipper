@@ -112,6 +112,15 @@ export function RadiusRouteGroupsPanel({
     [characters],
   );
 
+
+  const openBatchBuilder = (routeKey: string) => {
+    if (routeWorkspace) {
+      routeWorkspace.openBatchBuilder(routeKey);
+      return;
+    }
+    onOpenBatchBuilderForRoute?.(routeKey);
+  };
+
   const ensurePack = (routeKey: string, routeLabel: string) => {
     if (!routeWorkspace) return null;
     const existing = routeWorkspace.getPackByRouteKey(routeKey);
@@ -239,10 +248,7 @@ export function RadiusRouteGroupsPanel({
                     Assign Best Pilot
                   </button>
                   <button type="button" className="rounded-sm border border-eve-border/60 px-1 py-0.5" onClick={() => onCompareRoute?.(route.routeKey)}>Compare</button>
-                  <button type="button" className="rounded-sm border border-eve-border/60 px-1 py-0.5" onClick={() => {
-                    routeWorkspace?.openBatchBuilder(route.routeKey);
-                    onOpenBatchBuilderForRoute?.(route.routeKey);
-                  }}>Build Batch</button>
+                  <button type="button" className="rounded-sm border border-eve-border/60 px-1 py-0.5" onClick={() => openBatchBuilder(route.routeKey)}>Build Batch</button>
                   <button type="button" className="rounded-sm border border-eve-border/60 px-1 py-0.5" onClick={() => {
                     ensurePack(route.routeKey, route.routeLabel);
                     routeWorkspace?.copyManifest(route.routeKey);
