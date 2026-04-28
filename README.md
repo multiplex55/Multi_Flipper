@@ -3,6 +3,23 @@
 EVE Flipper is a local-first market analysis platform for EVE Online traders.
 It combines live ESI order books, historical market behavior, and execution-aware math to surface actionable opportunities across multiple trading workflows.
 
+> This project is a fork of the original eveflipper repository and has diverged significantly to support the maintainer’s preferred EVE playstyle and workflows.
+
+## What changed in this fork
+
+This fork prioritizes the maintainer’s preferences for day-to-day usage, so contributors and users should expect opinionated defaults and workflow decisions in areas such as:
+- route and planning preferences
+- market/scan/workbench behavior
+- UI density, sorting, and filtering defaults
+- quality-of-life workflow tweaks
+
+### Notable fork additions
+
+- **Flipper (Radius)**: local-radius opportunity scanning workflow tuned for fast route-to-execution decisions.
+- **Batch Builder**: one-click manifest generation from selected deals to streamline hauling and execution prep.
+- **Pinned Opportunities tab**: cross-tab pinning and comparison snapshots for scan, station, regional, and contract opportunities.
+- **Expanded workflow tabs**: additional workflows such as Contract Arbitrage, Industry, War Tracker, and PLEX+ beyond baseline trading views.
+
 [![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)](https://go.dev/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -304,3 +321,5 @@ MIT License. See `LICENSE`.
 
 EVE Flipper is an independent third-party project and is not affiliated with CCP Games.
 EVE Online and related trademarks are property of CCP hf.
+
+Original project: [ilyaux/Eve-flipper on GitHub](https://github.com/ilyaux/Eve-flipper).
