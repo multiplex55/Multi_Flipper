@@ -234,6 +234,7 @@ import {
   buildRadiusDealSnapshotKey,
   buildRadiusDealSnapshots,
   compareRadiusDealSnapshots,
+  summarizeRadiusMovement,
   type RadiusDealMovement,
   type RadiusDealMovementLabel,
   type RadiusDealSnapshot,
@@ -2051,6 +2052,7 @@ export function ScanResultsTable({
   const [showEndpointPrefsPanel, setShowEndpointPrefsPanel] = useState(false);
   const [showTrackedPanel, setShowTrackedPanel] = useState(false);
   const [showCachePanel, setShowCachePanel] = useState(false);
+  const [movementFilterChips, setMovementFilterChips] = useState<Set<string>>(new Set());
   const [activeControlMenuSection, setActiveControlMenuSection] = useState<string | null>(null);
   const [collapsedRegionGroups, setCollapsedRegionGroups] = useState<
     Set<string>
@@ -2967,6 +2969,24 @@ export function ScanResultsTable({
       lockFiltered = lockFiltered.filter((ir) => savedPatternMatchByRowId.get(ir.id)?.activeMatch);
     }
 
+    if (movementFilterChips.size > 0) {
+      const movementLookup = compareRadiusDealSnapshots(previousDealSnapshots, buildRadiusDealSnapshots(results)).movementByKey;
+      lockFiltered = lockFiltered.filter((ir) => {
+        const movement = movementLookup.get(buildRadiusDealSnapshotKey(ir.row));
+        if (!movement) return false;
+        const profitDeltaPct = movement.profitDeltaPct;
+        const qtyDeltaPct = movement.quantityDeltaPct;
+        const highValueNew = movement.label === "new" && (ir.row.RealProfit ?? 0) >= 25_000_000;
+        const checks = [
+          movementFilterChips.has(movement.label),
+          movementFilterChips.has("profit25") && profitDeltaPct >= 25,
+          movementFilterChips.has("qty50") && qtyDeltaPct >= 50,
+          movementFilterChips.has("highValueNew") && highValueNew,
+        ];
+        return checks.some(Boolean);
+      });
+    }
+
     const sessionScopedRows = lockFiltered.map((item) => item.row);
 
     const filteredScoreContext = buildFlipScoreContext(sessionScopedRows);
@@ -3072,6 +3092,8 @@ export function ScanResultsTable({
     savedRadiusPatterns,
     activeRadiusPattern,
     savedPatternModeEnabled,
+    movementFilterChips,
+    previousDealSnapshots,
   ]);
 
   // Available market groups derived from current results (region mode only)
@@ -3395,6 +3417,8 @@ export function ScanResultsTable({
     () => compareRadiusDealSnapshots(previousDealSnapshots, currentDealSnapshots),
     [currentDealSnapshots, previousDealSnapshots],
   );
+
+  const radiusMovementSummary = useMemo(() => summarizeRadiusMovement(radiusDealMovementByKey, disappearedDealKeys), [radiusDealMovementByKey, disappearedDealKeys]);
 
   useEffect(() => {
     setPreviousDealSnapshots(currentDealSnapshots);
@@ -6619,6 +6643,17 @@ export function ScanResultsTable({
         data-filter-stage-counts={JSON.stringify(filterAudit.stageCounts)}
         data-deal-disappeared-count={disappearedDealKeys.size}
       >
+      {isRadiusMode && (
+        <div className="shrink-0 px-2 pt-1 text-[11px] space-y-1" data-testid="radius-movement-summary-strip">
+          <div className="text-eve-dim">Changes: {radiusMovementSummary.new} new · {radiusMovementSummary.improving} improving · {radiusMovementSummary.worse} worse · {radiusMovementSummary.disappeared} disappeared</div>
+          <div className="flex flex-wrap gap-1">
+            {[["new","New"],["improving","Improving"],["worse","Worse"],["collapsing","Collapsing"],["disappeared","Disappeared"],["profit25","Profit +25%+"],["qty50","Qty +50%+"],["highValueNew","High-value new"]].map(([key,label]) => (
+              <button key={key} type="button" onClick={() => setMovementFilterChips((prev) => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; })} className={`rounded-sm border px-1.5 py-0.5 ${movementFilterChips.has(key) ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent" : "border-eve-border/60 text-eve-dim"}`}>{label}</button>
+            ))}
+            <button type="button" onClick={() => setMovementFilterChips(new Set())} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5">Clear</button>
+          </div>
+        </div>
+      )}
       {activeFilterChips.length > 0 && (
         <div
           className="shrink-0 px-2 pt-1 flex flex-wrap items-center gap-1.5 text-[11px]"
