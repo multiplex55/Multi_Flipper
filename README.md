@@ -310,8 +310,7 @@ Minimal add-pin payload example:
 
 ## Contributing
 
-See:
-- `CONTRIBUTING.md`
+This fork is maintained according to maintainer preference. If you want to propose a change, open an issue to discuss scope and fit before submitting a pull request.
 
 ## License
 
