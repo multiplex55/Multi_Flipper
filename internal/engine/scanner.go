@@ -34,6 +34,10 @@ type Scanner struct {
 	History            HistoryProvider
 	ContractsCache     *esi.ContractsCache     // Cache for contracts (5 min TTL)
 	ContractItemsCache *esi.ContractItemsCache // Cache for contract items (immutable)
+
+	// test hooks
+	sellJumpResolver     func(from, to int32, minSecurity float64) int
+	disableSellJumpCache bool
 }
 
 // NewScanner creates a Scanner with the given static data and ESI client.
@@ -640,9 +644,22 @@ func (s *Scanner) calculateResults(
 		sellLocID int64 // where we BUY (from sell orders)
 		buyLocID  int64 // where we SELL (to buy orders)
 	}
+	type routeKey struct {
+		from, to   int32
+		minSecMode bool
+	}
 	bestPairs := make(map[pairKey]*FlipResult)
 
 	minSec := params.MinRouteSecurity
+	sellJumpResolver := s.jumpsBetweenWithSecurity
+	if s.sellJumpResolver != nil {
+		sellJumpResolver = s.sellJumpResolver
+	}
+	sellJumpCacheInitialCap := len(idx.sellByType) * 8
+	if sellJumpCacheInitialCap < 16 {
+		sellJumpCacheInitialCap = 16
+	}
+	sellJumpCache := make(map[routeKey]int, sellJumpCacheInitialCap)
 	targetMarketSystemID := params.TargetMarketSystemID
 	targetMarketLocationID := params.TargetMarketLocationID
 
@@ -811,7 +828,18 @@ func (s *Scanner) calculateResults(
 
 				// Route check (BFS)
 				buyJumps := s.jumpsBetweenWithBFS(params.CurrentSystemID, sell.SystemID, bfsDistances, minSec)
-				sellJumps := s.jumpsBetweenWithSecurity(sell.SystemID, buy.SystemID, minSec)
+				sellJumps := 0
+				if s.disableSellJumpCache {
+					sellJumps = sellJumpResolver(sell.SystemID, buy.SystemID, minSec)
+				} else {
+					routeK := routeKey{from: sell.SystemID, to: buy.SystemID, minSecMode: minSec > 0}
+					if cached, ok := sellJumpCache[routeK]; ok {
+						sellJumps = cached
+					} else {
+						sellJumps = sellJumpResolver(sell.SystemID, buy.SystemID, minSec)
+						sellJumpCache[routeK] = sellJumps
+					}
+				}
 				if buyJumps >= UnreachableJumps || sellJumps >= UnreachableJumps {
 					continue
 				}
