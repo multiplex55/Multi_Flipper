@@ -1828,6 +1828,7 @@ export function ScanResultsTable({
   const [hiddenColumns, setHiddenColumns] = useState<Set<SortKey>>(new Set());
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [selectedRowKeys, setSelectedRowKeys] = useState<Set<string>>(new Set());
+  const [dismissedSameLegRailKey, setDismissedSameLegRailKey] = useState<string | null>(null);
   const [pinnedKeys, setPinnedKeys] = useState<Set<string>>(new Set());
   const [savedRadiusPatterns, setSavedRadiusPatterns] = useState<RadiusSavedDealPattern[]>(() =>
     loadSavedCandidatePatterns().filter(isRadiusSavedDealPattern),
@@ -4304,6 +4305,16 @@ export function ScanResultsTable({
     const selected = selectionScopeRows.find((entry) => selectedIds.has(entry.id));
     return selected?.row ?? null;
   }, [focusedRowEntry, selectedIds, selectionScopeRows]);
+  const selectedLegRailKey = useMemo(() => {
+    if (!selectedLegAnchor) return null;
+    return `${getExactLegKey(selectedLegAnchor)}:${selectedLegAnchor.TypeID}`;
+  }, [selectedLegAnchor]);
+  const showSameLegRail = useMemo(
+    () =>
+      selectedLegRailKey !== null &&
+      selectedLegRailKey !== dismissedSameLegRailKey,
+    [dismissedSameLegRailKey, selectedLegRailKey],
+  );
   const selectedOneLegAnchor = selectedLegAnchor;
   const sameLegRowsForAnchor = useMemo(() => {
     if (!selectedLegAnchor) return [] as FlipResult[];
@@ -4476,6 +4487,17 @@ export function ScanResultsTable({
       setIgnoredSelectedKeys(new Set());
     }
   }, [ignoredModalOpen]);
+
+  useEffect(() => {
+    if (!dismissedSameLegRailKey) return;
+    if (!selectedLegRailKey) {
+      setDismissedSameLegRailKey(null);
+      return;
+    }
+    if (selectedLegRailKey !== dismissedSameLegRailKey) {
+      setDismissedSameLegRailKey(null);
+    }
+  }, [dismissedSameLegRailKey, focusedRowId, selectedLegRailKey, selectedRowKeys]);
 
   useEffect(() => {
     setIgnoredSelectedKeys((prev) => {
@@ -8233,7 +8255,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
         />
       )}
 
-      {selectedLegAnchor && (
+      {showSameLegRail && selectedLegAnchor && (
         <div
           className="mb-2 rounded-sm border border-eve-accent/40 bg-eve-accent/5 p-2 text-[11px]"
           data-testid="same-leg-rail"
@@ -8270,6 +8292,16 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
             </button>
             <button type="button" className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-eve-dim" onClick={clearLegLocks}>
               Clear locks
+            </button>
+            <button type="button" className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-eve-dim" onClick={() => {
+              setFocusedRowId(null);
+              setSelectedIds(new Set());
+              setSelectedRowKeys(new Set());
+            }}>
+              Clear selection
+            </button>
+            <button type="button" className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 text-eve-dim" onClick={() => setDismissedSameLegRailKey(selectedLegRailKey)}>
+              Hide rail
             </button>
           </div>
         </div>

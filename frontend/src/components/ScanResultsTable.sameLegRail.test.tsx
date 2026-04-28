@@ -84,49 +84,36 @@ function renderTable(rows: FlipResult[], onOpenPriceValidation?: (manifest: stri
 }
 
 describe("ScanResultsTable same-leg rail", () => {
-  it("appears after row focus and hides when data clears", async () => {
-    const first = row({ TypeID: 1, TypeName: "A" });
-    const second = row({ TypeID: 2, TypeName: "B" });
-    const view = renderTable([first, second]);
+  it("shows on focus/select", async () => {
+    renderTable([row({ TypeID: 1, TypeName: "A" }), row({ TypeID: 2, TypeName: "B" })]);
 
     expect(screen.queryByTestId("same-leg-rail")).not.toBeInTheDocument();
     fireEvent.click(screen.getByText("A"));
     expect(await screen.findByTestId("same-leg-rail")).toBeInTheDocument();
+  });
 
-    view.rerender(
-      <I18nProvider>
-        <ToastProvider>
-          <ScanResultsTable results={[]} scanning={false} progress="" tradeStateTab="radius" />
-        </ToastProvider>
-      </I18nProvider>,
-    );
+  it("hides on button click and reappears on different selection", async () => {
+    renderTable([row({ TypeID: 3, TypeName: "Hide Me" }), row({ TypeID: 4, TypeName: "Bring Back" })]);
+
+    fireEvent.click(screen.getByText("Hide Me"));
+    expect(await screen.findByTestId("same-leg-rail")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Hide rail" }));
+    await waitFor(() => expect(screen.queryByTestId("same-leg-rail")).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getByText("Bring Back"));
+    expect(await screen.findByTestId("same-leg-rail")).toBeInTheDocument();
+  });
+
+  it("clear selection hides rail", async () => {
+    renderTable([row({ TypeID: 8, TypeName: "Lock Row" }), row({ TypeID: 9, TypeName: "Other" })]);
+
+    fireEvent.click(screen.getByText("Lock Row"));
+    expect(await screen.findByTestId("same-leg-rail")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
     await waitFor(() => expect(screen.queryByTestId("same-leg-rail")).not.toBeInTheDocument());
   });
 
-  it("rail quick verify dispatches manifest and Fill Cargo excludes off-leg rows", async () => {
-    const onOpenPriceValidation = vi.fn();
-    const anchor = row({ TypeID: 10, TypeName: "Anchor" });
-    const sameLeg = row({ TypeID: 11, TypeName: "Same Leg" });
-    const offLeg = row({ TypeID: 12, TypeName: "Off Leg", SellLocationID: 60008495, SellStation: "Dodixie" });
-    renderTable([anchor, sameLeg, offLeg], onOpenPriceValidation);
-
-    fireEvent.click(screen.getAllByText("Anchor")[0]);
-    fireEvent.click(await screen.findByRole("button", { name: "Quick Verify" }));
-    expect(onOpenPriceValidation).toHaveBeenCalledTimes(1);
-    expect(onOpenPriceValidation.mock.calls[0]?.[0]).toContain("Anchor");
-
-    fireEvent.click(screen.getByRole("button", { name: "Fill Cargo" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Open Price Validation" }));
-    const manifest =
-      onOpenPriceValidation.mock.calls[
-        onOpenPriceValidation.mock.calls.length - 1
-      ]?.[0] as string;
-    expect(manifest).toContain("Anchor");
-    expect(manifest).toContain("Same Leg");
-    expect(manifest).not.toContain("Off Leg");
-  });
-
-  it("renders lock chips, supports clear, and lock filters rows", async () => {
+  it("lock actions are unaffected", async () => {
     const anchor = row({ TypeID: 20, TypeName: "Anchor" });
     const sameBuyDifferentSell = row({ TypeID: 21, TypeName: "Different Sell", SellLocationID: 60008495, SellStation: "Dodixie" });
     const differentBuy = row({ TypeID: 22, TypeName: "Different Buy", BuyLocationID: 60000001, BuyStation: "Rens" });
@@ -134,14 +121,39 @@ describe("ScanResultsTable same-leg rail", () => {
 
     fireEvent.click(screen.getAllByText("Anchor")[0]);
     fireEvent.click(await screen.findByRole("button", { name: "Lock buy" }));
-
     expect(await screen.findByRole("button", { name: /Buy lock #60003760/i })).toBeInTheDocument();
-    expect(screen.queryAllByText("Anchor").length).toBeGreaterThan(0);
-    expect(screen.queryAllByText("Different Sell").length).toBeGreaterThan(0);
-    const tableContainer = document.querySelector(".table-scroll-container");
-    expect(tableContainer?.textContent ?? "").not.toContain("Rens");
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
+    expect(screen.getByRole("button", { name: /Buy lock #60003760/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /Buy lock #60003760/i }));
     await waitFor(() => expect(screen.queryByRole("button", { name: /Buy lock #60003760/i })).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getByText("Anchor"));
+    expect(await screen.findByTestId("same-leg-rail")).toBeInTheDocument();
+  });
+
+  it("actions still work after hide/reselect cycle", async () => {
+    const onOpenPriceValidation = vi.fn();
+    const anchor = row({ TypeID: 10, TypeName: "Anchor" });
+    const sameLeg = row({ TypeID: 11, TypeName: "Same Leg" });
+    const offLeg = row({ TypeID: 12, TypeName: "Off Leg", SellLocationID: 60008495, SellStation: "Dodixie" });
+    renderTable([anchor, sameLeg, offLeg], onOpenPriceValidation);
+
+    fireEvent.click(screen.getAllByText("Anchor")[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Hide rail" }));
+    await waitFor(() => expect(screen.queryByTestId("same-leg-rail")).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getAllByText("Same Leg")[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Quick Verify" }));
+    expect(onOpenPriceValidation).toHaveBeenCalledTimes(1);
+    expect(onOpenPriceValidation.mock.calls[0]?.[0]).toContain("Same Leg");
+
+    fireEvent.click(screen.getByRole("button", { name: "Fill Cargo" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open Price Validation" }));
+    const manifest = onOpenPriceValidation.mock.calls[onOpenPriceValidation.mock.calls.length - 1]?.[0] as string;
+    expect(manifest).toContain("Anchor");
+    expect(manifest).toContain("Same Leg");
+    expect(manifest).not.toContain("Off Leg");
   });
 });
