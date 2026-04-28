@@ -137,6 +137,41 @@ describe("ScanResultsTable more controls toolbar", () => {
     expect(pinsFirstToggle.checked).toBe(false);
   });
 
+  it("shows ordering chip by default in radius and updates when toggled", () => {
+    renderTable([makeRow()]);
+    expect(screen.getByText(/^Ordering: Smart/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /more controls ▸/i }));
+    fireEvent.click(screen.getByTestId("ordering-mode-toggle:column_only"));
+    expect(screen.getByText(/^Ordering: Column only/)).toBeInTheDocument();
+  });
+
+  it("opens more controls and focuses ordering group when ordering chip is clicked", () => {
+    renderTable([makeRow()]);
+    fireEvent.click(screen.getByText(/^Ordering: Smart/));
+    expect(screen.getByRole("button", { name: /more controls ▾/i })).toBeInTheDocument();
+    const orderingGroup = screen.getByTestId("radius-control-menu-group:ordering");
+    expect(orderingGroup).toHaveFocus();
+  });
+
+  it("starts with smart toggle active and column-only inactive", () => {
+    renderTable([makeRow()]);
+    fireEvent.click(screen.getByRole("button", { name: /more controls ▸/i }));
+    expect(screen.getByTestId("ordering-mode-toggle:smart")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("ordering-mode-toggle:column_only")).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("hydrates ordering preferences from localStorage", () => {
+    localStorage.setItem("eve-scan-ui-state:v1:radius:default:ordering", JSON.stringify({
+      orderingMode: "column_only",
+      pinsFirst: false,
+      trackedFirst: false,
+    }));
+    renderTable([makeRow()]);
+    expect(screen.getByText(/^Ordering: Column only/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /more controls ▸/i }));
+    expect(screen.getByTestId("ordering-mode-toggle:column_only")).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("renders ordering stack for smart and column-only modes", () => {
     renderTable([makeRow(), makeRow({ TypeID: 102, TypeName: "Item 102" })]);
     fireEvent.click(screen.getByRole("button", { name: /more controls ▸/i }));
@@ -226,7 +261,7 @@ describe("ScanResultsTable more controls toolbar", () => {
     });
     fireEvent.click(screen.getByTestId("pins-first-toggle"));
 
-    fireEvent.click(screen.getByTestId("reset-implicit-ordering-button"));
+    fireEvent.click(screen.getByTestId("ordering-clean-column-sort-button"));
 
     expect(screen.getByTestId("ordering-mode-toggle:column_only")).toHaveClass(
       "border-eve-accent/70",
@@ -260,7 +295,7 @@ describe("ScanResultsTable more controls toolbar", () => {
       "border-eve-accent/70",
     );
 
-    fireEvent.click(screen.getByTestId("reset-implicit-ordering-button"));
+    fireEvent.click(screen.getByTestId("ordering-clean-column-sort-button"));
 
     expect(screen.getByTestId("active-filter-chip:urgency-filter")).toBeInTheDocument();
     expect(screen.getByText("Showing 1 of 2")).toBeInTheDocument();
