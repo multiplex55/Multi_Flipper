@@ -110,6 +110,127 @@ func TestProfitCalculation_HighTax(t *testing.T) {
 	}
 }
 
+func TestPassesHistoryFilters_CombinedAndSingleThresholds(t *testing.T) {
+	base := FlipResult{
+		HistoryAvailable: true,
+		DailyVolume:      100,
+		S2BPerDay:        80,
+		BfSPerDay:        60,
+		S2BBfSRatio:      1.25,
+	}
+
+	tests := []struct {
+		name         string
+		row          FlipResult
+		params       ScanParams
+		needsHistory bool
+		want         bool
+	}{
+		{
+			name:         "no thresholds and no history requirement passes missing history",
+			row:          FlipResult{},
+			params:       ScanParams{},
+			needsHistory: false,
+			want:         true,
+		},
+		{
+			name: "combined thresholds pass when all checks meet",
+			row:  base,
+			params: ScanParams{
+				MinDailyVolume: 100,
+				MinS2BPerDay:   80,
+				MinBfSPerDay:   60,
+				MinS2BBfSRatio: 1.2,
+				MaxS2BBfSRatio: 1.3,
+			},
+			needsHistory: true,
+			want:         true,
+		},
+		{
+			name: "combined thresholds fail when history missing and required",
+			row: FlipResult{
+				HistoryAvailable: false,
+				DailyVolume:      100,
+				S2BPerDay:        80,
+				BfSPerDay:        60,
+				S2BBfSRatio:      1.25,
+			},
+			params: ScanParams{
+				MinDailyVolume: 100,
+				MinS2BPerDay:   80,
+				MinBfSPerDay:   60,
+				MinS2BBfSRatio: 1.2,
+				MaxS2BBfSRatio: 1.3,
+			},
+			needsHistory: true,
+			want:         false,
+		},
+		{
+			name: "single MinDailyVolume threshold enforced",
+			row:  base,
+			params: ScanParams{
+				MinDailyVolume: 101,
+			},
+			needsHistory: true,
+			want:         false,
+		},
+		{
+			name: "single MinS2BPerDay threshold enforced",
+			row:  base,
+			params: ScanParams{
+				MinS2BPerDay: 81,
+			},
+			needsHistory: true,
+			want:         false,
+		},
+		{
+			name: "single MinBfSPerDay threshold enforced",
+			row:  base,
+			params: ScanParams{
+				MinBfSPerDay: 61,
+			},
+			needsHistory: true,
+			want:         false,
+		},
+		{
+			name: "single MinS2BBfSRatio threshold enforced",
+			row:  base,
+			params: ScanParams{
+				MinS2BBfSRatio: 1.26,
+			},
+			needsHistory: true,
+			want:         false,
+		},
+		{
+			name: "single MaxS2BBfSRatio threshold enforced",
+			row:  base,
+			params: ScanParams{
+				MaxS2BBfSRatio: 1.24,
+			},
+			needsHistory: true,
+			want:         false,
+		},
+		{
+			name: "history missing allowed when needsHistory false despite thresholds unset",
+			row: FlipResult{
+				HistoryAvailable: false,
+			},
+			params:       ScanParams{},
+			needsHistory: false,
+			want:         true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := passesHistoryFilters(tc.row, tc.params, tc.needsHistory)
+			if got != tc.want {
+				t.Fatalf("passesHistoryFilters() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 type testHistoryProvider struct {
 	store map[string][]esi.HistoryEntry
 }

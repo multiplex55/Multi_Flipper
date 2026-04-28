@@ -1099,63 +1099,38 @@ func (s *Scanner) calculateResults(
 		params.MinBfSPerDay > 0 ||
 		params.MinS2BBfSRatio > 0 ||
 		params.MaxS2BBfSRatio > 0
-	if needsHistory {
-		filtered := make([]FlipResult, 0, len(results))
-		for _, r := range results {
-			if r.HistoryAvailable {
-				filtered = append(filtered, r)
-			}
+	filtered := make([]FlipResult, 0, len(results))
+	for _, r := range results {
+		if passesHistoryFilters(r, params, needsHistory) {
+			filtered = append(filtered, r)
 		}
-		results = filtered
 	}
-	if params.MinDailyVolume > 0 {
-		filtered := make([]FlipResult, 0, len(results))
-		for _, r := range results {
-			if r.DailyVolume >= params.MinDailyVolume {
-				filtered = append(filtered, r)
-			}
-		}
-		results = filtered
-	}
-	if params.MinS2BPerDay > 0 {
-		filtered := make([]FlipResult, 0, len(results))
-		for _, r := range results {
-			if r.S2BPerDay >= params.MinS2BPerDay {
-				filtered = append(filtered, r)
-			}
-		}
-		results = filtered
-	}
-	if params.MinBfSPerDay > 0 {
-		filtered := make([]FlipResult, 0, len(results))
-		for _, r := range results {
-			if r.BfSPerDay >= params.MinBfSPerDay {
-				filtered = append(filtered, r)
-			}
-		}
-		results = filtered
-	}
-	if params.MinS2BBfSRatio > 0 {
-		filtered := make([]FlipResult, 0, len(results))
-		for _, r := range results {
-			if r.S2BBfSRatio >= params.MinS2BBfSRatio {
-				filtered = append(filtered, r)
-			}
-		}
-		results = filtered
-	}
-	if params.MaxS2BBfSRatio > 0 {
-		filtered := make([]FlipResult, 0, len(results))
-		for _, r := range results {
-			if r.S2BBfSRatio <= params.MaxS2BBfSRatio {
-				filtered = append(filtered, r)
-			}
-		}
-		results = filtered
-	}
+	results = filtered
 
 	progress(fmt.Sprintf("Found %d profitable trades", len(results)))
 	return results, nil
+}
+
+func passesHistoryFilters(r FlipResult, p ScanParams, needsHistory bool) bool {
+	if needsHistory && !r.HistoryAvailable {
+		return false
+	}
+	if p.MinDailyVolume > 0 && r.DailyVolume < p.MinDailyVolume {
+		return false
+	}
+	if p.MinS2BPerDay > 0 && r.S2BPerDay < p.MinS2BPerDay {
+		return false
+	}
+	if p.MinBfSPerDay > 0 && r.BfSPerDay < p.MinBfSPerDay {
+		return false
+	}
+	if p.MinS2BBfSRatio > 0 && r.S2BBfSRatio < p.MinS2BBfSRatio {
+		return false
+	}
+	if p.MaxS2BBfSRatio > 0 && r.S2BBfSRatio > p.MaxS2BBfSRatio {
+		return false
+	}
+	return true
 }
 
 // fetchOrders is the legacy blocking version, kept for non-scan callers.
