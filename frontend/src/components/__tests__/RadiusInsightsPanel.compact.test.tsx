@@ -127,6 +127,19 @@ describe("Radius insights compact drawer flow", () => {
     expect(screen.queryByTestId("radius-insights-drawer")).not.toBeInTheDocument();
   });
 
+  it("closes full insights with escape and exposes deterministic scroll body hook", () => {
+    renderTable([makeRow()]);
+
+    fireEvent.click(screen.getByRole("button", { name: /open insights/i }));
+    expect(screen.getByTestId("radius-insights-drawer")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("radius-insights-drawer-scroll-body"),
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByTestId("radius-insights-drawer")).not.toBeInTheDocument();
+  });
+
   it("keeps the main table rendered while insights are collapsed", () => {
     renderTable([makeRow()]);
 

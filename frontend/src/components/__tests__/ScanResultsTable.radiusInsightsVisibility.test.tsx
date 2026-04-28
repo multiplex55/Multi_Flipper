@@ -27,6 +27,8 @@ vi.mock("@/lib/api", () => ({
 
 const RADIUS_ROUTE_INSIGHTS_HIDDEN_STORAGE_KEY =
   "eve-radius-route-insights-hidden:v1";
+const RADIUS_INSIGHTS_DRAWER_OPEN_STORAGE_KEY =
+  "eve-radius-insights-drawer-open:v1";
 
 function makeRow(overrides: Partial<FlipResult> = {}): FlipResult {
   return {
@@ -180,11 +182,18 @@ describe("ScanResultsTable radius insights visibility", () => {
     renderTable([makeRow()]);
 
     fireEvent.click(screen.getByRole("button", { name: /open insights/i }));
+    expect(screen.getByText("Item 101")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Hubs" }));
     fireEvent.click(screen.getByRole("button", { name: /Top Buy/i }));
     const headings = screen.getAllByText("Top Buy Hubs");
     expect(headings).toHaveLength(1);
     expect(screen.getAllByText("Jita IV - Moon 4").length).toBeGreaterThan(0);
+  });
+
+  it("keeps drawer closed when only localStorage open flag is set", () => {
+    localStorage.setItem(RADIUS_INSIGHTS_DRAWER_OPEN_STORAGE_KEY, "1");
+    renderTable([makeRow()]);
+    expect(screen.queryByTestId("radius-insights-drawer")).not.toBeInTheDocument();
   });
 
   it("closes an open drawer immediately when insights are hidden and shortcut does not reopen drawer", () => {
