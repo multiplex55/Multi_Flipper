@@ -1882,13 +1882,7 @@ export function ScanResultsTable({
       }
     });
   const [radiusInsightsDrawerOpen, setRadiusInsightsDrawerOpen] =
-    useState<boolean>(() => {
-      try {
-        return localStorage.getItem(RADIUS_INSIGHTS_DRAWER_OPEN_STORAGE_KEY) === "1";
-      } catch {
-        return false;
-      }
-    });
+    useState<boolean>(false);
   const previousScanningRef = useRef(scanning);
   const [groupByItem, setGroupByItem] = useState<boolean>(() => {
     try {
@@ -7992,7 +7986,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               routeAggregateMetricsByRoute={routeAggregateMetricsByRoute}
               routeFillerCandidatesByKey={routeFillerCandidatesByKey}
               lensActive={decisionLens !== "recommended"}
-              defaultExpanded
+              defaultExpanded={false}
               loopOpportunities={showLoopPanel ? effectiveLoopOpportunities : []}
               openRouteWorkbench={openRouteWorkbench}
               onOpenBatchBuilderForRoute={openBatchBuilderForRoute}
