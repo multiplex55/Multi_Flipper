@@ -11,6 +11,7 @@ const toneByLabel: Record<NonNullable<Props["movement"]>["label"], string> = {
   stable: "border-eve-border/60 bg-eve-panel/30 text-eve-dim",
   worse: "border-amber-400/45 bg-amber-500/10 text-amber-200",
   collapsing: "border-rose-400/55 bg-rose-500/10 text-rose-200",
+  disappeared: "border-violet-400/55 bg-violet-500/10 text-violet-200",
 };
 
 const labelByMovement: Record<NonNullable<Props["movement"]>["label"], string> = {
@@ -19,6 +20,7 @@ const labelByMovement: Record<NonNullable<Props["movement"]>["label"], string> =
   stable: "Stable",
   worse: "Worse",
   collapsing: "Collapsing",
+  disappeared: "Disappeared",
 };
 
 export function RadiusDealMovementBadge({ movement, showDelta = true }: Props) {

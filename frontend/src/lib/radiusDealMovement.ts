@@ -15,7 +15,7 @@ export type RadiusDealSnapshot = {
   trapRisk: number;
 };
 
-export type RadiusDealMovementLabel = "new" | "stable" | "improving" | "worse" | "collapsing";
+export type RadiusDealMovementLabel = "new" | "stable" | "improving" | "worse" | "collapsing" | "disappeared";
 
 export type RadiusDealMovement = {
   key: string;
@@ -25,6 +25,29 @@ export type RadiusDealMovement = {
   executionDelta: number;
   trapRiskDelta: number;
 };
+
+export type RadiusMovementSummary = Record<"new" | "improving" | "stable" | "worse" | "collapsing" | "disappeared", number>;
+
+export const RADIUS_NEW_VALUE_MOVEMENT_MULTIPLIER: Record<Exclude<RadiusDealMovementLabel, "disappeared">, number> = {
+  new: 1.35,
+  improving: 1.2,
+  stable: 1,
+  worse: 0.7,
+  collapsing: 0.35,
+};
+
+export function computeNewValueScore(params: {
+  realProfitIsk: number;
+  executionQuality: number;
+  movementLabel: Exclude<RadiusDealMovementLabel, "disappeared">;
+  liquidity: number;
+}): number {
+  const profitNorm = Math.max(0, params.realProfitIsk) / 1_000_000;
+  const executionNorm = Math.max(0, Math.min(1, params.executionQuality / 100));
+  const liquidityNorm = Math.max(0.25, Math.min(1.5, params.liquidity));
+  const movementMultiplier = RADIUS_NEW_VALUE_MOVEMENT_MULTIPLIER[params.movementLabel];
+  return Number((profitNorm * executionNorm * movementMultiplier * liquidityNorm).toFixed(3));
+}
 
 export type RadiusDealMovementComparison = {
   movementByKey: Map<string, RadiusDealMovement>;
@@ -139,4 +162,24 @@ export function compareRadiusDealSnapshots(
   }
 
   return { movementByKey, disappearedKeys };
+}
+
+export function summarizeRadiusMovement(
+  movementByKey: Map<string, RadiusDealMovement>,
+  disappearedKeys: Set<string>,
+): RadiusMovementSummary {
+  const summary: RadiusMovementSummary = {
+    new: 0,
+    improving: 0,
+    stable: 0,
+    worse: 0,
+    collapsing: 0,
+    disappeared: disappearedKeys.size,
+  };
+  for (const movement of movementByKey.values()) {
+    if (movement.label in summary) {
+      summary[movement.label as keyof RadiusMovementSummary] += 1;
+    }
+  }
+  return summary;
 }
