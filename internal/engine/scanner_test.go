@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"reflect"
 	"testing"
 	"time"
 
@@ -507,6 +508,116 @@ func TestCalculateResults_CargoCapacityClampsQuantityWithoutDroppingRow(t *testi
 	}
 	if results[0].UnitsToBuy != 2 {
 		t.Fatalf("units_to_buy = %d, want 2", results[0].UnitsToBuy)
+	}
+}
+
+func TestCalculateResults_SellJumpCache_ReducesRouteCallsWithoutChangingOutput(t *testing.T) {
+	u := graph.NewUniverse()
+	u.SetRegion(1, 10000002)
+	u.SetRegion(2, 10000002)
+	u.SetRegion(3, 10000002)
+	u.SetSecurity(1, 0.9)
+	u.SetSecurity(2, 0.9)
+	u.SetSecurity(3, 0.9)
+	u.AddGate(1, 2)
+	u.AddGate(2, 1)
+
+	const (
+		typeID     = int32(88001)
+		currentSys = int32(1)
+	)
+
+	scanner := &Scanner{
+		SDE: &sde.Data{
+			Universe: u,
+			Systems: map[int32]*sde.SolarSystem{
+				1: {ID: 1, Name: "Alpha", RegionID: 10000002},
+				2: {ID: 2, Name: "Beta", RegionID: 10000002},
+				3: {ID: 3, Name: "Gamma", RegionID: 10000002},
+			},
+			Types: map[int32]*sde.ItemType{
+				typeID: {ID: typeID, Name: "Route Cache Test Item", Volume: 1},
+			},
+		},
+		ESI: esi.NewClient(nil),
+	}
+
+	idx := &scanIndex{
+		sellByType: map[int32][]sellInfo{
+			typeID: {
+				{Price: 10, VolumeRemain: 100, LocationID: 91001, SystemID: 1},
+				{Price: 11, VolumeRemain: 100, LocationID: 91002, SystemID: 1},
+			},
+		},
+		buyByType: map[int32][]buyInfo{
+			typeID: {
+				{Price: 20, VolumeRemain: 100, LocationID: 92001, SystemID: 2},
+				{Price: 19, VolumeRemain: 100, LocationID: 92002, SystemID: 2},
+				{Price: 18, VolumeRemain: 100, LocationID: 92003, SystemID: 3},
+				{Price: 17, VolumeRemain: 100, LocationID: 92004, SystemID: 3},
+			},
+		},
+		sellOrders: []esi.MarketOrder{
+			{TypeID: typeID, LocationID: 91001, SystemID: 1, Price: 10, VolumeRemain: 100},
+			{TypeID: typeID, LocationID: 91002, SystemID: 1, Price: 11, VolumeRemain: 100},
+		},
+		buyOrders: []esi.MarketOrder{
+			{TypeID: typeID, LocationID: 92001, SystemID: 2, Price: 20, VolumeRemain: 100, IsBuyOrder: true},
+			{TypeID: typeID, LocationID: 92002, SystemID: 2, Price: 19, VolumeRemain: 100, IsBuyOrder: true},
+			{TypeID: typeID, LocationID: 92003, SystemID: 3, Price: 18, VolumeRemain: 100, IsBuyOrder: true},
+			{TypeID: typeID, LocationID: 92004, SystemID: 3, Price: 17, VolumeRemain: 100, IsBuyOrder: true},
+		},
+		sellSideBuyDepthByType:  map[int32]int64{typeID: 400},
+		sellSideSellDepthByType: map[int32]int64{typeID: 200},
+	}
+
+	params := ScanParams{CurrentSystemID: currentSys, CargoCapacity: 10_000, MinMargin: 0.1}
+	bfs := map[int32]int{currentSys: 0}
+
+	callCount := 0
+	resolver := func(from, to int32, minSecurity float64) int {
+		callCount++
+		if from == 1 && to == 2 {
+			return 1
+		}
+		if from == 1 && to == 3 {
+			return UnreachableJumps
+		}
+		t.Fatalf("unexpected route request from=%d to=%d minSec=%f", from, to, minSecurity)
+		return UnreachableJumps
+	}
+
+	scanner.sellJumpResolver = resolver
+	scanner.disableSellJumpCache = false
+	cachedResults, err := scanner.calculateResults(params, idx, bfs, func(string) {})
+	if err != nil {
+		t.Fatalf("cached calculateResults error: %v", err)
+	}
+	cachedCalls := callCount
+
+	callCount = 0
+	scanner.disableSellJumpCache = true
+	uncachedResults, err := scanner.calculateResults(params, idx, bfs, func(string) {})
+	if err != nil {
+		t.Fatalf("uncached calculateResults error: %v", err)
+	}
+	uncachedCalls := callCount
+
+	if uncachedCalls <= cachedCalls {
+		t.Fatalf("expected fewer route calls with cache: cached=%d uncached=%d", cachedCalls, uncachedCalls)
+	}
+	if uncachedCalls != 8 {
+		t.Fatalf("unexpected uncached call count: got=%d want=8", uncachedCalls)
+	}
+	if cachedCalls != 2 {
+		t.Fatalf("unexpected cached call count: got=%d want=2", cachedCalls)
+	}
+
+	if len(cachedResults) != len(uncachedResults) {
+		t.Fatalf("result length mismatch: cached=%d uncached=%d", len(cachedResults), len(uncachedResults))
+	}
+	if !reflect.DeepEqual(cachedResults, uncachedResults) {
+		t.Fatalf("results differ between cached and uncached execution")
 	}
 }
 
