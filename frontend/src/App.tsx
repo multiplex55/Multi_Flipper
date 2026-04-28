@@ -16,6 +16,7 @@ import { IndustryTab } from "./components/IndustryTab";
 import { WarTracker } from "./components/WarTracker";
 import { PlexTab } from "./components/PlexTab";
 import { PinnedOpportunitiesTab } from "./components/PinnedOpportunitiesTab";
+import { SellClipboardPanel } from "./components/SellClipboardPanel";
 // import { MarketMakingTab } from "./components/MarketMakingTab";
 import { ScanHistory } from "./components/ScanHistory";
 import { CommandPalette } from "./components/CommandPalette";
@@ -139,7 +140,8 @@ type Tab =
   | "industry"
   | "demand"
   | "plex"
-  | "pinned";
+  | "pinned"
+  | "sellClipboard";
 
 type RouteWorkspaceMode = "discover" | "workbench" | "finder" | "validate";
 
@@ -704,6 +706,7 @@ function App() {
           "demand",
           "plex",
           "pinned",
+          "sellClipboard",
         ].includes(saved)
       ) {
         return saved as Tab;
@@ -3129,6 +3132,11 @@ const handleScanAndRefresh = useCallback(async () => {
                   onClick={() => setTab("pinned")}
                   label={t("tabPinned") || "Pinned"}
                 />
+                <TabButton
+                  active={tab === "sellClipboard"}
+                  onClick={() => setTab("sellClipboard")}
+                  label="Sell Clipboard"
+                />
                 <div className="w-2 sm:w-4 shrink-0" />
               </div>
             </div>
@@ -4125,7 +4133,12 @@ const handleScanAndRefresh = useCallback(async () => {
                 <span>50%</span>
                 <span>100%</span>
               </div>
+                        <div
+              className={`flex-1 min-h-0 flex flex-col ${tab === "sellClipboard" ? "" : "hidden"}`}
+            >
+              <SellClipboardPanel rows={radiusResults} />
             </div>
+</div>
           </div>
         </div>
       )}
