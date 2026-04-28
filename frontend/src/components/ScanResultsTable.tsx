@@ -258,6 +258,11 @@ const RADIUS_FEATURE_PREFS_STORAGE_KEY = "eve-radius-feature-prefs:v1";
 const ENDPOINT_PREFS_STORAGE_KEY = "eve-radius-endpoint-preferences:v1";
 const ADVANCED_TOOLBAR_VISIBLE_STORAGE_KEY =
   "eve-radius-advanced-toolbar-visible:v1";
+const ORDERING_PREFS_DEFAULT = {
+  orderingMode: "smart" as OrderingMode,
+  pinsFirst: true,
+  trackedFirst: false,
+};
 const COMPACT_DASHBOARD_STORAGE_KEY = "eve-radius-compact-dashboard:v1";
 const RADIUS_ROUTE_INSIGHTS_HIDDEN_STORAGE_KEY =
   "eve-radius-route-insights-hidden:v1";
@@ -1792,8 +1797,8 @@ export function ScanResultsTable({
     useState<RadiusTransientModeSnapshot | null>(null);
   const [modeAppliedLayout, setModeAppliedLayout] =
     useState<RadiusTransientModeSnapshot | null>(null);
-  const [orderingMode, setOrderingMode] = useState<OrderingMode>("smart");
-  const [pinsFirst, setPinsFirst] = useState(true);
+  const [orderingMode, setOrderingMode] = useState<OrderingMode>(() => ORDERING_PREFS_DEFAULT.orderingMode);
+  const [pinsFirst, setPinsFirst] = useState(() => ORDERING_PREFS_DEFAULT.pinsFirst);
   const [decisionLens, setDecisionLens] = useState<
     "custom" | DecisionLensPreset
   >("recommended");
@@ -1924,7 +1929,7 @@ export function ScanResultsTable({
       }
       return "balanced_score";
     });
-  const [trackedFirst, setTrackedFirst] = useState(false);
+  const [trackedFirst, setTrackedFirst] = useState(() => ORDERING_PREFS_DEFAULT.trackedFirst);
   const [showTrackedChip, setShowTrackedChip] = useState(false);
   const [showAdvancedToolbar, setShowAdvancedToolbar] = useState<boolean>(() => {
     try {
@@ -2224,6 +2229,46 @@ export function ScanResultsTable({
       // ignore storage quota errors
     }
   }, [showHiddenRows, tableUiStateStoragePrefix]);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`${tableUiStateStoragePrefix}:ordering`);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<{
+        orderingMode: OrderingMode;
+        pinsFirst: boolean;
+        trackedFirst: boolean;
+      }>;
+      setOrderingMode(
+        parsed.orderingMode === "smart" || parsed.orderingMode === "column_only"
+          ? parsed.orderingMode
+          : ORDERING_PREFS_DEFAULT.orderingMode,
+      );
+      setPinsFirst(
+        typeof parsed.pinsFirst === "boolean"
+          ? parsed.pinsFirst
+          : ORDERING_PREFS_DEFAULT.pinsFirst,
+      );
+      setTrackedFirst(
+        typeof parsed.trackedFirst === "boolean"
+          ? parsed.trackedFirst
+          : ORDERING_PREFS_DEFAULT.trackedFirst,
+      );
+    } catch {
+      setOrderingMode(ORDERING_PREFS_DEFAULT.orderingMode);
+      setPinsFirst(ORDERING_PREFS_DEFAULT.pinsFirst);
+      setTrackedFirst(ORDERING_PREFS_DEFAULT.trackedFirst);
+    }
+  }, [tableUiStateStoragePrefix]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        `${tableUiStateStoragePrefix}:ordering`,
+        JSON.stringify({ orderingMode, pinsFirst, trackedFirst }),
+      );
+    } catch {
+      // ignore storage quota errors
+    }
+  }, [orderingMode, pinsFirst, trackedFirst, tableUiStateStoragePrefix]);
 
   // Watchlist
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
@@ -4521,7 +4566,13 @@ export function ScanResultsTable({
   const clearFilters = useCallback(() => {
     setFilters({});
   }, []);
-  const resetImplicitOrdering = useCallback(() => {
+  const useSmartDefaultOrdering = useCallback(() => {
+    setOrderingMode("smart");
+    setEndpointPreferenceMode(EndpointPreferenceApplicationMode.RankOnly);
+    setTrackedFirst(false);
+    setPinsFirst(true);
+  }, []);
+  const useCleanColumnSortOrdering = useCallback(() => {
     setOrderingMode("column_only");
     setEndpointPreferenceMode(EndpointPreferenceApplicationMode.Disabled);
     setTrackedFirst(false);
@@ -6371,6 +6422,7 @@ export function ScanResultsTable({
       { id: "tracked", label: `Tracked: ${trackedVisibilityMode}`, sectionId: "filters" },
       { id: "urgency", label: `Urgency: ${urgencyFilter}`, sectionId: "filters" },
       { id: "lens", label: `Lens: ${decisionLens}`, sectionId: "ordering" },
+      { id: "ordering", label: `Ordering: ${orderingMode === "smart" ? "Smart" : "Column only"} • ${activeSortLabel} ${sortDir === "asc" ? "↑" : "↓"}`, sectionId: "ordering" },
       { id: "hidden", label: showHiddenRows ? "Hidden: shown" : "Hidden: hidden", sectionId: "display-flags" },
     ];
     return chips;
@@ -6382,6 +6434,9 @@ export function ScanResultsTable({
     trackedVisibilityMode,
     urgencyFilter,
     decisionLens,
+    orderingMode,
+    activeSortLabel,
+    sortDir,
     showHiddenRows,
   ]);
 
@@ -6494,9 +6549,10 @@ export function ScanResultsTable({
             <button type="button" onClick={() => toggleSort("UrgencyScore")} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5">
               {t("colUrgency")}
             </button>
-            <button type="button" onClick={() => setOrderingMode("smart")} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5">{t("orderingModeSmartLabel")}</button>
-            <button type="button" onClick={() => setOrderingMode("column_only")} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5">{t("orderingModeColumnOnlyLabel")}</button>
-            <button type="button" onClick={resetImplicitOrdering} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5">{t("resetImplicitOrderingLabel")}</button>
+            <button type="button" onClick={() => setOrderingMode("smart")} data-testid="ordering-mode-toggle:smart" aria-pressed={orderingMode === "smart"} title="Smart: applies pins, tracked, session de-prioritization, saved pattern, and endpoint rank before the selected column." className={`rounded-sm border px-1.5 py-0.5 ${orderingMode === "smart" ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent" : "border-eve-border/60 text-eve-text"}`}>{t("orderingModeSmartLabel")}</button>
+            <button type="button" onClick={() => setOrderingMode("column_only")} data-testid="ordering-mode-toggle:column_only" aria-pressed={orderingMode === "column_only"} title="Column-only: follows selected column + direction only; filters still apply." className={`rounded-sm border px-1.5 py-0.5 ${orderingMode === "column_only" ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent" : "border-eve-border/60 text-eve-text"}`}>{t("orderingModeColumnOnlyLabel")}</button>
+            <button type="button" onClick={useSmartDefaultOrdering} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5" title="Discovery mode: restore smart layered ranking defaults.">Use Smart Default</button>
+            <button type="button" onClick={useCleanColumnSortOrdering} data-testid="ordering-clean-column-sort-button" className="rounded-sm border border-eve-border/60 px-1.5 py-0.5" title="Pure metric sort mode: use only column direction without smart ranking layers.">Clean Column Sort</button>
             <button type="button" onClick={onRecalculateLens} disabled={recalcLensDisabled} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5 disabled:opacity-50">
               Recalc Lens
             </button>
@@ -6543,7 +6599,7 @@ export function ScanResultsTable({
     endpointPresetSelection,
     hiddenCounts.total,
     oneLegModeEnabled,
-    resetImplicitOrdering,
+    useCleanColumnSortOrdering,
     setEndpointPreferenceMode,
     setEndpointPresetSelection,
     setRadiusFeaturePrefs,
@@ -7282,13 +7338,9 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               <div className="inline-flex items-center gap-1 px-1 py-0.5 rounded-sm border border-eve-border/60 bg-eve-dark/40 text-[11px]">
                 <span className="text-eve-dim px-1">{t("orderingModeLabel")}</span>
                 {([
-                  ["smart", t("orderingModeSmartLabel"), t("orderingModeSmartDescription")],
-                  [
-                    "column_only",
-                    t("orderingModeColumnOnlyLabel"),
-                    t("orderingModeColumnOnlyDescription"),
-                  ],
-                ] as const).map(([mode, label, description]) => {
+                  ["smart", t("orderingModeSmartLabel")],
+                  ["column_only", t("orderingModeColumnOnlyLabel")],
+                ] as const).map(([mode, label]) => {
                   const active = orderingMode === mode;
                   return (
                     <button
@@ -7300,8 +7352,13 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                           ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent"
                           : "border-eve-border/50 text-eve-dim hover:text-eve-text"
                       }`}
-                      title={description}
+                      title={
+                        mode === "smart"
+                          ? "Smart: applies pins, tracked, session de-prioritization, saved pattern, and endpoint rank before the selected column."
+                          : "Column-only: follows selected column + direction only; filters still apply."
+                      }
                       data-testid={`ordering-mode-toggle:${mode}`}
+                      aria-pressed={active}
                     >
                       {label}
                     </button>
@@ -7327,12 +7384,20 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
                 </label>
                 <button
                   type="button"
-                  onClick={resetImplicitOrdering}
+                  onClick={useCleanColumnSortOrdering}
                   className="ml-1 px-1.5 py-0.5 rounded-sm border border-eve-border/60 text-eve-dim hover:text-eve-text hover:border-eve-accent/50 transition-colors"
-                  title={t("resetImplicitOrderingHelp")}
-                  data-testid="reset-implicit-ordering-button"
+                  title="Pure metric sort mode: use only column direction without smart ranking layers."
+                  data-testid="ordering-clean-column-sort-button"
                 >
-                  {t("resetImplicitOrderingLabel")}
+                  Clean Column Sort
+                </button>
+                <button
+                  type="button"
+                  onClick={useSmartDefaultOrdering}
+                  className="px-1.5 py-0.5 rounded-sm border border-eve-border/60 text-eve-dim hover:text-eve-text hover:border-eve-accent/50 transition-colors"
+                  title="Discovery mode: restore smart layered ranking defaults."
+                >
+                  Use Smart Default
                 </button>
               </div>
               <div

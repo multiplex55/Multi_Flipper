@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 
 export type RadiusControlMenuGroup = {
@@ -13,11 +14,23 @@ type RadiusControlMenuProps = {
 };
 
 export function RadiusControlMenu({ menuId, groups, activeGroupId }: RadiusControlMenuProps) {
+  const activeGroupRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!activeGroupId) return;
+    const node = activeGroupRef.current;
+    if (!node) return;
+    node.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    node.focus();
+  }, [activeGroupId]);
+
   return (
     <div id={menuId} role="dialog" aria-label="Radius control menu" className="mt-1.5 space-y-1.5 text-[11px]">
       {groups.map((group) => (
         <section
           key={group.id}
+          ref={activeGroupId === group.id ? activeGroupRef : undefined}
+          tabIndex={activeGroupId === group.id ? -1 : undefined}
           data-testid={`radius-control-menu-group:${group.id}`}
           className={`rounded-sm border px-2 py-1 ${
             activeGroupId === group.id
