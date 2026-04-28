@@ -227,6 +227,7 @@ import {
 } from "@/lib/radiusDecisionModes";
 import { isRadiusTradeExecutableNow } from "@/lib/radiusExecutableNow";
 import { computeRadiusSessionSummary } from "@/lib/radiusSessionSummary";
+import { resetPerfMetrics, timed, type RadiusPerfMetrics } from "@/lib/radiusDiagnostics";
 import { classifyRadiusDealRisk } from "@/lib/radiusDealRisk";
 import { passesNumericFilter, passesTextFilter } from "@/lib/tableFilters";
 import { RadiusDealMovementBadge } from "@/components/RadiusDealMovementBadge";
@@ -452,6 +453,7 @@ type ScanResultsTableRouteHeavyConfig = {
   enableOptimizerModeSelector?: boolean;
   enableMovementBadges?: boolean;
   enableSavedPatternMode?: boolean;
+  enableDiagnosticsDebugPanel?: boolean;
 };
 
 type ScanResultsTableRouteLightConfig = {
@@ -465,6 +467,7 @@ type ScanResultsTableRouteLightConfig = {
   enableOptimizerModeSelector?: boolean;
   enableMovementBadges?: boolean;
   enableSavedPatternMode?: boolean;
+  enableDiagnosticsDebugPanel?: boolean;
 };
 
 type ScanResultsTableRowFirstConfig = {
@@ -478,6 +481,7 @@ type ScanResultsTableRowFirstConfig = {
   enableOptimizerModeSelector?: boolean;
   enableMovementBadges?: boolean;
   enableSavedPatternMode?: boolean;
+  enableDiagnosticsDebugPanel?: boolean;
 };
 
 export type ScanResultsTableFeatureConfig =
@@ -496,6 +500,7 @@ const DEFAULT_SCAN_RESULTS_TABLE_FEATURE_CONFIG: ScanResultsTableFeatureConfig =
   enableOptimizerModeSelector: true,
   enableMovementBadges: true,
   enableSavedPatternMode: true,
+  enableDiagnosticsDebugPanel: false,
 };
 
 interface Props {
@@ -2081,6 +2086,8 @@ export function ScanResultsTable({
     needsVerify: false,
     executableNow: false,
   });
+
+  const [radiusDiagnosticsOpen, setRadiusDiagnosticsOpen] = useState(false);
   const [oneLegModeEnabled, setOneLegModeEnabled] = useState<boolean>(() => {
     try {
       const stored = localStorage.getItem(ONE_LEG_MODE_STORAGE_KEY);
@@ -2115,6 +2122,7 @@ export function ScanResultsTable({
   const savedPatternModeEnabled = (featureConfig.enableSavedPatternMode ?? true) && radiusFeaturePrefs.savedPatternMode;
   const isRadiusMode = tradeStateTab === "radius";
   const useRadiusCommandBar = isRadiusMode;
+  const diagnosticsDebugEnabled = (featureConfig.enableDiagnosticsDebugPanel ?? false) && import.meta.env.DEV;
   const effectiveRouteViewMode =
     allowRouteGrouping && routeViewModeForDisplay !== "rows"
       ? routeViewModeForDisplay
@@ -2897,6 +2905,8 @@ export function ScanResultsTable({
     variantByRowId,
     endpointPreferenceMetaByRowId,
     savedPatternMatchByRowId,
+    filterTimeMs,
+    sortTimeMs,
   } = useMemo(() => {
     const sessionVisibleRows = filterRowsBySessionStationIgnores(
       results,
@@ -2918,44 +2928,47 @@ export function ScanResultsTable({
       };
     });
 
-    const hasFilters = Object.values(filters).some((v) => !!v);
-    const endpointEligible = indexed.filter(
-      (ir) => !ir.endpointPreferences?.excluded,
-    );
-    const baseFiltered = hasFilters
-      ? endpointEligible.filter((ir) => {
-          for (const col of columnDefs) {
-            const fval = filters[col.key];
-            if (!fval) continue;
-            if (
-              !passesFilter(
-                ir.row,
-                col,
-                fval,
-                batchMetricsByRow,
-                opportunityProfile,
+    const { value: lockFilteredInitial, durationMs: filterTimeMs } = timed(() => {
+      const hasFilters = Object.values(filters).some((v) => !!v);
+      const endpointEligible = indexed.filter(
+        (ir) => !ir.endpointPreferences?.excluded,
+      );
+      const baseFiltered = hasFilters
+        ? endpointEligible.filter((ir) => {
+            for (const col of columnDefs) {
+              const fval = filters[col.key];
+              if (!fval) continue;
+              if (
+                !passesFilter(
+                  ir.row,
+                  col,
+                  fval,
+                  batchMetricsByRow,
+                  opportunityProfile,
+                )
               )
-            )
-              return false;
-          }
-          return true;
-        })
-      : endpointEligible;
-    const filtered =
-      trackedVisibilityMode === "tracked_only"
-        ? baseFiltered.filter((ir) => watchlistIds.has(ir.row.TypeID))
-        : baseFiltered;
-    let lockFiltered = filtered.filter((ir) => {
-      const buyMatches =
-        lockedBuyLocationId == null ||
-        getBuyLocationID(ir.row) === lockedBuyLocationId;
-      const sellMatches =
-        lockedSellLocationId == null ||
-        getSellLocationID(ir.row) === lockedSellLocationId;
-      const legMatches =
-        lockedLegKey == null || getExactLegKey(ir.row) === lockedLegKey;
-      return buyMatches && sellMatches && legMatches;
+                return false;
+            }
+            return true;
+          })
+        : endpointEligible;
+      const filtered =
+        trackedVisibilityMode === "tracked_only"
+          ? baseFiltered.filter((ir) => watchlistIds.has(ir.row.TypeID))
+          : baseFiltered;
+      return filtered.filter((ir) => {
+        const buyMatches =
+          lockedBuyLocationId == null ||
+          getBuyLocationID(ir.row) === lockedBuyLocationId;
+        const sellMatches =
+          lockedSellLocationId == null ||
+          getSellLocationID(ir.row) === lockedSellLocationId;
+        const legMatches =
+          lockedLegKey == null || getExactLegKey(ir.row) === lockedLegKey;
+        return buyMatches && sellMatches && legMatches;
+      });
     });
+    let lockFiltered = lockFilteredInitial;
 
     // Derivation integration point: feature-flagged saved-pattern filtering/boosting plugs into the shared ordering pipeline below.
     const savedPatternMatchByRowId = new Map<number, { saved: boolean; activeMatch: boolean; boost: number }>();
@@ -2995,37 +3008,40 @@ export function ScanResultsTable({
 
     const filteredScoreContext = buildFlipScoreContext(sessionScopedRows);
 
-    const sorted = lockFiltered.slice();
-    sorted.sort((a, b) => {
-      return compareScanRows(a, b, {
-        orderingMode,
-        pinsFirst,
-        trackedFirst,
-        sortKey: effectiveSortKey,
-        sortDir: effectiveSortDir,
-        getSmartSignals: (item) => ({
-          isPinned: pinnedKeys.has(
-            mapScanRowToPinnedOpportunity(item.row).opportunity_key,
-          ),
-          isTracked: watchlistIds.has(item.row.TypeID),
-          isSessionDeprioritized: isFlipResultDeprioritized(
-            item.row,
-            sessionStationFilters,
-          ),
-          patternBoostScore: savedPatternMatchByRowId.get(item.id)?.boost ?? 0,
-          endpointScoreDelta: item.endpointPreferences?.scoreDelta ?? 0,
-        }),
-        getCellValue: (row, key) =>
-          getCellValue(
-            row,
-            key,
-            batchMetricsByRow,
-            opportunityProfile,
-            filteredScoreContext,
-          ),
-        isBatchSyntheticKey: (key) => isBatchSyntheticKey(key as SortKey),
-        compareBatchSyntheticValues,
+    const { value: sorted, durationMs: sortTimeMs } = timed(() => {
+      const next = lockFiltered.slice();
+      next.sort((a, b) => {
+        return compareScanRows(a, b, {
+          orderingMode,
+          pinsFirst,
+          trackedFirst,
+          sortKey: effectiveSortKey,
+          sortDir: effectiveSortDir,
+          getSmartSignals: (item) => ({
+            isPinned: pinnedKeys.has(
+              mapScanRowToPinnedOpportunity(item.row).opportunity_key,
+            ),
+            isTracked: watchlistIds.has(item.row.TypeID),
+            isSessionDeprioritized: isFlipResultDeprioritized(
+              item.row,
+              sessionStationFilters,
+            ),
+            patternBoostScore: savedPatternMatchByRowId.get(item.id)?.boost ?? 0,
+            endpointScoreDelta: item.endpointPreferences?.scoreDelta ?? 0,
+          }),
+          getCellValue: (row, key) =>
+            getCellValue(
+              row,
+              key,
+              batchMetricsByRow,
+              opportunityProfile,
+              filteredScoreContext,
+            ),
+          isBatchSyntheticKey: (key) => isBatchSyntheticKey(key as SortKey),
+          compareBatchSyntheticValues,
+        });
       });
+      return next;
     });
 
     const totalByType = new Map<number, number>();
@@ -3069,6 +3085,8 @@ export function ScanResultsTable({
       variantByRowId,
       endpointPreferenceMetaByRowId,
       savedPatternMatchByRowId,
+      filterTimeMs,
+      sortTimeMs,
     };
   }, [
     results,
@@ -3187,6 +3205,24 @@ export function ScanResultsTable({
     routeQueueEntries,
     routeVerificationByKey,
   ]);
+
+  const radiusDiagnostics = useMemo<RadiusPerfMetrics>(() => {
+    const cacheLastRefreshMs = cacheMeta?.last_refresh_at ? Date.parse(cacheMeta.last_refresh_at) : NaN;
+    const cacheAgeMs = Number.isFinite(cacheLastRefreshMs) ? Math.max(0, Date.now() - cacheLastRefreshMs) : null;
+    return {
+      ...resetPerfMetrics(),
+      rowsScanned: results.length,
+      rowsVisible: datasetRows.length,
+      renderRowCount: datasetRows.length,
+      filterTimeMs,
+      sortTimeMs,
+      lastScanDurationMs: (radiusScanSession as { lastScanDurationMs?: number } | null)?.lastScanDurationMs ?? null,
+      lastScanTimestampMs: (radiusScanSession as { lastScanCompletedAtMs?: number } | null)?.lastScanCompletedAtMs ?? null,
+      cacheAgeMs,
+      cacheHitCount: (radiusScanSession as { cacheHitCount?: number } | null)?.cacheHitCount ?? null,
+      cacheMissCount: (radiusScanSession as { cacheMissCount?: number } | null)?.cacheMissCount ?? null,
+    };
+  }, [cacheMeta?.last_refresh_at, datasetRows.length, filterTimeMs, results.length, radiusScanSession, sortTimeMs]);
 
   const hubScopeRows = useMemo(
     () => ({
@@ -9153,6 +9189,19 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
             }}
             onVerifyStationGroup={(list) => verifyStationGroup(list)}
           />
+        </div>
+      )}
+
+      {diagnosticsDebugEnabled && isRadiusMode && (
+        <div className="shrink-0 px-2 pb-1 text-[10px] text-eve-dim" data-testid="radius-diagnostics-panel">
+          <div className="flex items-center gap-2">
+            <span>diag: scanned {radiusDiagnostics.rowsScanned} · visible {radiusDiagnostics.rowsVisible} · filter {radiusDiagnostics.filterTimeMs.toFixed(2)}ms · sort {radiusDiagnostics.sortTimeMs.toFixed(2)}ms</span>
+            <button type="button" className="rounded-sm border border-eve-border/60 px-1" onClick={() => setRadiusDiagnosticsOpen((v) => !v)}>{radiusDiagnosticsOpen ? "Hide" : "Details"}</button>
+            <button type="button" className="rounded-sm border border-eve-border/60 px-1" onClick={() => navigator.clipboard.writeText(JSON.stringify(radiusDiagnostics, null, 2))}>Copy diagnostics</button>
+          </div>
+          {radiusDiagnosticsOpen && (
+            <pre className="mt-1 max-h-24 overflow-auto rounded-sm border border-eve-border/40 bg-eve-dark/40 p-1">{JSON.stringify(radiusDiagnostics, null, 2)}</pre>
+          )}
         </div>
       )}
 

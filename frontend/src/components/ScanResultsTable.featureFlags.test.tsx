@@ -113,4 +113,18 @@ describe("ScanResultsTable feature flags", () => {
     expect(screen.queryByText("Insights")).not.toBeInTheDocument();
     expect(screen.queryByTestId("saved-route-packs-panel")).not.toBeInTheDocument();
   });
+
+  it("keeps diagnostics panel hidden by default", () => {
+    renderTable({
+      allowRouteGrouping: false,
+      showRouteInsights: false,
+      showRouteWorkbench: false,
+      showSavedRoutes: false,
+      showLoopPanel: false,
+      defaultViewMode: "rows",
+      enableDiagnosticsDebugPanel: false,
+    });
+
+    expect(screen.queryByTestId("radius-diagnostics-panel")).not.toBeInTheDocument();
+  });
 });
