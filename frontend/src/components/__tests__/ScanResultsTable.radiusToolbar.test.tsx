@@ -119,6 +119,15 @@ describe("ScanResultsTable radius toolbar exclusivity", () => {
     expect(within(quickBar).getAllByRole("button", { name: /One-leg mode/i })).toHaveLength(1);
   });
 
+  it("shows movement baseline actions and disappeared panel behavior", () => {
+    renderTable("radius");
+    expect(screen.getByRole("button", { name: /Set current as baseline/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Clear baseline/i })).toBeInTheDocument();
+    expect(screen.queryByTestId("radius-disappeared-list")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Disappeared/i }));
+    expect(screen.getByTestId("radius-disappeared-list")).toBeInTheDocument();
+  });
+
   it("manages Radius display flags only under More Controls → Display Flags", () => {
     renderTable("radius");
 
