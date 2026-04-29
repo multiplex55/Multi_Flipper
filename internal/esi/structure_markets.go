@@ -1,6 +1,7 @@
 package esi
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -9,6 +10,13 @@ import (
 // FetchStructureOrders fetches all market orders for a specific Upwell structure.
 // Requires an authenticated access token with structure-market scope.
 func (c *Client) FetchStructureOrders(structureID int64, accessToken string) ([]MarketOrder, error) {
+	return c.FetchStructureOrdersWithContext(context.Background(), structureID, accessToken)
+}
+
+func (c *Client) FetchStructureOrdersWithContext(ctx context.Context, structureID int64, accessToken string) ([]MarketOrder, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if structureID <= 0 {
 		return nil, fmt.Errorf("invalid structure id: %d", structureID)
 	}
@@ -35,4 +43,3 @@ func (c *Client) FetchStructureOrders(structureID int64, accessToken string) ([]
 	}
 	return orders, nil
 }
-

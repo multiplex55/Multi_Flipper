@@ -1,6 +1,7 @@
 package esi
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -265,7 +266,7 @@ func (c *Client) fetchRegionOrdersWithCache(regionID int32, orderType string) ([
 
 	// 2. If we have an ETag, try conditional request on page 1
 	if etag != "" {
-		notModified, newExpires, err := c.conditionalCheck(url+"&page=1", etag)
+		notModified, newExpires, err := c.conditionalCheck(context.Background(), url+"&page=1", etag)
 		if err == nil && notModified {
 			// 304 — data unchanged, refresh expiry
 			c.orderCache.Touch(regionID, orderType, newExpires)
@@ -279,7 +280,7 @@ func (c *Client) fetchRegionOrdersWithCache(regionID int32, orderType string) ([
 	}
 
 	// 3. Full fetch
-	allOrders, respEtag, respExpires, err := c.getPaginatedDirectWithHeaders(url, regionID)
+	allOrders, respEtag, respExpires, err := c.getPaginatedDirectWithHeaders(context.Background(), url, regionID)
 	if err != nil {
 		return nil, err
 	}
@@ -294,11 +295,15 @@ func (c *Client) fetchRegionOrdersWithCache(regionID int32, orderType string) ([
 
 // conditionalCheck sends a HEAD-like GET with If-None-Match.
 // Returns (notModified, newExpires, error).
-func (c *Client) conditionalCheck(pageURL, etag string) (bool, time.Time, error) {
-	c.scanSem <- struct{}{}
+func (c *Client) conditionalCheck(ctx context.Context, pageURL, etag string) (bool, time.Time, error) {
+	select {
+	case c.scanSem <- struct{}{}:
+	case <-ctx.Done():
+		return false, time.Time{}, ctx.Err()
+	}
 	defer func() { <-c.scanSem }()
 
-	req, err := newESIRequest(pageURL)
+	req, err := newESIRequestWithContext(ctx, pageURL)
 	if err != nil {
 		return false, time.Time{}, err
 	}
@@ -320,7 +325,11 @@ func (c *Client) conditionalCheck(pageURL, etag string) (bool, time.Time, error)
 
 // newESIRequest creates a standard ESI GET request with common headers.
 func newESIRequest(url string) (*http.Request, error) {
-	req, err := http.NewRequest("GET", url, nil)
+	return newESIRequestWithContext(context.Background(), url)
+}
+
+func newESIRequestWithContext(ctx context.Context, url string) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, err
 	}
