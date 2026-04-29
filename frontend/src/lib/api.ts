@@ -200,6 +200,16 @@ export interface RegionalDayScanResponse {
   };
 }
 
+export interface ActiveScanState {
+  active: boolean;
+  scan_id?: string;
+  kind?: string;
+  started_at?: string;
+  last_progress_at?: string;
+  stage?: string;
+  terminal_status?: string;
+}
+
 function normalizeRouteHop(hop: RouteResult["Hops"][number]): RouteResult["Hops"][number] {
   const units = Number.isFinite(hop.Units) ? hop.Units : 0;
   const buyPrice = Number.isFinite(hop.BuyPrice) ? hop.BuyPrice : 0;
@@ -344,6 +354,16 @@ async function streamNdjson<T>(
 export async function getStatus(): Promise<AppStatus> {
   const res = await apiFetch(`${BASE}/api/status`);
   return handleResponse<AppStatus>(res);
+}
+
+export async function getActiveScan(): Promise<ActiveScanState> {
+  const res = await apiFetch(`${BASE}/api/scan/active`);
+  return handleResponse<ActiveScanState>(res);
+}
+
+export async function cancelActiveScan(): Promise<{ ok: boolean }> {
+  const res = await apiFetch(`${BASE}/api/scan/cancel`, { method: "POST" });
+  return handleResponse<{ ok: boolean }>(res);
 }
 
 export interface UpdateCheckStatus {

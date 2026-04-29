@@ -29,6 +29,7 @@ import { CharacterPopup } from "./components/CharacterPopup";
 import { TopActionButtons } from "./components/TopActionButtons";
 import { RadiusColumnGuideModal } from "./components/RadiusColumnGuideModal";
 import { RadiusSessionControls } from "./components/RadiusSessionControls";
+import { ScanStatusBar } from "./components/ScanStatusBar";
 import {
   addPinnedOpportunity,
   applyAppUpdate,
@@ -51,6 +52,8 @@ import {
   getCharacterLocation,
   getSystemsList,
   recalculateRadiusDistanceLens,
+  getActiveScan,
+  cancelActiveScan,
   type RadiusDistanceLensMetric,
 } from "./lib/api";
 import { useI18n } from "./lib/i18n";
@@ -885,6 +888,8 @@ function App() {
   } | null>(null);
   const [autoRefreshRadius, setAutoRefreshRadius] = useState(false);
   const [autoRefreshRegion, setAutoRefreshRegion] = useState(false);
+  const [activeScanState, setActiveScanState] = useState<any | null>(null);
+  const [scanReconciling, setScanReconciling] = useState(false);
 
   const [showWatchlist, setShowWatchlist] = useState(false);
   const [showBanlist, setShowBanlist] = useState(false);
@@ -2182,6 +2187,14 @@ const recalculateRadiusLensFromCharacter = useCallback(
 );
 
 const handleScan = useCallback(async (overrideParams?: ScanParams) => {
+    setScanReconciling(true);
+    const active = await getActiveScan().catch(() => ({ active: false }));
+    setActiveScanState(active);
+    setScanReconciling(false);
+    if (active.active) {
+      await cancelActiveScan().catch(() => undefined);
+      await new Promise((resolve) => window.setTimeout(resolve, 200));
+    }
     if (scanning) {
       abortRef.current?.abort();
       return;
@@ -2444,6 +2457,14 @@ const results = await scanMultiRegion(
     clearRadiusDistanceLens,
     sessionStationFilters,
   ]);
+
+  useEffect(() => {
+    const id = window.setInterval(async () => {
+      const state = await getActiveScan().catch(() => null);
+      if (state) setActiveScanState(state);
+    }, 5000);
+    return () => window.clearInterval(id);
+  }, []);
 
 const handleScanAndRefresh = useCallback(async () => {
   if (tab !== "radius" || scanning || scanAndRefreshing) return;
@@ -3207,6 +3228,15 @@ const handleScanAndRefresh = useCallback(async () => {
 
           {/* Results — all tabs stay mounted to preserve state */}
           <div className="flex-1 min-h-0 flex flex-col p-1.5 sm:p-2">
+            <ScanStatusBar
+              state={activeScanState}
+              reconciling={scanReconciling}
+              onCancel={() => {
+                void cancelActiveScan();
+              }}
+              onStartAnyway={() => void handleScan(params)}
+              allowStartAnyway={Boolean(activeScanState?.active)}
+            />
             <div
               className={`flex-1 min-h-0 flex flex-col ${tab === "radius" ? "" : "hidden"}`}
             >
