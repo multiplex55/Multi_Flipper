@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"math"
@@ -95,6 +96,14 @@ func (s *Scanner) resolveStructureSystemID(locationID int64, fallbackSystemID in
 
 // Scan finds profitable flip opportunities based on the given parameters.
 func (s *Scanner) Scan(params ScanParams, progress func(string)) ([]FlipResult, error) {
+	return s.ScanWithContext(context.Background(), params, progress)
+}
+
+// ScanWithContext finds profitable flip opportunities based on the given parameters.
+func (s *Scanner) ScanWithContext(ctx context.Context, params ScanParams, progress func(string)) ([]FlipResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	progress("Finding systems within radius...")
 	var buySystems, sellSystems map[int32]int
 	var wg sync.WaitGroup
@@ -117,6 +126,9 @@ func (s *Scanner) Scan(params ScanParams, progress func(string)) ([]FlipResult, 
 		}
 	}()
 	wg.Wait()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	ignored := ignoredSystemSetFromIDs(params.IgnoredSystemIDs)
 	buySystems = filterSystemDistanceMap(buySystems, ignored)
 	sellSystems = filterSystemDistanceMap(sellSystems, ignored)
@@ -132,12 +144,22 @@ func (s *Scanner) Scan(params ScanParams, progress func(string)) ([]FlipResult, 
 		len(buySystems), len(sellSystems), len(buyRegions), len(sellRegions))
 
 	progress(fmt.Sprintf("Fetching orders from %d+%d regions...", len(buyRegions), len(sellRegions)))
-	idx := s.fetchAndIndex(params, buyRegions, buySystems, sellRegions, sellSystems)
+	idx, err := s.fetchAndIndexWithContext(ctx, params, buyRegions, buySystems, sellRegions, sellSystems)
+	if err != nil {
+		return nil, err
+	}
 	return s.calculateResults(params, idx, buySystems, progress)
 }
 
 // ScanMultiRegion finds profitable flip opportunities across whole regions.
 func (s *Scanner) ScanMultiRegion(params ScanParams, progress func(string)) ([]FlipResult, error) {
+	return s.ScanMultiRegionWithContext(context.Background(), params, progress)
+}
+
+func (s *Scanner) ScanMultiRegionWithContext(ctx context.Context, params ScanParams, progress func(string)) ([]FlipResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	minSec := params.MinRouteSecurity
 	ignored := ignoredSystemSetFromIDs(params.IgnoredSystemIDs)
 
@@ -202,7 +224,10 @@ func (s *Scanner) ScanMultiRegion(params ScanParams, progress func(string)) ([]F
 	sellRegions = s.SDE.Universe.RegionsInSet(sellSystems)
 
 	progress(fmt.Sprintf("Fetching orders: buy from %d region(s), sell from %d region(s)...", len(buyRegions), len(sellRegions)))
-	idx := s.fetchAndIndex(params, buyRegions, buySystems, sellRegions, sellSystems)
+	idx, err := s.fetchAndIndexWithContext(ctx, params, buyRegions, buySystems, sellRegions, sellSystems)
+	if err != nil {
+		return nil, err
+	}
 	return s.calculateResults(params, idx, buySystemsRadius, progress)
 }
 
@@ -272,6 +297,7 @@ var hubRegionPriority = map[int32]int{
 // Hub regions are launched first so the pipeline starts building maps from
 // the largest data sets sooner.
 func (s *Scanner) fetchOrdersStream(
+	ctx context.Context,
 	regions map[int32]bool,
 	orderType string,
 	validSystems map[int32]int,
@@ -303,6 +329,9 @@ func (s *Scanner) fetchOrdersStream(
 		wg.Add(1)
 		go func(rid int32) {
 			defer wg.Done()
+			if ctx.Err() != nil {
+				return
+			}
 			orders, err := s.ESI.FetchRegionOrders(rid, orderType)
 			if err != nil {
 				return
@@ -318,7 +347,7 @@ func (s *Scanner) fetchOrdersStream(
 					filtered = append(filtered, o)
 				}
 			}
-			if len(filtered) > 0 {
+			if len(filtered) > 0 && ctx.Err() == nil {
 				ch <- filtered
 			}
 		}(regionID)
@@ -339,15 +368,25 @@ func (s *Scanner) fetchAndIndex(
 	buyRegions map[int32]bool, buySystems map[int32]int,
 	sellRegions map[int32]bool, sellSystems map[int32]int,
 ) *scanIndex {
-	sellCh := s.fetchOrdersStream(buyRegions, "sell", buySystems)
-	buyCh := s.fetchOrdersStream(sellRegions, "buy", sellSystems)
+	idx, _ := s.fetchAndIndexWithContext(context.Background(), params, buyRegions, buySystems, sellRegions, sellSystems)
+	return idx
+}
+
+func (s *Scanner) fetchAndIndexWithContext(
+	ctx context.Context,
+	params ScanParams,
+	buyRegions map[int32]bool, buySystems map[int32]int,
+	sellRegions map[int32]bool, sellSystems map[int32]int,
+) (*scanIndex, error) {
+	sellCh := s.fetchOrdersStream(ctx, buyRegions, "sell", buySystems)
+	buyCh := s.fetchOrdersStream(ctx, sellRegions, "buy", sellSystems)
 	// Additional sell-side sell-book stream for mathematically consistent S2B/BfS split.
-	sellSideSellCh := s.fetchOrdersStream(sellRegions, "sell", sellSystems)
+	sellSideSellCh := s.fetchOrdersStream(ctx, sellRegions, "sell", sellSystems)
 	var sourceBuyCh <-chan []esi.MarketOrder
 	enablePrivateStructureFetch := params.IncludeStructures && strings.TrimSpace(params.AccessToken) != ""
 	if enablePrivateStructureFetch {
 		// Source-side buy orders help discover structure IDs when source sell book is hidden in region endpoint.
-		sourceBuyCh = s.fetchOrdersStream(buyRegions, "buy", buySystems)
+		sourceBuyCh = s.fetchOrdersStream(ctx, buyRegions, "buy", buySystems)
 	} else if params.IncludeStructures {
 		log.Printf(
 			"[DEBUG] fetchAndIndex: include_structures=true but access token is missing; private structure sell fetch disabled",
@@ -483,7 +522,10 @@ func (s *Scanner) fetchAndIndex(
 
 	log.Printf("[DEBUG] fetchAndIndex: %d sell orders, %d buy orders", len(idx.sellOrders), len(idx.buyOrders))
 	log.Printf("[DEBUG] sellByType: %d types, buyByType: %d types", len(idx.sellByType), len(idx.buyByType))
-	return idx
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return idx, nil
 }
 
 func (s *Scanner) mergeSourceStructureSellOrders(
@@ -1135,7 +1177,7 @@ func passesHistoryFilters(r FlipResult, p ScanParams, needsHistory bool) bool {
 
 // fetchOrders is the legacy blocking version, kept for non-scan callers.
 func (s *Scanner) fetchOrders(regions map[int32]bool, orderType string, validSystems map[int32]int) []esi.MarketOrder {
-	ch := s.fetchOrdersStream(regions, orderType, validSystems)
+	ch := s.fetchOrdersStream(context.Background(), regions, orderType, validSystems)
 	var all []esi.MarketOrder
 	for batch := range ch {
 		all = append(all, batch...)
