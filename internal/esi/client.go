@@ -1,6 +1,7 @@
 package esi
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -499,16 +500,30 @@ func (r *bytesReader) Read(p []byte) (int, error) {
 // Retries up to maxRetries times on transient ESI errors (502/503/504) with exponential backoff.
 // Semaphore is released before sleeping so other requests can proceed.
 func (c *Client) GetJSON(url string, dst interface{}) error {
+	return c.GetJSONWithContext(context.Background(), url, dst)
+}
+
+func (c *Client) GetJSONWithContext(ctx context.Context, url string, dst interface{}) error {
 	var lastErr error
 	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if attempt > 0 {
 			wait := retryBaseWait * time.Duration(1<<(attempt-1)) // 500ms, 1s, 2s
-			time.Sleep(wait)
+			select {
+			case <-time.After(wait):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		select {
+		case c.sem <- struct{}{}:
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 
-		c.sem <- struct{}{} // acquire only for the actual request
-
-		req, err := http.NewRequest("GET", url, nil)
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
 			<-c.sem
 			return err
@@ -640,14 +655,19 @@ func (c *Client) getPaginatedInternal(url, accessToken string) ([]json.RawMessag
 
 // GetPaginatedDirect fetches all pages and decodes directly into MarketOrder slice.
 func (c *Client) GetPaginatedDirect(url string, regionID int32) ([]MarketOrder, error) {
-	orders, _, _, err := c.getPaginatedDirectWithHeaders(url, regionID)
+	orders, _, _, err := c.getPaginatedDirectWithHeaders(context.Background(), url, regionID)
+	return orders, err
+}
+
+func (c *Client) GetPaginatedDirectWithContext(ctx context.Context, url string, regionID int32) ([]MarketOrder, error) {
+	orders, _, _, err := c.getPaginatedDirectWithHeaders(ctx, url, regionID)
 	return orders, err
 }
 
 // getPaginatedDirectWithHeaders fetches all pages, returning ETag and Expires from page 1.
 // Uses scanSem so bulk page fetches never starve regular API calls.
 // Retries transient ESI errors with exponential backoff; semaphore released during sleep.
-func (c *Client) getPaginatedDirectWithHeaders(url string, regionID int32) ([]MarketOrder, string, time.Time, error) {
+func (c *Client) getPaginatedDirectWithHeaders(ctx context.Context, url string, regionID int32) ([]MarketOrder, string, time.Time, error) {
 	// Fetch page 1 with retry
 	var page1 []MarketOrder
 	var totalPages int
@@ -656,13 +676,23 @@ func (c *Client) getPaginatedDirectWithHeaders(url string, regionID int32) ([]Ma
 	var lastErr error
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, "", time.Time{}, err
+		}
 		if attempt > 0 {
-			time.Sleep(retryBaseWait * time.Duration(1<<(attempt-1)))
+			select {
+			case <-time.After(retryBaseWait * time.Duration(1<<(attempt-1))):
+			case <-ctx.Done():
+				return nil, "", time.Time{}, ctx.Err()
+			}
+		}
+		select {
+		case c.scanSem <- struct{}{}:
+		case <-ctx.Done():
+			return nil, "", time.Time{}, ctx.Err()
 		}
 
-		c.scanSem <- struct{}{}
-
-		req, err := newESIRequest(url + "&page=1")
+		req, err := newESIRequestWithContext(ctx, url+"&page=1")
 		if err != nil {
 			<-c.scanSem
 			return nil, "", time.Time{}, err
@@ -725,13 +755,26 @@ func (c *Client) getPaginatedDirectWithHeaders(url string, regionID int32) ([]Ma
 			pageURL := fmt.Sprintf("%s&page=%d", url, pageNum)
 
 			for attempt := 0; attempt <= maxRetries; attempt++ {
+				if err := ctx.Err(); err != nil {
+					results <- pageResult{err: err}
+					return
+				}
 				if attempt > 0 {
-					time.Sleep(retryBaseWait * time.Duration(1<<(attempt-1)))
+					select {
+					case <-time.After(retryBaseWait * time.Duration(1<<(attempt-1))):
+					case <-ctx.Done():
+						results <- pageResult{err: ctx.Err()}
+						return
+					}
+				}
+				select {
+				case c.scanSem <- struct{}{}:
+				case <-ctx.Done():
+					results <- pageResult{err: ctx.Err()}
+					return
 				}
 
-				c.scanSem <- struct{}{}
-
-				pageReq, err := newESIRequest(pageURL)
+				pageReq, err := newESIRequestWithContext(ctx, pageURL)
 				if err != nil {
 					<-c.scanSem
 					results <- pageResult{err: err}

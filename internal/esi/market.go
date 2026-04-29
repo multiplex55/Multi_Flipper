@@ -1,6 +1,7 @@
 package esi
 
 import (
+	"context"
 	"fmt"
 )
 
@@ -21,6 +22,13 @@ type MarketOrder struct {
 // Uses in-memory cache with ETag/Expires — repeated calls within the ESI refresh
 // window (typically 5 min) return instantly without any network I/O.
 func (c *Client) FetchRegionOrders(regionID int32, orderType string) ([]MarketOrder, error) {
+	return c.FetchRegionOrdersWithContext(context.Background(), regionID, orderType)
+}
+
+func (c *Client) FetchRegionOrdersWithContext(ctx context.Context, regionID int32, orderType string) ([]MarketOrder, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return c.FetchRegionOrdersCached(regionID, orderType)
 }
 
