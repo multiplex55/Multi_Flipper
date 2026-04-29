@@ -231,7 +231,6 @@ import { resetPerfMetrics, timed, type RadiusPerfMetrics } from "@/lib/radiusDia
 import { classifyRadiusDealRisk } from "@/lib/radiusDealRisk";
 import { passesNumericFilter, passesTextFilter } from "@/lib/tableFilters";
 import { RadiusDealMovementBadge } from "@/components/RadiusDealMovementBadge";
-import { RadiusAnalyticsPanel } from "@/components/RadiusAnalyticsPanel";
 import {
   buildRadiusDealSnapshotKey,
   buildRadiusDealSnapshots,
@@ -1839,7 +1838,6 @@ export function ScanResultsTable({
     optimizerModeSelector: boolean;
     movementBadges: boolean;
     savedPatternMode: boolean;
-    analyticsSection: boolean;
   }>(() => {
     try {
       const raw = localStorage.getItem(RADIUS_FEATURE_PREFS_STORAGE_KEY);
@@ -1849,7 +1847,6 @@ export function ScanResultsTable({
         optimizerModeSelector: parsed.optimizerModeSelector ?? true,
         movementBadges: parsed.movementBadges ?? true,
         savedPatternMode: parsed.savedPatternMode ?? true,
-        analyticsSection: parsed.analyticsSection ?? false,
       };
     } catch {
       return {
@@ -1857,7 +1854,6 @@ export function ScanResultsTable({
         optimizerModeSelector: true,
         movementBadges: true,
         savedPatternMode: true,
-        analyticsSection: false,
       };
     }
   });
@@ -6670,7 +6666,6 @@ export function ScanResultsTable({
               ["optimizerModeSelector", "Optimizer mode"],
               ["movementBadges", "Movement badges"],
               ["savedPatternMode", "Pattern mode"],
-              ["analyticsSection", "Analytics"],
             ] as const).map(([key, label]) => {
               const enabled = radiusFeaturePrefs[key];
               return (
@@ -7985,24 +7980,6 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
 
       {!isRegionGrouped && isRadiusMode && !radiusRouteInsightsHidden && (
         <>
-          {radiusFeaturePrefs.analyticsSection && (
-            <RadiusAnalyticsPanel
-              rows={results}
-              movementByKey={radiusDealMovementByKey}
-              rolloutStage={4}
-              onApplyProfitPerJumpBin={(bin) => {
-                if (!bin) return setFilters((prev) => ({ ...prev, ProfitPerJump: "" }));
-                const map: Record<string, string> = {
-                  "0-100k": "0-100000",
-                  "100k-250k": "100000-250000",
-                  "250k-500k": "250000-500000",
-                  "500k-1m": "500000-1000000",
-                  "1m+": ">=1000000",
-                };
-                setFilters((prev) => ({ ...prev, ProfitPerJump: map[bin] ?? "" }));
-              }}
-            />
-          )}
           {dealFocusBoardEnabled && (
             <RadiusDealFocusBoard
               candidates={radiusDealFocusCandidates}
