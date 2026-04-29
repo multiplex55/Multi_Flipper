@@ -150,5 +150,10 @@ describe("ScanResultsTable radius toolbar exclusivity", () => {
       expect(button).toHaveAttribute("title", `${label}: On`);
       expect(screen.getAllByRole("button", { name: label })).toHaveLength(1);
     }
+
+    expect(within(displayFlagsGroup).queryByRole("button", { name: "Analytics" })).not.toBeInTheDocument();
+    expect(within(displayFlagsGroup).queryByRole("button", { name: "Experimental Analytics" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Profit\/Jump distribution/i)).not.toBeInTheDocument();
+
   });
 });
