@@ -97,6 +97,7 @@ type Server struct {
 	batchCreateRoutePlanner  func(context.Context, engine.BatchCreateRouteParams) (engine.BatchCreateRouteResult, error)
 	routeSelectedPlanner     func(context.Context, engine.RouteSelectedPlannerParams) (engine.RouteSelectedPlannerResult, error)
 	batchRouteFillersPlanner func(context.Context, engine.BatchRouteFillerSuggestionParams) (engine.BatchRouteFillerSuggestionResult, error)
+	scanLifecycle            *scanLifecycleRegistry
 }
 
 // ssoStateEntry holds metadata for a pending SSO login flow.
@@ -656,6 +657,7 @@ func NewServer(cfg *config.Config, esiClient *esi.Client, database *db.DB, ssoCo
 		appFlavor:          "classic",
 		updateHTTP:         &http.Client{Timeout: 45 * time.Second},
 		updateSkipByUser:   make(map[string]string),
+		scanLifecycle:      newScanLifecycleRegistry(),
 	}
 	if s.wikiRAG != nil {
 		s.wikiRAG.Start(defaultStationAIWikiRepo)
@@ -749,6 +751,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/systems/autocomplete", s.handleAutocomplete)
 	mux.HandleFunc("GET /api/regions/autocomplete", s.handleRegionAutocomplete)
 	mux.HandleFunc("POST /api/scan", s.handleScan)
+	mux.HandleFunc("GET /api/scan/active", s.handleGetActiveScan)
+	mux.HandleFunc("POST /api/scan/cancel", s.handleCancelActiveScan)
 	mux.HandleFunc("POST /api/scan/multi-region", s.handleScanMultiRegion)
 	mux.HandleFunc("POST /api/scan/regional-day", s.handleScanRegionalDay)
 	mux.HandleFunc("POST /api/scan/contracts", s.handleScanContracts)
@@ -2577,25 +2581,31 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 
 	scanCtx, cancel := context.WithTimeout(r.Context(), scanExecutionTimeout)
 	defer cancel()
+	scanRunID := fmt.Sprintf("radius-%d", startTime.UnixNano())
+	s.scanLifecycle.register(userID, scanRunID, "radius", "starting", cancel)
 	results, err := scanner.ScanWithContext(scanCtx, params, func(msg string) {
+		s.scanLifecycle.progress(userID, msg)
 		line, _ := json.Marshal(map[string]string{"type": "progress", "message": msg})
 		fmt.Fprintf(w, "%s\n", line)
 		flusher.Flush()
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
+			s.scanLifecycle.finalize(userID, "canceled", scanTerminalCanceled)
 			line, _ := json.Marshal(map[string]string{"type": "error", "message": "scan canceled"})
 			fmt.Fprintf(w, "%s\n", line)
 			flusher.Flush()
 			return
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
+			s.scanLifecycle.finalize(userID, "timed out", scanTerminalTimedOut)
 			line, _ := json.Marshal(map[string]string{"type": "error", "message": "scan timed out"})
 			fmt.Fprintf(w, "%s\n", line)
 			flusher.Flush()
 			return
 		}
 		log.Printf("[API] Scan error: %v", err)
+		s.scanLifecycle.finalize(userID, "failed", scanTerminalFailed)
 		line, _ := json.Marshal(map[string]string{"type": "error", "message": err.Error()})
 		fmt.Fprintf(w, "%s\n", line)
 		flusher.Flush()
@@ -2603,6 +2613,7 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	durationMs := time.Since(startTime).Milliseconds()
+	s.scanLifecycle.finalize(userID, "completed", scanTerminalCompleted)
 	log.Printf("[API] Scan complete: %d results in %dms", len(results), durationMs)
 
 	// Resolve structure names if user enabled the toggle
@@ -2657,6 +2668,21 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 	flusher.Flush()
 }
 
+func (s *Server) handleGetActiveScan(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromRequest(r)
+	state, ok := s.scanLifecycle.get(userID)
+	if !ok {
+		writeJSON(w, map[string]any{"active": false})
+		return
+	}
+	writeJSON(w, state)
+}
+
+func (s *Server) handleCancelActiveScan(w http.ResponseWriter, r *http.Request) {
+	userID := userIDFromRequest(r)
+	writeJSON(w, map[string]any{"ok": s.scanLifecycle.cancel(userID)})
+}
+
 func (s *Server) handleScanMultiRegion(w http.ResponseWriter, r *http.Request) {
 	userID := userIDFromRequest(r)
 	userCfg := s.loadConfigForUser(userID)
@@ -2704,25 +2730,31 @@ func (s *Server) handleScanMultiRegion(w http.ResponseWriter, r *http.Request) {
 
 	scanCtx, cancel := context.WithTimeout(r.Context(), scanExecutionTimeout)
 	defer cancel()
+	scanRunID := fmt.Sprintf("region-%d", startTime.UnixNano())
+	s.scanLifecycle.register(userID, scanRunID, "region", "starting", cancel)
 	results, err := scanner.ScanMultiRegionWithContext(scanCtx, params, func(msg string) {
+		s.scanLifecycle.progress(userID, msg)
 		line, _ := json.Marshal(map[string]string{"type": "progress", "message": msg})
 		fmt.Fprintf(w, "%s\n", line)
 		flusher.Flush()
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
+			s.scanLifecycle.finalize(userID, "canceled", scanTerminalCanceled)
 			line, _ := json.Marshal(map[string]string{"type": "error", "message": "scan canceled"})
 			fmt.Fprintf(w, "%s\n", line)
 			flusher.Flush()
 			return
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
+			s.scanLifecycle.finalize(userID, "timed out", scanTerminalTimedOut)
 			line, _ := json.Marshal(map[string]string{"type": "error", "message": "scan timed out"})
 			fmt.Fprintf(w, "%s\n", line)
 			flusher.Flush()
 			return
 		}
 		log.Printf("[API] ScanMultiRegion error: %v", err)
+		s.scanLifecycle.finalize(userID, "failed", scanTerminalFailed)
 		line, _ := json.Marshal(map[string]string{"type": "error", "message": err.Error()})
 		fmt.Fprintf(w, "%s\n", line)
 		flusher.Flush()
@@ -2730,6 +2762,7 @@ func (s *Server) handleScanMultiRegion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	durationMs := time.Since(startTime).Milliseconds()
+	s.scanLifecycle.finalize(userID, "completed", scanTerminalCompleted)
 	log.Printf("[API] ScanMultiRegion complete: %d results in %dms", len(results), durationMs)
 
 	// Resolve structure names if user enabled the toggle
@@ -2839,10 +2872,22 @@ func (s *Server) handleScanRegionalDay(w http.ResponseWriter, r *http.Request) {
 	)
 
 	startTime := time.Now()
+	scanRunID := fmt.Sprintf("regional-day-%d", startTime.UnixNano())
+	scanCtx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	s.scanLifecycle.register(userID, scanRunID, "regional-day", "starting", cancel)
 
-	results, err := scanner.ScanMultiRegion(params, sendProgress)
+	results, err := scanner.ScanMultiRegionWithContext(scanCtx, params, func(msg string) {
+		s.scanLifecycle.progress(userID, msg)
+		sendProgress(msg)
+	})
 	if err != nil {
 		log.Printf("[API] ScanRegionalDay error: %v", err)
+		if errors.Is(err, context.Canceled) {
+			s.scanLifecycle.finalize(userID, "canceled", scanTerminalCanceled)
+		} else {
+			s.scanLifecycle.finalize(userID, "failed", scanTerminalFailed)
+		}
 		line, _ := json.Marshal(map[string]string{"type": "error", "message": err.Error()})
 		fmt.Fprintf(w, "%s\n", line)
 		flusher.Flush()
@@ -2872,6 +2917,7 @@ func (s *Server) handleScanRegionalDay(w http.ResponseWriter, r *http.Request) {
 	dayRows = filterFlipResultsByBanlist(dayRows, banned)
 
 	durationMs := time.Since(startTime).Milliseconds()
+	s.scanLifecycle.finalize(userID, "completed", scanTerminalCompleted)
 	log.Printf("[API] ScanRegionalDay complete: hubs=%d items=%d rows=%d raw=%d in %dms",
 		len(hubs), totalItems, len(dayRows), len(results), durationMs)
 
@@ -3247,10 +3293,16 @@ func (s *Server) handleScanContracts(w http.ResponseWriter, r *http.Request) {
 		params.CurrentSystemID, params.BuyRadius, params.MinMargin, params.SalesTaxPercent)
 
 	ctx := r.Context()
+	scanCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	userID := userIDFromRequest(r)
+	scanRunID := fmt.Sprintf("contracts-%d", time.Now().UnixNano())
+	s.scanLifecycle.register(userID, scanRunID, "contracts", "starting", cancel)
 	startTime := time.Now()
 
-	results, err := scanner.ScanContractsWithContext(ctx, params, func(msg string) {
-		if ctx.Err() != nil {
+	results, err := scanner.ScanContractsWithContext(scanCtx, params, func(msg string) {
+		s.scanLifecycle.progress(userID, msg)
+		if scanCtx.Err() != nil {
 			return
 		}
 		line, _ := json.Marshal(map[string]string{"type": "progress", "message": msg})
@@ -3260,6 +3312,13 @@ func (s *Server) handleScanContracts(w http.ResponseWriter, r *http.Request) {
 		flusher.Flush()
 	})
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			s.scanLifecycle.finalize(userID, "canceled", scanTerminalCanceled)
+		} else if errors.Is(err, context.DeadlineExceeded) {
+			s.scanLifecycle.finalize(userID, "timed out", scanTerminalTimedOut)
+		} else {
+			s.scanLifecycle.finalize(userID, "failed", scanTerminalFailed)
+		}
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			log.Printf("[API] ScanContracts canceled: %v", err)
 			return
@@ -3275,6 +3334,7 @@ func (s *Server) handleScanContracts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	durationMs := time.Since(startTime).Milliseconds()
+	s.scanLifecycle.finalize(userID, "completed", scanTerminalCompleted)
 	results = s.filterContractResultsMarketDisabled(results)
 	log.Printf("[API] ScanContracts complete: %d results in %dms", len(results), durationMs)
 	regionIDs := s.regionScopeForContractScan(params)
@@ -4611,8 +4671,11 @@ func (s *Server) handleScanStation(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
+	scanRunID := fmt.Sprintf("station-%d", time.Now().UnixNano())
+	s.scanLifecycle.register(userID, scanRunID, "station", "starting", cancel)
 	streamAlive := true
 	progressFn := func(msg string) {
+		s.scanLifecycle.progress(userID, msg)
 		if !streamAlive || ctx.Err() != nil {
 			streamAlive = false
 			return
@@ -4746,9 +4809,11 @@ func (s *Server) handleScanStation(w http.ResponseWriter, r *http.Request) {
 		results, err := scanner.ScanStationTrades(params, progressFn)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || ctx.Err() != nil || !streamAlive {
+				s.scanLifecycle.finalize(userID, "canceled", scanTerminalCanceled)
 				return
 			}
 			log.Printf("[API] ScanStation error (region %d): %v", regionID, err)
+			s.scanLifecycle.finalize(userID, "failed", scanTerminalFailed)
 			line, _ := json.Marshal(map[string]string{"type": "error", "message": err.Error()})
 			_, _ = fmt.Fprintf(w, "%s\n", line)
 			flusher.Flush()
@@ -4764,6 +4829,7 @@ func (s *Server) handleScanStation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	durationMs := time.Since(startTime).Milliseconds()
+	s.scanLifecycle.finalize(userID, "completed", scanTerminalCompleted)
 	log.Printf("[API] ScanStation complete: %d results in %dms", len(allResults), durationMs)
 	cacheMeta := s.stationCacheMetaForRegions(regionIDs)
 
