@@ -3602,6 +3602,11 @@ const handleScanAndRefresh = useCallback(async () => {
             >
               <PinnedOpportunitiesTab />
             </div>
+            <div
+              className={`flex-1 min-h-0 flex flex-col ${tab === "sellClipboard" ? "" : "hidden"}`}
+            >
+              <SellClipboardPanel rows={radiusResults} />
+            </div>
           </div>
         </div>
 
@@ -4133,11 +4138,6 @@ const handleScanAndRefresh = useCallback(async () => {
                 <span>50%</span>
                 <span>100%</span>
               </div>
-                        <div
-              className={`flex-1 min-h-0 flex flex-col ${tab === "sellClipboard" ? "" : "hidden"}`}
-            >
-              <SellClipboardPanel rows={radiusResults} />
-            </div>
 </div>
           </div>
         </div>
