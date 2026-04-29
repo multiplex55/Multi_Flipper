@@ -272,7 +272,7 @@ const RADIUS_ROUTE_INSIGHTS_HIDDEN_STORAGE_KEY =
 const RADIUS_INSIGHTS_DRAWER_OPEN_STORAGE_KEY =
   "eve-radius-insights-drawer-open:v1";
 const ONE_LEG_MODE_STORAGE_KEY = "eve-radius-one-leg-mode:v1";
-const RADIUS_DEAL_SNAPSHOT_STORAGE_KEY = "eve-radius-deal-snapshots:v1";
+const RADIUS_MOVEMENT_BASELINE_STORAGE_KEY = "eve-radius-movement-baseline:v1";
 
 type RadiusTransientModeSnapshot = {
   sortKey: SortKey;
@@ -2018,10 +2018,10 @@ export function ScanResultsTable({
     {},
   );
   const [focusedRowId, setFocusedRowId] = useState<number | null>(null);
-  const [previousDealSnapshots, setPreviousDealSnapshots] = useState<Map<string, RadiusDealSnapshot>>(() => {
+  const [movementBaselineSnapshots, setMovementBaselineSnapshots] = useState<Map<string, RadiusDealSnapshot>>(() => {
     if (typeof window === "undefined") return new Map();
     try {
-      const raw = window.localStorage.getItem(RADIUS_DEAL_SNAPSHOT_STORAGE_KEY);
+      const raw = window.localStorage.getItem(RADIUS_MOVEMENT_BASELINE_STORAGE_KEY);
       if (!raw) return new Map();
       const parsed = JSON.parse(raw) as RadiusDealSnapshot[];
       return new Map(parsed.map((entry) => [entry.key, entry]));
@@ -2057,6 +2057,8 @@ export function ScanResultsTable({
   const [showTrackedPanel, setShowTrackedPanel] = useState(false);
   const [showCachePanel, setShowCachePanel] = useState(false);
   const [movementFilterChips, setMovementFilterChips] = useState<Set<string>>(new Set());
+  const [showDisappearedPanel, setShowDisappearedPanel] = useState(false);
+  const hasMovementBaseline = movementBaselineSnapshots.size > 0;
   const [activeControlMenuSection, setActiveControlMenuSection] = useState<string | null>(null);
   const [collapsedRegionGroups, setCollapsedRegionGroups] = useState<
     Set<string>
@@ -2981,8 +2983,8 @@ export function ScanResultsTable({
       lockFiltered = lockFiltered.filter((ir) => savedPatternMatchByRowId.get(ir.id)?.activeMatch);
     }
 
-    if (movementFilterChips.size > 0) {
-      const movementLookup = compareRadiusDealSnapshots(previousDealSnapshots, buildRadiusDealSnapshots(results)).movementByKey;
+    if (hasMovementBaseline && movementFilterChips.size > 0) {
+      const movementLookup = compareRadiusDealSnapshots(movementBaselineSnapshots, buildRadiusDealSnapshots(results)).movementByKey;
       lockFiltered = lockFiltered.filter((ir) => {
         const movement = movementLookup.get(buildRadiusDealSnapshotKey(ir.row));
         if (!movement) return false;
@@ -3109,8 +3111,9 @@ export function ScanResultsTable({
     savedRadiusPatterns,
     activeRadiusPattern,
     savedPatternModeEnabled,
+    hasMovementBaseline,
     movementFilterChips,
-    previousDealSnapshots,
+    movementBaselineSnapshots,
   ]);
 
   // Available market groups derived from current results (region mode only)
@@ -3449,25 +3452,34 @@ export function ScanResultsTable({
   );
 
   const { movementByKey: radiusDealMovementByKey, disappearedKeys: disappearedDealKeys } = useMemo(
-    () => compareRadiusDealSnapshots(previousDealSnapshots, currentDealSnapshots),
-    [currentDealSnapshots, previousDealSnapshots],
+    () => compareRadiusDealSnapshots(movementBaselineSnapshots, currentDealSnapshots),
+    [currentDealSnapshots, movementBaselineSnapshots],
   );
 
   const radiusMovementSummary = useMemo(() => summarizeRadiusMovement(radiusDealMovementByKey, disappearedDealKeys), [radiusDealMovementByKey, disappearedDealKeys]);
 
-  useEffect(() => {
-    setPreviousDealSnapshots(currentDealSnapshots);
+  const setCurrentAsMovementBaseline = useCallback(() => {
+    setMovementBaselineSnapshots(currentDealSnapshots);
     if (typeof window === "undefined") return;
     try {
-      // Storage boundary: movement snapshots are persisted locally so next scans can compute deltas safely after reload.
       window.localStorage.setItem(
-        RADIUS_DEAL_SNAPSHOT_STORAGE_KEY,
+        RADIUS_MOVEMENT_BASELINE_STORAGE_KEY,
         JSON.stringify([...currentDealSnapshots.values()]),
       );
     } catch {
       // Ignore local storage write failures.
     }
   }, [currentDealSnapshots]);
+  const clearMovementBaseline = useCallback(() => {
+    setMovementBaselineSnapshots(new Map());
+    setMovementFilterChips(new Set());
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.removeItem(RADIUS_MOVEMENT_BASELINE_STORAGE_KEY);
+    } catch {
+      // Ignore local storage failures.
+    }
+  }, []);
 
   const rowMovementByRowId = useMemo(() => {
     const out = new Map<number, RadiusDealMovement>();
@@ -5670,6 +5682,14 @@ export function ScanResultsTable({
         onRemove: () => setRouteExecutionFilters({ hideQueued: false, unassignedOnly: false, needsVerify: false, executableNow: false }),
       });
     }
+    if (movementFilterChips.size > 0) {
+      const labels = [...movementFilterChips].map((key) => `Movement: ${key}`);
+      chips.push({
+        key: "movement-filters",
+        label: labels.join(", "),
+        onRemove: () => setMovementFilterChips(new Set()),
+      });
+    }
 
     if (sessionStationFilters) {
       const ignoredCount =
@@ -5698,6 +5718,7 @@ export function ScanResultsTable({
     sessionStationFilters,
     showHiddenRows,
     routeExecutionFilters,
+    movementFilterChips,
     t,
     trackedVisibilityMode,
   ]);
@@ -6703,12 +6724,23 @@ export function ScanResultsTable({
       {isRadiusMode && (
         <div className="shrink-0 px-2 pt-1 text-[11px] space-y-1" data-testid="radius-movement-summary-strip">
           <div className="text-eve-dim">Changes: {radiusMovementSummary.new} new · {radiusMovementSummary.improving} improving · {radiusMovementSummary.worse} worse · {radiusMovementSummary.disappeared} disappeared</div>
+          {!hasMovementBaseline && <div className="text-eve-dim">Set a movement baseline to enable movement filtering.</div>}
           <div className="flex flex-wrap gap-1">
-            {[["new","New"],["improving","Improving"],["worse","Worse"],["collapsing","Collapsing"],["disappeared","Disappeared"],["profit25","Profit +25%+"],["qty50","Qty +50%+"],["highValueNew","High-value new"]].map(([key,label]) => (
-              <button key={key} type="button" onClick={() => setMovementFilterChips((prev) => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; })} className={`rounded-sm border px-1.5 py-0.5 ${movementFilterChips.has(key) ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent" : "border-eve-border/60 text-eve-dim"}`}>{label}</button>
+            <button type="button" onClick={setCurrentAsMovementBaseline} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5">Set current as baseline</button>
+            <button type="button" onClick={clearMovementBaseline} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5">Clear baseline</button>
+            <button type="button" onClick={() => setShowDisappearedPanel((prev) => !prev)} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5">Disappeared ({radiusMovementSummary.disappeared})</button>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {[["new","New"],["improving","Improving"],["worse","Worse"],["collapsing","Collapsing"],["profit25","Profit +25%+"],["qty50","Qty +50%+"],["highValueNew","High-value new"]].map(([key,label]) => (
+              <button key={key} type="button" disabled={!hasMovementBaseline} onClick={() => setMovementFilterChips((prev) => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; })} className={`rounded-sm border px-1.5 py-0.5 ${movementFilterChips.has(key) ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent" : "border-eve-border/60 text-eve-dim"} ${!hasMovementBaseline ? "opacity-50 cursor-not-allowed" : ""}`}>{label}</button>
             ))}
             <button type="button" onClick={() => setMovementFilterChips(new Set())} className="rounded-sm border border-eve-border/60 px-1.5 py-0.5">Clear</button>
           </div>
+          {showDisappearedPanel && (
+            <div className="rounded-sm border border-eve-border/60 bg-black/20 p-2 text-eve-dim max-h-28 overflow-auto" data-testid="radius-disappeared-list">
+              {[...disappearedDealKeys].length === 0 ? "No disappeared deals." : [...disappearedDealKeys].map((key) => <div key={key}>{key}</div>)}
+            </div>
+          )}
         </div>
       )}
       {activeFilterChips.length > 0 && (
@@ -6814,6 +6846,8 @@ export function ScanResultsTable({
                     needsVerify: false,
                     executableNow: false,
                   });
+                  setMovementFilterChips(new Set());
+                  setShowDisappearedPanel(false);
                   setShowHiddenRows(false);
                 }}
               />
