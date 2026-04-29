@@ -40,6 +40,8 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+const scanExecutionTimeout = 5 * time.Minute
+
 // Server is the HTTP API server that connects the ESI client, scanner engine, and database.
 type Server struct {
 	cfg              *config.Config
@@ -2573,12 +2575,26 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 
 	startTime := time.Now()
 
-	results, err := scanner.Scan(params, func(msg string) {
+	scanCtx, cancel := context.WithTimeout(r.Context(), scanExecutionTimeout)
+	defer cancel()
+	results, err := scanner.ScanWithContext(scanCtx, params, func(msg string) {
 		line, _ := json.Marshal(map[string]string{"type": "progress", "message": msg})
 		fmt.Fprintf(w, "%s\n", line)
 		flusher.Flush()
 	})
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			line, _ := json.Marshal(map[string]string{"type": "error", "message": "scan canceled"})
+			fmt.Fprintf(w, "%s\n", line)
+			flusher.Flush()
+			return
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			line, _ := json.Marshal(map[string]string{"type": "error", "message": "scan timed out"})
+			fmt.Fprintf(w, "%s\n", line)
+			flusher.Flush()
+			return
+		}
 		log.Printf("[API] Scan error: %v", err)
 		line, _ := json.Marshal(map[string]string{"type": "error", "message": err.Error()})
 		fmt.Fprintf(w, "%s\n", line)
@@ -2686,12 +2702,26 @@ func (s *Server) handleScanMultiRegion(w http.ResponseWriter, r *http.Request) {
 
 	startTime := time.Now()
 
-	results, err := scanner.ScanMultiRegion(params, func(msg string) {
+	scanCtx, cancel := context.WithTimeout(r.Context(), scanExecutionTimeout)
+	defer cancel()
+	results, err := scanner.ScanMultiRegionWithContext(scanCtx, params, func(msg string) {
 		line, _ := json.Marshal(map[string]string{"type": "progress", "message": msg})
 		fmt.Fprintf(w, "%s\n", line)
 		flusher.Flush()
 	})
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			line, _ := json.Marshal(map[string]string{"type": "error", "message": "scan canceled"})
+			fmt.Fprintf(w, "%s\n", line)
+			flusher.Flush()
+			return
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			line, _ := json.Marshal(map[string]string{"type": "error", "message": "scan timed out"})
+			fmt.Fprintf(w, "%s\n", line)
+			flusher.Flush()
+			return
+		}
 		log.Printf("[API] ScanMultiRegion error: %v", err)
 		line, _ := json.Marshal(map[string]string{"type": "error", "message": err.Error()})
 		fmt.Fprintf(w, "%s\n", line)

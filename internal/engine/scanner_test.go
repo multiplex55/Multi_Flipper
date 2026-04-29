@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"math/rand"
@@ -1062,7 +1063,7 @@ func TestFetchOrdersAndIndex_EmptyRegions(t *testing.T) {
 	regions := map[int32]bool{}
 	validSystems := map[int32]int{}
 
-	stream := scanner.fetchOrdersStream(regions, "sell", validSystems)
+	stream := scanner.fetchOrdersStream(context.Background(), regions, "sell", validSystems)
 	if batch, ok := <-stream; ok {
 		t.Fatalf("expected closed stream for empty regions, got batch: %+v", batch)
 	}

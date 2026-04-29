@@ -176,6 +176,19 @@ type NdjsonGenericMessage<T> =
   | { type: "result"; data: T[]; count?: number; scan_id?: number; cache_meta?: StationCacheMeta }
   | { type: "error"; message: string };
 
+export type ScanTerminalState =
+  | "completed"
+  | "canceled"
+  | "timed_out"
+  | "failed"
+  | "completed_with_warnings";
+
+type StreamNdjsonOptions = {
+  signal?: AbortSignal;
+  requestTimeoutMs?: number;
+  stallTimeoutMs?: number;
+};
+
 export interface RegionalDayScanResponse {
   rows: FlipResult[];
   hubs: RegionalDayTradeHub[];
@@ -224,15 +237,39 @@ async function streamNdjson<T>(
   url: string,
   body: object,
   onProgress: (msg: string) => void,
-  signal?: AbortSignal,
+  options?: StreamNdjsonOptions,
   errorMessage = "Request failed",
   onResult?: (msg: Extract<NdjsonGenericMessage<T>, { type: "result" }>) => void
 ): Promise<T[]> {
+  const controller = new AbortController();
+  const reasonRef: { reason: "user canceled" | "request timeout" | "stall timeout" | null } = { reason: null };
+  const onAbort = () => {
+    reasonRef.reason = "user canceled";
+    controller.abort();
+  };
+  options?.signal?.addEventListener("abort", onAbort, { once: true });
+  const requestTimer = options?.requestTimeoutMs
+    ? window.setTimeout(() => {
+        reasonRef.reason = "request timeout";
+        controller.abort();
+      }, options.requestTimeoutMs)
+    : null;
+  let stallTimer: number | null = null;
+  const resetStall = () => {
+    if (!options?.stallTimeoutMs) return;
+    if (stallTimer) window.clearTimeout(stallTimer);
+    stallTimer = window.setTimeout(() => {
+      reasonRef.reason = "stall timeout";
+      controller.abort();
+    }, options.stallTimeoutMs);
+  };
+  resetStall();
+  try {
   const res = await apiFetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-    signal,
+    signal: controller.signal,
   });
 
   if (!res.ok) {
@@ -257,6 +294,7 @@ async function streamNdjson<T>(
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
+    resetStall();
     buffer += decoder.decode(value, { stream: true });
 
     const lines = buffer.split("\n");
@@ -288,6 +326,19 @@ async function streamNdjson<T>(
   }
 
   return results;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError" && reasonRef.reason) {
+      throw new Error(reasonRef.reason);
+    }
+    if (error instanceof TypeError) {
+      throw new Error("network failure");
+    }
+    throw error;
+  } finally {
+    options?.signal?.removeEventListener("abort", onAbort);
+    if (requestTimer) window.clearTimeout(requestTimer);
+    if (stallTimer) window.clearTimeout(stallTimer);
+  }
 }
 
 export async function getStatus(): Promise<AppStatus> {
@@ -423,7 +474,7 @@ export async function scan(
     `${BASE}/api/scan`,
     params,
     onProgress,
-    signal,
+    { signal, requestTimeoutMs: 300000, stallTimeoutMs: 30000 },
     "Scan failed",
     (msg) => onMeta?.(msg.cache_meta),
   );
@@ -453,7 +504,7 @@ export async function scanMultiRegion(
     `${BASE}/api/scan/multi-region`,
     params,
     onProgress,
-    signal,
+    { signal, requestTimeoutMs: 300000, stallTimeoutMs: 30000 },
     "Multi-region scan failed",
     (msg) => onMeta?.(msg.cache_meta),
   );
@@ -476,7 +527,7 @@ export async function scanRegionalDayTrader(
     `${BASE}/api/scan/regional-day`,
     params,
     onProgress,
-    signal,
+    { signal, requestTimeoutMs: 300000, stallTimeoutMs: 30000 },
     "Regional day trader scan failed",
     (msg) => {
       onMeta?.(msg.cache_meta);
@@ -510,7 +561,7 @@ export async function scanContracts(
     `${BASE}/api/scan/contracts`,
     params,
     onProgress,
-    signal,
+    { signal, requestTimeoutMs: 300000, stallTimeoutMs: 30000 },
     "Contract scan failed",
     (msg) => onMeta?.(msg.cache_meta),
   );
@@ -546,7 +597,7 @@ export async function findRoutes(
       include_structures: params.include_structures,
     },
     onProgress,
-    signal,
+    { signal, requestTimeoutMs: 300000, stallTimeoutMs: 30000 },
     "Route search failed"
   );
   return normalizeRouteResults(routes);
@@ -844,7 +895,7 @@ export async function scanStation(
     `${BASE}/api/scan/station`,
     params,
     onProgress,
-    signal,
+    { signal, requestTimeoutMs: 300000, stallTimeoutMs: 30000 },
     "Station scan failed",
     (msg) => onMeta?.(msg.cache_meta),
   );

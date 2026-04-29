@@ -1157,6 +1157,7 @@ function App() {
   );
 
   const abortRef = useRef<AbortController | null>(null);
+  const scanRunIDRef = useRef(0);
   const locationCacheRef = useRef<Map<string, Awaited<ReturnType<typeof getCharacterLocation>> | null>>(new Map());
   const desktopAlertCooldownRef = useRef<Map<string, number>>(new Map());
   const radiusAutoRefreshSignatureRef = useRef<string>("");
@@ -2188,10 +2189,15 @@ const handleScan = useCallback(async (overrideParams?: ScanParams) => {
 
     const currentTab = tab;
 const scanParams = overrideParams ?? params;
+    const runID = ++scanRunIDRef.current;
     const controller = new AbortController();
     abortRef.current = controller;
     setScanning(true);
     setProgress(t("scanStarting"));
+    const isActiveRun = () => scanRunIDRef.current === runID;
+    const guardedProgress = (msg: string) => {
+      if (isActiveRun()) setProgress(msg);
+    };
 
     // Clear previous results immediately so the user sees a fresh scan
     if (currentTab === "contracts") {
@@ -2300,12 +2306,13 @@ const scanParams = overrideParams ?? params;
         let meta: StationCacheMeta | undefined;
 const results = await scanContracts(
   scanParams,
-  setProgress,
+  guardedProgress,
   controller.signal,
   (m) => {
     meta = m;
   },
 );
+        if (!isActiveRun()) return;
         setContractResults(filterContractResults(results, bannedStationIDs));
         setContractCacheMeta(meta ?? null);
         setContractScanCompleted(true);
@@ -2317,12 +2324,13 @@ const radiusParams =
     : { ...scanParams, target_market_system: "" };
         const results = await scan(
           radiusParams,
-          setProgress,
+          guardedProgress,
           controller.signal,
           (m) => {
             meta = m;
           },
         );
+        if (!isActiveRun()) return;
         const filtered = filterFlipResults(results, bannedTypeIDs, bannedStationIDs);
         setRadiusResults(filtered);
         clearRadiusDistanceLens();
@@ -2340,12 +2348,13 @@ const radiusParams =
         let meta: StationCacheMeta | undefined;
         const response = await scanRegionalDayTrader(
           scanParams,
-          setProgress,
+          guardedProgress,
           controller.signal,
           (m) => {
             meta = m;
           },
         );
+        if (!isActiveRun()) return;
         const normalizedRows = filterFlipResults(
           normalizeRegionalResults(response.rows as unknown[]),
           bannedTypeIDs,
@@ -2393,12 +2402,13 @@ const radiusParams =
         let meta: StationCacheMeta | undefined;
 const results = await scanMultiRegion(
   scanParams,
-  setProgress,
+  guardedProgress,
   controller.signal,
   (m) => {
     meta = m;
   },
 );
+        if (!isActiveRun()) return;
         setRegionResults(
           filterFlipResults(results, bannedTypeIDs, bannedStationIDs),
         );
@@ -2406,11 +2416,21 @@ const results = await scanMultiRegion(
         await triggerDesktopAlerts(results);
       }
     } catch (e: unknown) {
-      if (e instanceof Error && e.name !== "AbortError") {
-        setProgress(t("errorPrefix") + e.message);
+      if (e instanceof Error && e.name !== "AbortError" && isActiveRun()) {
+        const mapped =
+          e.message === "user canceled"
+            ? "user canceled"
+            : e.message === "request timeout"
+              ? "request timeout"
+              : e.message === "stall timeout"
+                ? "stall timeout"
+                : e.message === "network failure"
+                  ? "network failure"
+                  : `backend error: ${e.message}`;
+        setProgress(t("errorPrefix") + mapped);
       }
     } finally {
-      setScanning(false);
+      if (isActiveRun()) setScanning(false);
     }
   }, [
     scanning,
