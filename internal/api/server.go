@@ -2609,29 +2609,28 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			s.scanLifecycle.finalize(userID, "canceled", scanTerminalCanceled)
+			s.scanLifecycle.finalize(userID, string(scanTerminalCanceled), scanTerminalCanceled)
 			line, _ := json.Marshal(map[string]string{"type": "error", "message": "scan canceled"})
-			fmt.Fprintf(w, "%s\n", line)
+			_, _ = fmt.Fprintf(w, "%s\n", line)
 			flusher.Flush()
 			return
 		}
 		if errors.Is(err, context.DeadlineExceeded) {
-			s.scanLifecycle.finalize(userID, "timed out", scanTerminalTimedOut)
+			s.scanLifecycle.finalize(userID, string(scanTerminalTimedOut), scanTerminalTimedOut)
 			line, _ := json.Marshal(map[string]string{"type": "error", "message": "scan timed out"})
-			fmt.Fprintf(w, "%s\n", line)
+			_, _ = fmt.Fprintf(w, "%s\n", line)
 			flusher.Flush()
 			return
 		}
 		log.Printf("[API] Scan error: %v", err)
-		s.scanLifecycle.finalize(userID, "failed", scanTerminalFailed)
+		s.scanLifecycle.finalize(userID, string(scanTerminalFailed), scanTerminalFailed)
 		line, _ := json.Marshal(map[string]string{"type": "error", "message": err.Error()})
-		fmt.Fprintf(w, "%s\n", line)
+		_, _ = fmt.Fprintf(w, "%s\n", line)
 		flusher.Flush()
 		return
 	}
 
 	durationMs := time.Since(startTime).Milliseconds()
-	s.scanLifecycle.finalize(userID, "completed", scanTerminalCompleted)
 	log.Printf("[API] Scan complete: %d results in %dms", len(results), durationMs)
 
 	// Resolve structure names if user enabled the toggle
@@ -2668,23 +2667,54 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 	}
 	go s.processWatchlistAlerts(userID, userCfg, results, scanIDPtr)
 
-	line, marshalErr := json.Marshal(map[string]interface{}{
+	payload := map[string]interface{}{
 		"type":       "result",
 		"data":       results,
 		"count":      len(results),
 		"scan_id":    scanID,
 		"cache_meta": cacheMeta,
 		"warnings":   scanWarnings,
-	})
-	if marshalErr != nil {
-		log.Printf("[API] Scan JSON marshal error: %v", marshalErr)
-		errLine, _ := json.Marshal(map[string]string{"type": "error", "message": "JSON: " + marshalErr.Error()})
-		fmt.Fprintf(w, "%s\n", errLine)
-		flusher.Flush()
+	}
+	if finalizeErr := s.writeScanPayloadAndFinalize(w, userID, payload); finalizeErr != nil {
+		log.Printf("[API] Scan response delivery failed: %v", finalizeErr)
+		if _, ok := w.(http.Flusher); ok {
+			errLine, _ := json.Marshal(map[string]string{"type": "error", "message": finalizeErr.Error()})
+			_, _ = fmt.Fprintf(w, "%s\n", errLine)
+			flusher.Flush()
+		}
 		return
 	}
-	fmt.Fprintf(w, "%s\n", line)
-	flusher.Flush()
+}
+
+func classifyScanTerminal(err error) scanTerminalStatus {
+	if errors.Is(err, context.Canceled) {
+		return scanTerminalCanceled
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return scanTerminalTimedOut
+	}
+	return scanTerminalFailed
+}
+
+func (s *Server) writeScanPayloadAndFinalize(w http.ResponseWriter, userID string, payload map[string]interface{}) error {
+	line, err := json.Marshal(payload)
+	if err != nil {
+		terminal := classifyScanTerminal(err)
+		s.scanLifecycle.finalize(userID, string(terminal), terminal)
+		return fmt.Errorf("scan response marshal failed: %w", err)
+	}
+	if _, err := fmt.Fprintf(w, "%s\n", line); err != nil {
+		terminal := classifyScanTerminal(err)
+		s.scanLifecycle.finalize(userID, string(terminal), terminal)
+		return fmt.Errorf("scan response write failed: %w", err)
+	}
+	if err := http.NewResponseController(w).Flush(); err != nil {
+		terminal := classifyScanTerminal(err)
+		s.scanLifecycle.finalize(userID, string(terminal), terminal)
+		return fmt.Errorf("scan response flush failed: %w", err)
+	}
+	s.scanLifecycle.finalize(userID, string(scanTerminalCompleted), scanTerminalCompleted)
+	return nil
 }
 
 func (s *Server) handleGetActiveScan(w http.ResponseWriter, r *http.Request) {
