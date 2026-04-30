@@ -195,6 +195,7 @@ type StreamNdjsonOptions = {
   signal?: AbortSignal;
   requestTimeoutMs?: number;
   stallTimeoutMs?: number;
+  onWarning?: (warning: string) => void;
 };
 
 export interface RegionalDayScanResponse {
@@ -325,6 +326,14 @@ async function streamNdjson<T>(
         onProgress(msg);
       } else if (msg.type === "result") {
         results = msg.data ?? [];
+        const resultWithWarnings = msg as { warnings?: unknown };
+        if (Array.isArray(resultWithWarnings.warnings)) {
+          for (const warning of resultWithWarnings.warnings) {
+            if (typeof warning === "string" && warning.trim()) {
+              options?.onWarning?.(warning.trim());
+            }
+          }
+        }
         onResult?.(msg);
       } else if (msg.type === "error") {
         throw new Error(msg.message);
@@ -502,7 +511,7 @@ export async function scan(
     `${BASE}/api/scan`,
     params,
     onProgress,
-    { signal, requestTimeoutMs: 300000, stallTimeoutMs: 30000 },
+    { signal, requestTimeoutMs: 300000, stallTimeoutMs: 90000 },
     "Scan failed",
     (msg) => onMeta?.(msg.cache_meta),
   );
@@ -532,7 +541,7 @@ export async function scanMultiRegion(
     `${BASE}/api/scan/multi-region`,
     params,
     onProgress,
-    { signal, requestTimeoutMs: 300000, stallTimeoutMs: 30000 },
+    { signal, requestTimeoutMs: 300000, stallTimeoutMs: 90000 },
     "Multi-region scan failed",
     (msg) => onMeta?.(msg.cache_meta),
   );
@@ -555,7 +564,7 @@ export async function scanRegionalDayTrader(
     `${BASE}/api/scan/regional-day`,
     params,
     onProgress,
-    { signal, requestTimeoutMs: 300000, stallTimeoutMs: 30000 },
+    { signal, requestTimeoutMs: 300000, stallTimeoutMs: 90000 },
     "Regional day trader scan failed",
     (msg) => {
       onMeta?.(msg.cache_meta);
@@ -589,7 +598,7 @@ export async function scanContracts(
     `${BASE}/api/scan/contracts`,
     params,
     onProgress,
-    { signal, requestTimeoutMs: 300000, stallTimeoutMs: 30000 },
+    { signal, requestTimeoutMs: 300000, stallTimeoutMs: 90000 },
     "Contract scan failed",
     (msg) => onMeta?.(msg.cache_meta),
   );
@@ -625,7 +634,7 @@ export async function findRoutes(
       include_structures: params.include_structures,
     },
     onProgress,
-    { signal, requestTimeoutMs: 300000, stallTimeoutMs: 30000 },
+    { signal, requestTimeoutMs: 300000, stallTimeoutMs: 90000 },
     "Route search failed"
   );
   return normalizeRouteResults(routes);
@@ -923,7 +932,7 @@ export async function scanStation(
     `${BASE}/api/scan/station`,
     params,
     onProgress,
-    { signal, requestTimeoutMs: 300000, stallTimeoutMs: 30000 },
+    { signal, requestTimeoutMs: 300000, stallTimeoutMs: 90000 },
     "Station scan failed",
     (msg) => onMeta?.(msg.cache_meta),
   );

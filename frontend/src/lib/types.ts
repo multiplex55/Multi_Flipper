@@ -1999,6 +1999,12 @@ export interface IndustryLedger {
   entries: IndustryLedgerEntry[];
 }
 
+export interface ScanWarning {
+  code: "degraded" | "backend_warning" | string;
+  message: string;
+  details?: string;
+}
+
 export interface IndustryTaskRecord {
   id: number;
   user_id: string;
