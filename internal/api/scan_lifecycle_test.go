@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -81,3 +82,42 @@ func TestScanEndpoint_DeadlineExceeded_EmitsTerminalErrorEvent(t *testing.T) {
 		t.Fatalf("expected timeout event, body=%s", rec.Body.String())
 	}
 }
+
+func TestWriteScanPayloadAndFinalize_WriteFailureMarksFailed(t *testing.T) {
+	srv := NewServer(config.Default(), &esi.Client{}, nil, nil, nil)
+	cookie := userCookieForServer(t, srv)
+	reqID := httptest.NewRequest(http.MethodGet, "/", nil)
+	reqID.AddCookie(cookie)
+	uid := srv.ensureRequestUserID(httptest.NewRecorder(), reqID)
+
+	srv.scanLifecycle.register(uid, "run-write-fail", "radius", "starting", func() {})
+
+	w := &failingScanWriter{}
+	err := srv.writeScanPayloadAndFinalize(w, uid, map[string]interface{}{"type": "result", "data": []string{"ok"}})
+	if err == nil {
+		t.Fatal("expected write failure")
+	}
+	state, ok := srv.scanLifecycle.get(uid)
+	if !ok {
+		t.Fatal("missing lifecycle state")
+	}
+	if state.Active {
+		t.Fatalf("expected inactive state, got active=true")
+	}
+	if state.TerminalStatus != scanTerminalFailed {
+		t.Fatalf("terminal status=%q", state.TerminalStatus)
+	}
+	if state.Stage != string(scanTerminalFailed) {
+		t.Fatalf("stage=%q", state.Stage)
+	}
+}
+
+type failingScanWriter struct{}
+
+func (w *failingScanWriter) Header() http.Header { return make(http.Header) }
+
+func (w *failingScanWriter) Write([]byte) (int, error) { return 0, errors.New("write failed") }
+
+func (w *failingScanWriter) WriteHeader(statusCode int) {}
+
+func (w *failingScanWriter) Flush() {}
