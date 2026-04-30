@@ -25,7 +25,7 @@ func (c *Client) FetchStructureOrdersWithContext(ctx context.Context, structureI
 	}
 
 	url := fmt.Sprintf("%s/markets/structures/%d/?datasource=tranquility", baseURL, structureID)
-	raw, err := c.AuthGetPaginated(url, accessToken)
+	raw, err := c.AuthGetPaginatedWithContext(ctx, url, accessToken)
 	if err != nil {
 		return nil, err
 	}

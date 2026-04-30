@@ -571,16 +571,25 @@ func (c *Client) AuthGetPaginated(url, accessToken string) ([]json.RawMessage, e
 	return c.getPaginatedInternal(url, accessToken)
 }
 
+// AuthGetPaginatedWithContext fetches all pages from a paginated ESI endpoint with an access token.
+func (c *Client) AuthGetPaginatedWithContext(ctx context.Context, url, accessToken string) ([]json.RawMessage, error) {
+	return c.getPaginatedInternalWithContext(ctx, url, accessToken)
+}
+
 // getPaginatedInternal is the shared implementation for paginated fetches.
 // If accessToken is non-empty, it is sent as a Bearer token.
 func (c *Client) getPaginatedInternal(url, accessToken string) ([]json.RawMessage, error) {
+	return c.getPaginatedInternalWithContext(context.Background(), url, accessToken)
+}
+
+func (c *Client) getPaginatedInternalWithContext(ctx context.Context, url, accessToken string) ([]json.RawMessage, error) {
 	c.sem <- struct{}{}
 
 	sep := "&"
 	if !strings.Contains(url, "?") {
 		sep = "?"
 	}
-	req, err := http.NewRequest("GET", url+sep+"page=1", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url+sep+"page=1", nil)
 	if err != nil {
 		<-c.sem
 		return nil, err
@@ -632,9 +641,9 @@ func (c *Client) getPaginatedInternal(url, accessToken string) ([]json.RawMessag
 			var data []json.RawMessage
 			var fetchErr error
 			if accessToken != "" {
-				fetchErr = c.AuthGetJSON(pageURL, accessToken, &data)
+				fetchErr = c.AuthGetJSONWithContext(ctx, pageURL, accessToken, &data)
 			} else {
-				fetchErr = c.GetJSON(pageURL, &data)
+				fetchErr = c.GetJSONWithContext(ctx, pageURL, &data)
 			}
 			results <- pageResult{page: pageNum, data: data, err: fetchErr}
 		}(p)

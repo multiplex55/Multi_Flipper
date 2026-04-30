@@ -29,7 +29,7 @@ func (c *Client) FetchRegionOrdersWithContext(ctx context.Context, regionID int3
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	return c.FetchRegionOrdersCached(regionID, orderType)
+	return c.FetchRegionOrdersCachedWithContext(ctx, regionID, orderType)
 }
 
 // FetchRegionOrdersByType fetches all market orders for a specific type in a region.
