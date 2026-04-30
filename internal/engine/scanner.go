@@ -575,7 +575,13 @@ func (s *Scanner) fetchAndIndexWithContext(
 		)
 	}
 	if enablePrivateStructureFetch && len(sourceStructureSystemIDs) > 0 {
-		s.mergeSourceStructureSellOrders(ctx, idx, sourceStructureSystemIDs, buySystems, params.AccessToken)
+		structureWarnings, err := s.mergeSourceStructureSellOrders(ctx, idx, sourceStructureSystemIDs, buySystems, params.AccessToken)
+		for _, w := range structureWarnings {
+			appendWarning(w)
+		}
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	log.Printf("[DEBUG] fetchAndIndex: %d sell orders, %d buy orders", len(idx.sellOrders), len(idx.buyOrders))
@@ -608,12 +614,12 @@ func (s *Scanner) mergeSourceStructureSellOrders(
 	sourceStructureSystemIDs map[int64]int32,
 	buySystems map[int32]int,
 	accessToken string,
-) {
+) ([]ScanWarning, error) {
 	if err := ctx.Err(); err != nil {
-		return
+		return nil, err
 	}
 	if idx == nil || len(sourceStructureSystemIDs) == 0 || strings.TrimSpace(accessToken) == "" || s.ESI == nil {
-		return
+		return nil, nil
 	}
 
 	const (
@@ -656,11 +662,18 @@ func (s *Scanner) mergeSourceStructureSellOrders(
 		wg.Add(1)
 		go func(sid int64, sysID int32) {
 			defer wg.Done()
-			sem <- struct{}{}
+			select {
+			case sem <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
 			orders, err := s.ESI.FetchStructureOrdersWithContext(ctx, sid, accessToken)
 			<-sem
 			if err != nil {
-				out <- fetchResult{structureID: sid, err: err}
+				select {
+				case out <- fetchResult{structureID: sid, err: err}:
+				case <-ctx.Done():
+				}
 				return
 			}
 
@@ -686,7 +699,10 @@ func (s *Scanner) mergeSourceStructureSellOrders(
 				}
 				filtered = append(filtered, o)
 			}
-			out <- fetchResult{structureID: sid, orders: filtered}
+			select {
+			case out <- fetchResult{structureID: sid, orders: filtered}:
+			case <-ctx.Done():
+			}
 		}(structureID, systemID)
 	}
 	wg.Wait()
@@ -695,10 +711,23 @@ func (s *Scanner) mergeSourceStructureSellOrders(
 	added := 0
 	fetched := 0
 	failed := 0
+	warnings := make([]ScanWarning, 0, 4)
 	for item := range out {
+		if err := ctx.Err(); err != nil {
+			return warnings, err
+		}
 		if item.err != nil {
 			log.Printf("[DEBUG] mergeSourceStructureSellOrders: structure %d fetch failed: %v", item.structureID, item.err)
 			failed++
+			if errors.Is(item.err, context.Canceled) || errors.Is(item.err, context.DeadlineExceeded) {
+				return warnings, item.err
+			}
+			warnings = append(warnings, ScanWarning{
+				Stage:      "structure_orders",
+				LocationID: item.structureID,
+				Message:    item.err.Error(),
+				Severity:   "warning",
+			})
 			continue
 		}
 		fetched++
@@ -732,6 +761,7 @@ func (s *Scanner) mergeSourceStructureSellOrders(
 		failed,
 		len(structureIDs),
 	)
+	return warnings, nil
 }
 
 // calculateResults is the shared profit calculation logic.

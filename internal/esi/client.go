@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -13,6 +14,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+)
+
+var (
+	// ErrESIStructureAccessForbidden indicates authenticated structure market access is forbidden.
+	ErrESIStructureAccessForbidden = errors.New("esi structure access forbidden")
+	// ErrESIServiceUnavailable indicates a transient upstream outage.
+	ErrESIServiceUnavailable = errors.New("esi service unavailable")
+	// ErrESIPartialPageFailure indicates some pages failed during paginated fetch.
+	ErrESIPartialPageFailure = errors.New("esi paginated partial page failure")
 )
 
 const (
@@ -583,6 +593,9 @@ func (c *Client) getPaginatedInternal(url, accessToken string) ([]json.RawMessag
 }
 
 func (c *Client) getPaginatedInternalWithContext(ctx context.Context, url, accessToken string) ([]json.RawMessage, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	c.sem <- struct{}{}
 
 	sep := "&"
@@ -610,6 +623,12 @@ func (c *Client) getPaginatedInternalWithContext(ctx context.Context, url, acces
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		<-c.sem
+		if resp.StatusCode == http.StatusForbidden {
+			return nil, fmt.Errorf("%w: %s", ErrESIStructureAccessForbidden, string(body))
+		}
+		if resp.StatusCode == http.StatusServiceUnavailable || resp.StatusCode == http.StatusBadGateway || resp.StatusCode == http.StatusGatewayTimeout {
+			return nil, fmt.Errorf("%w: status=%d body=%s", ErrESIServiceUnavailable, resp.StatusCode, string(body))
+		}
 		return nil, fmt.Errorf("ESI paginated %d: %s", resp.StatusCode, string(body))
 	}
 
@@ -645,19 +664,32 @@ func (c *Client) getPaginatedInternalWithContext(ctx context.Context, url, acces
 			} else {
 				fetchErr = c.GetJSONWithContext(ctx, pageURL, &data)
 			}
-			results <- pageResult{page: pageNum, data: data, err: fetchErr}
+			select {
+			case results <- pageResult{page: pageNum, data: data, err: fetchErr}:
+			case <-ctx.Done():
+			}
 		}(p)
 	}
 
 	all := make([]json.RawMessage, 0, len(page1)*totalPages)
 	all = append(all, page1...)
+	pageFailures := 0
 	for i := 0; i < totalPages-1; i++ {
-		r := <-results
+		var r pageResult
+		select {
+		case r = <-results:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 		if r.err != nil {
 			log.Printf("[ESI] Paginated page %d failed: %v", r.page, r.err)
+			pageFailures++
 			continue
 		}
 		all = append(all, r.data...)
+	}
+	if pageFailures > 0 {
+		return all, fmt.Errorf("%w: %d/%d pages failed", ErrESIPartialPageFailure, pageFailures, totalPages-1)
 	}
 	return all, nil
 }
