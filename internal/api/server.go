@@ -2603,7 +2603,7 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	scanRunID := fmt.Sprintf("radius-%d", startTime.UnixNano())
 	s.scanLifecycle.register(userID, scanRunID, "radius", "starting", cancel)
-	results, err := scanner.ScanWithContext(scanCtx, params, func(msg string) {
+	results, scanWarnings, err := scanner.ScanWithContextDetailed(scanCtx, params, func(msg string) {
 		s.scanLifecycle.progress(userID, msg)
 		writeProgressEvent(w, flusher, msg, "", 0, 0)
 	})
@@ -2674,6 +2674,7 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 		"count":      len(results),
 		"scan_id":    scanID,
 		"cache_meta": cacheMeta,
+		"warnings":   scanWarnings,
 	})
 	if marshalErr != nil {
 		log.Printf("[API] Scan JSON marshal error: %v", marshalErr)
