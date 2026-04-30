@@ -258,3 +258,13 @@ type ScanParams struct {
 	RouteValidationMinProfitRetainedPct    float64
 	RouteValidationMinLiquidityRetainedPct float64
 }
+
+// ScanWarning captures non-fatal scanner pipeline issues for degraded but completed scans.
+type ScanWarning struct {
+	Stage      string `json:"stage"`
+	RegionID   int32  `json:"region_id,omitempty"`
+	LocationID int64  `json:"location_id,omitempty"`
+	OrderType  string `json:"order_type,omitempty"`
+	Message    string `json:"message"`
+	Severity   string `json:"severity,omitempty"`
+}
