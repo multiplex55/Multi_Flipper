@@ -245,6 +245,9 @@ func (c *Client) FetchRegionOrdersCached(regionID int32, orderType string) ([]Ma
 }
 
 func (c *Client) FetchRegionOrdersCachedWithContext(ctx context.Context, regionID int32, orderType string) ([]MarketOrder, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("fetch region orders cache: %w", err)
+	}
 	sfKey := fmt.Sprintf("%d:%s", regionID, orderType)
 
 	resCh := c.orderCache.group.DoChan(sfKey, func() (interface{}, error) {
@@ -252,12 +255,16 @@ func (c *Client) FetchRegionOrdersCachedWithContext(ctx context.Context, regionI
 	})
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("fetch region orders cache wait: %w", ctx.Err())
 	case res := <-resCh:
 		if res.Err != nil {
-			return nil, res.Err
+			return nil, fmt.Errorf("fetch region orders cache group: %w", res.Err)
 		}
-		return res.Val.([]MarketOrder), nil
+		orders, ok := res.Val.([]MarketOrder)
+		if !ok {
+			return nil, fmt.Errorf("fetch region orders cache group: unexpected result type %T", res.Val)
+		}
+		return orders, nil
 	}
 }
 
@@ -276,7 +283,12 @@ func (c *Client) fetchRegionOrdersWithCache(ctx context.Context, regionID int32,
 	// 2. If we have an ETag, try conditional request on page 1
 	if etag != "" {
 		notModified, newExpires, err := c.conditionalCheck(ctx, url+"&page=1", etag)
-		if err == nil && notModified {
+		if err != nil {
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return nil, fmt.Errorf("fetch region orders cache conditional revalidate: %w", ctxErr)
+			}
+			log.Printf("[ESI] OrderCache conditional revalidate failed region=%d type=%s: %v", regionID, orderType, err)
+		} else if notModified {
 			// 304 — data unchanged, refresh expiry
 			c.orderCache.Touch(regionID, orderType, newExpires)
 			cached, _, _ := c.orderCache.Get(regionID, orderType)
@@ -291,7 +303,7 @@ func (c *Client) fetchRegionOrdersWithCache(ctx context.Context, regionID int32,
 	// 3. Full fetch
 	allOrders, respEtag, respExpires, err := c.getPaginatedDirectWithHeaders(ctx, url, regionID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fetch region orders cache full fetch: %w", err)
 	}
 
 	// Store in cache
@@ -308,19 +320,19 @@ func (c *Client) conditionalCheck(ctx context.Context, pageURL, etag string) (bo
 	select {
 	case c.scanSem <- struct{}{}:
 	case <-ctx.Done():
-		return false, time.Time{}, ctx.Err()
+		return false, time.Time{}, fmt.Errorf("conditional check wait semaphore: %w", ctx.Err())
 	}
 	defer func() { <-c.scanSem }()
 
 	req, err := newESIRequestWithContext(ctx, pageURL)
 	if err != nil {
-		return false, time.Time{}, err
+		return false, time.Time{}, fmt.Errorf("conditional check build request: %w", err)
 	}
 	req.Header.Set("If-None-Match", etag)
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return false, time.Time{}, err
+		return false, time.Time{}, fmt.Errorf("conditional check execute request: %w", err)
 	}
 	resp.Body.Close()
 

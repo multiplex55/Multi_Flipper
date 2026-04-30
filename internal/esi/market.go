@@ -27,9 +27,13 @@ func (c *Client) FetchRegionOrders(regionID int32, orderType string) ([]MarketOr
 
 func (c *Client) FetchRegionOrdersWithContext(ctx context.Context, regionID int32, orderType string) ([]MarketOrder, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fetch region orders preflight: %w", err)
 	}
-	return c.FetchRegionOrdersCachedWithContext(ctx, regionID, orderType)
+	orders, err := c.FetchRegionOrdersCachedWithContext(ctx, regionID, orderType)
+	if err != nil {
+		return nil, fmt.Errorf("fetch region orders cache path: %w", err)
+	}
+	return orders, nil
 }
 
 // FetchRegionOrdersByType fetches all market orders for a specific type in a region.
