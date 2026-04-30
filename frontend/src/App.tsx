@@ -76,6 +76,7 @@ import type {
   RegionalDayTradeItem,
   RegionalHubTrend,
   RouteResult,
+  ScanWarning,
   ScanParams,
   StrategyScoreConfig,
   StationCacheMeta,
@@ -154,6 +155,10 @@ type AlertChannels = {
   discord: boolean;
   desktop: boolean;
 };
+
+type ScanOutcome =
+  | { status: "completed"; warnings: ScanWarning[] }
+  | { status: "canceled" | "timed_out" | "failed"; reason: string; warnings: ScanWarning[] };
 
 type PatronEntry = {
   name: string;
@@ -891,6 +896,7 @@ function App() {
   const [autoRefreshRegion, setAutoRefreshRegion] = useState(false);
   const [activeScanState, setActiveScanState] = useState<any | null>(null);
   const [scanReconciling, setScanReconciling] = useState(false);
+  const [scanWarnings, setScanWarnings] = useState<ScanWarning[]>([]);
   const lastProgressAtRef = useRef<number>(0);
   const autoRefreshBlockedUntilRef = useRef<number>(0);
 
@@ -2189,7 +2195,7 @@ const recalculateRadiusLensFromCharacter = useCallback(
   [handleRecalculateRadiusDistanceLens],
 );
 
-const handleScan = useCallback(async (overrideParams?: ScanParams) => {
+const handleScan = useCallback(async (overrideParams?: ScanParams): Promise<ScanOutcome> => {
     setScanReconciling(true);
     const active = await getActiveScan().catch(() => ({ active: false }));
     setActiveScanState(active);
@@ -2200,12 +2206,14 @@ const handleScan = useCallback(async (overrideParams?: ScanParams) => {
     }
     if (scanning) {
       abortRef.current?.abort();
-      return;
+      return { status: "canceled", reason: "scan already running", warnings: [] };
     }
 
     const currentTab = tab;
 const scanParams = overrideParams ?? params;
     const runID = ++scanRunIDRef.current;
+    setScanWarnings([]);
+    const runWarnings: ScanWarning[] = [];
     const controller = new AbortController();
     abortRef.current = controller;
     setScanning(true);
@@ -2226,6 +2234,11 @@ const scanParams = overrideParams ?? params;
       const stage = evt.stage ? `${stageLabel[evt.stage] ?? evt.stage}: ` : "";
       const counter = evt.current != null && evt.total != null ? ` (${evt.current}/${evt.total})` : "";
       setProgress(`${stage}${evt.message}${counter}`);
+      if (/warning|degraded/i.test(evt.message)) {
+        const warning: ScanWarning = { code: "degraded", message: evt.message };
+        runWarnings.push(warning);
+        setScanWarnings((prev) => [...prev, warning]);
+      }
       lastProgressAtRef.current = Date.now();
     };
 
@@ -2342,10 +2355,11 @@ const results = await scanContracts(
     meta = m;
   },
 );
-        if (!isActiveRun()) return;
+        if (!isActiveRun()) return { status: "canceled", reason: "superseded by newer scan", warnings: runWarnings };
         setContractResults(filterContractResults(results, bannedStationIDs));
         setContractCacheMeta(meta ?? null);
         setContractScanCompleted(true);
+        return { status: "completed", warnings: runWarnings };
       } else if (currentTab === "radius") {
         let meta: StationCacheMeta | undefined;
 const radiusParams =
@@ -2360,7 +2374,7 @@ const radiusParams =
             meta = m;
           },
         );
-        if (!isActiveRun()) return;
+        if (!isActiveRun()) return { status: "canceled", reason: "superseded by newer scan", warnings: runWarnings };
         const filtered = filterFlipResults(results, bannedTypeIDs, bannedStationIDs);
         setRadiusResults(filtered);
         clearRadiusDistanceLens();
@@ -2374,6 +2388,7 @@ const radiusParams =
           }),
         );
         await triggerDesktopAlerts(results);
+        return { status: "completed", warnings: runWarnings };
       } else if (currentTab === "region") {
         let meta: StationCacheMeta | undefined;
         const response = await scanRegionalDayTrader(
@@ -2384,7 +2399,7 @@ const radiusParams =
             meta = m;
           },
         );
-        if (!isActiveRun()) return;
+        if (!isActiveRun()) return { status: "canceled", reason: "superseded by newer scan", warnings: runWarnings };
         const normalizedRows = filterFlipResults(
           normalizeRegionalResults(response.rows as unknown[]),
           bannedTypeIDs,
@@ -2427,6 +2442,7 @@ const radiusParams =
             row.DailyVolume ?? Math.round(row.DayTargetDemandPerDay ?? 0),
         }));
         await triggerDesktopAlerts(flatRows);
+        return { status: "completed", warnings: runWarnings };
       } else {
         // Keep old behavior for any legacy tab alias.
         let meta: StationCacheMeta | undefined;
@@ -2438,12 +2454,13 @@ const results = await scanMultiRegion(
     meta = m;
   },
 );
-        if (!isActiveRun()) return;
+        if (!isActiveRun()) return { status: "canceled", reason: "superseded by newer scan", warnings: runWarnings };
         setRegionResults(
           filterFlipResults(results, bannedTypeIDs, bannedStationIDs),
         );
         setRegionCacheMeta(meta ?? null);
         await triggerDesktopAlerts(results);
+        return { status: "completed", warnings: runWarnings };
       }
     } catch (e: unknown) {
       if (e instanceof Error && e.name !== "AbortError" && isActiveRun()) {
@@ -2461,10 +2478,17 @@ const results = await scanMultiRegion(
         if (mapped === "request timeout" || mapped === "stall timeout") {
           autoRefreshBlockedUntilRef.current = Date.now() + 120_000;
         }
+        return {
+          status: mapped === "user canceled" ? "canceled" : mapped.includes("timeout") ? "timed_out" : "failed",
+          reason: mapped,
+          warnings: runWarnings,
+        };
       }
+      return { status: "canceled", reason: "aborted", warnings: runWarnings };
     } finally {
       if (isActiveRun()) setScanning(false);
     }
+    return { status: "completed", warnings: runWarnings };
   }, [
     scanning,
     tab,
@@ -2501,8 +2525,17 @@ const handleScanAndRefresh = useCallback(async () => {
     setProgress("Location refresh: refreshing character location");
     const nextParams = await withTimeout("location refresh", () => refreshCurrentLocationIntoScanParams(), 45_000);
     setProgress("Scan start: launching scan");
-    await handleScan(nextParams);
-    setProgress("Finalize: scan and refresh complete");
+    const outcome = await handleScan(nextParams);
+    if (outcome.status === "completed") {
+      const warningSuffix = outcome.warnings.length > 0 ? ` (${outcome.warnings.length} warnings)` : "";
+      setProgress(`Finalize: scan and refresh complete${warningSuffix}`);
+    } else if (outcome.status === "canceled") {
+      setProgress(`Finalize: scan and refresh canceled (${outcome.reason})`);
+    } else if (outcome.status === "timed_out") {
+      setProgress(`Finalize: scan and refresh timed out (${outcome.reason})`);
+    } else {
+      setProgress(`Finalize: scan and refresh failed (${outcome.reason})`);
+    }
   } catch (err) {
     autoRefreshBlockedUntilRef.current = Date.now() + 120_000;
     throw err;
@@ -3276,6 +3309,16 @@ const handleScanAndRefresh = useCallback(async () => {
               onStartAnyway={() => void handleScan(params)}
               allowStartAnyway={Boolean(activeScanState?.active)}
             />
+            {scanWarnings.length > 0 && (
+              <div className="mb-2 text-xs rounded-sm border border-eve-warning/40 bg-eve-warning/10 px-2 py-1 text-eve-warning">
+                <div className="font-semibold">Scan warnings ({scanWarnings.length})</div>
+                <ul className="list-disc pl-4">
+                  {scanWarnings.map((warning, idx) => (
+                    <li key={`${warning.code}-${idx}`}>{warning.message}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div
               className={`flex-1 min-h-0 flex flex-col ${tab === "radius" ? "" : "hidden"}`}
             >

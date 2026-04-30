@@ -39,6 +39,6 @@ export function ScanStatusBar({ state, reconciling, onCancel, onStartAnyway, all
     {state?.stage && <span className="text-eve-dim">stage: {state.stage}</span>}
     {state?.active && <span className="text-eve-dim">elapsed: {elapsedSec}s</span>}
     {state?.active && <button className="px-2 py-0.5 border border-eve-border rounded" onClick={onCancel}>Cancel Scan</button>}
-    {allowStartAnyway && onStartAnyway && <button className="px-2 py-0.5 border border-eve-border rounded" onClick={onStartAnyway}>Start New Anyway</button>}
+    {allowStartAnyway && onStartAnyway && <button className="px-2 py-0.5 border border-eve-border rounded" title="Cancels the active scan before starting a new one." onClick={onStartAnyway}>Cancel and Start New</button>}
   </div>;
 }
