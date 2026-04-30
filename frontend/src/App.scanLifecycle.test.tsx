@@ -70,6 +70,26 @@ describe("App scan lifecycle", () => {
     expect(screen.queryByText(/old run/i)).not.toBeInTheDocument();
   });
 
+  it("manual abort settles to canceled lifecycle and allows restart", async () => {
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "scan" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "stop" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "stop" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "scan" })).toBeInTheDocument());
+    expect(mockScan).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders warnings detail chip when degraded response carries warnings", async () => {
+    mockScan.mockImplementationOnce(async (_: unknown, onProgress: (msg: { message: string; stage?: string }) => void) => {
+      onProgress({ stage: "fetch", message: "warming" });
+      return [];
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "scan" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "scan" })).toBeInTheDocument());
+    expect(screen.queryByText(/scan warnings/i)).not.toBeInTheDocument();
+  });
+
   it("does not start a second scan while scan lifecycle is non-idle", async () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "scan" }));
