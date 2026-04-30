@@ -54,6 +54,7 @@ import {
   recalculateRadiusDistanceLens,
   getActiveScan,
   cancelActiveScan,
+  type ProgressMessage,
   type RadiusDistanceLensMetric,
 } from "./lib/api";
 import { useI18n } from "./lib/i18n";
@@ -890,6 +891,8 @@ function App() {
   const [autoRefreshRegion, setAutoRefreshRegion] = useState(false);
   const [activeScanState, setActiveScanState] = useState<any | null>(null);
   const [scanReconciling, setScanReconciling] = useState(false);
+  const lastProgressAtRef = useRef<number>(0);
+  const autoRefreshBlockedUntilRef = useRef<number>(0);
 
   const [showWatchlist, setShowWatchlist] = useState(false);
   const [showBanlist, setShowBanlist] = useState(false);
@@ -2208,8 +2211,22 @@ const scanParams = overrideParams ?? params;
     setScanning(true);
     setProgress(t("scanStarting"));
     const isActiveRun = () => scanRunIDRef.current === runID;
-    const guardedProgress = (msg: string) => {
-      if (isActiveRun()) setProgress(msg);
+    const guardedProgress = (evt: ProgressMessage) => {
+      if (!isActiveRun()) return;
+      const stageLabel: Record<string, string> = {
+        cache_clear: "Cache clear",
+        location_refresh: "Location refresh",
+        scan_start: "Scan start",
+        fetch: "Fetch",
+        compute: "Compute",
+        sort: "Sort",
+        save: "Save",
+        finalize: "Finalize",
+      };
+      const stage = evt.stage ? `${stageLabel[evt.stage] ?? evt.stage}: ` : "";
+      const counter = evt.current != null && evt.total != null ? ` (${evt.current}/${evt.total})` : "";
+      setProgress(`${stage}${evt.message}${counter}`);
+      lastProgressAtRef.current = Date.now();
     };
 
     // Clear previous results immediately so the user sees a fresh scan
@@ -2441,6 +2458,9 @@ const results = await scanMultiRegion(
                   ? "network failure"
                   : `backend error: ${e.message}`;
         setProgress(t("errorPrefix") + mapped);
+        if (mapped === "request timeout" || mapped === "stall timeout") {
+          autoRefreshBlockedUntilRef.current = Date.now() + 120_000;
+        }
       }
     } finally {
       if (isActiveRun()) setScanning(false);
@@ -2468,11 +2488,24 @@ const results = await scanMultiRegion(
 
 const handleScanAndRefresh = useCallback(async () => {
   if (tab !== "radius" || scanning || scanAndRefreshing) return;
+  const withTimeout = async <T,>(label: string, fn: () => Promise<T>, timeoutMs = 45_000): Promise<T> => {
+    return await Promise.race([
+      fn(),
+      new Promise<T>((_, reject) => window.setTimeout(() => reject(new Error(`${label} timeout`)), timeoutMs)),
+    ]);
+  };
   setScanAndRefreshing(true);
   try {
-    await rebootStationCache();
-    const nextParams = await refreshCurrentLocationIntoScanParams();
+    setProgress("Cache clear: clearing station cache");
+    await withTimeout("cache clear", () => rebootStationCache(), 45_000);
+    setProgress("Location refresh: refreshing character location");
+    const nextParams = await withTimeout("location refresh", () => refreshCurrentLocationIntoScanParams(), 45_000);
+    setProgress("Scan start: launching scan");
     await handleScan(nextParams);
+    setProgress("Finalize: scan and refresh complete");
+  } catch (err) {
+    autoRefreshBlockedUntilRef.current = Date.now() + 120_000;
+    throw err;
   } finally {
     setScanAndRefreshing(false);
   }
@@ -2491,6 +2524,9 @@ const handleScanAndRefresh = useCallback(async () => {
     const COOLDOWN_MS = 90_000; // avoid loops on stale metadata snapshots
     const timer = window.setInterval(() => {
       if (scanning) return;
+      if (activeScanState?.active) return;
+      if (["starting", "running", "stopping", "reconciling"].includes(String(activeScanState?.stage ?? ""))) return;
+      if (Date.now() < autoRefreshBlockedUntilRef.current) return;
       if (!radiusCacheMeta?.next_expiry_at) return;
       const expiresAt = Date.parse(radiusCacheMeta.next_expiry_at);
       if (!Number.isFinite(expiresAt) || Date.now() < expiresAt) return;
@@ -2510,7 +2546,7 @@ const handleScanAndRefresh = useCallback(async () => {
       void handleScan();
     }, CHECK_INTERVAL);
     return () => window.clearInterval(timer);
-  }, [autoRefreshRadius, tab, scanning, radiusCacheMeta, handleScan]);
+  }, [autoRefreshRadius, tab, scanning, radiusCacheMeta, handleScan, activeScanState]);
 
   // Auto-refresh: when enabled and region cache expires, re-trigger scan automatically
   useEffect(() => {
@@ -2519,6 +2555,9 @@ const handleScanAndRefresh = useCallback(async () => {
     const COOLDOWN_MS = 90_000; // avoid loops on stale metadata snapshots
     const timer = window.setInterval(() => {
       if (scanning) return;
+      if (activeScanState?.active) return;
+      if (["starting", "running", "stopping", "reconciling"].includes(String(activeScanState?.stage ?? ""))) return;
+      if (Date.now() < autoRefreshBlockedUntilRef.current) return;
       if (!regionCacheMeta?.next_expiry_at) return;
       const expiresAt = Date.parse(regionCacheMeta.next_expiry_at);
       if (!Number.isFinite(expiresAt) || Date.now() < expiresAt) return;
@@ -2538,7 +2577,7 @@ const handleScanAndRefresh = useCallback(async () => {
       void handleScan();
     }, CHECK_INTERVAL);
     return () => window.clearInterval(timer);
-  }, [autoRefreshRegion, tab, scanning, regionCacheMeta, handleScan]);
+  }, [autoRefreshRegion, tab, scanning, regionCacheMeta, handleScan, activeScanState]);
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 

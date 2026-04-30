@@ -171,8 +171,16 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 // Generic NDJSON message type
+export type ProgressMessage = {
+  type: "progress";
+  message: string;
+  stage?: string;
+  current?: number;
+  total?: number;
+};
+
 type NdjsonGenericMessage<T> =
-  | { type: "progress"; message: string }
+  | ProgressMessage
   | { type: "result"; data: T[]; count?: number; scan_id?: number; cache_meta?: StationCacheMeta }
   | { type: "error"; message: string };
 
@@ -246,7 +254,7 @@ export function normalizeRouteResults(results: RouteResult[]): RouteResult[] {
 async function streamNdjson<T>(
   url: string,
   body: object,
-  onProgress: (msg: string) => void,
+  onProgress: (msg: any) => void,
   options?: StreamNdjsonOptions,
   errorMessage = "Request failed",
   onResult?: (msg: Extract<NdjsonGenericMessage<T>, { type: "result" }>) => void
@@ -314,7 +322,7 @@ async function streamNdjson<T>(
       if (!line.trim()) continue;
       const msg = JSON.parse(line) as NdjsonGenericMessage<T>;
       if (msg.type === "progress") {
-        onProgress(msg.message);
+        onProgress(msg);
       } else if (msg.type === "result") {
         results = msg.data ?? [];
         onResult?.(msg);
@@ -486,7 +494,7 @@ export interface RadiusDistanceLensMetric {
 
 export async function scan(
   params: ScanParams,
-  onProgress: (msg: string) => void,
+  onProgress: (msg: ProgressMessage) => void,
   signal?: AbortSignal,
   onMeta?: (meta: StationCacheMeta | undefined) => void
 ): Promise<FlipResult[]> {
@@ -516,7 +524,7 @@ export async function recalculateRadiusDistanceLens(
 
 export async function scanMultiRegion(
   params: ScanParams,
-  onProgress: (msg: string) => void,
+  onProgress: (msg: ProgressMessage) => void,
   signal?: AbortSignal,
   onMeta?: (meta: StationCacheMeta | undefined) => void
 ): Promise<FlipResult[]> {
@@ -532,7 +540,7 @@ export async function scanMultiRegion(
 
 export async function scanRegionalDayTrader(
   params: ScanParams,
-  onProgress: (msg: string) => void,
+  onProgress: (msg: ProgressMessage) => void,
   signal?: AbortSignal,
   onMeta?: (meta: StationCacheMeta | undefined) => void,
 ): Promise<RegionalDayScanResponse> {
@@ -573,7 +581,7 @@ export async function scanRegionalDayTrader(
 
 export async function scanContracts(
   params: ScanParams,
-  onProgress: (msg: string) => void,
+  onProgress: (msg: ProgressMessage) => void,
   signal?: AbortSignal,
   onMeta?: (meta: StationCacheMeta | undefined) => void
 ): Promise<ContractResult[]> {
@@ -907,7 +915,7 @@ export async function scanStation(
     structure_ids?: number[];
     ignored_system_ids?: number[];
   },
-  onProgress: (msg: string) => void,
+  onProgress: (msg: ProgressMessage) => void,
   signal?: AbortSignal,
   onMeta?: (meta: StationCacheMeta | undefined) => void
 ): Promise<StationTrade[]> {

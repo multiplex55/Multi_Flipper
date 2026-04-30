@@ -42,6 +42,26 @@ import (
 
 const scanExecutionTimeout = 5 * time.Minute
 
+type progressEvent struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
+	Stage   string `json:"stage,omitempty"`
+	Current int    `json:"current,omitempty"`
+	Total   int    `json:"total,omitempty"`
+}
+
+func writeProgressEvent(w http.ResponseWriter, flusher http.Flusher, msg, stage string, current, total int) {
+	line, _ := json.Marshal(progressEvent{
+		Type:    "progress",
+		Message: msg,
+		Stage:   stage,
+		Current: current,
+		Total:   total,
+	})
+	fmt.Fprintf(w, "%s\n", line)
+	flusher.Flush()
+}
+
 // Server is the HTTP API server that connects the ESI client, scanner engine, and database.
 type Server struct {
 	cfg              *config.Config
@@ -2585,9 +2605,7 @@ func (s *Server) handleScan(w http.ResponseWriter, r *http.Request) {
 	s.scanLifecycle.register(userID, scanRunID, "radius", "starting", cancel)
 	results, err := scanner.ScanWithContext(scanCtx, params, func(msg string) {
 		s.scanLifecycle.progress(userID, msg)
-		line, _ := json.Marshal(map[string]string{"type": "progress", "message": msg})
-		fmt.Fprintf(w, "%s\n", line)
-		flusher.Flush()
+		writeProgressEvent(w, flusher, msg, "", 0, 0)
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
@@ -2734,9 +2752,7 @@ func (s *Server) handleScanMultiRegion(w http.ResponseWriter, r *http.Request) {
 	s.scanLifecycle.register(userID, scanRunID, "region", "starting", cancel)
 	results, err := scanner.ScanMultiRegionWithContext(scanCtx, params, func(msg string) {
 		s.scanLifecycle.progress(userID, msg)
-		line, _ := json.Marshal(map[string]string{"type": "progress", "message": msg})
-		fmt.Fprintf(w, "%s\n", line)
-		flusher.Flush()
+		writeProgressEvent(w, flusher, msg, "", 0, 0)
 	})
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
