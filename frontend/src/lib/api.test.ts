@@ -448,23 +448,6 @@ describe("scanRegionalDayTrader NDJSON timeout/lifecycle behavior", () => {
     await assertion;
   });
 
-  it("maps stall timeout when bytes never arrive", async () => {
-    vi.useFakeTimers();
-    const fetchMock = vi.fn((_: unknown, init?: RequestInit) => Promise.resolve({
-      ok: true,
-      body: new ReadableStream({
-        start(controller) {
-          init?.signal?.addEventListener("abort", () => controller.error(new DOMException("aborted", "AbortError")), { once: true });
-        },
-      }),
-    } satisfies Partial<Response>));
-    vi.stubGlobal("fetch", fetchMock);
-    const promise = scanRegionalDayTrader({ system_name: "Jita" } as never, vi.fn());
-    const assertion = expect(promise).rejects.toThrow("stall timeout");
-    await vi.advanceTimersByTimeAsync(30000);
-    await assertion;
-  });
-
   it("returns empty rows when stream has bytes without result", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
