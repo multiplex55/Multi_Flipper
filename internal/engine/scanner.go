@@ -332,7 +332,7 @@ func (s *Scanner) fetchOrdersStream(
 			if ctx.Err() != nil {
 				return
 			}
-			orders, err := s.ESI.FetchRegionOrders(rid, orderType)
+			orders, err := s.ESI.FetchRegionOrdersWithContext(ctx, rid, orderType)
 			if err != nil {
 				return
 			}
@@ -517,7 +517,7 @@ func (s *Scanner) fetchAndIndexWithContext(
 		)
 	}
 	if enablePrivateStructureFetch && len(sourceStructureSystemIDs) > 0 {
-		s.mergeSourceStructureSellOrders(idx, sourceStructureSystemIDs, buySystems, params.AccessToken)
+		s.mergeSourceStructureSellOrders(ctx, idx, sourceStructureSystemIDs, buySystems, params.AccessToken)
 	}
 
 	log.Printf("[DEBUG] fetchAndIndex: %d sell orders, %d buy orders", len(idx.sellOrders), len(idx.buyOrders))
@@ -529,11 +529,15 @@ func (s *Scanner) fetchAndIndexWithContext(
 }
 
 func (s *Scanner) mergeSourceStructureSellOrders(
+	ctx context.Context,
 	idx *scanIndex,
 	sourceStructureSystemIDs map[int64]int32,
 	buySystems map[int32]int,
 	accessToken string,
 ) {
+	if err := ctx.Err(); err != nil {
+		return
+	}
 	if idx == nil || len(sourceStructureSystemIDs) == 0 || strings.TrimSpace(accessToken) == "" || s.ESI == nil {
 		return
 	}
@@ -579,7 +583,7 @@ func (s *Scanner) mergeSourceStructureSellOrders(
 		go func(sid int64, sysID int32) {
 			defer wg.Done()
 			sem <- struct{}{}
-			orders, err := s.ESI.FetchStructureOrders(sid, accessToken)
+			orders, err := s.ESI.FetchStructureOrdersWithContext(ctx, sid, accessToken)
 			<-sem
 			if err != nil {
 				out <- fetchResult{structureID: sid, err: err}

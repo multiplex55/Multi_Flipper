@@ -241,19 +241,28 @@ func (c *Client) ClearOrderCache() int {
 //
 // Uses singleflight to coalesce concurrent requests for the same region+orderType.
 func (c *Client) FetchRegionOrdersCached(regionID int32, orderType string) ([]MarketOrder, error) {
+	return c.FetchRegionOrdersCachedWithContext(context.Background(), regionID, orderType)
+}
+
+func (c *Client) FetchRegionOrdersCachedWithContext(ctx context.Context, regionID int32, orderType string) ([]MarketOrder, error) {
 	sfKey := fmt.Sprintf("%d:%s", regionID, orderType)
 
-	result, err, _ := c.orderCache.group.Do(sfKey, func() (interface{}, error) {
-		return c.fetchRegionOrdersWithCache(regionID, orderType)
+	resCh := c.orderCache.group.DoChan(sfKey, func() (interface{}, error) {
+		return c.fetchRegionOrdersWithCache(ctx, regionID, orderType)
 	})
-	if err != nil {
-		return nil, err
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case res := <-resCh:
+		if res.Err != nil {
+			return nil, res.Err
+		}
+		return res.Val.([]MarketOrder), nil
 	}
-	return result.([]MarketOrder), nil
 }
 
 // fetchRegionOrdersWithCache is the actual implementation behind singleflight.
-func (c *Client) fetchRegionOrdersWithCache(regionID int32, orderType string) ([]MarketOrder, error) {
+func (c *Client) fetchRegionOrdersWithCache(ctx context.Context, regionID int32, orderType string) ([]MarketOrder, error) {
 	// 1. Check cache
 	orders, etag, hit := c.orderCache.Get(regionID, orderType)
 	if hit {
@@ -266,7 +275,7 @@ func (c *Client) fetchRegionOrdersWithCache(regionID int32, orderType string) ([
 
 	// 2. If we have an ETag, try conditional request on page 1
 	if etag != "" {
-		notModified, newExpires, err := c.conditionalCheck(context.Background(), url+"&page=1", etag)
+		notModified, newExpires, err := c.conditionalCheck(ctx, url+"&page=1", etag)
 		if err == nil && notModified {
 			// 304 — data unchanged, refresh expiry
 			c.orderCache.Touch(regionID, orderType, newExpires)
@@ -280,7 +289,7 @@ func (c *Client) fetchRegionOrdersWithCache(regionID int32, orderType string) ([
 	}
 
 	// 3. Full fetch
-	allOrders, respEtag, respExpires, err := c.getPaginatedDirectWithHeaders(context.Background(), url, regionID)
+	allOrders, respEtag, respExpires, err := c.getPaginatedDirectWithHeaders(ctx, url, regionID)
 	if err != nil {
 		return nil, err
 	}
