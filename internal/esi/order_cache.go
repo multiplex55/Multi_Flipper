@@ -248,13 +248,21 @@ func (c *Client) FetchRegionOrdersCachedWithContext(ctx context.Context, regionI
 	if err := ctx.Err(); err != nil {
 		return nil, fmt.Errorf("fetch region orders cache: %w", err)
 	}
-	sfKey := fmt.Sprintf("%d:%s", regionID, orderType)
 
+	if orders, _, hit := c.orderCache.Get(regionID, orderType); hit {
+		log.Printf("[ESI] OrderCache HIT region=%d type=%s (%d orders)", regionID, orderType, len(orders))
+		return orders, nil
+	}
+
+	sfKey := fmt.Sprintf("%d:%s", regionID, orderType)
+	start := time.Now()
 	resCh := c.orderCache.group.DoChan(sfKey, func() (interface{}, error) {
 		return c.fetchRegionOrdersWithCache(ctx, regionID, orderType)
 	})
+
 	select {
 	case <-ctx.Done():
+		log.Printf("[ESI] OrderCache singleflight canceled region=%d type=%s after=%s", regionID, orderType, time.Since(start).Round(time.Millisecond))
 		return nil, fmt.Errorf("fetch region orders cache wait: %w", ctx.Err())
 	case res := <-resCh:
 		if res.Err != nil {
@@ -263,6 +271,9 @@ func (c *Client) FetchRegionOrdersCachedWithContext(ctx context.Context, regionI
 		orders, ok := res.Val.([]MarketOrder)
 		if !ok {
 			return nil, fmt.Errorf("fetch region orders cache group: unexpected result type %T", res.Val)
+		}
+		if res.Shared {
+			log.Printf("[ESI] OrderCache singleflight shared region=%d type=%s elapsed=%s", regionID, orderType, time.Since(start).Round(time.Millisecond))
 		}
 		return orders, nil
 	}
