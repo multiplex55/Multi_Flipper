@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { batchCreateRoute, getConfig, normalizeRouteResults, scanRegionalDayTrader, updateConfig } from "@/lib/api";
 import type { AppConfig, BatchCreateRouteRequest, BatchCreateRouteResponse, RouteResult } from "@/lib/types";
 
@@ -402,5 +402,75 @@ describe("scanRegionalDayTrader", () => {
     expect(result.hubs).toHaveLength(2);
     expect(result.hubs[0].staging_score).toBe(88.2);
     expect(result.hubs[1].staging_score).toBeUndefined();
+  });
+});
+
+
+
+
+describe("scanRegionalDayTrader NDJSON timeout/lifecycle behavior", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("handles normal progress stream", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const payload = [JSON.stringify({ type: "progress", message: "step1", stage: "fetch" }), JSON.stringify({ type: "result", data: [{ TypeID: 1 }], hubs: [], trends: [], count: 1 })].join("\n");
+    fetchMock.mockResolvedValue({ ok: true, body: new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode(payload)); c.close(); } }) } satisfies Partial<Response>);
+    const onProgress = vi.fn();
+    const result = await scanRegionalDayTrader({ system_name: "Jita" } as never, onProgress);
+    expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({ message: "step1" }));
+    expect(result.rows).toHaveLength(1);
+  });
+
+  it("maps request timeout with exact error text", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn((_: unknown, init?: RequestInit) => Promise.resolve({
+      ok: true,
+      body: new ReadableStream({
+        start(controller) {
+          const id = window.setInterval(() => {
+            controller.enqueue(new TextEncoder().encode(`{"type":"progress","message":"tick"}\n`));
+          }, 10_000);
+          init?.signal?.addEventListener("abort", () => {
+            window.clearInterval(id);
+            controller.error(new DOMException("aborted", "AbortError"));
+          }, { once: true });
+        },
+      }),
+    } satisfies Partial<Response>));
+    vi.stubGlobal("fetch", fetchMock);
+    const promise = scanRegionalDayTrader({ system_name: "Jita" } as never, vi.fn());
+    const assertion = expect(promise).rejects.toThrow("request timeout");
+    await vi.advanceTimersByTimeAsync(300000);
+    await assertion;
+  });
+
+  it("maps stall timeout when bytes never arrive", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn((_: unknown, init?: RequestInit) => Promise.resolve({
+      ok: true,
+      body: new ReadableStream({
+        start(controller) {
+          init?.signal?.addEventListener("abort", () => controller.error(new DOMException("aborted", "AbortError")), { once: true });
+        },
+      }),
+    } satisfies Partial<Response>));
+    vi.stubGlobal("fetch", fetchMock);
+    const promise = scanRegionalDayTrader({ system_name: "Jita" } as never, vi.fn());
+    const assertion = expect(promise).rejects.toThrow("stall timeout");
+    await vi.advanceTimersByTimeAsync(30000);
+    await assertion;
+  });
+
+  it("returns empty rows when stream has bytes without result", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const payload = JSON.stringify({ type: "progress", message: "only-progress" });
+    fetchMock.mockResolvedValue({ ok: true, body: new ReadableStream({ start(c) { c.enqueue(new TextEncoder().encode(payload)); c.close(); } }) } satisfies Partial<Response>);
+    const result = await scanRegionalDayTrader({ system_name: "Jita" } as never, vi.fn());
+    expect(result.rows).toEqual([]);
   });
 });
