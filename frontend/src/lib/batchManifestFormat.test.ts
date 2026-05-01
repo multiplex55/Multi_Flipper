@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   buildOrderedRouteManifestFromRouteResult,
+  buildRadiusRecommendationBuyChecklistText,
+  buildRadiusRecommendationMultibuyText,
+  buildRadiusRecommendationSellChecklistText,
   formatBatchLinesToMultibuyLines,
+  formatRadiusBuyRecommendationManifestText,
   formatBatchLinesToMultibuyText,
   formatOrderedRouteManifestText,
   formatRouteMetadataHeader,
   parseDetailedBatchLine,
 } from "@/lib/batchManifestFormat";
+import type { RadiusBuyRecommendation } from "@/lib/radiusBuyRecommendation";
 import type { OrderedRouteManifest, RouteResult } from "@/lib/types";
 
 describe("batchManifestFormat", () => {
@@ -86,6 +91,53 @@ describe("batchManifestFormat", () => {
   it("returns empty output for empty input", () => {
     expect(formatBatchLinesToMultibuyText([])).toBe("");
     expect(formatBatchLinesToMultibuyLines([])).toEqual([]);
+  });
+});
+
+describe("radius recommendation manifest formatter", () => {
+  const recommendation: RadiusBuyRecommendation = {
+    id: "rec-1",
+    kind: "cargo_build",
+    action: "buy",
+    title: "Test",
+    lines: [
+      {
+        typeId: 1,
+        typeName: "Tritanium",
+        qty: 1500,
+        unitVolumeM3: 0,
+        volumeM3: 0,
+        buyUnitIsk: 7,
+        sellUnitIsk: 10,
+        profitUnitIsk: 3,
+        buyTotalIsk: 10500,
+        sellTotalIsk: 15000,
+        profitTotalIsk: 4500,
+        routeKey: "r1",
+        row: { BuyJumps: 2, SellJumps: 1, BuyStation: "Jita", SellStation: "Amarr" } as never,
+      },
+    ],
+    reasons: [],
+    warnings: [],
+    blockers: [],
+  };
+
+  it("formats recommendation manifest with header, detail rows, and multibuy block", () => {
+    const text = formatRadiusBuyRecommendationManifestText(recommendation);
+    expect(text).toContain("Buy Station: Jita");
+    expect(text).toContain("Jumps to Buy Station: 2");
+    expect(text).toContain("Sell Station: Amarr");
+    expect(text).toContain("Jumps Buy -> Sell: 1");
+    expect(text).toContain("Total isk/jump: 1,500 ISK");
+    expect(text).toContain("Tritanium | qty 1,500");
+    expect(text).toContain("vol 0 m3");
+    expect(text).toContain("Tritanium 1500");
+  });
+
+  it("builds checklist and multibuy text", () => {
+    expect(buildRadiusRecommendationMultibuyText(recommendation)).toBe("Tritanium 1500");
+    expect(buildRadiusRecommendationBuyChecklistText(recommendation)).toContain("buy total 10,500 ISK");
+    expect(buildRadiusRecommendationSellChecklistText(recommendation)).toContain("sell total 15,000 ISK");
   });
 });
 

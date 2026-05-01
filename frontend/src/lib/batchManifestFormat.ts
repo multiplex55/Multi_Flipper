@@ -1,4 +1,5 @@
 import type { BatchLine } from "@/lib/batchMetrics";
+import type { RadiusBuyRecommendation } from "@/lib/radiusBuyRecommendation";
 import type {
   OrderedRouteManifest,
   RouteAdditionLine,
@@ -465,6 +466,78 @@ export function formatOrderedRouteManifestText(input: {
       );
     }
   }
+  return output.join("\n");
+}
+
+function safeDivide(numerator: number, denominator: number): number {
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) return 0;
+  return numerator / denominator;
+}
+
+export function buildRadiusRecommendationMultibuyText(
+  recommendation: RadiusBuyRecommendation,
+): string {
+  return formatBatchLinesToMultibuyText(
+    recommendation.lines.map((line) => ({ typeName: line.typeName, units: line.qty })),
+  );
+}
+
+export function buildRadiusRecommendationBuyChecklistText(
+  recommendation: RadiusBuyRecommendation,
+): string {
+  return recommendation.lines
+    .map(
+      (line) =>
+        `${line.typeName} | qty ${formatQuantity(line.qty)} | buy total ${formatInteger(line.buyTotalIsk)} ISK | buy per ${formatInteger(line.buyUnitIsk)} ISK | vol ${formatVolume(line.volumeM3)} m3`,
+    )
+    .join("\n");
+}
+
+export function buildRadiusRecommendationSellChecklistText(
+  recommendation: RadiusBuyRecommendation,
+): string {
+  return recommendation.lines
+    .map(
+      (line) =>
+        `${line.typeName} | qty ${formatQuantity(line.qty)} | sell total ${formatInteger(line.sellTotalIsk)} ISK | sell per ${formatInteger(line.sellUnitIsk)} ISK | vol ${formatVolume(line.volumeM3)} m3 | profit ${formatInteger(line.profitTotalIsk)} ISK`,
+    )
+    .join("\n");
+}
+
+export function formatRadiusBuyRecommendationManifestText(
+  recommendation: RadiusBuyRecommendation,
+): string {
+  const totalVolume = recommendation.lines.reduce((sum, line) => sum + (Number.isFinite(line.volumeM3) ? line.volumeM3 : 0), 0);
+  const totalCapital = recommendation.lines.reduce((sum, line) => sum + (Number.isFinite(line.buyTotalIsk) ? line.buyTotalIsk : 0), 0);
+  const totalGrossSell = recommendation.lines.reduce((sum, line) => sum + (Number.isFinite(line.sellTotalIsk) ? line.sellTotalIsk : 0), 0);
+  const totalProfit = recommendation.lines.reduce((sum, line) => sum + (Number.isFinite(line.profitTotalIsk) ? line.profitTotalIsk : 0), 0);
+  const first = recommendation.lines[0]?.row;
+  const buyJumps = Number.isFinite(first?.BuyJumps) ? first.BuyJumps : 0;
+  const sellJumps = Number.isFinite(first?.SellJumps) ? first.SellJumps : 0;
+  const totalIskPerJump = safeDivide(totalProfit, buyJumps + sellJumps);
+
+  const output = [
+    `Buy Station: ${first?.BuyStation?.trim() || "Unknown Station"}`,
+    `Jumps to Buy Station: ${formatQuantity(buyJumps)}`,
+    `Sell Station: ${first?.SellStation?.trim() || "Unknown Station"}`,
+    `Jumps Buy -> Sell: ${formatQuantity(sellJumps)}`,
+    `Items: ${formatQuantity(recommendation.lines.length)}`,
+    `Total volume: ${formatVolume(totalVolume)} m3`,
+    `Total capital: ${formatInteger(totalCapital)} ISK`,
+    `Total gross sell: ${formatInteger(totalGrossSell)} ISK`,
+    `Total profit: ${formatInteger(totalProfit)} ISK`,
+    `Total isk/jump: ${formatInteger(totalIskPerJump)} ISK`,
+    "",
+    ...recommendation.lines.map(
+      (line) =>
+        `${line.typeName} | qty ${formatQuantity(line.qty)} | buy total ${formatInteger(line.buyTotalIsk)} ISK | buy per ${formatInteger(line.buyUnitIsk)} ISK | sell total ${formatInteger(line.sellTotalIsk)} ISK | sell per ${formatInteger(line.sellUnitIsk)} ISK | vol ${formatVolume(line.volumeM3)} m3 | profit ${formatInteger(line.profitTotalIsk)} ISK`,
+    ),
+    "",
+    ...formatBatchLinesToMultibuyLines(
+      recommendation.lines.map((line) => ({ typeName: line.typeName, units: line.qty })),
+    ),
+  ];
+
   return output.join("\n");
 }
 
