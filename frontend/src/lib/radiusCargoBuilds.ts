@@ -372,13 +372,13 @@ export function buildRadiusCargoBuilds(
         0,
         row.RealProfit ?? row.ExpectedProfit ?? row.TotalProfit ?? row.ProfitPerUnit ?? 0,
       );
-      if (volumePerUnit <= 0) {
+      if (volumePerUnit < 0) {
         diagnostics.skippedNoVolume += 1;
         upsertBlocker(blockers, {
           kind: "no_volume",
           actual: volumePerUnit,
           required: 0.01,
-          message: "At least one line has missing/zero volume metadata.",
+          message: "At least one line has invalid (negative) volume metadata.",
           severity: 3,
         });
         continue;
@@ -443,7 +443,7 @@ export function buildRadiusCargoBuilds(
         execution,
         buyPrice,
       });
-      const iskPerM3 = volumePerUnit > 0 ? profitPerUnit / volumePerUnit : 0;
+      const iskPerM3 = volumePerUnit > 0 ? profitPerUnit / volumePerUnit : Number.POSITIVE_INFINITY;
       lineCandidates.push({
         row,
         requestedUnits,
@@ -499,7 +499,9 @@ export function buildRadiusCargoBuilds(
     for (const candidate of orderedRows) {
       const remainingCargo = Math.max(0, preset.cargoCapacityM3 - usedCargo);
       const remainingCapital = Math.max(0, preset.maxCapitalIsk - usedCapital);
-      const maxUnitsByCargo = Math.floor(remainingCargo / candidate.volumePerUnit);
+      const maxUnitsByCargo = candidate.volumePerUnit > 0
+        ? Math.floor(remainingCargo / candidate.volumePerUnit)
+        : Number.POSITIVE_INFINITY;
       const maxUnitsByCapital = Math.floor(remainingCapital / candidate.buyPrice);
       const units = Math.min(candidate.requestedUnits, maxUnitsByCargo, maxUnitsByCapital);
       if (units <= 0) {

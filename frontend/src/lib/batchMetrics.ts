@@ -108,6 +108,12 @@ export function safeNumber(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function safeRatioOrNull(numerator: number, denominator: number): number | null {
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) return null;
+  const value = numerator / denominator;
+  return Number.isFinite(value) ? value : null;
+}
+
 export function rowProfitPerUnit(row: FlipResult): number {
   const filledQty = safeNumber(row.FilledQty);
   if (filledQty > 0 && row.RealProfit != null) {
@@ -143,8 +149,8 @@ export function getRowBatchMetrics(row: FlipResult): RowBatchMetrics {
   const profitPerUnit = rowProfitPerUnit(row);
   const capitalPerUnit = rowCapitalPerUnit(row);
   const maxUnits = rowMaxUnits(row);
-  const iskPerM3 =
-    volumePerUnit > 0 && profitPerUnit > 0 ? profitPerUnit / volumePerUnit : 0;
+  const iskPerM3Candidate = safeRatioOrNull(profitPerUnit, volumePerUnit);
+  const iskPerM3 = iskPerM3Candidate != null && iskPerM3Candidate > 0 ? iskPerM3Candidate : 0;
 
   return {
     volumePerUnit,
@@ -248,7 +254,7 @@ export function buildBatch(
 
   for (const row of routeRows) {
     const metrics = getRowBatchMetrics(row);
-    if (metrics.volumePerUnit <= 0 || metrics.maxUnits <= 0 || metrics.profitPerUnit <= 0) {
+    if (metrics.volumePerUnit < 0 || metrics.maxUnits <= 0 || metrics.profitPerUnit <= 0) {
       continue;
     }
 
@@ -278,9 +284,11 @@ export function buildBatch(
 
   const addCandidate = (candidate: (typeof candidates)[number]) => {
     if (!(remaining > 0)) return;
-    const maxByCargo = Number.isFinite(remaining)
-      ? Math.floor((remaining + 1e-9) / candidate.volumePerUnit)
-      : candidate.maxUnits;
+    const maxByCargo = candidate.volumePerUnit > 0
+      ? (Number.isFinite(remaining)
+        ? Math.floor((remaining + 1e-9) / candidate.volumePerUnit)
+        : candidate.maxUnits)
+      : Number.POSITIVE_INFINITY;
     const units = Math.min(candidate.maxUnits, maxByCargo);
     if (units <= 0) return;
     const volume = units * candidate.volumePerUnit;
