@@ -512,8 +512,17 @@ export function formatRadiusBuyRecommendationManifestText(
   const totalGrossSell = recommendation.lines.reduce((sum, line) => sum + (Number.isFinite(line.sellTotalIsk) ? line.sellTotalIsk : 0), 0);
   const totalProfit = recommendation.lines.reduce((sum, line) => sum + (Number.isFinite(line.profitTotalIsk) ? line.profitTotalIsk : 0), 0);
   const first = recommendation.lines[0]?.row;
-  const buyJumps = Number.isFinite(first?.BuyJumps) ? first.BuyJumps : 0;
-  const sellJumps = Number.isFinite(first?.SellJumps) ? first.SellJumps : 0;
+  const buyJumpsCandidate = first?.BuyJumps;
+  const sellJumpsCandidate = first?.SellJumps;
+  const buyJumps =
+    typeof buyJumpsCandidate === "number" && Number.isFinite(buyJumpsCandidate)
+      ? buyJumpsCandidate
+      : 0;
+  const sellJumps =
+    typeof sellJumpsCandidate === "number" &&
+    Number.isFinite(sellJumpsCandidate)
+      ? sellJumpsCandidate
+      : 0;
   const totalIskPerJump = safeDivide(totalProfit, buyJumps + sellJumps);
 
   const output = [
