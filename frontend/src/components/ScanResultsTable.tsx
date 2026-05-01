@@ -5926,7 +5926,7 @@ export function ScanResultsTable({
 
   const consumedBatchBuilderRequestIdRef = useRef<number | null>(null);
 
-  const { openBatchBuilderForRoute } = useRouteBatchBuilderController({
+  const { openBatchBuilderForRoute, openBatchBuilderForRecommendation } = useRouteBatchBuilderController({
     routeRowsByKey,
     savedRoutePacks,
     preferredRouteKey: activeRouteGroupKey,
@@ -5955,6 +5955,18 @@ export function ScanResultsTable({
     onBatchBuilderRouteRequestConsumed,
     openBatchBuilderForRoute,
   ]);
+
+  const openRecommendationBatchBuilderForRoute = useCallback(
+    (routeKey: string) => {
+      openBatchBuilderForRecommendation({
+        routeKey,
+        intentLabel: "Buy-Now recommendation",
+        batchEntryMode: "core",
+        mode: "same_leg_fill",
+      });
+    },
+    [openBatchBuilderForRecommendation],
+  );
 
   const getWorkbenchPackForRoute = useCallback(
     (routeKey: string): SavedRoutePack | null => {
@@ -7984,7 +7996,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
             <RadiusDealFocusBoard
               candidates={radiusDealFocusCandidates}
               movementByRouteKey={movementBadgesEnabled ? movementByRouteKey : {}}
-              onOpenBatchBuilderForRoute={openBatchBuilderForRoute}
+              onOpenBatchBuilderForRoute={openRecommendationBatchBuilderForRoute}
               onOpenRouteWorkbench={(routeKey) => openRouteWorkbench(routeKey, "summary")}
               onVerifyRoute={(routeKey) =>
                 verifyRouteGroup(
@@ -8022,7 +8034,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               defaultExpanded={false}
               loopOpportunities={showLoopPanel ? effectiveLoopOpportunities : []}
               openRouteWorkbench={openRouteWorkbench}
-              onOpenBatchBuilderForRoute={openBatchBuilderForRoute}
+              onOpenBatchBuilderForRoute={openRecommendationBatchBuilderForRoute}
               onOpenInRoute={onOpenInRoute}
               onOpenInRouteWorkbench={(routeKey) => {
                 if (onOpenInRouteWorkbench) {
@@ -8104,7 +8116,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
               : undefined
           }
           openRouteWorkbench={openRouteWorkbench}
-          onOpenBatchBuilderForRoute={openBatchBuilderForRoute}
+          onOpenBatchBuilderForRoute={openRecommendationBatchBuilderForRoute}
           onOpenInRoute={onOpenInRoute}
           onOpenInRouteWorkbench={(routeKey) => {
             onOpenInRouteWorkbench?.(routeKey);
