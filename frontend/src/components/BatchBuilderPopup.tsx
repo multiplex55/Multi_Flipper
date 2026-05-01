@@ -367,6 +367,17 @@ export function BatchBuilderPopup({
     () => filterFlipResults(rows, bannedTypeIDs, bannedStationIDs),
     [rows, bannedTypeIDs, bannedStationIDs],
   );
+  const initialSelectedLineKeySet = useMemo(
+    () => new Set(initialSelectedLineKeys.filter((key) => key.length > 0)),
+    [initialSelectedLineKeys],
+  );
+  const selectedRouteRows = useMemo(
+    () =>
+      initialSelectedLineKeySet.size === 0
+        ? allowedRows
+        : allowedRows.filter((row) => initialSelectedLineKeySet.has(routeLineKey(row))),
+    [allowedRows, initialSelectedLineKeySet],
+  );
 
   const safeAnchorRow = useMemo(() => {
     if (!anchorRow) return null;
@@ -375,8 +386,12 @@ export function BatchBuilderPopup({
       bannedTypeIDs,
       bannedStationIDs,
     );
-    return anchorAllowed.length > 0 ? anchorAllowed[0] : null;
-  }, [anchorRow, bannedTypeIDs, bannedStationIDs]);
+    if (anchorAllowed.length === 0) return null;
+    if (initialSelectedLineKeySet.size === 0) return anchorAllowed[0];
+    const anchorKey = routeLineKey(anchorAllowed[0]);
+    if (initialSelectedLineKeySet.has(anchorKey)) return anchorAllowed[0];
+    return selectedRouteRows[0] ?? anchorAllowed[0];
+  }, [anchorRow, bannedTypeIDs, bannedStationIDs, initialSelectedLineKeySet, selectedRouteRows]);
 
   const batch = useMemo(() => {
     if (!safeAnchorRow) {
@@ -391,8 +406,8 @@ export function BatchBuilderPopup({
       };
       return emptyBatch;
     }
-    return buildBatch(safeAnchorRow, allowedRows, cargoLimitM3);
-  }, [safeAnchorRow, allowedRows, cargoLimitM3]);
+    return buildBatch(safeAnchorRow, selectedRouteRows, cargoLimitM3);
+  }, [safeAnchorRow, selectedRouteRows, cargoLimitM3]);
 
   const baseBatchManifest = useMemo<BaseBatchManifest | null>(() => {
     if (!safeAnchorRow || batch.lines.length === 0 || cargoLimitM3 <= 0)

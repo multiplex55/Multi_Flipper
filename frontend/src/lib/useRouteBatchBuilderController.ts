@@ -1,9 +1,21 @@
 import { useCallback } from "react";
 import type { FlipResult, SavedRoutePack } from "@/lib/types";
+import { routeLineKey } from "@/lib/batchMetrics";
 
 export type RouteBatchBuilderLaunchContext = {
   intentLabel?: string;
   batchEntryMode?: "core" | "filler" | "loop";
+  mode?: "single_anchor" | "same_leg_fill";
+};
+
+export type RouteBatchBuilderRecommendationLaunchInput = {
+  routeKey: string;
+  recommendation?: {
+    rows?: FlipResult[];
+  } | null;
+  intentLabel?: string;
+  batchEntryMode?: "core" | "filler" | "loop";
+  mode?: "single_anchor" | "same_leg_fill";
 };
 
 type RouteBatchBuilderControllerInput = {
@@ -82,7 +94,7 @@ export function useRouteBatchBuilderController(input: RouteBatchBuilderControlle
       setActiveRouteGroupKey(resolvedRouteKey);
       setBatchBuilderEntryMode(context?.batchEntryMode ?? "core");
       setBatchBuilderLaunchIntent(context?.intentLabel ?? null);
-      setBatchBuilderMode("single_anchor");
+      setBatchBuilderMode(context?.mode ?? "single_anchor");
       setBatchBuilderInitialSelectedLineKeys(undefined);
       return true;
     },
@@ -100,5 +112,46 @@ export function useRouteBatchBuilderController(input: RouteBatchBuilderControlle
     ],
   );
 
-  return { openBatchBuilderForRoute };
+  const openBatchBuilderForRecommendation = useCallback(
+    (input: RouteBatchBuilderRecommendationLaunchInput): boolean => {
+      const resolvedRouteKey = resolveRouteBatchBuilderRouteKey({
+        routeKey: input.routeKey,
+        preferredRouteKey,
+        routeRowsByKey,
+        savedRoutePacks,
+      });
+      if (!resolvedRouteKey) return false;
+      const rows = routeRowsByKey[resolvedRouteKey] ?? [];
+      const anchor = rows[0] ?? null;
+      if (!anchor) return false;
+
+      const recommendationRows = input.recommendation?.rows ?? rows;
+      const initialSelectedLineKeys = recommendationRows
+        .map((row) => routeLineKey(row))
+        .filter((key) => key.length > 0);
+
+      setBatchPlanRow(anchor);
+      setBatchPlanRows(rows);
+      setActiveRouteGroupKey(resolvedRouteKey);
+      setBatchBuilderEntryMode(input.batchEntryMode ?? "core");
+      setBatchBuilderLaunchIntent(input.intentLabel ?? "Buy-Now recommendation");
+      setBatchBuilderMode(input.mode ?? "same_leg_fill");
+      setBatchBuilderInitialSelectedLineKeys(initialSelectedLineKeys);
+      return true;
+    },
+    [
+      preferredRouteKey,
+      routeRowsByKey,
+      savedRoutePacks,
+      setActiveRouteGroupKey,
+      setBatchBuilderEntryMode,
+      setBatchBuilderInitialSelectedLineKeys,
+      setBatchBuilderLaunchIntent,
+      setBatchBuilderMode,
+      setBatchPlanRow,
+      setBatchPlanRows,
+    ],
+  );
+
+  return { openBatchBuilderForRoute, openBatchBuilderForRecommendation };
 }
