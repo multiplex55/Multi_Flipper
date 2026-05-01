@@ -93,18 +93,6 @@ describe("batchManifestFormat", () => {
     expect(formatBatchLinesToMultibuyLines([])).toEqual([]);
   });
 
-  it("renders exact header order, blank section lines, and safe rounded jump math", () => {
-    const text = formatRadiusBuyRecommendationManifestText(recommendation);
-    const lines = text.split("\n");
-    expect(lines[0]).toMatch(/^Buy Station:/);
-    expect(text).toContain("\n\n");
-    expect(text).toContain("qty 1,500");
-    expect(text).toContain("Tritanium 1500");
-    expect(text).toContain("vol 0 m3");
-    expect(text).not.toContain("Infinity");
-    expect(text).not.toContain("NaN");
-  });
-
 });
 
 describe("radius recommendation manifest formatter", () => {
@@ -830,18 +818,6 @@ describe("batch route manifest formatter", () => {
     expect(text).toContain("Total isk/jump: 0 ISK");
   });
 
-  it("renders exact header order, blank section lines, and safe rounded jump math", () => {
-    const text = formatRadiusBuyRecommendationManifestText(recommendation);
-    const lines = text.split("\n");
-    expect(lines[0]).toMatch(/^Buy Station:/);
-    expect(text).toContain("\n\n");
-    expect(text).toContain("qty 1,500");
-    expect(text).toContain("Tritanium 1500");
-    expect(text).toContain("vol 0 m3");
-    expect(text).not.toContain("Infinity");
-    expect(text).not.toContain("NaN");
-  });
-
 });
 
 describe("route copy formatter parity", () => {
@@ -1038,18 +1014,6 @@ describe("route copy formatter parity", () => {
     });
 
     expect(routeCopyOutput).toBe(manifestOutput);
-  });
-
-  it("renders exact header order, blank section lines, and safe rounded jump math", () => {
-    const text = formatRadiusBuyRecommendationManifestText(recommendation);
-    const lines = text.split("\n");
-    expect(lines[0]).toMatch(/^Buy Station:/);
-    expect(text).toContain("\n\n");
-    expect(text).toContain("qty 1,500");
-    expect(text).toContain("Tritanium 1500");
-    expect(text).toContain("vol 0 m3");
-    expect(text).not.toContain("Infinity");
-    expect(text).not.toContain("NaN");
   });
 
 });
