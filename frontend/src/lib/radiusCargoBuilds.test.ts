@@ -621,4 +621,15 @@ describe("buildRadiusCargoBuilds", () => {
     expect(multiRejected?.blockers.some((blocker) => blocker.kind === "confidence")).toBe(true);
   });
 
+  it("includes profitable zero-volume rows, consumes no cargo, and can rank above filler", () => {
+    const zeroVolume = row("Zero volume", { Volume: 0, UnitsToBuy: 50, BuyPrice: 1_000_000, ProfitPerUnit: 500_000, TotalProfit: 25_000_000, ExpectedProfit: 25_000_000, RealProfit: 25_000_000 });
+    const filler = row("Filler", { Volume: 10, UnitsToBuy: 50, BuyPrice: 1_000_000, ProfitPerUnit: 10_000, TotalProfit: 500_000, ExpectedProfit: 500_000, RealProfit: 500_000 });
+    const key = routeGroupKey(zeroVolume);
+    const { builds } = buildRadiusCargoBuilds({ rows: [filler, zeroVolume], routeAggregateMetricsByRoute: { [key]: aggregate }, preset: { ...RADIUS_CARGO_BUILD_PRESETS.low_capital, minExecutionQuality: 0, minConfidencePercent: 0, minJumpEfficiencyIsk: 0 } });
+    const zeroLine = builds[0].lines.find((l) => l.row.TypeName === "Zero volume");
+    expect(zeroLine).toBeDefined();
+    expect(zeroLine?.volumeM3).toBe(0);
+    expect(builds[0].lines[0]?.row.TypeName).toBe("Zero volume");
+  });
+
 });

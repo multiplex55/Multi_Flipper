@@ -105,4 +105,23 @@ describe("useRouteBatchBuilderController", () => {
     expect(setBatchBuilderMode).toHaveBeenCalledWith("single_anchor");
     expect(setBatchBuilderInitialSelectedLineKeys).toHaveBeenCalledWith(undefined);
   });
+
+  it("opens recommendation route with launch context and selected line keys", () => {
+    const setBatchPlanRow = vi.fn();
+    const setBatchPlanRows = vi.fn();
+    const setActiveRouteGroupKey = vi.fn();
+    const setBatchBuilderEntryMode = vi.fn();
+    const setBatchBuilderLaunchIntent = vi.fn();
+    const setBatchBuilderMode = vi.fn();
+    const setBatchBuilderInitialSelectedLineKeys = vi.fn();
+    const rows = [makeRow()];
+    const { result } = renderHook(() => useRouteBatchBuilderController({
+      routeRowsByKey: { "route:a": rows }, preferredRouteKey: null, setBatchPlanRow, setBatchPlanRows, setActiveRouteGroupKey, setBatchBuilderEntryMode, setBatchBuilderLaunchIntent, setBatchBuilderMode, setBatchBuilderInitialSelectedLineKeys,
+    }));
+    act(() => { result.current.openBatchBuilderForRecommendation({ routeKey: "route:a", recommendation: { rows }, intentLabel: "Buy-Now recommendation" }); });
+    expect(setActiveRouteGroupKey).toHaveBeenCalledWith("route:a");
+    expect(setBatchBuilderLaunchIntent).toHaveBeenCalled();
+    expect(setBatchBuilderInitialSelectedLineKeys).toHaveBeenCalledWith(["34:60003760:60008494"]);
+  });
+
 });
