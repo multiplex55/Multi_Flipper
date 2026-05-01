@@ -135,4 +135,17 @@ describe("buildRadiusBuyStationShoppingLists", () => {
     });
     expect(() => buildRadiusBuyStationShoppingLists({ rows: [sparse] })).not.toThrow();
   });
+
+  it("keeps zero-volume profitable rows and includes their capital/profit totals", () => {
+    const lists = buildRadiusBuyStationShoppingLists({
+      rows: [
+        row("zero vol", { TypeID: 99, Volume: 0, UnitsToBuy: 10, BuyPrice: 1_000, SellPrice: 1_600, ExpectedSellPrice: 1_600, ProfitPerUnit: 600, TotalProfit: 6_000, ExpectedProfit: 6_000 }),
+      ],
+    });
+    expect(lists).toHaveLength(1);
+    expect(lists[0].volumeM3).toBe(0);
+    expect(lists[0].capitalIsk).toBe(10_000);
+    expect(lists[0].totalProfitIsk).toBe(6_000);
+  });
+
 });

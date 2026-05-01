@@ -487,4 +487,14 @@ describe("batchMetrics", () => {
     expect(metadataFor(zero, zeroMeta).routeProfitConcentrationPct).toBeNull();
     expect(metadataFor(negative, negativeMeta).routeProfitConcentrationPct).toBeNull();
   });
+
+  it("keeps zero-volume rows from breaking fill percent and divide-by-zero aggregates", () => {
+    const zero = makeRow({ TypeID: 9001, Volume: 0, UnitsToBuy: 50, ProfitPerUnit: 100, ExpectedBuyPrice: 10, TotalJumps: 4 });
+    const { byRoute } = buildRouteBatchMetadata([zero], 1_000);
+    const meta = byRoute[routeGroupKey(zero)];
+    expect(meta.routeCapacityUsedPercent).toBeGreaterThanOrEqual(0);
+    expect(Number.isFinite(meta.routeRealIskPerM3PerJump)).toBe(true);
+    expect(Number.isFinite(meta.routeDailyIskPerJump)).toBe(true);
+  });
+
 });
