@@ -2,6 +2,7 @@ import type {
   RadiusCargoBuildDiagnostics,
   RadiusRejectedCargoBuild,
 } from "@/lib/radiusCargoBuilds";
+import { recommendationFromRejectedCargoBuild } from "@/lib/radiusBuyRecommendationAdapters";
 
 type RadiusCargoBuildDiagnosticsPanelProps = {
   presetLabel: string;
@@ -55,7 +56,9 @@ export function RadiusCargoBuildDiagnosticsPanel(props: RadiusCargoBuildDiagnost
             {props.rejectedBuilds.length} route{props.rejectedBuilds.length === 1 ? "" : "s"} came close but failed one or more gates.
           </div>
           <ul className="mt-1 space-y-1">
-            {props.rejectedBuilds.map((build) => (
+            {props.rejectedBuilds.map((build) => {
+              const recommendation = recommendationFromRejectedCargoBuild(build, { source: "diagnostics panel" });
+              return (
               <li key={`${build.routeKey}:${build.suggestedAction}`} className="rounded-sm border border-eve-border/30 p-1.5">
                 <div className="text-eve-text">
                   {build.routeLabel} · Profit {Math.round(build.totalProfitIsk).toLocaleString()} · Fill {build.cargoFillPercent.toFixed(1)}%
@@ -71,10 +74,11 @@ export function RadiusCargoBuildDiagnosticsPanel(props: RadiusCargoBuildDiagnost
                   ))}
                 </ul>
                 <div className="text-[10px] uppercase tracking-wide text-eve-accent">
-                  Suggested action: {actionLabelMap[build.suggestedAction]}
+                  Suggested action: {actionLabelMap[build.suggestedAction]} · Adapter action: {recommendation.action}
                 </div>
               </li>
-            ))}
+            );
+            })}
           </ul>
         </div>
       )}
