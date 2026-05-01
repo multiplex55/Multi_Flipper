@@ -198,16 +198,16 @@ import { RadiusCargoBuildCard } from "@/components/RadiusCargoBuildCard";
 import { RadiusCargoBuildDiagnosticsPanel } from "@/components/RadiusCargoBuildDiagnosticsPanel";
 import { useRouteBatchBuilderController } from "@/lib/useRouteBatchBuilderController";
 import {
-  formatRadiusCargoBuildBuyChecklist,
-  formatRadiusCargoBuildManifest,
-  formatRadiusCargoBuildSellChecklist,
-} from "@/lib/radiusCargoBuildFormat";
-import {
   buildRadiusBuyStationShoppingLists,
   type RadiusBuyStationShoppingList,
 } from "@/lib/radiusBuyStationShoppingList";
 import { RadiusBuyStationShoppingListView } from "@/components/RadiusBuyStationShoppingList";
+import { RadiusBuyNowQueuePanel } from "@/components/RadiusBuyNowQueuePanel";
 import { RadiusRowContextMenu } from "@/components/RadiusRowContextMenu";
+import { buildRadiusDecisionQueue, type RadiusDecisionQueueItem } from "@/lib/radiusDecisionQueue";
+import { recommendationFromBuyStationShoppingList, recommendationFromCargoBuild } from "@/lib/radiusBuyRecommendationAdapters";
+import { buildRadiusRecommendationBuyChecklistText, buildRadiusRecommendationSellChecklistText, formatRadiusBuyRecommendationManifestText } from "@/lib/batchManifestFormat";
+import type { RadiusBuyRecommendation } from "@/lib/radiusBuyRecommendation";
 import { RadiusBulkActionsBar } from "@/components/RadiusBulkActionsBar";
 import type { RadiusContextMenuAction } from "@/lib/radiusContextMenuItems";
 import {
@@ -4808,38 +4808,20 @@ export function ScanResultsTable({
   );
 
 
+  const recommendationFromBuild = useCallback((build: (typeof cargoBuilds)[number]) => recommendationFromCargoBuild(build, { source: "scan-results" }), []);
+  const recommendationFromShoppingList = useCallback((list: RadiusBuyStationShoppingList) => recommendationFromBuyStationShoppingList(list, { source: "scan-results" }), []);
+
   const copyCargoBuildManifest = useCallback((build: (typeof cargoBuilds)[number]) => {
-    copyText(formatRadiusCargoBuildManifest(build));
-  }, [copyText]);
+    copyText(formatRadiusBuyRecommendationManifestText(recommendationFromBuild(build)));
+  }, [copyText, recommendationFromBuild]);
 
   const copyCargoBuildBuyChecklist = useCallback((build: (typeof cargoBuilds)[number]) => {
-    copyText(formatRadiusCargoBuildBuyChecklist(build));
-  }, [copyText]);
+    copyText(buildRadiusRecommendationBuyChecklistText(recommendationFromBuild(build)));
+  }, [copyText, recommendationFromBuild]);
 
   const copyCargoBuildSellChecklist = useCallback((build: (typeof cargoBuilds)[number]) => {
-    copyText(formatRadiusCargoBuildSellChecklist(build));
-  }, [copyText]);
-  const formatStationBuyChecklist = useCallback((list: RadiusBuyStationShoppingList) => {
-    const lines = [`Buy Checklist — ${list.buyStationName}`, ""];
-    list.lines.forEach((line, idx) => {
-      lines.push(`${idx + 1}. [ ] BUY ${line.row.TypeName} x${line.units.toLocaleString("en-US")}`);
-    });
-    return lines.join("\n");
-  }, []);
-  const formatStationSellChecklist = useCallback((list: RadiusBuyStationShoppingList) => {
-    const lines = [`Sell Checklist — ${list.buyStationName} → ${list.primarySellStation}`, ""];
-    list.lines.forEach((line, idx) => {
-      lines.push(`${idx + 1}. [ ] SELL ${line.row.TypeName} x${line.units.toLocaleString("en-US")}`);
-    });
-    return lines.join("\n");
-  }, []);
-  const formatStationManifest = useCallback((list: RadiusBuyStationShoppingList) => {
-    const lines = ["=== Radius Station Manifest ===", `Buy: ${list.buyStationName}`, `Primary sell: ${list.primarySellStation}`, ""];
-    list.lines.forEach((line, idx) => {
-      lines.push(`${idx + 1}. ${line.row.TypeName} | qty ${line.units.toLocaleString("en-US")} | capital ${formatISK(line.capitalIsk)} | profit ${formatISK(line.profitIsk)}`);
-    });
-    return lines.join("\n");
-  }, []);
+    copyText(buildRadiusRecommendationSellChecklistText(recommendationFromBuild(build)));
+  }, [copyText, recommendationFromBuild]);
   const openRowsForStationGroup = useCallback((stationGroupId: number) => {
     setRouteViewMode("rows");
     const stationRows = datasetRows
@@ -4848,6 +4830,20 @@ export function ScanResultsTable({
     const stationLabel = stationRows[0]?.BuyStation ?? stationRows[0]?.BuySystemName ?? String(stationGroupId);
     setFilters((prev) => ({ ...prev, BuyStation: stationLabel }));
   }, [datasetRows]);
+
+  const queueItemAsRecommendation = useCallback((item: RadiusDecisionQueueItem): RadiusBuyRecommendation => ({
+    ...item,
+    kind: "route_group",
+  }), []);
+
+  const buyNowQueueRecommendations = useMemo<RadiusDecisionQueueItem[]>(() => {
+    const queue = buildRadiusDecisionQueue({
+      cargoBuilds,
+      buyStationShoppingLists: stationShoppingLists,
+      singleRowCandidates: datasetRows.slice(0, 8).map((entry) => entry.row),
+    }).queue;
+    return queue.slice(0, 12);
+  }, [cargoBuilds, datasetRows, stationShoppingLists]);
 
   const showCargoDiagnosticsPanel = cargoBuilds.length === 0 ||
     cargoBuildDiagnostics.skippedExecutionQuality +
@@ -6914,6 +6910,25 @@ export function ScanResultsTable({
           />
         </div>
       )}
+      {isRadiusMode && buyNowQueueRecommendations.length > 0 ? (
+        <div className="shrink-0 px-2 pt-1">
+          <RadiusBuyNowQueuePanel
+            recommendations={buyNowQueueRecommendations}
+            onOpenBatchBuilder={(recommendation) => openBatchBuilderForRecommendation({ routeKey: recommendation.routeKey ?? "", recommendation: { rows: recommendation.lines.map((line) => line.row).filter((row): row is FlipResult => Boolean(row)) }, intentLabel: "Buy-Now Queue", batchEntryMode: "core" })}
+            onCopyManifest={(recommendation) => copyText(formatRadiusBuyRecommendationManifestText(queueItemAsRecommendation(recommendation)))}
+            onCopyBuyChecklist={(recommendation) => copyText(buildRadiusRecommendationBuyChecklistText(queueItemAsRecommendation(recommendation)))}
+            onCopySellChecklist={(recommendation) => copyText(buildRadiusRecommendationSellChecklistText(queueItemAsRecommendation(recommendation)))}
+            onVerify={(recommendation) => onOpenPriceValidation?.(formatRadiusBuyRecommendationManifestText(queueItemAsRecommendation(recommendation)))}
+            onPin={(recommendation) => recommendation.routeKey ? onOpenInRoute?.(recommendation.routeKey) : undefined}
+            onMarkQueued={(recommendation) => recommendation.routeKey ? onSendToRouteQueue?.(recommendation.routeKey) : undefined}
+            onHideSimilar={(recommendation) => {
+              const firstType = recommendation.lines[0]?.typeName;
+              if (!firstType) return;
+              setFilters((prev) => ({ ...prev, TypeName: firstType }));
+            }}
+          />
+        </div>
+      ) : null}
       <div className={`shrink-0 px-2 ${compactDashboard ? "py-1" : "py-1.5"}`}>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <div className="flex items-center gap-2 text-eve-dim">
@@ -9225,9 +9240,9 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
             lists={stationShoppingLists}
             movementByListId={movementBadgesEnabled ? movementByShoppingListId : {}}
             onOpenRows={openRowsForStationGroup}
-            onCopyBuyChecklist={(list) => copyText(formatStationBuyChecklist(list))}
-            onCopySellChecklist={(list) => copyText(formatStationSellChecklist(list))}
-            onCopyManifest={(list) => copyText(formatStationManifest(list))}
+            onCopyBuyChecklist={(list) => copyText(buildRadiusRecommendationBuyChecklistText(recommendationFromShoppingList(list)))}
+            onCopySellChecklist={(list) => copyText(buildRadiusRecommendationSellChecklistText(recommendationFromShoppingList(list)))}
+            onCopyManifest={(list) => copyText(formatRadiusBuyRecommendationManifestText(recommendationFromShoppingList(list)))}
             onOpenBatch={(list) => {
               const routeKey = list.lines[0]?.routeKey;
               if (!routeKey) return;
