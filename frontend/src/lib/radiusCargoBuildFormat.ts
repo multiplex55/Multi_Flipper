@@ -10,6 +10,12 @@ function fmtM3(value: number): string {
   return value.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
+function fmtLineM3(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+  if (value === 0) return "0 (zero-volume)";
+  return fmtM3(value);
+}
+
 function buildOrderedLines(lines: RadiusCargoBuildLine[]): Array<{ line: RadiusCargoBuildLine; sequence: number }> {
   return lines.map((line, index) => ({ line, sequence: index + 1 }));
 }
@@ -35,7 +41,7 @@ export function formatRadiusCargoBuildManifest(build: RadiusCargoBuild): string 
   for (const { line, sequence } of buildOrderedLines(build.lines)) {
     const execCue = line.partial ? "partial" : "full";
     lines.push(
-      `${sequence}. ${line.row.TypeName} | qty ${line.units.toLocaleString("en-US")} | buy ${fmtISK(line.capitalIsk)} | sell ${fmtISK(line.grossSellIsk)} | profit ${fmtISK(line.profitIsk)} | m3 ${fmtM3(line.volumeM3)} | ${execCue}`,
+      `${sequence}. ${line.row.TypeName} | qty ${line.units.toLocaleString("en-US")} | buy ${fmtISK(line.capitalIsk)} | sell ${fmtISK(line.grossSellIsk)} | profit ${fmtISK(line.profitIsk)} | m3 ${fmtLineM3(line.volumeM3)} | ${execCue}`,
     );
   }
 

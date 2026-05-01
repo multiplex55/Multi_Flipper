@@ -187,7 +187,10 @@ export function formatDetailedManifestItemLine(
     vars?: Record<string, string | number>,
   ) => string,
 ): string {
-  return `${input.typeName} | ${t("batchBuilderManifestItemQty", { qty: input.qty.toLocaleString() })} | ${t("batchBuilderManifestItemBuyTotal", { isk: Math.round(input.buyTotal).toLocaleString() })} | ${t("batchBuilderManifestItemBuyPer", { isk: Math.round(input.buyPer).toLocaleString() })} | ${t("batchBuilderManifestItemSellTotal", { isk: Math.round(input.sellTotal).toLocaleString() })} | ${t("batchBuilderManifestItemSellPer", { isk: Math.round(input.sellPer).toLocaleString() })} | ${t("batchBuilderManifestItemVol", { volume: input.volume.toLocaleString(undefined, { maximumFractionDigits: 1 }) })} | ${t("batchBuilderManifestItemProfit", { isk: Math.round(input.profit).toLocaleString() })}`;
+  const volumeLabel = Number.isFinite(input.volume)
+    ? input.volume.toLocaleString(undefined, { maximumFractionDigits: 1 })
+    : "0";
+  return `${input.typeName} | ${t("batchBuilderManifestItemQty", { qty: input.qty.toLocaleString() })} | ${t("batchBuilderManifestItemBuyTotal", { isk: Math.round(input.buyTotal).toLocaleString() })} | ${t("batchBuilderManifestItemBuyPer", { isk: Math.round(input.buyPer).toLocaleString() })} | ${t("batchBuilderManifestItemSellTotal", { isk: Math.round(input.sellTotal).toLocaleString() })} | ${t("batchBuilderManifestItemSellPer", { isk: Math.round(input.sellPer).toLocaleString() })} | ${t("batchBuilderManifestItemVol", { volume: volumeLabel })} | ${t("batchBuilderManifestItemProfit", { isk: Math.round(input.profit).toLocaleString() })}`;
 }
 
 type BaseBatchManifestTextInput = {

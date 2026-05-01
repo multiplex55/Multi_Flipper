@@ -88,7 +88,7 @@ function isValidRow(row: FlipResult): boolean {
   return (
     stableBuyGroupId(row) > 0 &&
     pricing.units > 0 &&
-    pricing.volume > 0 &&
+    pricing.volume >= 0 &&
     pricing.buyPrice > 0 &&
     pricing.sellPrice > pricing.buyPrice &&
     pricing.profitPerUnit > 0 &&
@@ -138,7 +138,7 @@ export function buildRadiusBuyStationShoppingLists(
     const capitalIsk = units * pricing.buyPrice;
     const grossSellIsk = units * pricing.sellPrice;
     const profitIsk = units * pricing.profitPerUnit;
-    if (volumeM3 <= 0 || capitalIsk <= 0 || grossSellIsk <= 0 || profitIsk <= 0) continue;
+    if (volumeM3 < 0 || capitalIsk <= 0 || grossSellIsk <= 0 || profitIsk <= 0) continue;
     const executionQuality = executionQualityForFlip(row).score;
     const confidence = rowConfidence(row);
     const trapRisk = classifyRadiusDealRisk(row).score;

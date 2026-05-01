@@ -16,12 +16,18 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
 
+function safeRatioOrNull(numerator: number, denominator: number): number | null {
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) return null;
+  const value = numerator / denominator;
+  return Number.isFinite(value) ? value : null;
+}
+
 export function scoreRadiusCargoLine(input: RadiusCargoLineScoreInput): number {
   const { row, aggregate, profitPerUnit, volumePerUnit, confidence, execution, buyPrice } = input;
   const realProfit = Math.max(0, row.RealProfit ?? row.TotalProfit ?? 0);
   const expectedProfit = Math.max(0, row.ExpectedProfit ?? row.TotalProfit ?? 0);
   const profitQuality = expectedProfit > 0 ? clamp01(realProfit / expectedProfit) : 0.5;
-  const iskPerM3 = volumePerUnit > 0 ? profitPerUnit / volumePerUnit : 0;
+  const iskPerM3 = safeRatioOrNull(profitPerUnit, volumePerUnit);
   const jumpCount = Math.max(1, row.TotalJumps ?? 1);
   const jumpEfficiency = clamp01(1 - (jumpCount - 1) / 25);
   const executionQuality = clamp01(execution / 100);
@@ -29,11 +35,11 @@ export function scoreRadiusCargoLine(input: RadiusCargoLineScoreInput): number {
   const turnoverPenalty = clamp01((aggregate?.turnoverDays ?? 0) / 30);
   const slippagePenalty = clamp01((aggregate?.weightedSlippagePct ?? 0) / 15);
   const trapRiskPenalty = clamp01((aggregate?.riskTotalCount ?? 0) / 8);
-  const capitalEfficiency = buyPrice > 0 ? clamp01(profitPerUnit / buyPrice) : 0;
+  const capitalEfficiency = clamp01(safeRatioOrNull(profitPerUnit, buyPrice) ?? 0);
 
   return (
     profitQuality * 0.18 +
-    clamp01(iskPerM3 / 5_000) * 0.2 +
+    clamp01((iskPerM3 ?? 0) / 5_000) * 0.2 +
     jumpEfficiency * 0.09 +
     executionQuality * 0.12 +
     fillability * 0.1 +
