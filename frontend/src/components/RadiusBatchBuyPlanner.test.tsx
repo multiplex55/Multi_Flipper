@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { RadiusBatchBuyPlanner } from "@/components/RadiusBatchBuyPlanner";
 
 const recommendation = {
+  verificationState: { status: "not_verified" as const },
   id: "rec-1",
   kind: "route_group",
   action: "buy",
@@ -59,7 +60,7 @@ describe("RadiusBatchBuyPlanner", () => {
   it("renders human-readable verification status", () => {
     const withStatus = { ...recommendation, verificationState: { status: "stale" as const } };
     render(<RadiusBatchBuyPlanner recommendations={[withStatus as never]} mode="balanced" onModeChange={vi.fn()} onOpenBatchBuilder={vi.fn()} onCopyManifest={vi.fn()} onVerify={vi.fn()} />);
-    expect(screen.getByText("Stale")).toBeInTheDocument();
+    expect(screen.getByTitle("Stale")).toBeInTheDocument();
   });
 
   it("row actions call handlers with exact recommendation", () => {
@@ -74,4 +75,27 @@ describe("RadiusBatchBuyPlanner", () => {
     expect(onCopyManifest).toHaveBeenCalledWith(recommendation);
     expect(onVerify).toHaveBeenCalledWith(recommendation);
   });
+});
+
+
+it("verification sorting uses verificationState.status", () => {
+  const verified = { ...recommendation, id: "v", verificationState: { status: "verified" as const } };
+  const failed = { ...recommendation, id: "f", verificationState: { status: "failed" as const, profitDeltaIsk: -1000 } };
+  render(<RadiusBatchBuyPlanner recommendations={[failed as never, verified as never]} mode="balanced" onModeChange={vi.fn()} onOpenBatchBuilder={vi.fn()} onCopyManifest={vi.fn()} onVerify={vi.fn()} />);
+  fireEvent.click(screen.getByText("Verification"));
+  expect(screen.getAllByRole("row")[1]).toHaveTextContent("Verified");
+});
+
+it("verification filter chips constrain visible rows", () => {
+  const recs = [
+    { ...recommendation, id: "v", verificationState: { status: "verified" as const } },
+    { ...recommendation, id: "n", verificationState: { status: "not_verified" as const } },
+    { ...recommendation, id: "s", verificationState: { status: "stale" as const } },
+    { ...recommendation, id: "f", verificationState: { status: "failed" as const } },
+  ];
+  render(<RadiusBatchBuyPlanner recommendations={recs as never[]} mode="balanced" onModeChange={vi.fn()} onOpenBatchBuilder={vi.fn()} onCopyManifest={vi.fn()} onVerify={vi.fn()} />);
+  fireEvent.click(screen.getByTestId("verification-chip-verified"));
+  expect(screen.getAllByRole("row")).toHaveLength(2);
+  fireEvent.click(screen.getByTestId("verification-chip-failed"));
+  expect(screen.getAllByRole("row")).toHaveLength(2);
 });

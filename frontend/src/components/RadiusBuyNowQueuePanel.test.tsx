@@ -61,11 +61,24 @@ describe("RadiusBuyNowQueuePanel", () => {
     expect(screen.getByText("Open Batch Builder")).toBeInTheDocument();
   });
 
-  it("renders verification state labels", () => {
+  it("verification badge/status and show details rendering", () => {
     const rec = mkRec("r1", 1);
+    rec.reasons = ["good spread"];
+    rec.warnings = ["thin market"];
+    rec.blockers = ["manual check"] as never;
     rec.verificationState = { status: "failed", profitDeltaIsk: -9000 } as never;
     render(<RadiusBuyNowQueuePanel recommendations={[rec as never]} {...handlers} />);
-    expect(screen.getByTestId("verification-state-label")).toHaveTextContent("Failed: profit delta");
+    expect(screen.getByTestId("verification-state-label")).toHaveTextContent("Failed: profit collapsed by");
+    fireEvent.click(screen.getByText("Show details"));
+    expect(screen.getByText("Reasons")).toBeInTheDocument();
+    expect(screen.getByText("Warnings")).toBeInTheDocument();
+    expect(screen.getByText("Blockers")).toBeInTheDocument();
+    expect(screen.getByText("Score breakdown")).toBeInTheDocument();
+    expect(screen.getByText("Package metrics")).toBeInTheDocument();
+    expect(screen.getByText("Item lines")).toBeInTheDocument();
+    expect(screen.getByText("Tritanium")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Hide details"));
+    expect(screen.queryByText("Item lines")).not.toBeInTheDocument();
   });
 
   it("reads displayed package metrics from recommendation package fields", () => {

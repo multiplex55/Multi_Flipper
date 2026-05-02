@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { RadiusDecisionQueueItem } from "@/lib/radiusDecisionQueue";
 import { formatISK } from "@/lib/format";
+import { RadiusBuyRecommendationDetails } from "@/components/RadiusBuyRecommendationDetails";
 
 type LayoutMode = "compact" | "cards" | "table";
 
@@ -96,6 +97,7 @@ export function RadiusBuyNowQueuePanel({
           const warningsCount = recommendation.warnings.length + recommendation.blockers.length;
           const rank = start + index + 1;
           const verificationLabel = formatVerificationState(recommendation.verificationState);
+          const verificationBadgeClass = verificationBadgeClassName(recommendation.verificationState?.status);
           return (
             <div key={recommendation.id} className="rounded-sm border border-eve-border/40 bg-black/20 p-2">
               <div className="flex flex-wrap items-center gap-2">
@@ -103,7 +105,7 @@ export function RadiusBuyNowQueuePanel({
                 <span className="rounded-sm border border-eve-accent/40 px-1 py-0 text-[10px] text-eve-accent">{recommendation.action}</span>
                 <span className="rounded-sm border border-eve-border/40 px-1 py-0 text-[10px] text-eve-dim">{recommendation.kind}</span>
                 <span className="rounded-sm border border-sky-500/40 px-1 py-0 text-[10px] text-sky-300">{recommendation.haulWorthiness.label}</span>
-                <span className="rounded-sm border border-amber-500/40 px-1 py-0 text-[10px] text-amber-200" data-testid="verification-state-label">{verificationLabel}</span>
+                <span className={verificationBadgeClass} data-testid="verification-state-label">{verificationLabel}</span>
                 <span className="text-eve-text">{buyStation} → {sellStation}</span>
               </div>
 
@@ -152,6 +154,7 @@ export function RadiusBuyNowQueuePanel({
                 {onHideSimilar ? <button type="button" className="text-eve-dim hover:text-eve-text" onClick={() => onHideSimilar(recommendation)}>Hide similar</button> : null}
                 <button type="button" className="text-eve-dim hover:text-eve-text" onClick={() => setExpandedId((prev) => prev === recommendation.id ? null : recommendation.id)}>{expandedId === recommendation.id ? "Hide details" : "Show details"}</button>
               </div>
+              {expandedId === recommendation.id ? <RadiusBuyRecommendationDetails recommendation={recommendation} /> : null}
             </div>
           );
         })}
@@ -162,10 +165,14 @@ export function RadiusBuyNowQueuePanel({
 
 function formatVerificationState(state: RadiusDecisionQueueItem["verificationState"]): string {
   if (!state || state.status === "not_verified") return "Not verified";
-  if (state.status === "stale") return "Stale";
+  if (state.status === "stale") {
+    const checkedAtMs = new Date(state.checkedAt ?? "").getTime();
+    const minutesAgo = Number.isFinite(checkedAtMs) ? Math.max(0, Math.floor((Date.now() - checkedAtMs) / 60_000)) : null;
+    return minutesAgo === null ? "Stale" : `Stale: checked ${minutesAgo}m ago`;
+  }
   if (state.status === "failed") {
     const delta = Number(state.profitDeltaIsk ?? state.priceDeltaIsk ?? 0);
-    return Number.isFinite(delta) && delta !== 0 ? `Failed: profit delta ${formatISK(delta)}` : "Failed: review needed";
+    return Number.isFinite(delta) && delta !== 0 ? `Failed: profit collapsed by ${formatISK(Math.abs(delta))}` : "Failed: review needed";
   }
   if (state.status === "verified") {
     if (!state.checkedAt) return "Verified";
@@ -176,4 +183,11 @@ function formatVerificationState(state: RadiusDecisionQueueItem["verificationSta
     return `Verified ${minutesAgo}m ago`;
   }
   return "Not verified";
+}
+
+function verificationBadgeClassName(status: NonNullable<RadiusDecisionQueueItem["verificationState"]>["status"] | undefined): string {
+  if (status === "verified") return "rounded-sm border border-emerald-500/40 px-1 py-0 text-[10px] text-emerald-200";
+  if (status === "stale") return "rounded-sm border border-amber-500/40 px-1 py-0 text-[10px] text-amber-200";
+  if (status === "failed") return "rounded-sm border border-rose-500/40 px-1 py-0 text-[10px] text-rose-200";
+  return "rounded-sm border border-eve-border/40 px-1 py-0 text-[10px] text-eve-dim";
 }

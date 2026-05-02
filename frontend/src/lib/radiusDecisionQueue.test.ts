@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildRadiusDecisionQueue } from "@/lib/radiusDecisionQueue";
+import { buildRadiusDecisionQueue, verificationSortRank } from "@/lib/radiusDecisionQueue";
 import { makeFlipResult } from "@/lib/testFixtures";
 
 const row = (o = {}) => makeFlipResult({ TypeID: 1, TypeName: "A", BuyPrice: 100, SellPrice: 140, ExpectedBuyPrice: 100, ExpectedSellPrice: 140, ProfitPerUnit: 40, UnitsToBuy: 10, Volume: 1, TotalJumps: 4, ...o });
@@ -182,4 +182,9 @@ describe("radiusDecisionQueue", () => {
     expect(decisionMode.queue[0].score).toBeCloseTo(balanced.queue[0].score, 8);
   });
 
+});
+
+
+it("verification rank ordering deterministic", () => {
+  expect(["verified", "not_verified", "stale", "failed"].map((s) => verificationSortRank(s as never))).toEqual([0, 1, 2, 3]);
 });
