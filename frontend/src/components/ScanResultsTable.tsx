@@ -203,6 +203,7 @@ import {
 } from "@/lib/radiusBuyStationShoppingList";
 import { RadiusBuyStationShoppingListView } from "@/components/RadiusBuyStationShoppingList";
 import { RadiusBuyNowQueuePanel } from "@/components/RadiusBuyNowQueuePanel";
+import { RadiusBatchBuyPlanner } from "@/components/RadiusBatchBuyPlanner";
 import { RadiusRowContextMenu } from "@/components/RadiusRowContextMenu";
 import { buildRadiusDecisionQueue, type RadiusDecisionQueueItem } from "@/lib/radiusDecisionQueue";
 import { recommendationFromBuyStationShoppingList, recommendationFromCargoBuild } from "@/lib/radiusBuyRecommendationAdapters";
@@ -2055,6 +2056,7 @@ export function ScanResultsTable({
   const [movementFilterChips, setMovementFilterChips] = useState<Set<string>>(new Set());
   const [showDisappearedPanel, setShowDisappearedPanel] = useState(false);
   const [showBuyNowQueuePanel, setShowBuyNowQueuePanel] = useState(false);
+  const [showBuyPlanner, setShowBuyPlanner] = useState(false);
   const hasMovementBaseline = movementBaselineSnapshots.size > 0;
   const [activeControlMenuSection, setActiveControlMenuSection] = useState<string | null>(null);
   const [collapsedRegionGroups, setCollapsedRegionGroups] = useState<
@@ -6928,6 +6930,23 @@ export function ScanResultsTable({
       )}
       {isRadiusMode && buyNowQueueRecommendations.length > 0 ? (
         <div className="shrink-0 px-2 pt-1">
+          <div className="mb-1">
+            <button type="button" className="rounded-sm border border-eve-border/60 px-1.5 py-0.5" onClick={() => setShowBuyPlanner((previous) => !previous)}>
+              {showBuyPlanner ? "Hide Buy Planner" : `Show Buy Planner (${buyNowQueueRecommendations.length})`}
+            </button>
+          </div>
+          {showBuyPlanner ? (
+            <div className="mb-2" id="radius-buy-planner-section">
+              <RadiusBatchBuyPlanner
+                recommendations={buyNowQueueRecommendations.map((item) => queueItemAsRecommendation(item))}
+                mode={activeDecisionMode}
+                onModeChange={(mode) => applyDecisionMode(mode as RadiusDecisionModeId | "custom")}
+                onOpenBatchBuilder={(recommendation) => openBatchBuilderForRecommendation({ routeKey: recommendation.routeKey ?? "", recommendation: { rows: recommendation.lines.map((line) => line.row).filter((row): row is FlipResult => Boolean(row)) }, intentLabel: "Buy Planner", batchEntryMode: "core" })}
+                onCopyManifest={(recommendation) => copyText(formatRadiusBuyRecommendationManifestText(recommendation))}
+                onVerify={(recommendation) => onOpenPriceValidation?.(formatRadiusBuyRecommendationManifestText(recommendation))}
+              />
+            </div>
+          ) : null}
           {showBuyNowQueuePanel ? (
             <div id="radius-buy-now-queue-section">
               <RadiusBuyNowQueuePanel
