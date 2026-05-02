@@ -26,6 +26,12 @@ type RadiusCommandBarProps = {
     label: string;
     onToggle: () => void;
   };
+  buyNowQueueVisibilityToggle?: {
+    expanded: boolean;
+    label: string;
+    onToggle: () => void;
+    controlsId: string;
+  };
   compactLayoutToggle?: {
     compact: boolean;
     label: string;
@@ -89,6 +95,7 @@ export function RadiusCommandBar({
   shortcutScopeActive = true,
   metrics,
   insightsVisibilityToggle,
+  buyNowQueueVisibilityToggle,
   compactLayoutToggle,
   tableControls,
   actions,
@@ -257,6 +264,17 @@ export function RadiusCommandBar({
           >
             {insightsVisibilityToggle.label}
           </ToggleButton>
+          {buyNowQueueVisibilityToggle ? (
+            <ToggleButton
+              pressed={buyNowQueueVisibilityToggle.expanded}
+              onClick={buyNowQueueVisibilityToggle.onToggle}
+              aria-expanded={buyNowQueueVisibilityToggle.expanded}
+              aria-controls={buyNowQueueVisibilityToggle.controlsId}
+              title={buyNowQueueVisibilityToggle.label}
+            >
+              {buyNowQueueVisibilityToggle.label}
+            </ToggleButton>
+          ) : null}
           {tableControls.hasActiveFilters ? (
             <ActionButton
               tone="accent"

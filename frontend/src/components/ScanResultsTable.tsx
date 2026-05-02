@@ -2054,6 +2054,7 @@ export function ScanResultsTable({
   const [showCachePanel, setShowCachePanel] = useState(false);
   const [movementFilterChips, setMovementFilterChips] = useState<Set<string>>(new Set());
   const [showDisappearedPanel, setShowDisappearedPanel] = useState(false);
+  const [showBuyNowQueuePanel, setShowBuyNowQueuePanel] = useState(false);
   const hasMovementBaseline = movementBaselineSnapshots.size > 0;
   const [activeControlMenuSection, setActiveControlMenuSection] = useState<string | null>(null);
   const [collapsedRegionGroups, setCollapsedRegionGroups] = useState<
@@ -6797,6 +6798,14 @@ export function ScanResultsTable({
               onToggle: () =>
                 setRadiusRouteInsightsHidden((previous) => !previous),
             }}
+            buyNowQueueVisibilityToggle={isRadiusMode && buyNowQueueRecommendations.length > 0 ? {
+              expanded: showBuyNowQueuePanel,
+              label: showBuyNowQueuePanel
+                ? "Hide Buy-Now Queue"
+                : `Show Buy-Now Queue (${buyNowQueueRecommendations.length})`,
+              onToggle: () => setShowBuyNowQueuePanel((previous) => !previous),
+              controlsId: "radius-buy-now-queue-section",
+            } : undefined}
             compactLayoutToggle={{
               compact: compactDashboard,
               label: "Compact Dashboard",
@@ -6912,21 +6921,25 @@ export function ScanResultsTable({
       )}
       {isRadiusMode && buyNowQueueRecommendations.length > 0 ? (
         <div className="shrink-0 px-2 pt-1">
-          <RadiusBuyNowQueuePanel
-            recommendations={buyNowQueueRecommendations}
-            onOpenBatchBuilder={(recommendation) => openBatchBuilderForRecommendation({ routeKey: recommendation.routeKey ?? "", recommendation: { rows: recommendation.lines.map((line) => line.row).filter((row): row is FlipResult => Boolean(row)) }, intentLabel: "Buy-Now Queue", batchEntryMode: "core" })}
-            onCopyManifest={(recommendation) => copyText(formatRadiusBuyRecommendationManifestText(queueItemAsRecommendation(recommendation)))}
-            onCopyBuyChecklist={(recommendation) => copyText(buildRadiusRecommendationBuyChecklistText(queueItemAsRecommendation(recommendation)))}
-            onCopySellChecklist={(recommendation) => copyText(buildRadiusRecommendationSellChecklistText(queueItemAsRecommendation(recommendation)))}
-            onVerify={(recommendation) => onOpenPriceValidation?.(formatRadiusBuyRecommendationManifestText(queueItemAsRecommendation(recommendation)))}
-            onPin={(recommendation) => recommendation.routeKey ? onOpenInRoute?.(recommendation.routeKey) : undefined}
-            onMarkQueued={(recommendation) => recommendation.routeKey ? onSendToRouteQueue?.(recommendation.routeKey) : undefined}
-            onHideSimilar={(recommendation) => {
-              const firstType = recommendation.lines[0]?.typeName;
-              if (!firstType) return;
-              setFilters((prev) => ({ ...prev, TypeName: firstType }));
-            }}
-          />
+          {showBuyNowQueuePanel ? (
+            <div id="radius-buy-now-queue-section">
+              <RadiusBuyNowQueuePanel
+                recommendations={buyNowQueueRecommendations}
+                onOpenBatchBuilder={(recommendation) => openBatchBuilderForRecommendation({ routeKey: recommendation.routeKey ?? "", recommendation: { rows: recommendation.lines.map((line) => line.row).filter((row): row is FlipResult => Boolean(row)) }, intentLabel: "Buy-Now Queue", batchEntryMode: "core" })}
+                onCopyManifest={(recommendation) => copyText(formatRadiusBuyRecommendationManifestText(queueItemAsRecommendation(recommendation)))}
+                onCopyBuyChecklist={(recommendation) => copyText(buildRadiusRecommendationBuyChecklistText(queueItemAsRecommendation(recommendation)))}
+                onCopySellChecklist={(recommendation) => copyText(buildRadiusRecommendationSellChecklistText(queueItemAsRecommendation(recommendation)))}
+                onVerify={(recommendation) => onOpenPriceValidation?.(formatRadiusBuyRecommendationManifestText(queueItemAsRecommendation(recommendation)))}
+                onPin={(recommendation) => recommendation.routeKey ? onOpenInRoute?.(recommendation.routeKey) : undefined}
+                onMarkQueued={(recommendation) => recommendation.routeKey ? onSendToRouteQueue?.(recommendation.routeKey) : undefined}
+                onHideSimilar={(recommendation) => {
+                  const firstType = recommendation.lines[0]?.typeName;
+                  if (!firstType) return;
+                  setFilters((prev) => ({ ...prev, TypeName: firstType }));
+                }}
+              />
+            </div>
+          ) : null}
         </div>
       ) : null}
       <div className={`shrink-0 px-2 ${compactDashboard ? "py-1" : "py-1.5"}`}>
