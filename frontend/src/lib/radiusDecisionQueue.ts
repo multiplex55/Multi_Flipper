@@ -2,7 +2,7 @@ import type { RadiusBuyRecommendation, RadiusBuyRecommendationAction } from "@/l
 import type { RadiusCargoBuild, RadiusRejectedCargoBuild } from "@/lib/radiusCargoBuilds";
 import type { RadiusBuyStationShoppingList } from "@/lib/radiusBuyStationShoppingList";
 import {
-  recommendationFromBuyStationShoppingList,
+  recommendationsFromBuyStationShoppingList,
   recommendationFromCargoBuild,
   recommendationFromRejectedCargoBuild,
   recommendationFromRouteBatch,
@@ -212,7 +212,11 @@ export function buildRadiusDecisionQueue(input: BuildRadiusDecisionQueueInput): 
 
   for (const build of input.cargoBuilds ?? []) queue.push(scoreRecommendation(recommendationFromCargoBuild(build, { source: "decision_queue" }), "cargo_build", weights));
   for (const [routeKey, rows] of Object.entries(input.routeRowsByKey ?? {})) queue.push(scoreRecommendation(recommendationFromRouteBatch(routeKey, rows, input.routeBatchMetadataByRoute?.[routeKey], input.cargoCapacityM3 ?? 0, { source: `decision_queue:${input.mode ?? "default"}` }), "same_leg_batch", weights));
-  for (const list of input.buyStationShoppingLists ?? []) queue.push(scoreRecommendation(recommendationFromBuyStationShoppingList(list, { source: "decision_queue" }), "buy_station_package", weights));
+  for (const list of input.buyStationShoppingLists ?? []) {
+    for (const recommendation of recommendationsFromBuyStationShoppingList(list, { source: "decision_queue" })) {
+      queue.push(scoreRecommendation(recommendation, "buy_station_package", weights));
+    }
+  }
   for (const row of input.singleRowCandidates ?? []) queue.push(scoreRecommendation(recommendationFromSingleRow(row, { source: "decision_queue" }), "single_item", weights));
   for (const row of input.watchlistFocusedCandidates ?? []) queue.push(scoreRecommendation(recommendationFromSingleRow(row, { source: "decision_queue:watchlist" }), "watchlist_package", weights));
   for (const row of input.movementOrImprovingCandidates ?? []) queue.push(scoreRecommendation(recommendationFromSingleRow(row, { source: "decision_queue:movement" }), "new_or_improving", weights));

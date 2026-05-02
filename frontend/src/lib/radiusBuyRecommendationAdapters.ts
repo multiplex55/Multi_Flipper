@@ -59,11 +59,30 @@ export function recommendationFromCargoBuild(build: RadiusCargoBuild, context: R
   return out;
 }
 
+export function recommendationsFromBuyStationShoppingList(list: RadiusBuyStationShoppingList, context: RadiusBuyRecommendationContext): RadiusBuyRecommendation[] {
+  const grouped = new Map<string, RadiusBuyRecommendationLine[]>();
+
+  for (const line of list.lines) {
+    const normalized = normalizeLine(line.row, line.units);
+    if (!normalized) continue;
+    const buyKey = String(line.row.BuyLocationID ?? line.row.BuyStation ?? list.buyStationName ?? "unknown-buy");
+    const sellKey = String(line.row.SellLocationID ?? line.row.SellStation ?? list.primarySellStation ?? "unknown-sell");
+    const legKey = `${buyKey}:${sellKey}`;
+    const existing = grouped.get(legKey);
+    if (existing) existing.push(normalized);
+    else grouped.set(legKey, [normalized]);
+  }
+
+  return [...grouped.entries()].map(([legKey, lines], index) => {
+    const legRec = rec(`${list.id}:leg:${legKey}`, "buy_station_list", "buy", list.buyStationName, lines, { ...context, source: "buy station list child package" });
+    legRec.reasons.push(`Station ${list.buyStationName} score ${list.actionableScore.toFixed(1)}`);
+    legRec.reasons.push(`Shopping list leg package ${index + 1}/${grouped.size}`);
+    return legRec;
+  });
+}
+
 export function recommendationFromBuyStationShoppingList(list: RadiusBuyStationShoppingList, context: RadiusBuyRecommendationContext): RadiusBuyRecommendation {
-  const lines = list.lines.map((line) => normalizeLine(line.row, line.units)).filter((line): line is RadiusBuyRecommendationLine => Boolean(line));
-  const out = rec(list.id, "buy_station_list", "buy", list.buyStationName, lines, { ...context, source: "buy station list" });
-  out.reasons.push(`Station ${list.buyStationName} score ${list.actionableScore.toFixed(1)}`);
-  return out;
+  return recommendationsFromBuyStationShoppingList(list, context)[0] ?? rec(list.id, "buy_station_list", "buy", list.buyStationName, [], { ...context, source: "buy station list" });
 }
 
 export function recommendationFromSingleRow(row: FlipResult, context: RadiusBuyRecommendationContext): RadiusBuyRecommendation {

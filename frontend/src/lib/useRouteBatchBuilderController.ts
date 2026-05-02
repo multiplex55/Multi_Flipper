@@ -126,9 +126,7 @@ export function useRouteBatchBuilderController(input: RouteBatchBuilderControlle
       if (!anchor) return false;
 
       const recommendationRows = input.recommendation?.rows ?? rows;
-      const initialSelectedLineKeys = recommendationRows
-        .map((row) => routeLineKey(row))
-        .filter((key) => key.length > 0);
+      const initialSelectedLineKeys = recommendationRows.map((row) => routeLineKey(row));
 
       setBatchPlanRow(anchor);
       setBatchPlanRows(rows);

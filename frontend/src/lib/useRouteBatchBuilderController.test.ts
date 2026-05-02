@@ -124,4 +124,39 @@ describe("useRouteBatchBuilderController", () => {
     expect(setBatchBuilderInitialSelectedLineKeys).toHaveBeenCalledWith(["34:60003760:60008494"]);
   });
 
+  it("uses recommendation rows exactly for initial selection without route-wide fallback", () => {
+    const setBatchPlanRow = vi.fn();
+    const setBatchPlanRows = vi.fn();
+    const setActiveRouteGroupKey = vi.fn();
+    const setBatchBuilderEntryMode = vi.fn();
+    const setBatchBuilderLaunchIntent = vi.fn();
+    const setBatchBuilderMode = vi.fn();
+    const setBatchBuilderInitialSelectedLineKeys = vi.fn();
+    const routeRows = [makeRow(), makeRow({ TypeID: 35 })];
+    const recommendationRows = [makeRow({ TypeID: 35 })];
+
+    const { result } = renderHook(() =>
+      useRouteBatchBuilderController({
+        routeRowsByKey: { "route:a": routeRows },
+        preferredRouteKey: null,
+        setBatchPlanRow,
+        setBatchPlanRows,
+        setActiveRouteGroupKey,
+        setBatchBuilderEntryMode,
+        setBatchBuilderLaunchIntent,
+        setBatchBuilderMode,
+        setBatchBuilderInitialSelectedLineKeys,
+      }),
+    );
+
+    act(() => {
+      result.current.openBatchBuilderForRecommendation({
+        routeKey: "route:a",
+        recommendation: { rows: recommendationRows },
+      });
+    });
+
+    expect(setBatchBuilderInitialSelectedLineKeys).toHaveBeenCalledWith(["35:60003760:60008494"]);
+  });
+
 });
