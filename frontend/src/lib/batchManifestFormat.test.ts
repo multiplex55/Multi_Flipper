@@ -133,6 +133,7 @@ describe("radius recommendation manifest formatter", () => {
     batchGrossSellIsk: 15000,
     batchIskPerJump: 1500,
     batchRoiPercent: 42.85,
+    packageMetrics: { averageFillConfidencePct: 0, worstFillConfidencePct: 0, riskCount: 0, weightedSlippagePct: 0, verificationCoveragePct: 0, batchProfitIsk: 4500, batchCapitalIsk: 10500, batchGrossSellIsk: 15000, batchIskPerJump: 1500, batchRoiPercent: 42.85, cargoUsedPercent: 10, totalJumps: 3 },
   };
 
   it("formats recommendation manifest with header, detail rows, and multibuy block", () => {

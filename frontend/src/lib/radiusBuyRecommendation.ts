@@ -22,6 +22,22 @@ export type RadiusBuyRecommendationLine = {
   row?: FlipResult;
 };
 
+
+export type RadiusBuyRecommendationPackageMetrics = {
+  averageFillConfidencePct: number;
+  worstFillConfidencePct: number;
+  riskCount: number;
+  weightedSlippagePct: number;
+  verificationCoveragePct: number;
+  batchProfitIsk: number;
+  batchCapitalIsk: number;
+  batchGrossSellIsk: number;
+  batchIskPerJump: number;
+  batchRoiPercent: number;
+  cargoUsedPercent: number;
+  totalJumps: number;
+};
+
 export type RadiusBuyRecommendationRejectedDiagnostic = {
   kind: string;
   message: string;
@@ -55,6 +71,7 @@ export type RadiusBuyRecommendation = {
   batchGrossSellIsk: number;
   batchIskPerJump: number;
   batchRoiPercent: number;
+  packageMetrics: RadiusBuyRecommendationPackageMetrics;
   verificationSlots?: string[];
   verificationState?: {
     status: "not_verified" | "verified" | "stale" | "failed";

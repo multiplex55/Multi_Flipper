@@ -12,6 +12,7 @@ const recommendation = {
   jumpsToBuyStation: 1, jumpsBuyToSell: 4, totalJumps: 5,
   cargoCapacityM3: 1000, totalVolumeM3: 50, remainingCargoM3: 950, cargoUsedPercent: 5,
   batchProfitIsk: 5000000, batchCapitalIsk: 20000000, batchGrossSellIsk: 25000000, batchIskPerJump: 1000000, batchRoiPercent: 25,
+  packageMetrics: { averageFillConfidencePct: 82, worstFillConfidencePct: 60, riskCount: 2, weightedSlippagePct: 4.2, verificationCoveragePct: 95, batchProfitIsk: 5000000, batchCapitalIsk: 20000000, batchGrossSellIsk: 25000000, batchIskPerJump: 1000000, batchRoiPercent: 25, cargoUsedPercent: 5, totalJumps: 5 },
   verificationSlots: ["market"], scoreBreakdown: { fillConfidence: 0.82, penalties: 0.11 },
 };
 
@@ -25,6 +26,19 @@ describe("RadiusBatchBuyPlanner", () => {
     expect(screen.getByText("Jita 4-4 → Amarr VIII")).toBeInTheDocument();
     expect(screen.getByText("5.0%")).toBeInTheDocument();
     expect(screen.getByText("82%")).toBeInTheDocument();
+    expect(screen.getByText("2 (4.2%)")).toBeInTheDocument();
+  });
+
+  it("sorts by package profit and isk/jump", () => {
+    const r2 = { ...recommendation, id: "rec-2", packageMetrics: { ...recommendation.packageMetrics, batchProfitIsk: 1000000, batchIskPerJump: 2000000 } };
+    render(<RadiusBatchBuyPlanner recommendations={[recommendation as never, r2 as never]} mode="balanced" onModeChange={vi.fn()} onOpenBatchBuilder={vi.fn()} onCopyManifest={vi.fn()} onVerify={vi.fn()} />);
+    fireEvent.click(screen.getByText("Profit"));
+    const rows = screen.getAllByRole("row");
+    expect(rows[1]).toHaveTextContent("1 M");
+    fireEvent.click(screen.getByText("ISK/jump"));
+    expect(screen.getAllByRole("row")[1]).toHaveTextContent("1 M");
+    fireEvent.click(screen.getByText("ISK/jump"));
+    expect(screen.getAllByRole("row")[1]).toHaveTextContent("2 M");
   });
 
   it("triggers mode change callback", () => {
