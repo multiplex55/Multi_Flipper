@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { recommendationFromRejectedCargoBuild, recommendationFromRouteBatch, recommendationFromSingleRow } from "@/lib/radiusBuyRecommendationAdapters";
+import { buildBatch, routeLineKey } from "@/lib/batchMetrics";
 import { makeFlipResult } from "@/lib/testFixtures";
 
 const rowA = makeFlipResult({ TypeID: 1, UnitsToBuy: 10, Volume: 2, TotalJumps: 4, ExpectedBuyPrice: 100, ExpectedSellPrice: 150, RealProfit: 500 });
 const rowB = makeFlipResult({ TypeID: 2, UnitsToBuy: 5, Volume: 1, TotalJumps: 4, ExpectedBuyPrice: 200, ExpectedSellPrice: 260, RealProfit: 300 });
 
 describe("radiusBuyRecommendationAdapters", () => {
-  it("maps route batch with package-level metrics and exact rows", () => {
-    const rec = recommendationFromRouteBatch("r", [rowA], {
+  it("maps route batch from batch builder lines and package totals", () => {
+    const rows = [rowA, rowB];
+    const rec = recommendationFromRouteBatch({ routeKey: "r", rows, metadata: {
       batchNumber: 1,
       batchProfit: 500,
       batchTotalCapital: 1000,
@@ -42,11 +44,15 @@ describe("radiusBuyRecommendationAdapters", () => {
       routeProfitConcentrationPct: null,
       routeRemainingCargoM3: 20,
       routeComplexity: "Clean",
-    }, 40, {});
-    expect(rec.lines).toHaveLength(1);
-    expect(rec.totalVolumeM3).toBe(20);
-    expect(rec.cargoUsedPercent).toBe(50);
-    expect(rec.batchProfitIsk).toBe(500);
+    }, cargoCapacityM3: 10 }, {});
+    const expected = buildBatch(rows[0], rows, 10);
+    expect(rec.lines).toHaveLength(expected.lines.length);
+    expect(rec.selectedLineKeys).toEqual(rec.lines.map((line) => routeLineKey(line.row!)));
+    expect(rec.totalVolumeM3).toBe(expected.totalVolume);
+    expect(rec.batchProfitIsk).toBe(expected.totalProfit);
+    expect(rec.batchCapitalIsk).toBe(expected.totalCapital);
+    expect(rec.batchGrossSellIsk).toBe(expected.totalGrossSell);
+    expect(rec.totalVolumeM3).toBeLessThanOrEqual(10);
   });
 
   it("keeps rejected cargo build near-miss lines only", () => {
@@ -59,4 +65,14 @@ describe("radiusBuyRecommendationAdapters", () => {
     const rec = recommendationFromSingleRow(rowA, {});
     expect(rec.lines).toHaveLength(1);
   });
+});
+
+
+it("includes zero-volume lines with zero cargo impact", () => {
+  const zero = makeFlipResult({ TypeID: 3, UnitsToBuy: 10, Volume: 0, ExpectedBuyPrice: 10, ExpectedSellPrice: 15, RealProfit: 50 });
+  const rec = recommendationFromRouteBatch({ routeKey: "r", rows: [zero], cargoCapacityM3: 5 }, {});
+  expect(rec.lines).toHaveLength(1);
+  expect(rec.lines[0].volumeM3).toBe(0);
+  expect(rec.totalVolumeM3).toBe(0);
+  expect(rec.cargoUsedPercent).toBe(0);
 });

@@ -1,6 +1,6 @@
 import type { RadiusCargoBuild, RadiusRejectedCargoBuild } from "@/lib/radiusCargoBuilds";
 import type { RadiusBuyStationShoppingList } from "@/lib/radiusBuyStationShoppingList";
-import { routeGroupKey, safeNumber, type RouteBatchMetadata } from "@/lib/batchMetrics";
+import { buildBatch, routeGroupKey, routeLineKey, safeNumber, type RouteBatchMetadata } from "@/lib/batchMetrics";
 import type { FlipResult } from "@/lib/types";
 import type {
   RadiusBuyRecommendation,
@@ -9,6 +9,14 @@ import type {
 } from "@/lib/radiusBuyRecommendation";
 
 export type RadiusBuyRecommendationContext = { source?: string };
+
+export type RecommendationFromRouteBatchInput = {
+  routeKey: string;
+  rows: FlipResult[];
+  metadata?: RouteBatchMetadata;
+  cargoCapacityM3: number;
+  originLabel?: string;
+};
 
 function normalizeLine(row: FlipResult, qtyInput?: number): RadiusBuyRecommendationLine | null {
   const qty = Math.max(0, Math.trunc(Number(qtyInput ?? row.UnitsToBuy ?? row.FilledQty ?? 0)));
@@ -46,7 +54,7 @@ function rec(id: string, kind: RadiusBuyRecommendation["kind"], action: RadiusBu
   const batchGrossSellIsk = lines.reduce((s, l) => s + safeNumber(l.sellTotalIsk), 0);
   const batchProfitIsk = lines.reduce((s, l) => s + safeNumber(l.profitTotalIsk), 0);
   const totalJumps = Math.max(1, ...lines.map((l) => Math.max(1, safeNumber(l.row?.TotalJumps))));
-  return { id, kind, action, title, routeKey: lines[0]?.routeKey, lines, reasons, warnings, blockers: [],
+  return { id, kind, action, title, routeKey: lines[0]?.routeKey, lines, selectedLineKeys: metrics?.selectedLineKeys, sourcePackageKind: metrics?.sourcePackageKind, reasons, warnings, blockers: [],
     jumpsToBuyStation: 0, jumpsBuyToSell: 0, totalJumps, cargoCapacityM3: Math.max(0, totalVolumeM3), totalVolumeM3, remainingCargoM3: 0, cargoUsedPercent: totalVolumeM3 > 0 ? 100 : 0,
     batchProfitIsk, batchCapitalIsk, batchGrossSellIsk, batchIskPerJump: batchProfitIsk / Math.max(1,totalJumps), batchRoiPercent: batchCapitalIsk > 0 ? (batchProfitIsk / batchCapitalIsk) * 100 : 0,
     verificationSlots: [], ...metrics };
@@ -54,7 +62,7 @@ function rec(id: string, kind: RadiusBuyRecommendation["kind"], action: RadiusBu
 
 export function recommendationFromCargoBuild(build: RadiusCargoBuild, context: RadiusBuyRecommendationContext): RadiusBuyRecommendation {
   const lines = build.lines.map((line) => normalizeLine(line.row, line.units)).filter((line): line is RadiusBuyRecommendationLine => Boolean(line));
-  const out = rec(build.id, "cargo_build", "buy", build.routeLabel, lines, { ...context, source: "cargo build" });
+  const out = rec(build.id, "cargo_build", "buy", build.routeLabel, lines, { ...context, source: "cargo build" }, { sourcePackageKind: "cargo_build", selectedLineKeys: lines.map((line) => line.row ? routeLineKey(line.row) : `${line.typeId}:${line.routeKey}`) });
   out.reasons.push(`Build score ${build.finalScore.toFixed(1)} and fill ${build.cargoFillPercent.toFixed(1)}%`);
   return out;
 }
@@ -74,7 +82,7 @@ export function recommendationsFromBuyStationShoppingList(list: RadiusBuyStation
   }
 
   return [...grouped.entries()].map(([legKey, lines], index) => {
-    const legRec = rec(`${list.id}:leg:${legKey}`, "buy_station_list", "buy", list.buyStationName, lines, { ...context, source: "buy station list child package" });
+    const legRec = rec(`${list.id}:leg:${legKey}`, "buy_station_list", "buy", list.buyStationName, lines, { ...context, source: "buy station list child package" }, { sourcePackageKind: "buy_station_child", selectedLineKeys: lines.map((line) => line.row ? routeLineKey(line.row) : `${line.typeId}:${line.routeKey}`) });
     legRec.reasons.push(`Station ${list.buyStationName} score ${list.actionableScore.toFixed(1)}`);
     legRec.reasons.push(`Shopping list leg package ${index + 1}/${grouped.size}`);
     return legRec;
@@ -87,26 +95,35 @@ export function recommendationFromBuyStationShoppingList(list: RadiusBuyStationS
 
 export function recommendationFromSingleRow(row: FlipResult, context: RadiusBuyRecommendationContext): RadiusBuyRecommendation {
   const line = normalizeLine(row, Number(row.UnitsToBuy ?? row.FilledQty ?? 0));
-  return rec(`row:${row.TypeID}:${routeGroupKey(row)}`, "single_row", "buy", row.TypeName || "Row", line ? [line] : [], context);
+  return rec(`row:${row.TypeID}:${routeGroupKey(row)}`, "single_row", "buy", row.TypeName || "Row", line ? [line] : [], context, { sourcePackageKind: "single_row", selectedLineKeys: line ? [routeLineKey(row)] : [] });
 }
 
 
-export function recommendationFromRouteBatch(routeKey: string, rows: FlipResult[], metadata: RouteBatchMetadata | undefined, cargoCapacityM3: number, context: RadiusBuyRecommendationContext): RadiusBuyRecommendation {
-  const lines = rows.map((row) => normalizeLine(row, Number(row.UnitsToBuy ?? row.FilledQty ?? 0))).filter((line): line is RadiusBuyRecommendationLine => Boolean(line));
+export function recommendationFromRouteBatch(input: RecommendationFromRouteBatchInput, context: RadiusBuyRecommendationContext): RadiusBuyRecommendation {
+  const { routeKey, rows, metadata, cargoCapacityM3, originLabel } = input;
+  const anchor = rows[0];
+  const batch = anchor ? buildBatch(anchor, rows, cargoCapacityM3) : { lines: [], totalVolume: 0, totalProfit: 0, totalCapital: 0, totalGrossSell: 0, remainingM3: cargoCapacityM3, usedPercent: 0 };
+  const lines = batch.lines.map((line) => normalizeLine(line.row, line.units)).filter((line): line is RadiusBuyRecommendationLine => Boolean(line));
+  const selectedLineKeys = batch.lines.map((line) => routeLineKey(line.row));
   const verificationState = (metadata as { verificationState?: RadiusBuyRecommendation["verificationState"] } | undefined)?.verificationState;
-  return rec(`route:${routeKey}`, "route_group", "buy", routeKey, lines, context, {
-    jumpsToBuyStation: 0,
-    jumpsBuyToSell: 0,
-    totalJumps: Math.max(1, safeNumber(rows[0]?.TotalJumps)),
+  const buyJumps = safeNumber(anchor?.BuyJumps);
+  const sellJumps = safeNumber(anchor?.SellJumps);
+  const totalJumps = Math.max(1, safeNumber(anchor?.TotalJumps), buyJumps + sellJumps);
+  return rec(`route:${routeKey}`, "route_group", "buy", originLabel ?? routeKey, lines, context, {
+    sourcePackageKind: "route_batch",
+    selectedLineKeys,
+    jumpsToBuyStation: buyJumps,
+    jumpsBuyToSell: sellJumps,
+    totalJumps,
     cargoCapacityM3: Math.max(0, cargoCapacityM3),
-    totalVolumeM3: safeNumber(metadata?.routeTotalVolume ?? lines.reduce((s, l) => s + safeNumber(l.volumeM3), 0)),
-    remainingCargoM3: safeNumber(metadata?.routeRemainingCargoM3),
-    cargoUsedPercent: safeNumber(metadata?.routeCapacityUsedPercent),
-    batchProfitIsk: safeNumber(metadata?.routeTotalProfit),
-    batchCapitalIsk: safeNumber(metadata?.routeTotalCapital),
-    batchGrossSellIsk: safeNumber(metadata?.routeTotalCapital) + safeNumber(metadata?.routeTotalProfit),
-    batchIskPerJump: safeNumber(metadata?.routeRealIskPerJump || metadata?.batchIskPerJump),
-    batchRoiPercent: safeNumber(metadata?.routeDailyProfitOverCapital) > 0 ? safeNumber(metadata?.routeDailyProfitOverCapital) * 100 : (safeNumber(metadata?.routeTotalCapital) > 0 ? (safeNumber(metadata?.routeTotalProfit)/safeNumber(metadata?.routeTotalCapital))*100 : 0),
+    totalVolumeM3: safeNumber(batch.totalVolume),
+    remainingCargoM3: safeNumber(batch.remainingM3),
+    cargoUsedPercent: safeNumber(batch.usedPercent),
+    batchProfitIsk: safeNumber(batch.totalProfit),
+    batchCapitalIsk: safeNumber(batch.totalCapital),
+    batchGrossSellIsk: safeNumber(batch.totalGrossSell),
+    batchIskPerJump: safeNumber(batch.totalProfit) / Math.max(1, totalJumps),
+    batchRoiPercent: safeNumber(batch.totalCapital) > 0 ? (safeNumber(batch.totalProfit) / safeNumber(batch.totalCapital)) * 100 : 0,
     verificationSlots: [],
     verificationState,
   });
@@ -121,7 +138,7 @@ export function recommendationFromRejectedCargoBuild(rejected: RadiusRejectedCar
   const action: RadiusBuyRecommendationAction = rejected.suggestedAction === "trim_lines" ? "trim" : rejected.suggestedAction === "skip" ? "watch" : "verify";
   const maybeLines = ((rejected as unknown as { lines?: Array<{ row: FlipResult; units: number }> }).lines ?? []);
   const nearMiss = maybeLines.map((line) => normalizeLine(line.row, line.units)).filter((line): line is RadiusBuyRecommendationLine => Boolean(line));
-  const out = rec(`rejected:${rejected.routeKey}`, "rejected_cargo_build", action, rejected.routeLabel, nearMiss, context);
+  const out = rec(`rejected:${rejected.routeKey}`, "rejected_cargo_build", action, rejected.routeLabel, nearMiss, context, { sourcePackageKind: "near_miss", selectedLineKeys: nearMiss.map((line) => line.row ? routeLineKey(line.row) : `${line.typeId}:${line.routeKey}`) });
   out.blockers = rejected.blockers.map((b) => b.message);
   out.diagnostics = rejected.blockers.map((b) => ({ kind: b.kind, message: b.message, actual: b.actual, required: b.required, severity: b.severity }));
   out.warnings.push("Near miss recommendation; manual verification required.");

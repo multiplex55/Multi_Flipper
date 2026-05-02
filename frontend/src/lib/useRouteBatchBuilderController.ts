@@ -1,6 +1,5 @@
 import { useCallback } from "react";
 import type { FlipResult, SavedRoutePack } from "@/lib/types";
-import { routeLineKey } from "@/lib/batchMetrics";
 
 export type RouteBatchBuilderLaunchContext = {
   intentLabel?: string;
@@ -11,7 +10,7 @@ export type RouteBatchBuilderLaunchContext = {
 export type RouteBatchBuilderRecommendationLaunchInput = {
   routeKey: string;
   recommendation?: {
-    rows?: FlipResult[];
+    selectedLineKeys?: string[];
   } | null;
   intentLabel?: string;
   batchEntryMode?: "core" | "filler" | "loop";
@@ -125,8 +124,7 @@ export function useRouteBatchBuilderController(input: RouteBatchBuilderControlle
       const anchor = rows[0] ?? null;
       if (!anchor) return false;
 
-      const recommendationRows = input.recommendation?.rows ?? rows;
-      const initialSelectedLineKeys = recommendationRows.map((row) => routeLineKey(row));
+      const initialSelectedLineKeys = input.recommendation?.selectedLineKeys ?? [];
 
       setBatchPlanRow(anchor);
       setBatchPlanRows(rows);
