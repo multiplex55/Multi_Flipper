@@ -51,5 +51,12 @@ export type RadiusBuyRecommendation = {
   batchIskPerJump: number;
   batchRoiPercent: number;
   verificationSlots?: string[];
+  verificationState?: {
+    status: "not_verified" | "verified" | "stale" | "failed";
+    checkedAt?: string;
+    failedLineCount?: number;
+    priceDeltaIsk?: number;
+    profitDeltaIsk?: number;
+  };
   scoreBreakdown?: Record<string, number> | Record<string, unknown>;
 };

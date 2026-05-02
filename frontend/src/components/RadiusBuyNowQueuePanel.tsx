@@ -79,6 +79,7 @@ export function RadiusBuyNowQueuePanel({
           const sellStation = first?.SellStation ?? "Unknown sell";
           const warningsCount = recommendation.warnings.length + recommendation.blockers.length;
           const rank = start + index + 1;
+          const verificationLabel = formatVerificationState(recommendation.verificationState);
           return (
             <div key={recommendation.id} className="rounded-sm border border-eve-border/40 bg-black/20 p-2">
               <div className="flex flex-wrap items-center gap-2">
@@ -86,6 +87,7 @@ export function RadiusBuyNowQueuePanel({
                 <span className="rounded-sm border border-eve-accent/40 px-1 py-0 text-[10px] text-eve-accent">{recommendation.action}</span>
                 <span className="rounded-sm border border-eve-border/40 px-1 py-0 text-[10px] text-eve-dim">{recommendation.kind}</span>
                 <span className="rounded-sm border border-sky-500/40 px-1 py-0 text-[10px] text-sky-300">{recommendation.haulWorthiness.label}</span>
+                <span className="rounded-sm border border-amber-500/40 px-1 py-0 text-[10px] text-amber-200" data-testid="verification-state-label">{verificationLabel}</span>
                 <span className="text-eve-text">{buyStation} → {sellStation}</span>
               </div>
 
@@ -138,4 +140,22 @@ export function RadiusBuyNowQueuePanel({
       </div>
     </div>
   );
+}
+
+function formatVerificationState(state: RadiusDecisionQueueItem["verificationState"]): string {
+  if (!state || state.status === "not_verified") return "Not verified";
+  if (state.status === "stale") return "Stale";
+  if (state.status === "failed") {
+    const delta = Number(state.profitDeltaIsk ?? state.priceDeltaIsk ?? 0);
+    return Number.isFinite(delta) && delta !== 0 ? `Failed: profit delta ${formatISK(delta)}` : "Failed: review needed";
+  }
+  if (state.status === "verified") {
+    if (!state.checkedAt) return "Verified";
+    const checkedAtMs = new Date(state.checkedAt).getTime();
+    if (!Number.isFinite(checkedAtMs)) return "Verified";
+    const minutesAgo = Math.max(0, Math.floor((Date.now() - checkedAtMs) / 60_000));
+    if (minutesAgo < 1) return "Verified just now";
+    return `Verified ${minutesAgo}m ago`;
+  }
+  return "Not verified";
 }

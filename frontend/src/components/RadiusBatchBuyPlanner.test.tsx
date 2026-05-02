@@ -34,6 +34,12 @@ describe("RadiusBatchBuyPlanner", () => {
     expect(onModeChange).toHaveBeenCalledWith("throughput");
   });
 
+  it("renders human-readable verification status", () => {
+    const withStatus = { ...recommendation, verificationState: { status: "stale" as const } };
+    render(<RadiusBatchBuyPlanner recommendations={[withStatus as never]} mode="balanced" onModeChange={vi.fn()} onOpenBatchBuilder={vi.fn()} onCopyManifest={vi.fn()} onVerify={vi.fn()} />);
+    expect(screen.getByText("Stale")).toBeInTheDocument();
+  });
+
   it("row actions call handlers with exact recommendation", () => {
     const onOpenBatchBuilder = vi.fn();
     const onCopyManifest = vi.fn();
