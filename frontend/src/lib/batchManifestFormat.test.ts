@@ -148,6 +148,34 @@ describe("radius recommendation manifest formatter", () => {
     expect(text).toContain("Tritanium 1500");
   });
 
+  it("renders mixed zero/non-zero volume recommendation lines without NaN/Infinity unit pricing", () => {
+    const text = formatRadiusBuyRecommendationManifestText({
+      ...recommendation,
+      lines: [
+        recommendation.lines[0],
+        {
+          ...recommendation.lines[0],
+          typeId: 2,
+          typeName: "Pyerite",
+          qty: 100,
+          unitVolumeM3: 0.5,
+          volumeM3: 50,
+          buyTotalIsk: 20_000,
+          sellTotalIsk: 24_000,
+          profitTotalIsk: 4_000,
+        },
+      ],
+      totalVolumeM3: 50,
+      batchCapitalIsk: 30_500,
+      batchGrossSellIsk: 39_000,
+      batchProfitIsk: 8_500,
+    });
+    expect(text).toContain("vol 0 m3");
+    expect(text).toContain("vol 50 m3");
+    expect(text).not.toContain("NaN");
+    expect(text).not.toContain("Infinity");
+  });
+
   it("builds checklist and multibuy text", () => {
     expect(buildRadiusRecommendationMultibuyText(recommendation)).toBe("Tritanium 1500");
     expect(buildRadiusRecommendationBuyChecklistText(recommendation)).toContain("buy total 10,500 ISK");

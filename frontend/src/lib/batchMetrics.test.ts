@@ -3,6 +3,7 @@ import {
   buildBatch,
   buildRouteBatchMetadata,
   buildRouteBatchMetadataByRow,
+  getRowBatchMetrics,
   routeGroupKey,
   routeLineKey,
   sameRoute,
@@ -68,6 +69,21 @@ describe("batchMetrics", () => {
     expect(batch.remainingM3).toBe(0);
   });
 
+  it("treats negative unit volume as invalid while retaining zero-volume row economics", () => {
+    const negative = makeRow({ TypeID: 801, Volume: -3, ProfitPerUnit: 40, UnitsToBuy: 4 });
+    const zero = makeRow({ TypeID: 802, Volume: 0, ProfitPerUnit: 50, UnitsToBuy: 5, ExpectedBuyPrice: 200 });
+    const anchor = makeRow({ ...zero, TypeID: 900, BuyLocationID: zero.BuyLocationID, SellLocationID: zero.SellLocationID });
+    const batch = buildBatch(anchor, [anchor, negative, zero], 1000);
+
+    expect(getRowBatchMetrics(negative).volumePerUnit).toBe(-3);
+    expect(batch.lines.find((line) => line.row.TypeID === 801)).toBeUndefined();
+    expect(batch.lines.find((line) => line.row.TypeID === 802)).toBeDefined();
+    const zeroLine = batch.lines.find((line) => line.row.TypeID === 802);
+    expect(zeroLine?.volume).toBe(0);
+    expect(zeroLine?.capital).toBeGreaterThan(0);
+    expect(zeroLine?.profit).toBeGreaterThan(0);
+  });
+
   it("builds route metadata correctly across normal and edge rows, excluding invalid candidates", () => {
     const normal = makeRow({ TypeID: 1, Volume: 2, ProfitPerUnit: 20, UnitsToBuy: 10, ExpectedBuyPrice: 100 });
     const fallbackProfit = makeRow({
@@ -95,20 +111,20 @@ describe("batchMetrics", () => {
     const metadataByRow = buildRouteBatchMetadataByRow(rows, 1_000);
     const normalMeta = metadataFor(normal, metadataByRow);
 
-    expect(normalMeta.batchNumber).toBe(3);
-    expect(normalMeta.batchProfit).toBe(340);
-    expect(normalMeta.batchTotalCapital).toBe(1_660);
-    expect(normalMeta.batchIskPerJump).toBe(170);
+    expect(normalMeta.batchNumber).toBe(4);
+    expect(normalMeta.batchProfit).toBe(940);
+    expect(normalMeta.batchTotalCapital).toBe(1_960);
+    expect(normalMeta.batchIskPerJump).toBe(470);
 
     const invalidMeta = metadataFor(invalidVolume, metadataByRow);
     const nonPositiveMeta = metadataFor(nonPositiveProfit, metadataByRow);
-    expect(invalidMeta.batchNumber).toBe(3);
-    expect(nonPositiveMeta.batchNumber).toBe(3);
+    expect(invalidMeta.batchNumber).toBe(4);
+    expect(nonPositiveMeta.batchNumber).toBe(4);
     expect(invalidMeta.batchIskPerJump).toBe(normalMeta.batchIskPerJump);
     expect(nonPositiveMeta.batchIskPerJump).toBe(normalMeta.batchIskPerJump);
 
     const batchFromNormal = buildBatch(normal, rows, 1_000);
-    expect(batchFromNormal.lines.map((line) => line.row.TypeID)).toEqual([1, 5, 2]);
+    expect(batchFromNormal.lines.map((line) => line.row.TypeID)).toEqual([1, 5, 2, 3]);
     const duplicateLine = batchFromNormal.lines.find((line) => line.row.TypeID === 5);
     expect(duplicateLine?.profit).toBe(120);
   });
@@ -421,11 +437,11 @@ describe("batchMetrics", () => {
     const meta = buildRouteBatchMetadata([noJumpsNoCapital], 1_000).byRoute[
       routeGroupKey(noJumpsNoCapital)
     ];
-    expect(meta.routeDailyProfit).toBe(0);
+    expect(meta.routeDailyProfit).toBe(10);
     expect(meta.routeDailyProfitOverCapital).toBeNull();
     expect(meta.routeTurnoverDays).toBeNull();
-    expect(meta.routeExitOverhangDays).toBeNull();
-    expect(meta.routeBreakevenBuffer).toBeNull();
+    expect(meta.routeExitOverhangDays).toBe(0);
+    expect(meta.routeBreakevenBuffer).toBeGreaterThan(0);
   });
 
   it("computes route profit concentration for dominant/even lines and nulls on zero-or-negative totals", () => {
