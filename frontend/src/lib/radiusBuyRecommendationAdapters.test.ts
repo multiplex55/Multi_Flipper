@@ -73,6 +73,8 @@ it("includes zero-volume lines with zero cargo impact", () => {
   const rec = recommendationFromRouteBatch({ routeKey: "r", rows: [zero], cargoCapacityM3: 5 }, {});
   expect(rec.lines).toHaveLength(1);
   expect(rec.lines[0].volumeM3).toBe(0);
+  expect(rec.lines[0].qty).toBeGreaterThan(0);
   expect(rec.totalVolumeM3).toBe(0);
   expect(rec.cargoUsedPercent).toBe(0);
+  expect(rec.batchProfitIsk).toBeGreaterThan(0);
 });

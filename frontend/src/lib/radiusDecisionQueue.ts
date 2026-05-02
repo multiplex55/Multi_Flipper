@@ -153,7 +153,8 @@ function scoreRecommendation(item: RadiusBuyRecommendation, kind: RadiusDecision
 
   const profitNorm = clamp01(profit / 300_000_000);
   const iskPerJumpNorm = clamp01(safeNumber(item.batchIskPerJump) / 20_000_000);
-  const cargoEfficiencyNorm = clamp01((safeNumber(item.cargoUsedPercent) / 100) * (profit / Math.max(1, volume) / 200_000));
+  const profitPerM3 = volume > 0 ? profit / volume : 0;
+  const cargoEfficiencyNorm = clamp01((safeNumber(item.cargoUsedPercent) / 100) * (profitPerM3 / 200_000));
   const roiNorm = clamp01(safeNumber(item.batchRoiPercent) / 100);
   const baseBreakdown = item.scoreBreakdown ?? {};
   const executionQualityNorm = clamp01(safeNumber(baseBreakdown.executionQuality));

@@ -149,8 +149,10 @@ export function getRowBatchMetrics(row: FlipResult): RowBatchMetrics {
   const profitPerUnit = rowProfitPerUnit(row);
   const capitalPerUnit = rowCapitalPerUnit(row);
   const maxUnits = rowMaxUnits(row);
-  const iskPerM3Candidate = safeRatioOrNull(profitPerUnit, volumePerUnit);
-  const iskPerM3 = iskPerM3Candidate != null && iskPerM3Candidate > 0 ? iskPerM3Candidate : 0;
+  const iskPerM3Candidate = volumePerUnit > 0 ? safeRatioOrNull(profitPerUnit, volumePerUnit) : null;
+  const iskPerM3 = iskPerM3Candidate != null && Number.isFinite(iskPerM3Candidate) && iskPerM3Candidate > 0
+    ? iskPerM3Candidate
+    : 0;
 
   return {
     volumePerUnit,

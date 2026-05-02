@@ -95,7 +95,7 @@ describe("batchMetrics", () => {
       UnitsToBuy: 4,
       ExpectedBuyPrice: 90,
     });
-    const invalidVolume = makeRow({ TypeID: 3, Volume: 0, ProfitPerUnit: 200, UnitsToBuy: 3 });
+    const invalidVolume = makeRow({ TypeID: 3, Volume: -1, ProfitPerUnit: 200, UnitsToBuy: 3 });
     const nonPositiveProfit = makeRow({ TypeID: 4, Volume: 3, ProfitPerUnit: 0, UnitsToBuy: 3 });
     const duplicateLowDensity = makeRow({ TypeID: 5, Volume: 2, ProfitPerUnit: 10, UnitsToBuy: 3 });
     const duplicateHighDensity = makeRow({ TypeID: 5, Volume: 2, ProfitPerUnit: 40, UnitsToBuy: 3 });
@@ -111,22 +111,48 @@ describe("batchMetrics", () => {
     const metadataByRow = buildRouteBatchMetadataByRow(rows, 1_000);
     const normalMeta = metadataFor(normal, metadataByRow);
 
-    expect(normalMeta.batchNumber).toBe(4);
-    expect(normalMeta.batchProfit).toBe(940);
-    expect(normalMeta.batchTotalCapital).toBe(1_960);
-    expect(normalMeta.batchIskPerJump).toBe(470);
+    expect(normalMeta.batchNumber).toBe(3);
+    expect(normalMeta.batchProfit).toBe(340);
+    expect(normalMeta.batchTotalCapital).toBe(1_660);
+    expect(normalMeta.batchIskPerJump).toBe(170);
 
     const invalidMeta = metadataFor(invalidVolume, metadataByRow);
     const nonPositiveMeta = metadataFor(nonPositiveProfit, metadataByRow);
-    expect(invalidMeta.batchNumber).toBe(4);
-    expect(nonPositiveMeta.batchNumber).toBe(4);
+    expect(invalidMeta.batchNumber).toBe(3);
+    expect(nonPositiveMeta.batchNumber).toBe(3);
     expect(invalidMeta.batchIskPerJump).toBe(normalMeta.batchIskPerJump);
     expect(nonPositiveMeta.batchIskPerJump).toBe(normalMeta.batchIskPerJump);
 
     const batchFromNormal = buildBatch(normal, rows, 1_000);
-    expect(batchFromNormal.lines.map((line) => line.row.TypeID)).toEqual([1, 5, 2, 3]);
+    expect(batchFromNormal.lines.map((line) => line.row.TypeID)).toEqual([1, 5, 2]);
     const duplicateLine = batchFromNormal.lines.find((line) => line.row.TypeID === 5);
     expect(duplicateLine?.profit).toBe(120);
+  });
+
+  it("keeps zero-volume profitable rows without NaN/Infinity in volume metrics", () => {
+    const anchor = makeRow({ TypeID: 901, Volume: 0, ProfitPerUnit: 25, UnitsToBuy: 4, ExpectedBuyPrice: 100 });
+    const extra = makeRow({
+      TypeID: 902,
+      BuyLocationID: anchor.BuyLocationID,
+      SellLocationID: anchor.SellLocationID,
+      Volume: 2,
+      ProfitPerUnit: 10,
+      UnitsToBuy: 3,
+      ExpectedBuyPrice: 100,
+    });
+    const batch = buildBatch(anchor, [anchor, extra], 1_000);
+    const zeroLine = batch.lines.find((line) => line.row.TypeID === 901);
+    expect(zeroLine).toBeDefined();
+    expect(zeroLine?.volume).toBe(0);
+    expect(zeroLine?.profit).toBe(100);
+    expect(zeroLine?.capital).toBe(400);
+    expect(batch.totalProfit).toBe(130);
+    expect(batch.totalCapital).toBe(700);
+    expect(batch.totalGrossSell).toBeGreaterThan(0);
+    expect(batch.totalVolume).toBe(6);
+    expect(batch.lines.length).toBe(2);
+    expect(Number.isFinite(batch.lines[0].iskPerM3)).toBe(true);
+    expect(Number.isFinite(batch.lines[1].iskPerM3)).toBe(true);
   });
 
   it("populates batchIskPerJump using stable route jumps fallback", () => {
