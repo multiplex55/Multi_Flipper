@@ -141,6 +141,7 @@ describe("radius recommendation manifest formatter", () => {
     expect(text).toContain("Jumps to Buy Station: 2");
     expect(text).toContain("Sell Station: Amarr");
     expect(text).toContain("Jumps Buy -> Sell: 1");
+    expect(text).toContain("Cargo m3: 1,000 m3");
     expect(text).toContain("Total isk/jump: 1,500 ISK");
     expect(text).toContain("Tritanium | qty 1,500");
     expect(text).toContain("vol 0 m3");
@@ -156,13 +157,55 @@ describe("radius recommendation manifest formatter", () => {
   it("renders exact header order, blank section lines, and safe rounded jump math", () => {
     const text = formatRadiusBuyRecommendationManifestText(recommendation);
     const lines = text.split("\n");
-    expect(lines[0]).toMatch(/^Buy Station:/);
+    expect(lines.slice(0, 11)).toEqual([
+      "Buy Station: Jita",
+      "Jumps to Buy Station: 2",
+      "Sell Station: Amarr",
+      "Jumps Buy -> Sell: 1",
+      "Cargo m3: 1,000 m3",
+      "Items: 1",
+      "Total volume: 0 m3",
+      "Total capital: 10,500 ISK",
+      "Total gross sell: 15,000 ISK",
+      "Total profit: 4,500 ISK",
+      "Total isk/jump: 1,500 ISK",
+    ]);
     expect(text).toContain("\n\n");
     expect(text).toContain("qty 1,500");
     expect(text).toContain("Tritanium 1500");
     expect(text).toContain("vol 0 m3");
     expect(text).not.toContain("Infinity");
     expect(text).not.toContain("NaN");
+  });
+
+  it("uses package total jumps and batch isk/jump instead of per-line jump sum", () => {
+    const text = formatRadiusBuyRecommendationManifestText({
+      ...recommendation,
+      totalJumps: 50,
+      batchIskPerJump: 999,
+      lines: recommendation.lines.map((line) => ({
+        ...line,
+        profitTotalIsk: 10_000,
+        row: { ...line.row, BuyJumps: 0, SellJumps: 0 } as never,
+      })),
+    });
+
+    expect(text).toContain("Jumps to Buy Station: 0");
+    expect(text).toContain("Jumps Buy -> Sell: 0");
+    expect(text).toContain("Total isk/jump: 999 ISK");
+  });
+
+  it("formats quantities with commas in detail and without commas in multibuy", () => {
+    const text = formatRadiusBuyRecommendationManifestText({
+      ...recommendation,
+      lines: recommendation.lines.map((line) => ({
+        ...line,
+        qty: 12345,
+      })),
+    });
+
+    expect(text).toContain("qty 12,345");
+    expect(text).toContain("Tritanium 12345");
   });
 
 });

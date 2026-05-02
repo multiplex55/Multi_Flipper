@@ -526,13 +526,23 @@ export function formatRadiusBuyRecommendationManifestText(
     Number.isFinite(sellJumpsCandidate)
       ? sellJumpsCandidate
       : 0;
-  const totalIskPerJump = safeDivide(totalProfit, buyJumps + sellJumps);
+  const totalJumps =
+    typeof recommendation.totalJumps === "number" &&
+    Number.isFinite(recommendation.totalJumps)
+      ? recommendation.totalJumps
+      : 0;
+  const totalIskPerJump =
+    typeof recommendation.batchIskPerJump === "number" &&
+    Number.isFinite(recommendation.batchIskPerJump)
+      ? recommendation.batchIskPerJump
+      : safeDivide(totalProfit, totalJumps);
 
   const output = [
     `Buy Station: ${first?.BuyStation?.trim() || "Unknown Station"}`,
     `Jumps to Buy Station: ${formatQuantity(buyJumps)}`,
     `Sell Station: ${first?.SellStation?.trim() || "Unknown Station"}`,
     `Jumps Buy -> Sell: ${formatQuantity(sellJumps)}`,
+    `Cargo m3: ${formatVolume(recommendation.cargoCapacityM3)} m3`,
     `Items: ${formatQuantity(recommendation.lines.length)}`,
     `Total volume: ${formatVolume(totalVolume)} m3`,
     `Total capital: ${formatInteger(totalCapital)} ISK`,
