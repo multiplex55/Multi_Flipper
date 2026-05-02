@@ -601,7 +601,7 @@ export function BatchBuilderPopup({
                   ? safeNumber(row.ExpectedSellPrice)
                   : safeNumber(row.SellPrice),
             }))
-            .filter((candidate) => candidate.units > 0 && candidate.unit_volume_m3 > 0)
+            .filter((candidate) => candidate.units > 0 && candidate.unit_volume_m3 >= 0)
         : [],
     [scanSourceTab, allowedRows],
   );
