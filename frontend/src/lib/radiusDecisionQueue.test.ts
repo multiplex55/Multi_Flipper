@@ -5,6 +5,22 @@ import { makeFlipResult } from "@/lib/testFixtures";
 const row = (o = {}) => makeFlipResult({ TypeID: 1, TypeName: "A", BuyPrice: 100, SellPrice: 140, ExpectedBuyPrice: 100, ExpectedSellPrice: 140, ProfitPerUnit: 40, UnitsToBuy: 10, Volume: 1, TotalJumps: 4, ...o });
 
 describe("radiusDecisionQueue", () => {
+  it("supports mode-specific ordering and long-haul competitiveness", () => {
+    const longGood = row({ TypeID: 70, TotalJumps: 55, RealProfit: 600_000_000, ExpectedBuyPrice: 900_000_000, UnitsToBuy: 1, CargoPercent: 65, RealIskPerJump: 10_900_000 });
+    const shortOkay = row({ TypeID: 71, TotalJumps: 8, RealProfit: 120_000_000, ExpectedBuyPrice: 300_000_000, UnitsToBuy: 1, CargoPercent: 40, RealIskPerJump: 6_000_000 });
+    const out = buildRadiusDecisionQueue({
+      mode: "long_haul_worth",
+      routeRowsByKey: { long: [longGood], short: [shortOkay] },
+      routeBatchMetadataByRoute: {
+        long: { routeTotalProfit: 600_000_000, routeTotalCapital: 900_000_000, routeTotalVolume: 1_000, routeCapacityUsedPercent: 65, routeRemainingCargoM3: 500, routeRealIskPerJump: 10_900_000 } as never,
+        short: { routeTotalProfit: 120_000_000, routeTotalCapital: 300_000_000, routeTotalVolume: 500, routeCapacityUsedPercent: 40, routeRemainingCargoM3: 400, routeRealIskPerJump: 6_000_000 } as never,
+      },
+      cargoCapacityM3: 1500,
+    });
+    expect(out.queue[0].id).toContain("route:long");
+    expect(out.queue[0].haulWorthiness.label).toBe("long_worth_it");
+    expect(out.queue[0].scoreBreakdown.positive.longHaulWorth).toBeGreaterThan(0.9);
+  });
   it("uses package-level metrics and preserves ranking against single-row heuristics", () => {
     const strongRouteRow = row({ TypeID: 20, RealProfit: 50_000_000, ExpectedBuyPrice: 200_000_000, UnitsToBuy: 1 });
     const flashySingle = row({ TypeID: 99, RealProfit: 2_000_000, ExpectedBuyPrice: 1_000_000, UnitsToBuy: 1 });
@@ -21,6 +37,7 @@ describe("radiusDecisionQueue", () => {
     expect((routeItem?.score ?? 0)).toBeGreaterThan(singleItem?.score ?? 0);
     expect(out.queue[0].totalVolumeM3).toBe(200);
     expect(out.queue[0].batchProfitIsk).toBe(50_000_000);
+    expect(out.queue[0].scoreBreakdown.positive.profit).toBeGreaterThan(0);
   });
 
   it("maps rejected near-miss actions away from buy", () => {

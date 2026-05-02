@@ -85,6 +85,7 @@ export function RadiusBuyNowQueuePanel({
                 <span className="font-mono text-eve-dim">#{rank}</span>
                 <span className="rounded-sm border border-eve-accent/40 px-1 py-0 text-[10px] text-eve-accent">{recommendation.action}</span>
                 <span className="rounded-sm border border-eve-border/40 px-1 py-0 text-[10px] text-eve-dim">{recommendation.kind}</span>
+                <span className="rounded-sm border border-sky-500/40 px-1 py-0 text-[10px] text-sky-300">{recommendation.haulWorthiness.label}</span>
                 <span className="text-eve-text">{buyStation} → {sellStation}</span>
               </div>
 
@@ -103,10 +104,10 @@ export function RadiusBuyNowQueuePanel({
                     <span>Profit {formatISK(recommendation.batchProfitIsk)}</span><span>Capital {formatISK(recommendation.batchCapitalIsk)}</span><span>ROI {recommendation.batchRoiPercent.toFixed(1)}%</span><span>Cargo {recommendation.totalVolumeM3.toLocaleString("en-US")} m3</span><span>ISK/jump {formatISK(recommendation.batchIskPerJump)}</span><span>Jumps {recommendation.totalJumps}</span>
                   </div>
                   <div className="mt-1 flex flex-wrap gap-2 text-eve-dim">
-                    <span>Execution {(recommendation.scoreBreakdown.executionQuality * 100).toFixed(0)}%</span>
-                    <span>Fill {(recommendation.scoreBreakdown.fillConfidence * 100).toFixed(0)}%</span>
-                    <span>Risk {(recommendation.scoreBreakdown.penalties * 100).toFixed(0)}%</span>
-                    <span>Movement {(recommendation.scoreBreakdown.movement * 100).toFixed(0)}%</span>
+                    <span>Execution {(recommendation.scoreBreakdown.positive.executionQuality * 100).toFixed(0)}%</span>
+                    <span>Fill {(recommendation.scoreBreakdown.positive.fillConfidence * 100).toFixed(0)}%</span>
+                    <span>Risk {(recommendation.scoreBreakdown.totalPenalty * 100).toFixed(0)}%</span>
+                    <span>Movement {(recommendation.scoreBreakdown.positive.movement * 100).toFixed(0)}%</span>
                     <span>Warnings {warningsCount}</span>
                   </div>
                 </>
