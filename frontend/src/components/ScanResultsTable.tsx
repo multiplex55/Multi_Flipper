@@ -6798,6 +6798,14 @@ export function ScanResultsTable({
               onToggle: () =>
                 setRadiusRouteInsightsHidden((previous) => !previous),
             }}
+            buyNowQueueVisibilityToggle={isRadiusMode && buyNowQueueRecommendations.length > 0 ? {
+              expanded: showBuyNowQueuePanel,
+              label: showBuyNowQueuePanel
+                ? "Hide Buy-Now Queue"
+                : `Show Buy-Now Queue (${buyNowQueueRecommendations.length})`,
+              onToggle: () => setShowBuyNowQueuePanel((previous) => !previous),
+              controlsId: "radius-buy-now-queue-section",
+            } : undefined}
             compactLayoutToggle={{
               compact: compactDashboard,
               label: "Compact Dashboard",
@@ -6913,23 +6921,8 @@ export function ScanResultsTable({
       )}
       {isRadiusMode && buyNowQueueRecommendations.length > 0 ? (
         <div className="shrink-0 px-2 pt-1">
-          <button
-            type="button"
-            aria-expanded={showBuyNowQueuePanel}
-            aria-controls="radius-buy-now-queue-section"
-            className={`rounded-sm border px-1.5 py-0.5 text-[11px] transition-colors ${
-              showBuyNowQueuePanel
-                ? "border-eve-accent/70 bg-eve-accent/15 text-eve-accent"
-                : "border-eve-border/60 text-eve-dim hover:text-eve-text"
-            }`}
-            onClick={() => setShowBuyNowQueuePanel((previous) => !previous)}
-          >
-            {showBuyNowQueuePanel
-              ? "Hide Buy-Now Queue"
-              : `Show Buy-Now Queue (${buyNowQueueRecommendations.length})`}
-          </button>
           {showBuyNowQueuePanel ? (
-            <div id="radius-buy-now-queue-section" className="pt-1">
+            <div id="radius-buy-now-queue-section">
               <RadiusBuyNowQueuePanel
                 recommendations={buyNowQueueRecommendations}
                 onOpenBatchBuilder={(recommendation) => openBatchBuilderForRecommendation({ routeKey: recommendation.routeKey ?? "", recommendation: { rows: recommendation.lines.map((line) => line.row).filter((row): row is FlipResult => Boolean(row)) }, intentLabel: "Buy-Now Queue", batchEntryMode: "core" })}
