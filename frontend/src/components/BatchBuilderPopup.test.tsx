@@ -19,6 +19,8 @@ vi.mock("@/lib/api", async () => {
     batchCreateRoute: vi.fn(),
     batchFillerSuggestions: vi.fn(),
   };
+
+
 });
 
 function makeRow(overrides: Partial<FlipResult>): FlipResult {
@@ -324,6 +326,9 @@ function renderPopup({
   bannedStationIDs,
   entryMode,
   mode,
+  initialSelectedLineKeys,
+  manifestRouteKey,
+  onManifestVerificationSnapshot,
 }: {
   anchorRow: FlipResult | null;
   rows: FlipResult[];
@@ -334,6 +339,9 @@ function renderPopup({
   bannedStationIDs?: number[];
   entryMode?: "core" | "filler" | "loop";
   mode?: "single_anchor" | "same_leg_fill";
+  initialSelectedLineKeys?: string[];
+  manifestRouteKey?: string | null;
+  onManifestVerificationSnapshot?: (routeKey: string, snapshot: unknown) => void;
 }) {
   return render(
     <I18nProvider>
@@ -368,6 +376,9 @@ function renderPopup({
           bannedStationIDs={bannedStationIDs}
           entryMode={entryMode}
           mode={mode}
+          initialSelectedLineKeys={initialSelectedLineKeys}
+          manifestRouteKey={manifestRouteKey}
+          onManifestVerificationSnapshot={onManifestVerificationSnapshot as never}
         />
       </ToastProvider>
     </I18nProvider>,
@@ -1298,4 +1309,36 @@ describe("BatchBuilderPopup route creation", () => {
     expect(manifest).not.toContain("Export Order");
     expect(manifest).toContain("Anchor Paste 1500");
   });
+
+  it("uses initialSelectedLineKeys exactly and emits manifest route key snapshot", async () => {
+    const response = makeRouteResponse();
+    response.selected_option_id = "rank-1";
+    response.selected_rank = 1;
+    batchCreateRouteMock.mockResolvedValue(response);
+    const onManifestVerificationSnapshot = vi.fn();
+
+    const selectedRows = [rows[1]];
+    renderPopup({
+      anchorRow,
+      rows,
+      initialSelectedLineKeys: ["2:60003760:60008494"],
+      manifestRouteKey: "route:child-leg",
+      onManifestVerificationSnapshot,
+    });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+
+    await waitFor(() => expect(batchCreateRouteMock).toHaveBeenCalled());
+    const request = batchCreateRouteMock.mock.calls[0][0];
+    expect(request.base_batch?.base_lines).toHaveLength(1);
+    expect(request.base_batch?.base_lines[0]?.type_id).toBe(selectedRows[0].TypeID);
+
+    await waitFor(() =>
+      expect(onManifestVerificationSnapshot).toHaveBeenCalledWith(
+        "route:child-leg",
+        expect.any(Object),
+      ),
+    );
+  });
+
 });
