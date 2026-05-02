@@ -118,7 +118,7 @@ describe("useRouteBatchBuilderController", () => {
     const { result } = renderHook(() => useRouteBatchBuilderController({
       routeRowsByKey: { "route:a": rows }, preferredRouteKey: null, setBatchPlanRow, setBatchPlanRows, setActiveRouteGroupKey, setBatchBuilderEntryMode, setBatchBuilderLaunchIntent, setBatchBuilderMode, setBatchBuilderInitialSelectedLineKeys,
     }));
-    act(() => { result.current.openBatchBuilderForRecommendation({ routeKey: "route:a", recommendation: { rows }, intentLabel: "Buy-Now recommendation" }); });
+    act(() => { result.current.openBatchBuilderForRecommendation({ routeKey: "route:a", recommendation: { selectedLineKeys: ["34:60003760:60008494"] }, intentLabel: "Buy-Now recommendation" }); });
     expect(setActiveRouteGroupKey).toHaveBeenCalledWith("route:a");
     expect(setBatchBuilderLaunchIntent).toHaveBeenCalled();
     expect(setBatchBuilderInitialSelectedLineKeys).toHaveBeenCalledWith(["34:60003760:60008494"]);
@@ -133,8 +133,7 @@ describe("useRouteBatchBuilderController", () => {
     const setBatchBuilderMode = vi.fn();
     const setBatchBuilderInitialSelectedLineKeys = vi.fn();
     const routeRows = [makeRow(), makeRow({ TypeID: 35 })];
-    const recommendationRows = [makeRow({ TypeID: 35 })];
-
+    
     const { result } = renderHook(() =>
       useRouteBatchBuilderController({
         routeRowsByKey: { "route:a": routeRows },
@@ -152,7 +151,7 @@ describe("useRouteBatchBuilderController", () => {
     act(() => {
       result.current.openBatchBuilderForRecommendation({
         routeKey: "route:a",
-        recommendation: { rows: recommendationRows },
+        recommendation: { selectedLineKeys: ["35:60003760:60008494"] },
       });
     });
 

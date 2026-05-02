@@ -510,10 +510,10 @@ export function buildRadiusRecommendationSellChecklistText(
 export function formatRadiusBuyRecommendationManifestText(
   recommendation: RadiusBuyRecommendation,
 ): string {
-  const totalVolume = recommendation.lines.reduce((sum, line) => sum + (Number.isFinite(line.volumeM3) ? line.volumeM3 : 0), 0);
-  const totalCapital = recommendation.lines.reduce((sum, line) => sum + (Number.isFinite(line.buyTotalIsk) ? line.buyTotalIsk : 0), 0);
-  const totalGrossSell = recommendation.lines.reduce((sum, line) => sum + (Number.isFinite(line.sellTotalIsk) ? line.sellTotalIsk : 0), 0);
-  const totalProfit = recommendation.lines.reduce((sum, line) => sum + (Number.isFinite(line.profitTotalIsk) ? line.profitTotalIsk : 0), 0);
+  const totalVolume = Number.isFinite(recommendation.totalVolumeM3) ? recommendation.totalVolumeM3 : recommendation.lines.reduce((sum, line) => sum + (Number.isFinite(line.volumeM3) ? line.volumeM3 : 0), 0);
+  const totalCapital = Number.isFinite(recommendation.batchCapitalIsk) ? recommendation.batchCapitalIsk : recommendation.lines.reduce((sum, line) => sum + (Number.isFinite(line.buyTotalIsk) ? line.buyTotalIsk : 0), 0);
+  const totalGrossSell = Number.isFinite(recommendation.batchGrossSellIsk) ? recommendation.batchGrossSellIsk : recommendation.lines.reduce((sum, line) => sum + (Number.isFinite(line.sellTotalIsk) ? line.sellTotalIsk : 0), 0);
+  const totalProfit = Number.isFinite(recommendation.batchProfitIsk) ? recommendation.batchProfitIsk : recommendation.lines.reduce((sum, line) => sum + (Number.isFinite(line.profitTotalIsk) ? line.profitTotalIsk : 0), 0);
   const first = recommendation.lines[0]?.row;
   const buyJumpsCandidate = first?.BuyJumps;
   const sellJumpsCandidate = first?.SellJumps;

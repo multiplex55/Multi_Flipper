@@ -6941,7 +6941,7 @@ export function ScanResultsTable({
                 recommendations={buyNowQueueRecommendations.map((item) => queueItemAsRecommendation(item))}
                 mode={activeDecisionMode}
                 onModeChange={(mode) => applyDecisionMode(mode as RadiusDecisionModeId | "custom")}
-                onOpenBatchBuilder={(recommendation) => openBatchBuilderForRecommendation({ routeKey: recommendation.routeKey ?? "", recommendation: { rows: recommendation.lines.map((line) => line.row).filter((row): row is FlipResult => Boolean(row)) }, intentLabel: "Buy Planner", batchEntryMode: "core" })}
+                onOpenBatchBuilder={(recommendation) => openBatchBuilderForRecommendation({ routeKey: recommendation.routeKey ?? "", recommendation: recommendation, intentLabel: "Buy Planner", batchEntryMode: "core" })}
                 onCopyManifest={(recommendation) => copyText(formatRadiusBuyRecommendationManifestText(recommendation))}
                 onVerify={(recommendation) => onOpenPriceValidation?.(formatRadiusBuyRecommendationManifestText(recommendation))}
               />
@@ -6951,7 +6951,7 @@ export function ScanResultsTable({
             <div id="radius-buy-now-queue-section">
               <RadiusBuyNowQueuePanel
                 recommendations={buyNowQueueRecommendations}
-                onOpenBatchBuilder={(recommendation) => openBatchBuilderForRecommendation({ routeKey: recommendation.routeKey ?? "", recommendation: { rows: recommendation.lines.map((line) => line.row).filter((row): row is FlipResult => Boolean(row)) }, intentLabel: "Buy-Now Queue", batchEntryMode: "core" })}
+                onOpenBatchBuilder={(recommendation) => openBatchBuilderForRecommendation({ routeKey: recommendation.routeKey ?? "", recommendation: recommendation, intentLabel: "Buy-Now Queue", batchEntryMode: "core" })}
                 onCopyManifest={(recommendation) => copyText(formatRadiusBuyRecommendationManifestText(queueItemAsRecommendation(recommendation)))}
                 onCopyBuyChecklist={(recommendation) => copyText(buildRadiusRecommendationBuyChecklistText(queueItemAsRecommendation(recommendation)))}
                 onCopySellChecklist={(recommendation) => copyText(buildRadiusRecommendationSellChecklistText(queueItemAsRecommendation(recommendation)))}

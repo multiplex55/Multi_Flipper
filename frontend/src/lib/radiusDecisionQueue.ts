@@ -224,7 +224,7 @@ export function buildRadiusDecisionQueue(input: BuildRadiusDecisionQueueInput): 
   const rejected: BuildRadiusDecisionQueueResult["rejected"] = [];
 
   for (const build of input.cargoBuilds ?? []) queue.push(scoreRecommendation(recommendationFromCargoBuild(build, { source: "decision_queue" }), "cargo_build", weights));
-  for (const [routeKey, rows] of Object.entries(input.routeRowsByKey ?? {})) queue.push(scoreRecommendation(recommendationFromRouteBatch(routeKey, rows, input.routeBatchMetadataByRoute?.[routeKey], input.cargoCapacityM3 ?? 0, { source: `decision_queue:${input.mode ?? "default"}` }), "same_leg_batch", weights));
+  for (const [routeKey, rows] of Object.entries(input.routeRowsByKey ?? {})) queue.push(scoreRecommendation(recommendationFromRouteBatch({ routeKey, rows, metadata: input.routeBatchMetadataByRoute?.[routeKey], cargoCapacityM3: input.cargoCapacityM3 ?? 0 }, { source: `decision_queue:${input.mode ?? "default"}` }), "same_leg_batch", weights));
   for (const list of input.buyStationShoppingLists ?? []) {
     for (const recommendation of recommendationsFromBuyStationShoppingList(list, { source: "decision_queue" })) {
       queue.push(scoreRecommendation(recommendation, "buy_station_package", weights));

@@ -1,6 +1,7 @@
 import type { FlipResult } from "@/lib/types";
 
 export type RadiusBuyRecommendationKind = "cargo_build" | "buy_station_list" | "single_row" | "route_group" | "rejected_cargo_build";
+export type RadiusRecommendationSourcePackageKind = "route_batch" | "cargo_build" | "single_row" | "buy_station_child" | "near_miss";
 export type RadiusBuyRecommendationAction = "buy" | "verify" | "trim" | "watch";
 
 export type RadiusBuyRecommendationLine = {
@@ -34,6 +35,8 @@ export type RadiusBuyRecommendation = {
   title: string;
   routeKey?: string;
   lines: RadiusBuyRecommendationLine[];
+  selectedLineKeys?: string[];
+  sourcePackageKind?: RadiusRecommendationSourcePackageKind;
   reasons: string[];
   warnings: string[];
   blockers: string[];
