@@ -38,4 +38,18 @@ export type RadiusBuyRecommendation = {
   warnings: string[];
   blockers: string[];
   diagnostics?: RadiusBuyRecommendationRejectedDiagnostic[];
+  jumpsToBuyStation: number;
+  jumpsBuyToSell: number;
+  totalJumps: number;
+  cargoCapacityM3: number;
+  totalVolumeM3: number;
+  remainingCargoM3: number;
+  cargoUsedPercent: number;
+  batchProfitIsk: number;
+  batchCapitalIsk: number;
+  batchGrossSellIsk: number;
+  batchIskPerJump: number;
+  batchRoiPercent: number;
+  verificationSlots?: string[];
+  scoreBreakdown?: Record<string, number>;
 };

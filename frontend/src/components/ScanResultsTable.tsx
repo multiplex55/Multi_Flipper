@@ -4838,13 +4838,20 @@ export function ScanResultsTable({
   }), []);
 
   const buyNowQueueRecommendations = useMemo<RadiusDecisionQueueItem[]>(() => {
-    const queue = buildRadiusDecisionQueue({
+    const routeRowsByKey = Object.fromEntries(
+      Object.entries(routeGroupByKey).map(([key, group]) => [key, group.rows.map((entry) => entry.row)]),
+    );
+    return buildRadiusDecisionQueue({
       cargoBuilds,
       buyStationShoppingLists: stationShoppingLists,
-      singleRowCandidates: datasetRows.slice(0, 8).map((entry) => entry.row),
+      routeRowsByKey,
+      routeBatchMetadataByRoute: batchMetricsByRoute,
+      cargoCapacityM3: cargoLimit,
+      mode: activeDecisionMode,
+      maxRecommendations: 12,
+      singleRowCandidates: datasetRows.slice(0, 4).map((entry) => entry.row),
     }).queue;
-    return queue.slice(0, 12);
-  }, [cargoBuilds, datasetRows, stationShoppingLists]);
+  }, [activeDecisionMode, batchMetricsByRoute, cargoBuilds, cargoLimit, datasetRows, routeGroupByKey, stationShoppingLists]);
 
   const showCargoDiagnosticsPanel = cargoBuilds.length === 0 ||
     cargoBuildDiagnostics.skippedExecutionQuality +
