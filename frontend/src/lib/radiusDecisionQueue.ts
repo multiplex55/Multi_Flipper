@@ -1,4 +1,4 @@
-import type { RadiusBuyRecommendation, RadiusBuyRecommendationAction } from "@/lib/radiusBuyRecommendation";
+import type { BuyPlannerMode, RadiusBuyRecommendation, RadiusBuyRecommendationAction } from "@/lib/radiusBuyRecommendation";
 import type { RadiusCargoBuild, RadiusRejectedCargoBuild } from "@/lib/radiusCargoBuilds";
 import type { RadiusBuyStationShoppingList } from "@/lib/radiusBuyStationShoppingList";
 import {
@@ -31,7 +31,6 @@ export type RadiusDecisionRejectedDiagnostic = {
   severity?: number;
 };
 
-export type BuyPlannerMode = "balanced" | "batch_profit" | "batch_isk_per_jump" | "cargo_fill" | "long_haul_worth" | "low_capital";
 
 export type RadiusDecisionScoreBreakdown = {
   positive: {
@@ -217,8 +216,15 @@ function scoreRecommendation(item: RadiusBuyRecommendation, kind: RadiusDecision
   };
 }
 
+const VALID_BUY_PLANNER_MODES = new Set<BuyPlannerMode>(["balanced", "batch_profit", "batch_isk_per_jump", "cargo_fill", "long_haul_worth", "low_capital"]);
+
+function parseBuyPlannerMode(mode: string | undefined): BuyPlannerMode {
+  if (!mode) return "balanced";
+  return VALID_BUY_PLANNER_MODES.has(mode as BuyPlannerMode) ? (mode as BuyPlannerMode) : "balanced";
+}
+
 export function buildRadiusDecisionQueue(input: BuildRadiusDecisionQueueInput): BuildRadiusDecisionQueueResult {
-  const mode = (input.mode ?? "balanced") as BuyPlannerMode;
+  const mode = parseBuyPlannerMode(input.mode);
   const weights = { ...DEFAULT_WEIGHTS, ...(MODE_WEIGHT_OVERRIDES[mode] ?? MODE_WEIGHT_OVERRIDES.balanced), ...(input.factorWeights ?? {}) };
   const queue: RadiusDecisionQueueItem[] = [];
   const rejected: BuildRadiusDecisionQueueResult["rejected"] = [];

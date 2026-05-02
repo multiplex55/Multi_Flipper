@@ -208,7 +208,7 @@ import { RadiusRowContextMenu } from "@/components/RadiusRowContextMenu";
 import { buildRadiusDecisionQueue, type RadiusDecisionQueueItem } from "@/lib/radiusDecisionQueue";
 import { recommendationFromBuyStationShoppingList, recommendationFromCargoBuild } from "@/lib/radiusBuyRecommendationAdapters";
 import { buildRadiusRecommendationBuyChecklistText, buildRadiusRecommendationSellChecklistText, formatRadiusBuyRecommendationManifestText } from "@/lib/batchManifestFormat";
-import type { RadiusBuyRecommendation } from "@/lib/radiusBuyRecommendation";
+import type { BuyPlannerMode, RadiusBuyRecommendation } from "@/lib/radiusBuyRecommendation";
 import { RadiusBulkActionsBar } from "@/components/RadiusBulkActionsBar";
 import type { RadiusContextMenuAction } from "@/lib/radiusContextMenuItems";
 import {
@@ -1800,6 +1800,7 @@ export function ScanResultsTable({
   const [activeDecisionMode, setActiveDecisionMode] = useState<
     RadiusDecisionModeId | "custom"
   >("custom");
+  const [buyPlannerMode, setBuyPlannerMode] = useState<BuyPlannerMode>("batch_isk_per_jump");
   const [modeBaselineSnapshot, setModeBaselineSnapshot] =
     useState<RadiusTransientModeSnapshot | null>(null);
   const [modeAppliedLayout, setModeAppliedLayout] =
@@ -4849,11 +4850,11 @@ export function ScanResultsTable({
       routeRowsByKey,
       routeBatchMetadataByRoute: batchMetricsByRoute,
       cargoCapacityM3: cargoLimit,
-      mode: activeDecisionMode,
+      mode: buyPlannerMode,
       maxRecommendations: 12,
       singleRowCandidates: datasetRows.slice(0, 4).map((entry) => entry.row),
     }).queue;
-  }, [activeDecisionMode, batchMetricsByRoute, cargoBuilds, cargoLimit, datasetRows, routeGroupByKey, stationShoppingLists]);
+  }, [batchMetricsByRoute, buyPlannerMode, cargoBuilds, cargoLimit, datasetRows, routeGroupByKey, stationShoppingLists]);
 
   const showCargoDiagnosticsPanel = cargoBuilds.length === 0 ||
     cargoBuildDiagnostics.skippedExecutionQuality +
@@ -6939,8 +6940,8 @@ export function ScanResultsTable({
             <div className="mb-2" id="radius-buy-planner-section">
               <RadiusBatchBuyPlanner
                 recommendations={buyNowQueueRecommendations.map((item) => queueItemAsRecommendation(item))}
-                mode={activeDecisionMode}
-                onModeChange={(mode) => applyDecisionMode(mode as RadiusDecisionModeId | "custom")}
+                mode={buyPlannerMode}
+                onModeChange={setBuyPlannerMode}
                 onOpenBatchBuilder={(recommendation) => openBatchBuilderForRecommendation({ routeKey: recommendation.routeKey ?? "", recommendation: recommendation, intentLabel: "Buy Planner", batchEntryMode: "core" })}
                 onCopyManifest={(recommendation) => copyText(formatRadiusBuyRecommendationManifestText(recommendation))}
                 onVerify={(recommendation) => onOpenPriceValidation?.(formatRadiusBuyRecommendationManifestText(recommendation))}

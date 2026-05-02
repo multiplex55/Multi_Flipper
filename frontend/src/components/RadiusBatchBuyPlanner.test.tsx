@@ -30,8 +30,16 @@ describe("RadiusBatchBuyPlanner", () => {
   it("triggers mode change callback", () => {
     const onModeChange = vi.fn();
     render(<RadiusBatchBuyPlanner recommendations={[recommendation as never]} mode="balanced" onModeChange={onModeChange} onOpenBatchBuilder={vi.fn()} onCopyManifest={vi.fn()} onVerify={vi.fn()} />);
-    fireEvent.change(screen.getByLabelText("planner-mode"), { target: { value: "throughput" } });
-    expect(onModeChange).toHaveBeenCalledWith("throughput");
+    fireEvent.change(screen.getByLabelText("planner-mode"), { target: { value: "batch_profit" } });
+    expect(onModeChange).toHaveBeenCalledWith("batch_profit");
+  });
+
+  it("selector emits BuyPlannerMode values only", () => {
+    const onModeChange = vi.fn();
+    render(<RadiusBatchBuyPlanner recommendations={[recommendation as never]} mode="balanced" onModeChange={onModeChange} onOpenBatchBuilder={vi.fn()} onCopyManifest={vi.fn()} onVerify={vi.fn()} />);
+    const options = Array.from(screen.getByLabelText("planner-mode").querySelectorAll("option")).map((opt) => opt.getAttribute("value"));
+    expect(options).toEqual(["balanced", "batch_profit", "batch_isk_per_jump", "cargo_fill", "long_haul_worth", "low_capital"]);
+    expect(screen.getByTestId("planner-mode-summary")).toHaveTextContent("balanced");
   });
 
   it("renders human-readable verification status", () => {
