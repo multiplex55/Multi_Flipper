@@ -45,4 +45,28 @@ describe("radiusDecisionQueue", () => {
     expect(out.queue[0].action).not.toBe("buy");
     expect(out.queue[0].lines).toHaveLength(1);
   });
+
+  it("prioritizes verified profitable recs over failed recs", () => {
+    const base = {
+      routeTotalProfit: 200_000_000,
+      routeTotalCapital: 500_000_000,
+      routeTotalVolume: 200,
+      routeCapacityUsedPercent: 60,
+      routeRemainingCargoM3: 100,
+      routeRealIskPerJump: 8_000_000,
+    };
+    const out = buildRadiusDecisionQueue({
+      routeRowsByKey: {
+        verified: [row({ TypeID: 101, RealProfit: 200_000_000 })],
+        failed: [row({ TypeID: 102, RealProfit: 200_000_000 })],
+      },
+      routeBatchMetadataByRoute: { verified: { ...base, verificationState: { status: "verified", checkedAt: new Date(Date.now() - 120_000).toISOString() } }, failed: { ...base, verificationState: { status: "failed", failedLineCount: 2, profitDeltaIsk: -10_000_000 } } } as never,
+      cargoCapacityM3: 500,
+    });
+    const verifiedIdx = out.queue.findIndex((q) => q.id.includes("route:verified"));
+    const failedIdx = out.queue.findIndex((q) => q.id.includes("route:failed"));
+    expect(verifiedIdx).toBeGreaterThanOrEqual(0);
+    expect(failedIdx).toBeGreaterThanOrEqual(0);
+    expect(verifiedIdx).toBeLessThan(failedIdx);
+  });
 });

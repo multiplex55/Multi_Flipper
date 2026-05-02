@@ -58,15 +58,15 @@ export function RadiusBatchBuyPlanner({ recommendations, mode, onModeChange, onO
         <tbody>
           {sorted.map(({ recommendation, rank }) => {
             const first = recommendation.lines[0]?.row;
-            const verification = recommendation.verificationSlots?.length ?? 0;
             const fill = Number(recommendation.scoreBreakdown?.fillConfidence ?? 0);
             const risk = Number(recommendation.scoreBreakdown?.penalties ?? 0);
+            const verificationText = formatVerificationState(recommendation.verificationState);
             return <tr key={recommendation.id} className="border-t border-eve-border/30">
               <td className="px-1 py-1">#{rank}</td><td>{recommendation.action}</td><td>{recommendation.kind}</td>
               <td>{first?.BuyStation ?? "?"} → {first?.SellStation ?? "?"}</td>
               <td>{recommendation.lines.length}</td><td>{formatISK(recommendation.batchProfitIsk)}</td><td>{formatISK(recommendation.batchIskPerJump)}</td>
               <td>{recommendation.cargoUsedPercent.toFixed(1)}%</td><td>{recommendation.remainingCargoM3.toLocaleString("en-US")} m3</td><td>{formatISK(recommendation.batchCapitalIsk)}</td>
-              <td>{recommendation.batchRoiPercent.toFixed(1)}%</td><td>{recommendation.totalJumps}</td><td>{(fill * 100).toFixed(0)}%</td><td>{(risk * 100).toFixed(0)}%</td><td>{verification}</td>
+              <td>{recommendation.batchRoiPercent.toFixed(1)}%</td><td>{recommendation.totalJumps}</td><td>{(fill * 100).toFixed(0)}%</td><td>{(risk * 100).toFixed(0)}%</td><td title={verificationText}>{verificationText}</td>
               <td className="space-x-1"><button type="button" onClick={() => onOpenBatchBuilder(recommendation)}>Open</button><button type="button" onClick={() => onCopyManifest(recommendation)}>Manifest</button><button type="button" onClick={() => onVerify(recommendation)}>Verify</button></td>
             </tr>;
           })}
@@ -74,6 +74,24 @@ export function RadiusBatchBuyPlanner({ recommendations, mode, onModeChange, onO
       </table>
     </div>
   </section>;
+}
+
+function formatVerificationState(state: RadiusBuyRecommendation["verificationState"]): string {
+  if (!state || state.status === "not_verified") return "Not verified";
+  if (state.status === "stale") return "Stale";
+  if (state.status === "failed") {
+    const delta = Number(state.profitDeltaIsk ?? state.priceDeltaIsk ?? 0);
+    return Number.isFinite(delta) && delta !== 0 ? `Failed: profit delta ${formatISK(delta)}` : "Failed: review needed";
+  }
+  if (state.status === "verified") {
+    if (!state.checkedAt) return "Verified";
+    const checkedAtMs = new Date(state.checkedAt).getTime();
+    if (!Number.isFinite(checkedAtMs)) return "Verified";
+    const minutesAgo = Math.max(0, Math.floor((Date.now() - checkedAtMs) / 60_000));
+    if (minutesAgo < 1) return "Verified just now";
+    return `Verified ${minutesAgo}m ago`;
+  }
+  return "Not verified";
 }
 
 function getSortValue(recommendation: RadiusBuyRecommendation, rank: number, key: SortKey): number | string {

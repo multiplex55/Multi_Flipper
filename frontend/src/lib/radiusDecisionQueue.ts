@@ -116,6 +116,17 @@ const DEFAULT_WEIGHTS = {
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
 
+function getVerificationAdjustment(item: RadiusBuyRecommendation): { bonus: number; reason?: string } {
+  const state = item.verificationState;
+  if (!state || state.status === "not_verified") return { bonus: 0 };
+
+  const positiveProfit = safeNumber(item.batchProfitIsk) > 0;
+  if (state.status === "verified") return { bonus: positiveProfit ? 0.06 : 0.02 };
+  if (state.status === "stale") return { bonus: -0.015, reason: "verification_stale" };
+  if (state.status === "failed") return { bonus: -0.08, reason: `verification_failed:${safeNumber(state.failedLineCount) > 0 ? ` ${safeNumber(state.failedLineCount)} lines` : " review needed"}` };
+  return { bonus: 0 };
+}
+
 
 const MODE_WEIGHT_OVERRIDES: Record<BuyPlannerMode, Partial<typeof DEFAULT_WEIGHTS>> = {
   balanced: {},
@@ -143,6 +154,7 @@ function scoreRecommendation(item: RadiusBuyRecommendation, kind: RadiusDecision
   const dailyTurnoverNorm = clamp01(safeNumber(baseBreakdown.dailyProfitTurnover));
   const movementNorm = clamp01(safeNumber(baseBreakdown.movement));
   const watchlistBonusNorm = clamp01(safeNumber(baseBreakdown.watchlistBonus));
+  const verificationAdjustment = getVerificationAdjustment(item);
 
   const haulWorthiness = classifyHaulWorthiness({ jumps, profitIsk: profit, iskPerJump: safeNumber(item.batchIskPerJump), cargoUsedPercent: safeNumber(item.cargoUsedPercent) });
   const longHaulWorthNorm = haulWorthiness.label === "long_worth_it" ? 1 : haulWorthiness.label === "short_efficient" ? 0.85 : haulWorthiness.label === "long_marginal" ? 0.45 : 0;
@@ -164,7 +176,8 @@ function scoreRecommendation(item: RadiusBuyRecommendation, kind: RadiusDecision
     movementNorm * weights.movement +
     watchlistBonusNorm * weights.watchlistBonus +
     longHaulWorthNorm * 0.1 +
-    verificationReadinessNorm * 0.05;
+    verificationReadinessNorm * 0.05 +
+    verificationAdjustment.bonus;
   const totalPenalty =
     riskPenalty * weights.riskPenalty +
     slippagePenalty * weights.slippagePenalty +
@@ -178,7 +191,7 @@ function scoreRecommendation(item: RadiusBuyRecommendation, kind: RadiusDecision
     kind,
     score,
     haulWorthiness,
-    diagnostics: item.diagnostics ?? [],
+    diagnostics: [...(item.diagnostics ?? []), ...(verificationAdjustment.reason ? [{ kind: "verification", message: verificationAdjustment.reason }] : [])],
     scoreBreakdown: {
       positive: {
         profit: profitNorm,

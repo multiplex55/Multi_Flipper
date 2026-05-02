@@ -93,6 +93,7 @@ export function recommendationFromSingleRow(row: FlipResult, context: RadiusBuyR
 
 export function recommendationFromRouteBatch(routeKey: string, rows: FlipResult[], metadata: RouteBatchMetadata | undefined, cargoCapacityM3: number, context: RadiusBuyRecommendationContext): RadiusBuyRecommendation {
   const lines = rows.map((row) => normalizeLine(row, Number(row.UnitsToBuy ?? row.FilledQty ?? 0))).filter((line): line is RadiusBuyRecommendationLine => Boolean(line));
+  const verificationState = (metadata as { verificationState?: RadiusBuyRecommendation["verificationState"] } | undefined)?.verificationState;
   return rec(`route:${routeKey}`, "route_group", "buy", routeKey, lines, context, {
     jumpsToBuyStation: 0,
     jumpsBuyToSell: 0,
@@ -107,6 +108,7 @@ export function recommendationFromRouteBatch(routeKey: string, rows: FlipResult[
     batchIskPerJump: safeNumber(metadata?.routeRealIskPerJump || metadata?.batchIskPerJump),
     batchRoiPercent: safeNumber(metadata?.routeDailyProfitOverCapital) > 0 ? safeNumber(metadata?.routeDailyProfitOverCapital) * 100 : (safeNumber(metadata?.routeTotalCapital) > 0 ? (safeNumber(metadata?.routeTotalProfit)/safeNumber(metadata?.routeTotalCapital))*100 : 0),
     verificationSlots: [],
+    verificationState,
   });
 }
 
