@@ -30,6 +30,8 @@ import { useGlobalToast } from "./Toast";
 import { filterFlipResults } from "@/lib/banlistFilters";
 import { getVerificationProfileById } from "@/lib/verificationProfiles";
 import type { FillerCandidate } from "@/lib/fillerCandidates";
+import { planRouteFillSuggestions } from "@/lib/batchFillerAdvisor";
+import { BatchBuilderFillerAdvisor } from "@/components/BatchBuilderFillerAdvisor";
 
 interface BatchBuilderPopupProps {
   open: boolean;
@@ -614,6 +616,16 @@ export function BatchBuilderPopup({
         ? mergeAdditionLines(selectedOption.lines, appliedFillerLines)
         : [],
     [selectedOption, appliedFillerLines],
+  );
+  const plannedFillerSuggestions = useMemo(
+    () =>
+      planRouteFillSuggestions({
+        rows,
+        suggestions: fillerSuggestions,
+        selectedLineKeys: initialSelectedLineKeys ?? [],
+        remainingCargoM3: fillerRemainingM3,
+      }),
+    [rows, fillerSuggestions, batch.lines, fillerRemainingM3],
   );
   const effectiveSelectedSummary = useMemo(() => {
     const totals = {
@@ -1861,6 +1873,29 @@ export function BatchBuilderPopup({
                     </table>
                   </div>
                 )}
+                <div className="mt-3">
+                  <BatchBuilderFillerAdvisor
+                    remainingCargoM3={fillerRemainingM3}
+                    suggestions={plannedFillerSuggestions}
+                    onAddOne={(lineKey) => {
+                      const found = fillerSuggestions.find((suggestion) => `${suggestion.type_id}:${suggestion.buy_location_id}:${suggestion.sell_location_id}` === lineKey);
+                      if (found) setAppliedFillerLines((prev) => [...prev, suggestionToAdditionLine(found)]);
+                    }}
+                    onAddAllSafe={() =>
+                      setAppliedFillerLines(
+                        plannedFillerSuggestions
+                          .filter((row) => row.suggested_role === "safe_filler")
+                          .map(suggestionToAdditionLine),
+                      )
+                    }
+                    onReplaceWeakLine={(lineKey) => {
+                      const found = fillerSuggestions.find((suggestion) => `${suggestion.type_id}:${suggestion.buy_location_id}:${suggestion.sell_location_id}` === lineKey);
+                      if (!found) return;
+                      setAppliedFillerLines([suggestionToAdditionLine(found)]);
+                    }}
+                  />
+                </div>
+
                 <div className="mt-2 flex flex-wrap gap-2">
                   <button
                     type="button"
