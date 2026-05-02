@@ -64,15 +64,16 @@ export function RadiusBatchBuyPlanner({ recommendations, mode, onModeChange, onO
         <tbody>
           {sorted.map(({ recommendation, rank }) => {
             const first = recommendation.lines[0]?.row;
-            const fill = Number(recommendation.scoreBreakdown?.fillConfidence ?? 0);
-            const risk = Number(recommendation.scoreBreakdown?.penalties ?? 0);
+            const fill = Number(recommendation.packageMetrics?.averageFillConfidencePct ?? 0);
+            const risk = Number(recommendation.packageMetrics?.riskCount ?? 0);
+            const slippage = Number(recommendation.packageMetrics?.weightedSlippagePct ?? 0);
             const verificationText = formatVerificationState(recommendation.verificationState);
             return <tr key={recommendation.id} className="border-t border-eve-border/30">
               <td className="px-1 py-1">#{rank}</td><td>{recommendation.action}</td><td>{recommendation.kind}</td>
               <td>{first?.BuyStation ?? "?"} → {first?.SellStation ?? "?"}</td>
-              <td>{recommendation.lines.length}</td><td>{formatISK(recommendation.batchProfitIsk)}</td><td>{formatISK(recommendation.batchIskPerJump)}</td>
-              <td>{recommendation.cargoUsedPercent.toFixed(1)}%</td><td>{recommendation.remainingCargoM3.toLocaleString("en-US")} m3</td><td>{formatISK(recommendation.batchCapitalIsk)}</td>
-              <td>{recommendation.batchRoiPercent.toFixed(1)}%</td><td>{recommendation.totalJumps}</td><td>{(fill * 100).toFixed(0)}%</td><td>{(risk * 100).toFixed(0)}%</td><td title={verificationText}>{verificationText}</td>
+              <td>{recommendation.lines.length}</td><td>{formatISK(recommendation.packageMetrics.batchProfitIsk)}</td><td>{formatISK(recommendation.packageMetrics.batchIskPerJump)}</td>
+              <td>{recommendation.packageMetrics.cargoUsedPercent.toFixed(1)}%</td><td>{recommendation.remainingCargoM3.toLocaleString("en-US")} m3</td><td>{formatISK(recommendation.packageMetrics.batchCapitalIsk)}</td>
+              <td>{recommendation.packageMetrics.batchRoiPercent.toFixed(1)}%</td><td>{recommendation.packageMetrics.totalJumps}</td><td>{fill.toFixed(0)}%</td><td>{risk.toFixed(0)} ({slippage.toFixed(1)}%)</td><td title={verificationText}>{verificationText}</td>
               <td className="space-x-1"><button type="button" onClick={() => onOpenBatchBuilder(recommendation)}>Open</button><button type="button" onClick={() => onCopyManifest(recommendation)}>Manifest</button><button type="button" onClick={() => onVerify(recommendation)}>Verify</button></td>
             </tr>;
           })}
@@ -108,15 +109,15 @@ function getSortValue(recommendation: RadiusBuyRecommendation, rank: number, key
     case "kind": return recommendation.kind;
     case "stations": return `${first?.BuyStation ?? ""}-${first?.SellStation ?? ""}`;
     case "items": return recommendation.lines.length;
-    case "profit": return recommendation.batchProfitIsk;
-    case "iskJump": return recommendation.batchIskPerJump;
-    case "cargoUsed": return recommendation.cargoUsedPercent;
+    case "profit": return recommendation.packageMetrics.batchProfitIsk;
+    case "iskJump": return recommendation.packageMetrics.batchIskPerJump;
+    case "cargoUsed": return recommendation.packageMetrics.cargoUsedPercent;
     case "remaining": return recommendation.remainingCargoM3;
-    case "capital": return recommendation.batchCapitalIsk;
-    case "roi": return recommendation.batchRoiPercent;
-    case "jumps": return recommendation.totalJumps;
-    case "fill": return Number(recommendation.scoreBreakdown?.fillConfidence ?? 0);
-    case "risk": return Number(recommendation.scoreBreakdown?.penalties ?? 0);
+    case "capital": return recommendation.packageMetrics.batchCapitalIsk;
+    case "roi": return recommendation.packageMetrics.batchRoiPercent;
+    case "jumps": return recommendation.packageMetrics.totalJumps;
+    case "fill": return Number(recommendation.packageMetrics.averageFillConfidencePct ?? 0);
+    case "risk": return Number(recommendation.packageMetrics.riskCount ?? 0);
     case "verification": return recommendation.verificationSlots?.length ?? 0;
   }
 }

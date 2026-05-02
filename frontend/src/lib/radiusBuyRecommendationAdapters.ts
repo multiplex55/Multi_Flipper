@@ -57,6 +57,20 @@ function rec(id: string, kind: RadiusBuyRecommendation["kind"], action: RadiusBu
   return { id, kind, action, title, routeKey: lines[0]?.routeKey, lines, selectedLineKeys: metrics?.selectedLineKeys, sourcePackageKind: metrics?.sourcePackageKind, reasons, warnings, blockers: [],
     jumpsToBuyStation: 0, jumpsBuyToSell: 0, totalJumps, cargoCapacityM3: Math.max(0, totalVolumeM3), totalVolumeM3, remainingCargoM3: 0, cargoUsedPercent: totalVolumeM3 > 0 ? 100 : 0,
     batchProfitIsk, batchCapitalIsk, batchGrossSellIsk, batchIskPerJump: batchProfitIsk / Math.max(1,totalJumps), batchRoiPercent: batchCapitalIsk > 0 ? (batchProfitIsk / batchCapitalIsk) * 100 : 0,
+    packageMetrics: {
+      averageFillConfidencePct: 0,
+      worstFillConfidencePct: 0,
+      riskCount: 0,
+      weightedSlippagePct: 0,
+      verificationCoveragePct: 0,
+      batchProfitIsk,
+      batchCapitalIsk,
+      batchGrossSellIsk,
+      batchIskPerJump: batchProfitIsk / Math.max(1, totalJumps),
+      batchRoiPercent: batchCapitalIsk > 0 ? (batchProfitIsk / batchCapitalIsk) * 100 : 0,
+      cargoUsedPercent: totalVolumeM3 > 0 ? 100 : 0,
+      totalJumps,
+    },
     verificationSlots: [], ...metrics };
 }
 
@@ -124,6 +138,20 @@ export function recommendationFromRouteBatch(input: RecommendationFromRouteBatch
     batchGrossSellIsk: safeNumber(batch.totalGrossSell),
     batchIskPerJump: safeNumber(batch.totalProfit) / Math.max(1, totalJumps),
     batchRoiPercent: safeNumber(batch.totalCapital) > 0 ? (safeNumber(batch.totalProfit) / safeNumber(batch.totalCapital)) * 100 : 0,
+    packageMetrics: {
+      averageFillConfidencePct: safeNumber((metadata as { averageFillConfidencePct?: number } | undefined)?.averageFillConfidencePct),
+      worstFillConfidencePct: safeNumber((metadata as { worstFillConfidencePct?: number } | undefined)?.worstFillConfidencePct),
+      riskCount: safeNumber((metadata as { riskCount?: number } | undefined)?.riskCount),
+      weightedSlippagePct: safeNumber((metadata as { weightedSlippagePct?: number } | undefined)?.weightedSlippagePct),
+      verificationCoveragePct: safeNumber((metadata as { verificationCoveragePct?: number } | undefined)?.verificationCoveragePct),
+      batchProfitIsk: safeNumber(batch.totalProfit),
+      batchCapitalIsk: safeNumber(batch.totalCapital),
+      batchGrossSellIsk: safeNumber(batch.totalGrossSell),
+      batchIskPerJump: safeNumber(batch.totalProfit) / Math.max(1, totalJumps),
+      batchRoiPercent: safeNumber(batch.totalCapital) > 0 ? (safeNumber(batch.totalProfit) / safeNumber(batch.totalCapital)) * 100 : 0,
+      cargoUsedPercent: safeNumber(batch.usedPercent),
+      totalJumps,
+    },
     verificationSlots: [],
     verificationState,
   });

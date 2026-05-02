@@ -14,6 +14,7 @@ const mkRec = (id: string, n: number) => ({
   reasons: ["ok"], warnings: ["warn"], blockers: [], diagnostics: [],
   jumpsToBuyStation: 1, jumpsBuyToSell: 2, totalJumps: n + 1, cargoCapacityM3: 1000, totalVolumeM3: 10, remainingCargoM3: 990, cargoUsedPercent: 1,
   batchProfitIsk: 1000 * n, batchCapitalIsk: 500 * n, batchGrossSellIsk: 1500 * n, batchIskPerJump: 200 * n, batchRoiPercent: 10,
+  packageMetrics: { averageFillConfidencePct: 70, worstFillConfidencePct: 55, riskCount: 1, weightedSlippagePct: 1.5, verificationCoveragePct: 90, batchProfitIsk: 1000 * n, batchCapitalIsk: 500 * n, batchGrossSellIsk: 1500 * n, batchIskPerJump: 200 * n, batchRoiPercent: 10, cargoUsedPercent: 1, totalJumps: n + 1 },
   scoreBreakdown: { positive: { executionQuality: 0.8, fillConfidence: 0.7, movement: 0.2, longHaulWorth: 0.5 }, totalPenalty: 0.1 },
   haulWorthiness: { label: "short_efficient", reason: "test" },
   verificationState: { status: "not_verified" as const },
@@ -65,5 +66,27 @@ describe("RadiusBuyNowQueuePanel", () => {
     rec.verificationState = { status: "failed", profitDeltaIsk: -9000 } as never;
     render(<RadiusBuyNowQueuePanel recommendations={[rec as never]} {...handlers} />);
     expect(screen.getByTestId("verification-state-label")).toHaveTextContent("Failed: profit delta");
+  });
+
+  it("reads displayed package metrics from recommendation package fields", () => {
+    const rec = mkRec("r-metrics", 1);
+    rec.lines[0].profitTotalIsk = 9999999;
+    rec.lines[0].buyTotalIsk = 8888888;
+    rec.packageMetrics.batchProfitIsk = 1234;
+    rec.packageMetrics.batchCapitalIsk = 5678;
+    rec.packageMetrics.batchGrossSellIsk = 9012;
+    rec.packageMetrics.batchIskPerJump = 345;
+    rec.packageMetrics.totalJumps = 77;
+    rec.packageMetrics.averageFillConfidencePct = 66;
+    rec.packageMetrics.worstFillConfidencePct = 44;
+    rec.packageMetrics.riskCount = 3;
+    rec.packageMetrics.weightedSlippagePct = 2.4;
+    render(<RadiusBuyNowQueuePanel recommendations={[rec as never]} {...handlers} />);
+    expect(screen.getByText(/Profit 1.2 K/i)).toBeInTheDocument();
+    expect(screen.getByText(/Capital 5.7 K/i)).toBeInTheDocument();
+    expect(screen.getByText(/Gross 9 K/i)).toBeInTheDocument();
+    expect(screen.getByText(/ISK\/jump 345/i)).toBeInTheDocument();
+    expect(screen.getByText(/Jumps 77/i)).toBeInTheDocument();
+    expect(screen.getByText(/Fill 66%/i)).toBeInTheDocument();
   });
 });

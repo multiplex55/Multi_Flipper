@@ -57,6 +57,22 @@ export function RadiusBuyNowQueuePanel({
   const displayEnd = totalCount === 0 ? 0 : endExclusive;
   const hasPrev = !showAll && page > 0;
   const hasNext = !showAll && endExclusive < totalCount;
+  const isDev = typeof import.meta !== "undefined" && Boolean(import.meta.env?.DEV);
+
+  if (isDev) {
+    for (const recommendation of visibleRecommendations) {
+      const lineProfit = recommendation.lines.reduce((sum, line) => sum + Number(line.profitTotalIsk ?? 0), 0);
+      const lineCapital = recommendation.lines.reduce((sum, line) => sum + Number(line.buyTotalIsk ?? 0), 0);
+      if (Math.abs(lineProfit - recommendation.packageMetrics.batchProfitIsk) > 1 || Math.abs(lineCapital - recommendation.packageMetrics.batchCapitalIsk) > 1) {
+        console.warn("RadiusBuyNowQueuePanel package metrics mismatch", recommendation.id, {
+          lineProfit,
+          packageProfit: recommendation.packageMetrics.batchProfitIsk,
+          lineCapital,
+          packageCapital: recommendation.packageMetrics.batchCapitalIsk,
+        });
+      }
+    }
+  }
 
   return (
     <div className="rounded-sm border border-eve-border/60 bg-eve-dark/25 p-2 text-[11px]" data-testid="radius-buy-now-queue-panel">
@@ -103,13 +119,15 @@ export function RadiusBuyNowQueuePanel({
               {selectedLayout === "cards" ? (
                 <>
                   <div className="mt-1 flex flex-wrap gap-2 text-eve-dim" data-testid="cards-row">
-                    <span>Profit {formatISK(recommendation.batchProfitIsk)}</span><span>Capital {formatISK(recommendation.batchCapitalIsk)}</span><span>ROI {recommendation.batchRoiPercent.toFixed(1)}%</span><span>Cargo {recommendation.totalVolumeM3.toLocaleString("en-US")} m3</span><span>ISK/jump {formatISK(recommendation.batchIskPerJump)}</span><span>Jumps {recommendation.totalJumps}</span>
+                    <span>Profit {formatISK(recommendation.packageMetrics.batchProfitIsk)}</span><span>Capital {formatISK(recommendation.packageMetrics.batchCapitalIsk)}</span><span>Gross {formatISK(recommendation.packageMetrics.batchGrossSellIsk)}</span><span>ROI {recommendation.packageMetrics.batchRoiPercent.toFixed(1)}%</span><span>Cargo {recommendation.totalVolumeM3.toLocaleString("en-US")} m3</span><span>ISK/jump {formatISK(recommendation.packageMetrics.batchIskPerJump)}</span><span>Jumps {recommendation.packageMetrics.totalJumps}</span>
                   </div>
                   <div className="mt-1 flex flex-wrap gap-2 text-eve-dim">
-                    <span>Execution {(recommendation.scoreBreakdown.positive.executionQuality * 100).toFixed(0)}%</span>
-                    <span>Fill {(recommendation.scoreBreakdown.positive.fillConfidence * 100).toFixed(0)}%</span>
-                    <span>Risk {(recommendation.scoreBreakdown.totalPenalty * 100).toFixed(0)}%</span>
-                    <span>Movement {(recommendation.scoreBreakdown.positive.movement * 100).toFixed(0)}%</span>
+                    <span>Fill {recommendation.packageMetrics.averageFillConfidencePct.toFixed(0)}%</span>
+                    <span>Worst fill {recommendation.packageMetrics.worstFillConfidencePct.toFixed(0)}%</span>
+                    <span>Risk {recommendation.packageMetrics.riskCount.toFixed(0)}</span>
+                    <span>Slippage {recommendation.packageMetrics.weightedSlippagePct.toFixed(1)}%</span>
+                    <span>Verified {recommendation.packageMetrics.verificationCoveragePct.toFixed(0)}%</span>
+                    <span>Why ranked {Object.keys((recommendation.scoreBreakdown ?? {}) as Record<string, unknown>).length} signals</span>
                     <span>Warnings {warningsCount}</span>
                   </div>
                 </>
