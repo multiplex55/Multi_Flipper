@@ -1,6 +1,6 @@
 import type { RadiusCargoBuild, RadiusRejectedCargoBuild } from "@/lib/radiusCargoBuilds";
 import type { RadiusBuyStationShoppingList } from "@/lib/radiusBuyStationShoppingList";
-import { routeGroupKey } from "@/lib/batchMetrics";
+import { routeGroupKey, safeNumber, type RouteBatchMetadata } from "@/lib/batchMetrics";
 import type { FlipResult } from "@/lib/types";
 import type {
   RadiusBuyRecommendation,
@@ -35,13 +35,21 @@ function normalizeLine(row: FlipResult, qtyInput?: number): RadiusBuyRecommendat
   };
 }
 
-function rec(id: string, kind: RadiusBuyRecommendation["kind"], action: RadiusBuyRecommendationAction, title: string, lines: RadiusBuyRecommendationLine[], context: RadiusBuyRecommendationContext): RadiusBuyRecommendation {
+function rec(id: string, kind: RadiusBuyRecommendation["kind"], action: RadiusBuyRecommendationAction, title: string, lines: RadiusBuyRecommendationLine[], context: RadiusBuyRecommendationContext, metrics?: Partial<RadiusBuyRecommendation>): RadiusBuyRecommendation {
   const reasons = [
     `${lines.length} line(s) normalized from ${context.source ?? kind}`,
     `Total qty ${lines.reduce((s, l) => s + l.qty, 0)}`,
   ];
   const warnings = lines.some((line) => line.qty === 0 || line.volumeM3 === 0) ? ["Contains zero-qty or zero-volume lines"] : [];
-  return { id, kind, action, title, routeKey: lines[0]?.routeKey, lines, reasons, warnings, blockers: [] };
+  const totalVolumeM3 = lines.reduce((s, l) => s + safeNumber(l.volumeM3), 0);
+  const batchCapitalIsk = lines.reduce((s, l) => s + safeNumber(l.buyTotalIsk), 0);
+  const batchGrossSellIsk = lines.reduce((s, l) => s + safeNumber(l.sellTotalIsk), 0);
+  const batchProfitIsk = lines.reduce((s, l) => s + safeNumber(l.profitTotalIsk), 0);
+  const totalJumps = Math.max(1, ...lines.map((l) => Math.max(1, safeNumber(l.row?.TotalJumps))));
+  return { id, kind, action, title, routeKey: lines[0]?.routeKey, lines, reasons, warnings, blockers: [],
+    jumpsToBuyStation: 0, jumpsBuyToSell: 0, totalJumps, cargoCapacityM3: Math.max(0, totalVolumeM3), totalVolumeM3, remainingCargoM3: 0, cargoUsedPercent: totalVolumeM3 > 0 ? 100 : 0,
+    batchProfitIsk, batchCapitalIsk, batchGrossSellIsk, batchIskPerJump: batchProfitIsk / Math.max(1,totalJumps), batchRoiPercent: batchCapitalIsk > 0 ? (batchProfitIsk / batchCapitalIsk) * 100 : 0,
+    verificationSlots: [], ...metrics };
 }
 
 export function recommendationFromCargoBuild(build: RadiusCargoBuild, context: RadiusBuyRecommendationContext): RadiusBuyRecommendation {
@@ -63,6 +71,26 @@ export function recommendationFromSingleRow(row: FlipResult, context: RadiusBuyR
   return rec(`row:${row.TypeID}:${routeGroupKey(row)}`, "single_row", "buy", row.TypeName || "Row", line ? [line] : [], context);
 }
 
+
+export function recommendationFromRouteBatch(routeKey: string, rows: FlipResult[], metadata: RouteBatchMetadata | undefined, cargoCapacityM3: number, context: RadiusBuyRecommendationContext): RadiusBuyRecommendation {
+  const lines = rows.map((row) => normalizeLine(row, Number(row.UnitsToBuy ?? row.FilledQty ?? 0))).filter((line): line is RadiusBuyRecommendationLine => Boolean(line));
+  return rec(`route:${routeKey}`, "route_group", "buy", routeKey, lines, context, {
+    jumpsToBuyStation: 0,
+    jumpsBuyToSell: 0,
+    totalJumps: Math.max(1, safeNumber(rows[0]?.TotalJumps)),
+    cargoCapacityM3: Math.max(0, cargoCapacityM3),
+    totalVolumeM3: safeNumber(metadata?.routeTotalVolume ?? lines.reduce((s, l) => s + safeNumber(l.volumeM3), 0)),
+    remainingCargoM3: safeNumber(metadata?.routeRemainingCargoM3),
+    cargoUsedPercent: safeNumber(metadata?.routeCapacityUsedPercent),
+    batchProfitIsk: safeNumber(metadata?.routeTotalProfit),
+    batchCapitalIsk: safeNumber(metadata?.routeTotalCapital),
+    batchGrossSellIsk: safeNumber(metadata?.routeTotalCapital) + safeNumber(metadata?.routeTotalProfit),
+    batchIskPerJump: safeNumber(metadata?.routeRealIskPerJump || metadata?.batchIskPerJump),
+    batchRoiPercent: safeNumber(metadata?.routeDailyProfitOverCapital) > 0 ? safeNumber(metadata?.routeDailyProfitOverCapital) * 100 : (safeNumber(metadata?.routeTotalCapital) > 0 ? (safeNumber(metadata?.routeTotalProfit)/safeNumber(metadata?.routeTotalCapital))*100 : 0),
+    verificationSlots: [],
+  });
+}
+
 export function recommendationFromRouteGroup(routeKey: string, rows: FlipResult[], context: RadiusBuyRecommendationContext): RadiusBuyRecommendation {
   const lines = rows.map((row) => normalizeLine(row, Number(row.UnitsToBuy ?? row.FilledQty ?? 0))).filter((line): line is RadiusBuyRecommendationLine => Boolean(line));
   return rec(`route:${routeKey}`, "route_group", "buy", routeKey, lines, context);
@@ -70,7 +98,9 @@ export function recommendationFromRouteGroup(routeKey: string, rows: FlipResult[
 
 export function recommendationFromRejectedCargoBuild(rejected: RadiusRejectedCargoBuild, context: RadiusBuyRecommendationContext): RadiusBuyRecommendation {
   const action: RadiusBuyRecommendationAction = rejected.suggestedAction === "trim_lines" ? "trim" : rejected.suggestedAction === "skip" ? "watch" : "verify";
-  const out = rec(`rejected:${rejected.routeKey}`, "rejected_cargo_build", action, rejected.routeLabel, [], context);
+  const maybeLines = ((rejected as unknown as { lines?: Array<{ row: FlipResult; units: number }> }).lines ?? []);
+  const nearMiss = maybeLines.map((line) => normalizeLine(line.row, line.units)).filter((line): line is RadiusBuyRecommendationLine => Boolean(line));
+  const out = rec(`rejected:${rejected.routeKey}`, "rejected_cargo_build", action, rejected.routeLabel, nearMiss, context);
   out.blockers = rejected.blockers.map((b) => b.message);
   out.diagnostics = rejected.blockers.map((b) => ({ kind: b.kind, message: b.message, actual: b.actual, required: b.required, severity: b.severity }));
   out.warnings.push("Near miss recommendation; manual verification required.");

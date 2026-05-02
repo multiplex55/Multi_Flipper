@@ -121,6 +121,18 @@ describe("radius recommendation manifest formatter", () => {
     reasons: [],
     warnings: [],
     blockers: [],
+    jumpsToBuyStation: 2,
+    jumpsBuyToSell: 1,
+    totalJumps: 3,
+    cargoCapacityM3: 1000,
+    totalVolumeM3: 100,
+    remainingCargoM3: 900,
+    cargoUsedPercent: 10,
+    batchProfitIsk: 4500,
+    batchCapitalIsk: 10500,
+    batchGrossSellIsk: 15000,
+    batchIskPerJump: 1500,
+    batchRoiPercent: 42.85,
   };
 
   it("formats recommendation manifest with header, detail rows, and multibuy block", () => {

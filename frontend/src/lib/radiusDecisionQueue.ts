@@ -5,10 +5,10 @@ import {
   recommendationFromBuyStationShoppingList,
   recommendationFromCargoBuild,
   recommendationFromRejectedCargoBuild,
-  recommendationFromRouteGroup,
+  recommendationFromRouteBatch,
   recommendationFromSingleRow,
 } from "@/lib/radiusBuyRecommendationAdapters";
-import { safeNumber } from "@/lib/batchMetrics";
+import { safeNumber, type RouteBatchMetadataByRoute } from "@/lib/batchMetrics";
 import type { FlipResult } from "@/lib/types";
 
 export type RadiusDecisionQueueKind =
@@ -55,7 +55,11 @@ export type BuildRadiusDecisionQueueInput = {
   singleRowCandidates?: FlipResult[];
   watchlistFocusedCandidates?: FlipResult[];
   movementOrImprovingCandidates?: FlipResult[];
-  sameLegBatches?: Array<{ routeKey: string; rows: FlipResult[]; title?: string }>;
+  routeRowsByKey?: Record<string, FlipResult[]>;
+  routeBatchMetadataByRoute?: RouteBatchMetadataByRoute;
+  cargoCapacityM3?: number;
+  mode?: string;
+  maxRecommendations?: number;
   factorWeights?: Partial<{
     profit: number;
     iskPerJump: number;
@@ -99,16 +103,16 @@ const clamp01 = (v: number) => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 
 
 function scoreRecommendation(item: RadiusBuyRecommendation, kind: RadiusDecisionQueueKind, weights: typeof DEFAULT_WEIGHTS): RadiusDecisionQueueItem {
   const lines = item.lines;
-  const profit = lines.reduce((s, l) => s + safeNumber(l.profitTotalIsk), 0);
-  const buy = lines.reduce((s, l) => s + safeNumber(l.buyTotalIsk), 0);
-  const volume = lines.reduce((s, l) => s + safeNumber(l.volumeM3), 0);
-  const jumps = Math.max(1, ...lines.map((l) => Math.max(1, safeNumber(l.row?.TotalJumps))));
+  const profit = safeNumber(item.batchProfitIsk);
+  const buy = safeNumber(item.batchCapitalIsk);
+  const volume = safeNumber(item.totalVolumeM3);
+  const jumps = Math.max(1, safeNumber(item.totalJumps));
   const daily = lines.reduce((s, l) => s + safeNumber(l.row?.DailyProfit), 0);
 
   const profitNorm = clamp01(profit / 300_000_000);
   const iskPerJumpNorm = clamp01(profit / jumps / 20_000_000);
-  const cargoEfficiencyNorm = clamp01(profit / Math.max(1, volume) / 200_000);
-  const roiNorm = clamp01(profit / Math.max(1, buy));
+  const cargoEfficiencyNorm = clamp01((safeNumber(item.cargoUsedPercent) / 100) * (profit / Math.max(1, volume) / 200_000));
+  const roiNorm = clamp01(safeNumber(item.batchRoiPercent) / 100);
   const executionQualityNorm = clamp01(lines.reduce((s, l) => s + safeNumber((l.row as Record<string, unknown> | undefined)?.ExecutionQuality), 0) / Math.max(1, lines.length) / 100);
   const fillConfidenceNorm = clamp01(lines.reduce((s, l) => s + safeNumber((l.row as Record<string, unknown> | undefined)?.FillConfidencePct), 0) / Math.max(1, lines.length) / 100);
   const dailyTurnoverNorm = clamp01((daily / Math.max(1, buy)) * 12);
@@ -176,7 +180,7 @@ export function buildRadiusDecisionQueue(input: BuildRadiusDecisionQueueInput): 
   const rejected: BuildRadiusDecisionQueueResult["rejected"] = [];
 
   for (const build of input.cargoBuilds ?? []) queue.push(scoreRecommendation(recommendationFromCargoBuild(build, { source: "decision_queue" }), "cargo_build", weights));
-  for (const batch of input.sameLegBatches ?? []) queue.push(scoreRecommendation({ ...recommendationFromRouteGroup(batch.routeKey, batch.rows, { source: "decision_queue" }), title: batch.title ?? batch.routeKey }, "same_leg_batch", weights));
+  for (const [routeKey, rows] of Object.entries(input.routeRowsByKey ?? {})) queue.push(scoreRecommendation(recommendationFromRouteBatch(routeKey, rows, input.routeBatchMetadataByRoute?.[routeKey], input.cargoCapacityM3 ?? 0, { source: `decision_queue:${input.mode ?? "default"}` }), "same_leg_batch", weights));
   for (const list of input.buyStationShoppingLists ?? []) queue.push(scoreRecommendation(recommendationFromBuyStationShoppingList(list, { source: "decision_queue" }), "buy_station_package", weights));
   for (const row of input.singleRowCandidates ?? []) queue.push(scoreRecommendation(recommendationFromSingleRow(row, { source: "decision_queue" }), "single_item", weights));
   for (const row of input.watchlistFocusedCandidates ?? []) queue.push(scoreRecommendation(recommendationFromSingleRow(row, { source: "decision_queue:watchlist" }), "watchlist_package", weights));
@@ -198,5 +202,6 @@ export function buildRadiusDecisionQueue(input: BuildRadiusDecisionQueueInput): 
   }
 
   queue.sort((a, b) => b.score - a.score || a.kind.localeCompare(b.kind) || a.id.localeCompare(b.id));
-  return { queue, rejected };
+  const limited = (input.maxRecommendations ?? 0) > 0 ? queue.slice(0, input.maxRecommendations) : queue;
+  return { queue: limited, rejected };
 }
