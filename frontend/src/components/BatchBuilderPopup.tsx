@@ -1354,6 +1354,13 @@ export function BatchBuilderPopup({
     }),
     [],
   );
+  const applyFillerSuggestions = useCallback(
+    (rowsToApply: BatchRouteFillerSuggestionRow[], mode: "append" | "replace" = "replace") => {
+      const mapped = rowsToApply.map(suggestionToAdditionLine);
+      setAppliedFillerLines((prev) => (mode === "append" ? mergeAdditionLines(prev, mapped) : mapped));
+    },
+    [suggestionToAdditionLine],
+  );
 
   if (!anchorRow) return null;
 
@@ -1879,20 +1886,23 @@ export function BatchBuilderPopup({
                     suggestions={plannedFillerSuggestions}
                     onAddOne={(lineKey) => {
                       const found = fillerSuggestions.find((suggestion) => `${suggestion.type_id}:${suggestion.buy_location_id}:${suggestion.sell_location_id}` === lineKey);
-                      if (found) setAppliedFillerLines((prev) => [...prev, suggestionToAdditionLine(found)]);
+                      if (found) applyFillerSuggestions([found], "append");
                     }}
                     onAddAllSafe={() =>
-                      setAppliedFillerLines(
-                        plannedFillerSuggestions
-                          .filter((row) => row.suggested_role === "safe_filler")
-                          .map(suggestionToAdditionLine),
+                      applyFillerSuggestions(
+                        plannedFillerSuggestions.filter((row) => row.suggested_role === "safe_filler"),
                       )
                     }
                     onReplaceWeakLine={(lineKey) => {
                       const found = fillerSuggestions.find((suggestion) => `${suggestion.type_id}:${suggestion.buy_location_id}:${suggestion.sell_location_id}` === lineKey);
                       if (!found) return;
-                      setAppliedFillerLines([suggestionToAdditionLine(found)]);
+                      applyFillerSuggestions([found]);
                     }}
+                    onShowRisky={() =>
+                      applyFillerSuggestions(
+                        plannedFillerSuggestions.filter((row) => row.safetyLabel === "risky"),
+                      )
+                    }
                   />
                 </div>
 
@@ -1911,23 +1921,32 @@ export function BatchBuilderPopup({
                         });
                         return !!selectedFillerKeys[key];
                       });
-                      setAppliedFillerLines(selected.map(suggestionToAdditionLine));
+                      applyFillerSuggestions(selected);
                     }}
                   >
-                    Add selected fillers
+                    Add filler
                   </button>
                   <button
                     type="button"
                     className="px-2 py-1 rounded-sm border border-emerald-400/60 text-emerald-300 text-xs"
                     onClick={() =>
-                      setAppliedFillerLines(
-                        fillerSuggestions
-                          .filter((row) => row.suggested_role === "safe_filler")
-                          .map(suggestionToAdditionLine),
+                      applyFillerSuggestions(
+                        fillerSuggestions.filter((row) => row.suggested_role === "safe_filler"),
                       )
                     }
                   >
                     Add all safe fillers
+                  </button>
+                  <button
+                    type="button"
+                    className="px-2 py-1 rounded-sm border border-amber-400/60 text-amber-300 text-xs"
+                    onClick={() =>
+                      applyFillerSuggestions(
+                        fillerSuggestions.filter((row) => row.suggested_role !== "safe_filler"),
+                      )
+                    }
+                  >
+                    Show risky fillers
                   </button>
                   <button
                     type="button"
