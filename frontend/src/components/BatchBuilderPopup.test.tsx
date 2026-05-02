@@ -847,6 +847,18 @@ describe("BatchBuilderPopup route creation", () => {
     expect(await screen.findByText(/Current selection: 1 lines/)).toBeInTheDocument();
   });
 
+  it("add filler action updates selected totals and merged manifest content", async () => {
+    batchCreateRouteMock.mockResolvedValue(makeRouteResponse());
+    renderPopup({ anchorRow, rows });
+    fireEvent.click(await screen.findByRole("button", { name: "Batch Create Route" }));
+    expect(await screen.findByText(/Current selection: 1 lines/)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Add filler" }));
+    expect(await screen.findByText(/Current selection: 2 lines/)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Copy merged manifest" }));
+    const manifest = writeText.mock.calls[writeText.mock.calls.length - 1][0] as string;
+    expect(manifest).toContain("Filler One");
+  });
+
   it("uses option totals for duplicate added lines in merged display", async () => {
     batchCreateRouteMock.mockResolvedValue(makeDuplicateTotalsRouteResponse());
 
