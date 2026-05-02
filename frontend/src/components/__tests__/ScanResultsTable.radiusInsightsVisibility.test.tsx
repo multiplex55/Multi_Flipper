@@ -210,4 +210,32 @@ describe("ScanResultsTable radius insights visibility", () => {
     expect(screen.getByTestId("radius-best-deal-strip")).toBeInTheDocument();
     expect(screen.queryByTestId("radius-insights-drawer")).not.toBeInTheDocument();
   });
+
+  it("toggles buy-now queue independently from route insights", () => {
+    renderTable([makeRow()]);
+
+    const collapsedToggle = screen.getByRole("button", {
+      name: /show buy-now queue \(\d+\)/i,
+    });
+    expect(collapsedToggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("radius-buy-now-queue-panel")).not.toBeInTheDocument();
+
+    fireEvent.click(collapsedToggle);
+    expect(
+      screen.getByRole("button", { name: /hide buy-now queue/i }),
+    ).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByTestId("radius-buy-now-queue-panel")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /hide route insights/i }));
+    expect(
+      screen.getByRole("button", { name: /show route insights/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("radius-buy-now-queue-panel")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /hide buy-now queue/i }));
+    expect(
+      screen.getByRole("button", { name: /show buy-now queue \(\d+\)/i }),
+    ).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("radius-buy-now-queue-panel")).not.toBeInTheDocument();
+  });
 });
