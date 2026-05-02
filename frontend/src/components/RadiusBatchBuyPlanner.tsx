@@ -1,13 +1,13 @@
 import { useMemo, useState } from "react";
 import { formatISK } from "@/lib/format";
-import type { RadiusBuyRecommendation } from "@/lib/radiusBuyRecommendation";
+import type { BuyPlannerMode, RadiusBuyRecommendation } from "@/lib/radiusBuyRecommendation";
 
 type SortKey = "rank" | "action" | "kind" | "stations" | "items" | "profit" | "iskJump" | "cargoUsed" | "remaining" | "capital" | "roi" | "jumps" | "fill" | "risk" | "verification";
 
 type Props = {
   recommendations: RadiusBuyRecommendation[];
-  mode: string;
-  onModeChange: (mode: string) => void;
+  mode: BuyPlannerMode;
+  onModeChange: (mode: BuyPlannerMode) => void;
   onOpenBatchBuilder: (recommendation: RadiusBuyRecommendation) => void;
   onCopyManifest: (recommendation: RadiusBuyRecommendation) => void;
   onVerify: (recommendation: RadiusBuyRecommendation) => void;
@@ -39,12 +39,18 @@ export function RadiusBatchBuyPlanner({ recommendations, mode, onModeChange, onO
 
   return <section className="rounded-sm border border-eve-border/60 bg-eve-dark/25 p-2 text-[11px]" data-testid="radius-batch-buy-planner">
     <div className="mb-2 flex items-center justify-between gap-2">
-      <h3 className="text-eve-text">Radius Buy Planner</h3>
+      <div>
+        <h3 className="text-eve-text">Radius Buy Planner</h3>
+        <p className="text-[10px] text-eve-dim">Active mode: <span data-testid="planner-mode-summary">{mode}</span></p>
+      </div>
       <label className="flex items-center gap-1 text-eve-dim">Mode
-        <select aria-label="planner-mode" value={mode} onChange={(event) => onModeChange(event.target.value)} className="rounded-sm border border-eve-border/60 bg-black/30 px-1 py-0.5">
-          <option value="throughput">Throughput</option>
-          <option value="risk_off">Risk-off</option>
-          <option value="balanced">Balanced</option>
+        <select aria-label="planner-mode" value={mode} onChange={(event) => onModeChange(event.target.value as BuyPlannerMode)} className="rounded-sm border border-eve-border/60 bg-black/30 px-1 py-0.5">
+          <option value="balanced">balanced</option>
+          <option value="batch_profit">batch_profit</option>
+          <option value="batch_isk_per_jump">batch_isk_per_jump</option>
+          <option value="cargo_fill">cargo_fill</option>
+          <option value="long_haul_worth">long_haul_worth</option>
+          <option value="low_capital">low_capital</option>
         </select>
       </label>
     </div>

@@ -4,6 +4,8 @@ export type RadiusBuyRecommendationKind = "cargo_build" | "buy_station_list" | "
 export type RadiusRecommendationSourcePackageKind = "route_batch" | "cargo_build" | "single_row" | "buy_station_child" | "near_miss";
 export type RadiusBuyRecommendationAction = "buy" | "verify" | "trim" | "watch";
 
+export type BuyPlannerMode = "balanced" | "batch_profit" | "batch_isk_per_jump" | "cargo_fill" | "long_haul_worth" | "low_capital";
+
 export type RadiusBuyRecommendationLine = {
   typeId: number;
   typeName: string;
