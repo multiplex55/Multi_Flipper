@@ -46,6 +46,42 @@ describe("radiusDecisionQueue", () => {
     expect(out.queue[0].lines).toHaveLength(1);
   });
 
+  it("scores mixed zero/non-zero volume package without NaN/Infinity cargo efficiency", () => {
+    const out = buildRadiusDecisionQueue({
+      cargoBuilds: [
+        {
+          id: "cb-1",
+          routeKey: "r",
+          routeLabel: "r",
+          rowCount: 2,
+          totalProfitIsk: 10_000,
+          totalCapitalIsk: 50_000,
+          totalCargoM3: 5,
+          totalGrossSellIsk: 60_000,
+          jumps: 5,
+          iskPerJump: 2_000,
+          jumpEfficiency: 0.5,
+          capitalEfficiency: 0.2,
+          cargoFillPercent: 10,
+          confidencePercent: 80,
+          executionQuality: 75,
+          riskCount: 0,
+          riskRate: 0,
+          riskCue: "low",
+          executionCue: "smooth",
+          finalScore: 50,
+          rows: [row({ TypeID: 501, Volume: 0 }), row({ TypeID: 502, Volume: 1 })],
+          lines: [
+            { row: row({ TypeID: 501, Volume: 0 }), units: 10, volumeM3: 0, capitalIsk: 10_000, profitIsk: 2_000, grossSellIsk: 12_000, partial: false },
+            { row: row({ TypeID: 502, Volume: 1 }), units: 5, volumeM3: 5, capitalIsk: 40_000, profitIsk: 8_000, grossSellIsk: 48_000, partial: false },
+          ],
+        } as never,
+      ],
+    });
+    expect(out.queue).toHaveLength(1);
+    expect(Number.isFinite(out.queue[0].scoreBreakdown.positive.cargoEfficiency)).toBe(true);
+  });
+
   it("prioritizes verified profitable recs over failed recs", () => {
     const base = {
       routeTotalProfit: 200_000_000,

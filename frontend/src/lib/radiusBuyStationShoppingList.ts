@@ -73,7 +73,7 @@ function resolveSellStationName(row: FlipResult): string {
 
 function rowPricing(row: FlipResult) {
   const units = Math.max(0, requestedUnitsForFlip(row));
-  const volume = Math.max(0, Number(row.Volume ?? 0));
+  const volume = Number(row.Volume ?? 0);
   const buyPrice = Math.max(0, Number(row.ExpectedBuyPrice ?? row.BuyPrice ?? 0));
   const sellPrice = Math.max(0, Number(row.ExpectedSellPrice ?? row.SellPrice ?? 0));
   const profitPerUnit = Math.max(0, Number(row.ExpectedProfit ?? row.RealProfit ?? row.TotalProfit ?? 0)) > 0
@@ -196,7 +196,7 @@ export function buildRadiusBuyStationShoppingLists(
     const avgExecutionQuality = selected.reduce((sum, line) => sum + line.executionQuality, 0) / selected.length;
     const confidence = selected.reduce((sum, line) => sum + line.confidence, 0) / selected.length;
     const worstTrapRisk = selected.reduce((worst, line) => Math.max(worst, line.trapRisk), 0);
-    const capitalEfficiency = totalProfitIsk / Math.max(1, capitalIsk);
+    const capitalEfficiency = capitalIsk > 0 ? totalProfitIsk / capitalIsk : 0;
     const cargoFillPercent = input.cargoCapacityM3 && input.cargoCapacityM3 > 0
       ? clamp((volumeM3 / input.cargoCapacityM3) * 100, 0, 100)
       : 100;

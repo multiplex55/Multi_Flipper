@@ -273,9 +273,9 @@ export function formatBaseBatchManifestText(
   for (const line of input.lines) {
     const qty = line.units;
     const buyTotal = line.capital;
-    const buyPer = line.capital / line.units;
+    const buyPer = line.units > 0 ? line.capital / line.units : 0;
     const sellTotal = line.grossSell;
-    const sellPer = line.grossSell / line.units;
+    const sellPer = line.units > 0 ? line.grossSell / line.units : 0;
     const vol = line.volume;
     const profit = line.profit;
     lines.push(

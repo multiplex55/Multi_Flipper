@@ -364,7 +364,7 @@ export function buildRadiusCargoBuilds(
       }
 
       // 1) Data validity
-      const volumePerUnit = Math.max(0, row.Volume ?? 0);
+      const volumePerUnit = Number(row.Volume ?? 0);
       const buyPrice = Math.max(0, row.ExpectedBuyPrice ?? row.BuyPrice ?? 0);
       const profitPerUnit = Math.max(0, row.ProfitPerUnit ?? 0);
       const sellPrice = Math.max(0, row.SellPrice ?? 0);
@@ -443,7 +443,7 @@ export function buildRadiusCargoBuilds(
         execution,
         buyPrice,
       });
-      const iskPerM3 = volumePerUnit > 0 ? profitPerUnit / volumePerUnit : Number.POSITIVE_INFINITY;
+      const iskPerM3 = volumePerUnit > 0 ? profitPerUnit / volumePerUnit : 0;
       lineCandidates.push({
         row,
         requestedUnits,
@@ -546,9 +546,10 @@ export function buildRadiusCargoBuilds(
         grossSellIsk,
         partial,
       });
-      weightedConfidence += candidate.confidence * volume;
-      weightedExecution += candidate.execution * volume;
-      weightTotal += volume;
+      const confidenceWeight = candidate.volumePerUnit > 0 ? volume : units;
+      weightedConfidence += candidate.confidence * confidenceWeight;
+      weightedExecution += candidate.execution * confidenceWeight;
+      weightTotal += confidenceWeight;
     }
 
     const picked = lines.map((line) => line.row);
@@ -560,7 +561,9 @@ export function buildRadiusCargoBuilds(
     const riskCount = Math.max(0, aggregate?.riskTotalCount ?? 0);
     const riskDenominator = Math.max(1, lineCandidates.length);
     const riskRate = riskCount / riskDenominator;
-    const cargoFillPercent = clamp((usedCargo / Math.max(1, preset.cargoCapacityM3)) * 100, 0, 100);
+    const cargoFillPercent = preset.cargoCapacityM3 > 0
+      ? clamp((usedCargo / preset.cargoCapacityM3) * 100, 0, 100)
+      : 0;
     const confidencePercent = weightTotal > 0 ? weightedConfidence / weightTotal : 0;
     const executionQuality = weightTotal > 0 ? weightedExecution / weightTotal : 0;
 

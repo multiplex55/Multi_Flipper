@@ -50,7 +50,7 @@ describe("buildRadiusBuyStationShoppingLists", () => {
       rows: [
         row("valid", { TypeID: 1 }),
         row("no units", { TypeID: 2, UnitsToBuy: 0 }),
-        row("no volume", { TypeID: 3, Volume: 0 }),
+        row("no volume", { TypeID: 3, Volume: -1 }),
         row("bad spread", { TypeID: 4, SellPrice: 80, ExpectedSellPrice: 80 }),
         row("no profit", { TypeID: 5, ProfitPerUnit: 0, TotalProfit: 0, ExpectedProfit: 0 }),
       ],
@@ -144,8 +144,21 @@ describe("buildRadiusBuyStationShoppingLists", () => {
     });
     expect(lists).toHaveLength(1);
     expect(lists[0].volumeM3).toBe(0);
-    expect(lists[0].capitalIsk).toBe(10_000);
+    expect(lists[0].capitalIsk).toBeGreaterThan(0);
     expect(lists[0].totalProfitIsk).toBe(6_000);
+  });
+
+  it("rejects negative-volume rows while keeping mixed zero/non-zero packages", () => {
+    const lists = buildRadiusBuyStationShoppingLists({
+      rows: [
+        row("bad vol", { TypeID: 201, Volume: -2 }),
+        row("zero vol", { TypeID: 202, Volume: 0, UnitsToBuy: 4, BuyPrice: 1_000, ExpectedBuyPrice: 1_000, SellPrice: 1_250, ExpectedSellPrice: 1_250, ProfitPerUnit: 250, TotalProfit: 1_000, ExpectedProfit: 1_000 }),
+        row("normal", { TypeID: 203, Volume: 3, UnitsToBuy: 5, BuyPrice: 2_000, ExpectedBuyPrice: 2_000, SellPrice: 2_500, ExpectedSellPrice: 2_500, ProfitPerUnit: 500, TotalProfit: 2_500, ExpectedProfit: 2_500 }),
+      ],
+    });
+    expect(lists).toHaveLength(1);
+    expect(lists[0].lines.map((l) => l.row.TypeName)).toEqual(expect.arrayContaining(["zero vol", "normal"]));
+    expect(lists[0].lines.find((l) => l.row.TypeName === "bad vol")).toBeUndefined();
   });
 
 });

@@ -111,6 +111,37 @@ describe("buildRadiusCargoBuilds", () => {
     expect(builds[0].totalCapitalIsk).toBe(350_000_000);
   });
 
+  it("rejects negative unit volume rows and keeps zero-volume rows for capital/profit", () => {
+    const negative = row("Negative volume", { TypeID: 9901, Volume: -1, UnitsToBuy: 10 });
+    const zeroVolume = row("Zero volume", {
+      TypeID: 9902,
+      Volume: 0,
+      UnitsToBuy: 20,
+      BuyPrice: 10_000,
+      ExpectedBuyPrice: 10_000,
+      SellPrice: 12_000,
+      ProfitPerUnit: 2_000,
+      TotalProfit: 40_000,
+      ExpectedProfit: 40_000,
+      RealProfit: 40_000,
+    });
+    const key = routeGroupKey(negative);
+
+    const { builds, diagnostics } = buildRadiusCargoBuilds({
+      rows: [negative, zeroVolume],
+      routeAggregateMetricsByRoute: { [key]: aggregate },
+      preset: { ...RADIUS_CARGO_BUILD_PRESETS.low_capital, minExecutionQuality: 0, minConfidencePercent: 0, minJumpEfficiencyIsk: 0 },
+    });
+
+    expect(diagnostics.skippedNoVolume).toBe(1);
+    expect(builds).toHaveLength(1);
+    expect(builds[0].lines).toHaveLength(1);
+    expect(builds[0].lines[0].row.TypeName).toBe("Zero volume");
+    expect(builds[0].lines[0].volumeM3).toBe(0);
+    expect(builds[0].totalCapitalIsk).toBe(200_000);
+    expect(builds[0].totalProfitIsk).toBe(40_000);
+  });
+
   it("handles exact-fit and zero-fit boundaries", () => {
     const exactFit = row("Exact fit", {
       Volume: 100,
@@ -411,7 +442,7 @@ describe("buildRadiusCargoBuilds", () => {
 
   it("tracks diagnostics counters without double counting", () => {
     const noUnits = row("No units", { UnitsToBuy: 0 });
-    const noVolume = row("No volume", { Volume: 0 });
+    const noVolume = row("No volume", { Volume: -1 });
     const noCapital = row("No capital", { BuyPrice: 0, ExpectedBuyPrice: 0 });
     const lowExecution = row("Low execution", { FilledQty: 0, CanFill: false });
     const lowConfidence = row("Low confidence", { FilledQty: 0, CanFill: false, PreExecutionUnits: 1, UnitsToBuy: 1, BuyOrderRemain: 1, SellOrderRemain: 1, DayTargetPeriodPrice: 120 });
@@ -487,7 +518,7 @@ describe("buildRadiusCargoBuilds", () => {
   it("filters invalid economics rows before allocation", () => {
     const valid = row("Valid");
     const rows = [
-      row("Zero volume", { Volume: 0 }),
+      row("Negative volume", { Volume: -1 }),
       row("Zero buy", { BuyPrice: 0, ExpectedBuyPrice: 0 }),
       row("No profit", { ProfitPerUnit: 0, TotalProfit: 0, ExpectedProfit: 0, RealProfit: 0 }),
       valid,
