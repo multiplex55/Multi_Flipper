@@ -115,14 +115,22 @@ const DEFAULT_WEIGHTS = {
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
 
+export function verificationSortRank(status: NonNullable<RadiusBuyRecommendation["verificationState"]>["status"] | undefined): number {
+  if (status === "verified") return 0;
+  if (status === "not_verified" || !status) return 1;
+  if (status === "stale") return 2;
+  if (status === "failed") return 3;
+  return 4;
+}
+
 function getVerificationAdjustment(item: RadiusBuyRecommendation): { bonus: number; reason?: string } {
   const state = item.verificationState;
   if (!state || state.status === "not_verified") return { bonus: 0 };
 
   const positiveProfit = safeNumber(item.batchProfitIsk) > 0;
-  if (state.status === "verified") return { bonus: positiveProfit ? 0.06 : 0.02 };
+  if (state.status === "verified") return { bonus: positiveProfit ? 0.08 : 0.01 };
   if (state.status === "stale") return { bonus: -0.015, reason: "verification_stale" };
-  if (state.status === "failed") return { bonus: -0.08, reason: `verification_failed:${safeNumber(state.failedLineCount) > 0 ? ` ${safeNumber(state.failedLineCount)} lines` : " review needed"}` };
+  if (state.status === "failed") return { bonus: -0.12, reason: `verification_failed:${safeNumber(state.failedLineCount) > 0 ? ` ${safeNumber(state.failedLineCount)} lines` : " review needed"}` };
   return { bonus: 0 };
 }
 
@@ -255,7 +263,7 @@ export function buildRadiusDecisionQueue(input: BuildRadiusDecisionQueueInput): 
     if (item.id.startsWith("rejected:") && item.action === "buy") item.action = "verify";
   }
 
-  queue.sort((a, b) => b.score - a.score || b.scoreBreakdown.positive.longHaulWorth - a.scoreBreakdown.positive.longHaulWorth || a.kind.localeCompare(b.kind) || a.id.localeCompare(b.id));
+  queue.sort((a, b) => b.score - a.score || verificationSortRank(a.verificationState?.status) - verificationSortRank(b.verificationState?.status) || b.scoreBreakdown.positive.longHaulWorth - a.scoreBreakdown.positive.longHaulWorth || a.kind.localeCompare(b.kind) || a.id.localeCompare(b.id));
   const limited = (input.maxRecommendations ?? 0) > 0 ? queue.slice(0, input.maxRecommendations) : queue;
   return { queue: limited, rejected };
 }

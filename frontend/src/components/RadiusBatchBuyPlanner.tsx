@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { formatISK } from "@/lib/format";
 import type { BuyPlannerMode, RadiusBuyRecommendation } from "@/lib/radiusBuyRecommendation";
+import { verificationSortRank } from "@/lib/radiusDecisionQueue";
 
 type SortKey = "rank" | "action" | "kind" | "stations" | "items" | "profit" | "iskJump" | "cargoUsed" | "remaining" | "capital" | "roi" | "jumps" | "fill" | "risk" | "verification";
+type VerificationFilter = "all" | "verified" | "needs_verify" | "stale" | "failed";
 
 type Props = {
   recommendations: RadiusBuyRecommendation[];
@@ -16,9 +18,19 @@ type Props = {
 export function RadiusBatchBuyPlanner({ recommendations, mode, onModeChange, onOpenBatchBuilder, onCopyManifest, onVerify }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("rank");
   const [dir, setDir] = useState<1 | -1>(1);
+  const [verificationFilter, setVerificationFilter] = useState<VerificationFilter>("all");
 
   const sorted = useMemo(() => {
-    const rows = recommendations.map((recommendation, index) => ({ recommendation, rank: index + 1 }));
+    const rows = recommendations
+      .filter((recommendation) => {
+        const status = recommendation.verificationState?.status ?? "not_verified";
+        if (verificationFilter === "all") return true;
+        if (verificationFilter === "verified") return status === "verified";
+        if (verificationFilter === "needs_verify") return status === "not_verified";
+        if (verificationFilter === "stale") return status === "stale";
+        return status === "failed";
+      })
+      .map((recommendation, index) => ({ recommendation, rank: index + 1 }));
     rows.sort((a, b) => {
       const av = getSortValue(a.recommendation, a.rank, sortKey);
       const bv = getSortValue(b.recommendation, b.rank, sortKey);
@@ -27,7 +39,7 @@ export function RadiusBatchBuyPlanner({ recommendations, mode, onModeChange, onO
       return a.rank - b.rank;
     });
     return rows;
-  }, [dir, recommendations, sortKey]);
+  }, [dir, recommendations, sortKey, verificationFilter]);
 
   const onSort = (key: SortKey) => {
     if (sortKey === key) setDir((prev) => (prev === 1 ? -1 : 1));
@@ -53,6 +65,11 @@ export function RadiusBatchBuyPlanner({ recommendations, mode, onModeChange, onO
           <option value="low_capital">low_capital</option>
         </select>
       </label>
+    </div>
+    <div className="mb-2 flex flex-wrap gap-1">
+      {[["all", "All"], ["verified", "Verified"], ["needs_verify", "Needs Verify"], ["stale", "Stale"], ["failed", "Failed"]].map(([value, label]) => (
+        <button key={value} type="button" onClick={() => setVerificationFilter(value as VerificationFilter)} className="rounded-sm border border-eve-border/60 px-1 py-0.5" data-testid={`verification-chip-${value}`}>{label}</button>
+      ))}
     </div>
     <div className="overflow-x-auto">
       <table className="min-w-full text-left">
@@ -88,7 +105,7 @@ function formatVerificationState(state: RadiusBuyRecommendation["verificationSta
   if (state.status === "stale") return "Stale";
   if (state.status === "failed") {
     const delta = Number(state.profitDeltaIsk ?? state.priceDeltaIsk ?? 0);
-    return Number.isFinite(delta) && delta !== 0 ? `Failed: profit delta ${formatISK(delta)}` : "Failed: review needed";
+    return Number.isFinite(delta) && delta !== 0 ? `Failed: profit collapsed by ${formatISK(Math.abs(delta))}` : "Failed: review needed";
   }
   if (state.status === "verified") {
     if (!state.checkedAt) return "Verified";
@@ -118,6 +135,6 @@ function getSortValue(recommendation: RadiusBuyRecommendation, rank: number, key
     case "jumps": return recommendation.packageMetrics.totalJumps;
     case "fill": return Number(recommendation.packageMetrics.averageFillConfidencePct ?? 0);
     case "risk": return Number(recommendation.packageMetrics.riskCount ?? 0);
-    case "verification": return recommendation.verificationSlots?.length ?? 0;
+    case "verification": return verificationSortRank(recommendation.verificationState?.status);
   }
 }
