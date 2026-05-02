@@ -51,5 +51,5 @@ export type RadiusBuyRecommendation = {
   batchIskPerJump: number;
   batchRoiPercent: number;
   verificationSlots?: string[];
-  scoreBreakdown?: Record<string, number>;
+  scoreBreakdown?: Record<string, number> | Record<string, unknown>;
 };

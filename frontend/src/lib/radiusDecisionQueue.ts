@@ -9,6 +9,7 @@ import {
   recommendationFromSingleRow,
 } from "@/lib/radiusBuyRecommendationAdapters";
 import { safeNumber, type RouteBatchMetadataByRoute } from "@/lib/batchMetrics";
+import { classifyHaulWorthiness, type HaulWorthinessLabel } from "@/lib/haulWorthiness";
 import type { FlipResult } from "@/lib/types";
 
 export type RadiusDecisionQueueKind =
@@ -30,10 +31,10 @@ export type RadiusDecisionRejectedDiagnostic = {
   severity?: number;
 };
 
-export type RadiusDecisionQueueItem = Omit<RadiusBuyRecommendation, "kind"> & {
-  kind: RadiusDecisionQueueKind;
-  score: number;
-  scoreBreakdown: {
+export type BuyPlannerMode = "balanced" | "batch_profit" | "batch_isk_per_jump" | "cargo_fill" | "long_haul_worth" | "low_capital";
+
+export type RadiusDecisionScoreBreakdown = {
+  positive: {
     profit: number;
     iskPerJump: number;
     cargoEfficiency: number;
@@ -43,8 +44,23 @@ export type RadiusDecisionQueueItem = Omit<RadiusBuyRecommendation, "kind"> & {
     dailyProfitTurnover: number;
     movement: number;
     watchlistBonus: number;
-    penalties: number;
+    longHaulWorth: number;
+    verificationReadiness: number;
   };
+  negative: {
+    riskPenalty: number;
+    slippagePenalty: number;
+    concentrationPenalty: number;
+    capitalLockupPenalty: number;
+  };
+  totalPenalty: number;
+};
+
+export type RadiusDecisionQueueItem = Omit<RadiusBuyRecommendation, "kind" | "scoreBreakdown"> & {
+  kind: RadiusDecisionQueueKind;
+  score: number;
+  haulWorthiness: { label: HaulWorthinessLabel; reason: string };
+  scoreBreakdown: RadiusDecisionScoreBreakdown;
   diagnostics: RadiusDecisionRejectedDiagnostic[];
 };
 
@@ -101,27 +117,40 @@ const DEFAULT_WEIGHTS = {
 const clamp01 = (v: number) => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
 
 
+const MODE_WEIGHT_OVERRIDES: Record<BuyPlannerMode, Partial<typeof DEFAULT_WEIGHTS>> = {
+  balanced: {},
+  batch_profit: { profit: 0.38, roi: 0.12, capitalLockupPenalty: 0.1 },
+  batch_isk_per_jump: { iskPerJump: 0.3, profit: 0.2, dailyProfitTurnover: 0.12, capitalLockupPenalty: 0.06 },
+  cargo_fill: { cargoEfficiency: 0.28, fillConfidence: 0.16, roi: 0.08 },
+  long_haul_worth: { iskPerJump: 0.24, profit: 0.22, cargoEfficiency: 0.18, movement: 0.05, capitalLockupPenalty: 0.08 },
+  low_capital: { roi: 0.22, dailyProfitTurnover: 0.22, capitalLockupPenalty: 0.2, profit: 0.14 },
+};
+
 function scoreRecommendation(item: RadiusBuyRecommendation, kind: RadiusDecisionQueueKind, weights: typeof DEFAULT_WEIGHTS): RadiusDecisionQueueItem {
   const lines = item.lines;
   const profit = safeNumber(item.batchProfitIsk);
   const buy = safeNumber(item.batchCapitalIsk);
   const volume = safeNumber(item.totalVolumeM3);
   const jumps = Math.max(1, safeNumber(item.totalJumps));
-  const daily = lines.reduce((s, l) => s + safeNumber(l.row?.DailyProfit), 0);
 
   const profitNorm = clamp01(profit / 300_000_000);
-  const iskPerJumpNorm = clamp01(profit / jumps / 20_000_000);
+  const iskPerJumpNorm = clamp01(safeNumber(item.batchIskPerJump) / 20_000_000);
   const cargoEfficiencyNorm = clamp01((safeNumber(item.cargoUsedPercent) / 100) * (profit / Math.max(1, volume) / 200_000));
   const roiNorm = clamp01(safeNumber(item.batchRoiPercent) / 100);
-  const executionQualityNorm = clamp01(lines.reduce((s, l) => s + safeNumber((l.row as Record<string, unknown> | undefined)?.ExecutionQuality), 0) / Math.max(1, lines.length) / 100);
-  const fillConfidenceNorm = clamp01(lines.reduce((s, l) => s + safeNumber((l.row as Record<string, unknown> | undefined)?.FillConfidencePct), 0) / Math.max(1, lines.length) / 100);
-  const dailyTurnoverNorm = clamp01((daily / Math.max(1, buy)) * 12);
-  const movementNorm = clamp01(lines.reduce((s, l) => s + safeNumber((l.row as Record<string, unknown> | undefined)?.MovementScore), 0) / Math.max(1, lines.length) / 100);
-  const watchlistBonusNorm = clamp01(lines.some((l) => Boolean((l.row as Record<string, unknown> | undefined)?.WatchlistSignal || (l.row as Record<string, unknown> | undefined)?.IsWatchlist)) ? 1 : 0);
+  const baseBreakdown = item.scoreBreakdown ?? {};
+  const executionQualityNorm = clamp01(safeNumber(baseBreakdown.executionQuality));
+  const fillConfidenceNorm = clamp01(safeNumber(baseBreakdown.fillConfidence));
+  const dailyTurnoverNorm = clamp01(safeNumber(baseBreakdown.dailyProfitTurnover));
+  const movementNorm = clamp01(safeNumber(baseBreakdown.movement));
+  const watchlistBonusNorm = clamp01(safeNumber(baseBreakdown.watchlistBonus));
 
-  const riskPenalty = clamp01(lines.reduce((s, l) => s + safeNumber((l.row as Record<string, unknown> | undefined)?.RiskCount), 0) / Math.max(1, lines.length) / 8);
-  const slippagePenalty = clamp01(lines.reduce((s, l) => s + safeNumber(l.row?.SlippageBuyPct) + safeNumber(l.row?.SlippageSellPct), 0) / Math.max(1, lines.length) / 30);
-  const concentrationPenalty = clamp01(lines.reduce((s, l) => s + safeNumber(l.qty), 0) > 0 && lines.length <= 1 ? 0.8 : 0.2);
+  const haulWorthiness = classifyHaulWorthiness({ jumps, profitIsk: profit, iskPerJump: safeNumber(item.batchIskPerJump), cargoUsedPercent: safeNumber(item.cargoUsedPercent) });
+  const longHaulWorthNorm = haulWorthiness.label === "long_worth_it" ? 1 : haulWorthiness.label === "short_efficient" ? 0.85 : haulWorthiness.label === "long_marginal" ? 0.45 : 0;
+  const verificationReadinessNorm = clamp01(item.action === "verify" ? 1 : fillConfidenceNorm * executionQualityNorm);
+
+  const riskPenalty = clamp01(safeNumber(baseBreakdown.riskPenalty));
+  const slippagePenalty = clamp01(safeNumber(baseBreakdown.slippagePenalty));
+  const concentrationPenalty = clamp01(lines.length <= 1 ? 0.8 : 0.2);
   const capitalLockPenalty = clamp01(buy / 1_500_000_000);
 
   const positive =
@@ -133,49 +162,51 @@ function scoreRecommendation(item: RadiusBuyRecommendation, kind: RadiusDecision
     fillConfidenceNorm * weights.fillConfidence +
     dailyTurnoverNorm * weights.dailyProfitTurnover +
     movementNorm * weights.movement +
-    watchlistBonusNorm * weights.watchlistBonus;
-  const penalties =
+    watchlistBonusNorm * weights.watchlistBonus +
+    longHaulWorthNorm * 0.1 +
+    verificationReadinessNorm * 0.05;
+  const totalPenalty =
     riskPenalty * weights.riskPenalty +
     slippagePenalty * weights.slippagePenalty +
     concentrationPenalty * weights.concentrationPenalty +
     capitalLockPenalty * weights.capitalLockupPenalty;
 
-  const score = Math.max(0, Math.min(100, (positive - penalties) * 100));
-
-  const reasons = [...item.reasons];
-  if (profit > 0) reasons.push(`profit:${Math.round(profit).toLocaleString()}`);
-  if (iskPerJumpNorm > 0.5) reasons.push("isk_per_jump_strong");
-  if (movementNorm > 0.45) reasons.push("movement_signal");
-  if (watchlistBonusNorm > 0) reasons.push("watchlist_signal");
-
-  const warnings = [...item.warnings];
-  if (capitalLockPenalty > 0.7) warnings.push("capital_lockup_high");
-  if (slippagePenalty > 0.5) warnings.push("slippage_risk_elevated");
+  const score = Math.max(0, Math.min(100, (positive - totalPenalty) * 100));
 
   return {
     ...item,
     kind,
     score,
-    reasons,
-    warnings,
+    haulWorthiness,
     diagnostics: item.diagnostics ?? [],
     scoreBreakdown: {
-      profit: profitNorm,
-      iskPerJump: iskPerJumpNorm,
-      cargoEfficiency: cargoEfficiencyNorm,
-      roi: roiNorm,
-      executionQuality: executionQualityNorm,
-      fillConfidence: fillConfidenceNorm,
-      dailyProfitTurnover: dailyTurnoverNorm,
-      movement: movementNorm,
-      watchlistBonus: watchlistBonusNorm,
-      penalties,
+      positive: {
+        profit: profitNorm,
+        iskPerJump: iskPerJumpNorm,
+        cargoEfficiency: cargoEfficiencyNorm,
+        roi: roiNorm,
+        executionQuality: executionQualityNorm,
+        fillConfidence: fillConfidenceNorm,
+        dailyProfitTurnover: dailyTurnoverNorm,
+        movement: movementNorm,
+        watchlistBonus: watchlistBonusNorm,
+        longHaulWorth: longHaulWorthNorm,
+        verificationReadiness: verificationReadinessNorm,
+      },
+      negative: {
+        riskPenalty,
+        slippagePenalty,
+        concentrationPenalty,
+        capitalLockupPenalty: capitalLockPenalty,
+      },
+      totalPenalty,
     },
   };
 }
 
 export function buildRadiusDecisionQueue(input: BuildRadiusDecisionQueueInput): BuildRadiusDecisionQueueResult {
-  const weights = { ...DEFAULT_WEIGHTS, ...(input.factorWeights ?? {}) };
+  const mode = (input.mode ?? "balanced") as BuyPlannerMode;
+  const weights = { ...DEFAULT_WEIGHTS, ...(MODE_WEIGHT_OVERRIDES[mode] ?? MODE_WEIGHT_OVERRIDES.balanced), ...(input.factorWeights ?? {}) };
   const queue: RadiusDecisionQueueItem[] = [];
   const rejected: BuildRadiusDecisionQueueResult["rejected"] = [];
 
@@ -201,7 +232,7 @@ export function buildRadiusDecisionQueue(input: BuildRadiusDecisionQueueInput): 
     if (item.id.startsWith("rejected:") && item.action === "buy") item.action = "verify";
   }
 
-  queue.sort((a, b) => b.score - a.score || a.kind.localeCompare(b.kind) || a.id.localeCompare(b.id));
+  queue.sort((a, b) => b.score - a.score || b.scoreBreakdown.positive.longHaulWorth - a.scoreBreakdown.positive.longHaulWorth || a.kind.localeCompare(b.kind) || a.id.localeCompare(b.id));
   const limited = (input.maxRecommendations ?? 0) > 0 ? queue.slice(0, input.maxRecommendations) : queue;
   return { queue: limited, rejected };
 }
