@@ -6,6 +6,7 @@ import {
   buildRadiusRecommendationSellChecklistText,
   formatBatchLinesToMultibuyLines,
   formatRadiusBuyRecommendationManifestText,
+  copyRecommendationManifest,
   formatBatchLinesToMultibuyText,
   formatOrderedRouteManifestText,
   formatRouteMetadataHeader,
@@ -142,7 +143,7 @@ describe("radius recommendation manifest formatter", () => {
     expect(text).toContain("Jumps to Buy Station: 2");
     expect(text).toContain("Sell Station: Amarr");
     expect(text).toContain("Jumps Buy -> Sell: 1");
-    expect(text).toContain("Cargo m3: 1,000 m3");
+    expect(text).toContain("Cargo m3: 1,000");
     expect(text).toContain("Total isk/jump: 1,500 ISK");
     expect(text).toContain("Tritanium | qty 1,500");
     expect(text).toContain("vol 0 m3");
@@ -191,9 +192,9 @@ describe("radius recommendation manifest formatter", () => {
       "Jumps to Buy Station: 2",
       "Sell Station: Amarr",
       "Jumps Buy -> Sell: 1",
-      "Cargo m3: 1,000 m3",
+      "Cargo m3: 1,000",
       "Items: 1",
-      "Total volume: 0 m3",
+      "Total volume: 100 m3",
       "Total capital: 10,500 ISK",
       "Total gross sell: 15,000 ISK",
       "Total profit: 4,500 ISK",
@@ -219,8 +220,8 @@ describe("radius recommendation manifest formatter", () => {
       })),
     });
 
-    expect(text).toContain("Jumps to Buy Station: 0");
-    expect(text).toContain("Jumps Buy -> Sell: 0");
+    expect(text).toContain("Jumps to Buy Station: 2");
+    expect(text).toContain("Jumps Buy -> Sell: 1");
     expect(text).toContain("Total isk/jump: 999 ISK");
   });
 
@@ -235,6 +236,30 @@ describe("radius recommendation manifest formatter", () => {
 
     expect(text).toContain("qty 12,345");
     expect(text).toContain("Tritanium 12345");
+  });
+
+  it("prefers package jump fields over first-line row fallbacks", () => {
+    const text = formatRadiusBuyRecommendationManifestText({
+      ...recommendation,
+      jumpsToBuyStation: 9,
+      jumpsBuyToSell: 8,
+      totalJumps: 17,
+      batchIskPerJump: 777,
+      lines: recommendation.lines.map((line) => ({
+        ...line,
+        row: { ...line.row, BuyJumps: 1, SellJumps: 2 } as never,
+      })),
+    });
+
+    expect(text).toContain("Jumps to Buy Station: 9");
+    expect(text).toContain("Jumps Buy -> Sell: 8");
+    expect(text).toContain("Total isk/jump: 777 ISK");
+  });
+
+  it("planner and batch-builder copy manifests match for same selected package", () => {
+    const plannerManifest = copyRecommendationManifest(recommendation);
+    const batchBuilderManifest = formatRadiusBuyRecommendationManifestText(recommendation);
+    expect(plannerManifest).toBe(batchBuilderManifest);
   });
 
 });

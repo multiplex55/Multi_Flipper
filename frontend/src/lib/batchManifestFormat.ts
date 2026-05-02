@@ -515,25 +515,24 @@ export function formatRadiusBuyRecommendationManifestText(
   const totalGrossSell = Number.isFinite(recommendation.batchGrossSellIsk) ? recommendation.batchGrossSellIsk : recommendation.lines.reduce((sum, line) => sum + (Number.isFinite(line.sellTotalIsk) ? line.sellTotalIsk : 0), 0);
   const totalProfit = Number.isFinite(recommendation.batchProfitIsk) ? recommendation.batchProfitIsk : recommendation.lines.reduce((sum, line) => sum + (Number.isFinite(line.profitTotalIsk) ? line.profitTotalIsk : 0), 0);
   const first = recommendation.lines[0]?.row;
-  const buyJumpsCandidate = first?.BuyJumps;
-  const sellJumpsCandidate = first?.SellJumps;
   const buyJumps =
-    typeof buyJumpsCandidate === "number" && Number.isFinite(buyJumpsCandidate)
-      ? buyJumpsCandidate
-      : 0;
+    typeof recommendation.jumpsToBuyStation === "number" && Number.isFinite(recommendation.jumpsToBuyStation)
+      ? recommendation.jumpsToBuyStation
+      : typeof first?.BuyJumps === "number" && Number.isFinite(first.BuyJumps)
+        ? first.BuyJumps
+        : 0;
   const sellJumps =
-    typeof sellJumpsCandidate === "number" &&
-    Number.isFinite(sellJumpsCandidate)
-      ? sellJumpsCandidate
-      : 0;
+    typeof recommendation.jumpsBuyToSell === "number" && Number.isFinite(recommendation.jumpsBuyToSell)
+      ? recommendation.jumpsBuyToSell
+      : typeof first?.SellJumps === "number" && Number.isFinite(first.SellJumps)
+        ? first.SellJumps
+        : 0;
   const totalJumps =
-    typeof recommendation.totalJumps === "number" &&
-    Number.isFinite(recommendation.totalJumps)
+    typeof recommendation.totalJumps === "number" && Number.isFinite(recommendation.totalJumps)
       ? recommendation.totalJumps
-      : 0;
+      : safeDivide(buyJumps + sellJumps, 1);
   const totalIskPerJump =
-    typeof recommendation.batchIskPerJump === "number" &&
-    Number.isFinite(recommendation.batchIskPerJump)
+    typeof recommendation.batchIskPerJump === "number" && Number.isFinite(recommendation.batchIskPerJump)
       ? recommendation.batchIskPerJump
       : safeDivide(totalProfit, totalJumps);
 
@@ -542,7 +541,7 @@ export function formatRadiusBuyRecommendationManifestText(
     `Jumps to Buy Station: ${formatQuantity(buyJumps)}`,
     `Sell Station: ${first?.SellStation?.trim() || "Unknown Station"}`,
     `Jumps Buy -> Sell: ${formatQuantity(sellJumps)}`,
-    `Cargo m3: ${formatVolume(recommendation.cargoCapacityM3)} m3`,
+    `Cargo m3: ${formatVolume(recommendation.cargoCapacityM3)}`,
     `Items: ${formatQuantity(recommendation.lines.length)}`,
     `Total volume: ${formatVolume(totalVolume)} m3`,
     `Total capital: ${formatInteger(totalCapital)} ISK`,
@@ -561,6 +560,12 @@ export function formatRadiusBuyRecommendationManifestText(
   ];
 
   return output.join("\n");
+}
+
+export function copyRecommendationManifest(
+  recommendation: RadiusBuyRecommendation,
+): string {
+  return formatRadiusBuyRecommendationManifestText(recommendation);
 }
 
 function withStationSystemLabel(

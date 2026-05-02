@@ -207,7 +207,7 @@ import { RadiusBatchBuyPlanner } from "@/components/RadiusBatchBuyPlanner";
 import { RadiusRowContextMenu } from "@/components/RadiusRowContextMenu";
 import { buildRadiusDecisionQueue, type RadiusDecisionQueueItem } from "@/lib/radiusDecisionQueue";
 import { recommendationFromBuyStationShoppingList, recommendationFromCargoBuild } from "@/lib/radiusBuyRecommendationAdapters";
-import { buildRadiusRecommendationBuyChecklistText, buildRadiusRecommendationSellChecklistText, formatRadiusBuyRecommendationManifestText } from "@/lib/batchManifestFormat";
+import { buildRadiusRecommendationBuyChecklistText, buildRadiusRecommendationSellChecklistText, copyRecommendationManifest } from "@/lib/batchManifestFormat";
 import type { BuyPlannerMode, RadiusBuyRecommendation } from "@/lib/radiusBuyRecommendation";
 import { RadiusBulkActionsBar } from "@/components/RadiusBulkActionsBar";
 import type { RadiusContextMenuAction } from "@/lib/radiusContextMenuItems";
@@ -4816,7 +4816,7 @@ export function ScanResultsTable({
   const recommendationFromShoppingList = useCallback((list: RadiusBuyStationShoppingList) => recommendationFromBuyStationShoppingList(list, { source: "scan-results" }), []);
 
   const copyCargoBuildManifest = useCallback((build: (typeof cargoBuilds)[number]) => {
-    copyText(formatRadiusBuyRecommendationManifestText(recommendationFromBuild(build)));
+    copyText(copyRecommendationManifest(recommendationFromBuild(build)));
   }, [copyText, recommendationFromBuild]);
 
   const copyCargoBuildBuyChecklist = useCallback((build: (typeof cargoBuilds)[number]) => {
@@ -6943,8 +6943,8 @@ export function ScanResultsTable({
                 mode={buyPlannerMode}
                 onModeChange={setBuyPlannerMode}
                 onOpenBatchBuilder={(recommendation) => openBatchBuilderForRecommendation({ routeKey: recommendation.routeKey ?? "", recommendation: recommendation, intentLabel: "Buy Planner", batchEntryMode: "core" })}
-                onCopyManifest={(recommendation) => copyText(formatRadiusBuyRecommendationManifestText(recommendation))}
-                onVerify={(recommendation) => onOpenPriceValidation?.(formatRadiusBuyRecommendationManifestText(recommendation))}
+                onCopyManifest={(recommendation) => copyText(copyRecommendationManifest(recommendation))}
+                onVerify={(recommendation) => onOpenPriceValidation?.(copyRecommendationManifest(recommendation))}
               />
             </div>
           ) : null}
@@ -6953,10 +6953,10 @@ export function ScanResultsTable({
               <RadiusBuyNowQueuePanel
                 recommendations={buyNowQueueRecommendations}
                 onOpenBatchBuilder={(recommendation) => openBatchBuilderForRecommendation({ routeKey: recommendation.routeKey ?? "", recommendation: recommendation, intentLabel: "Buy-Now Queue", batchEntryMode: "core" })}
-                onCopyManifest={(recommendation) => copyText(formatRadiusBuyRecommendationManifestText(queueItemAsRecommendation(recommendation)))}
+                onCopyManifest={(recommendation) => copyText(copyRecommendationManifest(queueItemAsRecommendation(recommendation)))}
                 onCopyBuyChecklist={(recommendation) => copyText(buildRadiusRecommendationBuyChecklistText(queueItemAsRecommendation(recommendation)))}
                 onCopySellChecklist={(recommendation) => copyText(buildRadiusRecommendationSellChecklistText(queueItemAsRecommendation(recommendation)))}
-                onVerify={(recommendation) => onOpenPriceValidation?.(formatRadiusBuyRecommendationManifestText(queueItemAsRecommendation(recommendation)))}
+                onVerify={(recommendation) => onOpenPriceValidation?.(copyRecommendationManifest(queueItemAsRecommendation(recommendation)))}
                 onPin={(recommendation) => recommendation.routeKey ? onOpenInRoute?.(recommendation.routeKey) : undefined}
                 onMarkQueued={(recommendation) => recommendation.routeKey ? onSendToRouteQueue?.(recommendation.routeKey) : undefined}
                 onHideSimilar={(recommendation) => {
@@ -9282,7 +9282,7 @@ ${t("cacheTooltipNextExpiry")}: ${new Date(cacheView.nextExpiryAt).toLocaleTimeS
             onOpenRows={openRowsForStationGroup}
             onCopyBuyChecklist={(list) => copyText(buildRadiusRecommendationBuyChecklistText(recommendationFromShoppingList(list)))}
             onCopySellChecklist={(list) => copyText(buildRadiusRecommendationSellChecklistText(recommendationFromShoppingList(list)))}
-            onCopyManifest={(list) => copyText(formatRadiusBuyRecommendationManifestText(recommendationFromShoppingList(list)))}
+            onCopyManifest={(list) => copyText(copyRecommendationManifest(recommendationFromShoppingList(list)))}
             onOpenBatch={(list) => {
               const routeKey = list.lines[0]?.routeKey;
               if (!routeKey) return;
