@@ -447,6 +447,47 @@ describe("BatchBuyVerifier", () => {
     expect(exportBtn).toBeDisabled();
     expect(screen.getByText("No buyable rows to export.")).toBeInTheDocument();
   });
+
+
+  it("renders adjusted buy plan metrics when exclusions exist and export copies filtered manifest", async () => {
+    render(<BatchBuyVerifier />);
+    const manifest = [
+      "Buy station: Jita IV - Moon 4",
+      "Jumps to buy station: 2",
+      "Sell station: Amarr",
+      "Jumps buy -> sell: 3",
+      "Cargo m3: 1,200",
+      "A | qty 10 | buy per 5 | buy total 50 | sell per 8 | sell total 80 | vol 2 | profit 30",
+      "B | qty 5 | buy per 4 | buy total 20 | sell per 7 | sell total 35 | vol 1 | profit 15",
+      "C | qty 4 | buy per 6 | buy total 24 | sell per 9 | sell total 36 | vol 1.5 | profit 12",
+    ].join("\n");
+    const exportRows = [
+      ["A", "10", "5", "50"].join("\t"),
+      ["B", "5", "4", "20"].join("\t"),
+    ].join("\n");
+
+    fireEvent.change(screen.getByLabelText("Batch Buy Manifest"), { target: { value: manifest } });
+    fireEvent.change(screen.getByLabelText("Export Order"), { target: { value: exportRows } });
+    fireEvent.click(screen.getByLabelText("Strict"));
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
+
+    expect(screen.getByText("Buy lines kept")).toBeInTheDocument();
+    expect(screen.getByText("Excluded manifest lines")).toBeInTheDocument();
+    expect(screen.getByText("Some manifest rows were excluded from the export due to non-safe evaluation states.")).toBeInTheDocument();
+    expect(screen.getByText("Current buy cost")).toBeInTheDocument();
+    expect(screen.getByText("Planned sell value")).toBeInTheDocument();
+    expect(screen.getByText("Estimated profit")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Export Buy Manifest" }));
+    await waitFor(() => expect(writeTextMock).toHaveBeenCalled());
+    const payload = writeTextMock.mock.calls.at(-1)?.[0] as string;
+    expect(payload).toContain("A | qty 10");
+    expect(payload).toContain("B | qty 5");
+    expect(payload).not.toContain("C | qty");
+    expect(payload.indexOf("A | qty 10")).toBeLessThan(payload.indexOf("B | qty 5"));
+    expect(payload).toContain("\n\nA 10\nB 5");
+  });
+
   it("uses dark-mode-safe row and section styles while preserving per-state distinction", () => {
     render(<BatchBuyVerifier />);
 
