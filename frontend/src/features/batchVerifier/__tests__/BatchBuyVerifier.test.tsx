@@ -419,6 +419,34 @@ describe("BatchBuyVerifier", () => {
     expect(within(summary).queryByRole("alert")).not.toBeInTheDocument();
   });
 
+
+
+  it("disables export for duplicate normalized names and shows safety warning", () => {
+    render(<BatchBuyVerifier />);
+    const dupManifest = [
+      "Heavy  Water | qty 10 | buy per 5 | buy total 50 | sell per 8 | sell total 80",
+      "Heavy Water | qty 5 | buy per 5 | buy total 25 | sell per 8 | sell total 40",
+    ].join("\n");
+    const dupExport = [
+      ["Heavy Water", "10", "5", "50"].join("\t"),
+    ].join("\n");
+    fireEvent.change(screen.getByLabelText("Batch Buy Manifest"), { target: { value: dupManifest } });
+    fireEvent.change(screen.getByLabelText("Export Order"), { target: { value: dupExport } });
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
+    expect(screen.getByRole("button", { name: "Export Buy Manifest" })).toBeDisabled();
+    expect(screen.getByText("Duplicate item names detected; filtered manifest export may be unsafe.")).toBeInTheDocument();
+  });
+
+  it("shows no-buyable status when no safe rows exist", () => {
+    render(<BatchBuyVerifier />);
+    fireEvent.change(screen.getByLabelText("Batch Buy Manifest"), { target: { value: "Tritanium | qty 10 | buy per 5 | buy total 50" } });
+    fireEvent.change(screen.getByLabelText("Export Order"), { target: { value: "Tritanium\t10\t6\t60" } });
+    fireEvent.click(screen.getByLabelText("Strict"));
+    fireEvent.click(screen.getByRole("button", { name: "Evaluate" }));
+    const exportBtn = screen.getByRole("button", { name: "Export Buy Manifest" });
+    expect(exportBtn).toBeDisabled();
+    expect(screen.getByText("No buyable rows to export.")).toBeInTheDocument();
+  });
   it("uses dark-mode-safe row and section styles while preserving per-state distinction", () => {
     render(<BatchBuyVerifier />);
 

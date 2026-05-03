@@ -344,6 +344,7 @@ export function BatchBuyVerifier({ initialManifestText }: BatchBuyVerifierProps)
   );
   const hasSafeRows = Boolean(filteredBuyManifest && filteredBuyManifest.lines.length > 0);
   const hasDuplicateNameWarning = Boolean(filteredBuyManifest?.hasDuplicateNormalizedManifestNames);
+  const hasMissingSellOrProfitFallbackWarning = Boolean(filteredBuyManifest?.usedMissingSellOrProfitFallback);
 
 
   const handleExportBuyManifest = async () => {
@@ -353,7 +354,7 @@ export function BatchBuyVerifier({ initialManifestText }: BatchBuyVerifierProps)
     }
 
     if (filteredBuyManifest.hasDuplicateNormalizedManifestNames) {
-      setCopyStatus("Copy failed.");
+      setCopyStatus("Duplicate item names detected; filtered manifest export may be unsafe.");
       return;
     }
 
@@ -636,7 +637,17 @@ export function BatchBuyVerifier({ initialManifestText }: BatchBuyVerifierProps)
             </div>
             {hasDuplicateNameWarning ? (
               <p role="alert" className="text-eve-error" style={{ marginTop: 10, marginBottom: 0 }}>
-                Duplicate manifest names detected after normalization: {filteredBuyManifest?.duplicateNormalizedManifestNames.join(", ")}.
+                Duplicate item names detected; filtered manifest export may be unsafe.
+              </p>
+            ) : null}
+            {!hasSafeRows ? (
+              <p className="text-eve-error" style={{ marginTop: 10, marginBottom: 0 }}>
+                No buyable rows to export.
+              </p>
+            ) : null}
+            {hasMissingSellOrProfitFallbackWarning ? (
+              <p className="text-eve-dim" style={{ marginTop: 10, marginBottom: 0 }}>
+                Some rows used 0 defaults for missing sell/profit fields in adjusted totals/output.
               </p>
             ) : null}
             {hasExcludedManifestRows ? (
