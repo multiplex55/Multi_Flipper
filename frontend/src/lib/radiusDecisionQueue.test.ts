@@ -147,6 +147,7 @@ describe("radiusDecisionQueue", () => {
         sparse: { routeTotalProfit: 100_000_000, routeTotalCapital: 250_000_000, routeTotalVolume: 100, routeCapacityUsedPercent: 20, routeRemainingCargoM3: 800, routeRealIskPerJump: 7_000_000 } as never,
       },
       cargoCapacityM3: 1000,
+      factorWeights: { riskPenalty: 0, slippagePenalty: 0, concentrationPenalty: 0, capitalLockupPenalty: 0 },
     });
     expect(out.queue[0].id).toContain("route:dense");
   });
@@ -181,6 +182,27 @@ describe("radiusDecisionQueue", () => {
     expect(invalid.queue[0].score).toBeCloseTo(balanced.queue[0].score, 8);
     expect(decisionMode.queue[0].score).toBeCloseTo(balanced.queue[0].score, 8);
   });
+
+  it("long-haul worthiness affects score direction", () => {
+    const out = buildRadiusDecisionQueue({
+      mode: "long_haul_worth",
+      singleRowCandidates: [
+        row({ TypeID: 801, TotalJumps: 55, RealProfit: 700_000_000, CargoPercent: 85, RealIskPerJump: 12_500_000, ExpectedBuyPrice: 800_000_000, UnitsToBuy: 1 }),
+        row({ TypeID: 802, TotalJumps: 55, RealProfit: 320_000_000, CargoPercent: 45, RealIskPerJump: 6_600_000, ExpectedBuyPrice: 700_000_000, UnitsToBuy: 1 }),
+        row({ TypeID: 803, TotalJumps: 55, RealProfit: 110_000_000, CargoPercent: 20, RealIskPerJump: 2_100_000, ExpectedBuyPrice: 600_000_000, UnitsToBuy: 1 }),
+      ],
+      factorWeights: { riskPenalty: 0, slippagePenalty: 0, concentrationPenalty: 0, capitalLockupPenalty: 0 },
+    });
+
+    const worth = out.queue.find((q) => q.id.includes("row:801"));
+    const marginal = out.queue.find((q) => q.id.includes("row:802"));
+    const weak = out.queue.find((q) => q.id.includes("row:803"));
+    expect(worth?.haulWorthiness.label).toBe("long_worth_it");
+    expect(weak?.haulWorthiness.label).toBe("long_not_worth");
+    expect((worth?.score ?? 0)).toBeGreaterThan(marginal?.score ?? 0);
+    expect((marginal?.score ?? 0)).toBeGreaterThan(weak?.score ?? 0);
+  });
+
 
 });
 
