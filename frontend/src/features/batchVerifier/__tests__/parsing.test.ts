@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   normalizeItemName,
   parseBatchManifest,
+  parseBatchManifestHeader,
   parseExportOrder,
   parseIskNumber,
 } from "@/features/batchVerifier/parsing";
@@ -91,6 +92,38 @@ describe("batch verifier parsing utilities", () => {
     ]);
   });
 
+
+
+  it("header parser reads buy/sell stations, jumps, and cargo with comma formatting", () => {
+    const header = parseBatchManifestHeader([
+      "Buy station: Jita IV - Moon 4",
+      "Jumps to buy station: 1,234",
+      "Sell station: Amarr VIII",
+      "Jumps buy -> sell: 2",
+      "Cargo m3: 12,345.6 m3",
+    ].join("\n"));
+
+    expect(header).toEqual({
+      buyStation: "Jita IV - Moon 4",
+      jumpsToBuyStation: 1234,
+      sellStation: "Amarr VIII",
+      jumpsBuyToSell: 2,
+      cargoM3: 12345.6,
+    });
+  });
+
+  it("header parser tolerates missing header lines safely", () => {
+    const header = parseBatchManifestHeader([
+      "Buy station: Dodixie IX",
+      "Tritanium | qty 10 | buy per 5 | buy total 50",
+    ].join("\n"));
+
+    expect(header.buyStation).toBe("Dodixie IX");
+    expect(header.jumpsToBuyStation).toBeUndefined();
+    expect(header.sellStation).toBeUndefined();
+    expect(header.jumpsBuyToSell).toBeUndefined();
+    expect(header.cargoM3).toBeUndefined();
+  });
   it("normalizes names by trimming and collapsing internal whitespace", () => {
     const matrix: Array<[string, string]> = [
       ["  Republic   Fleet   EMP S  ", "Republic Fleet EMP S"],
