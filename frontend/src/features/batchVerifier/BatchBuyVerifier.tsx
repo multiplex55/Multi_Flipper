@@ -19,6 +19,7 @@ import {
   type ManifestItem,
   type ParseDiagnostic,
 } from "@/features/batchVerifier/parsing";
+import { buildFilteredBuyManifest } from "@/features/batchVerifier/filteredManifest";
 
 type EvaluationResult = {
   manifestItems: ManifestItem[];
@@ -207,6 +208,16 @@ export function BatchBuyVerifier({ initialManifestText }: BatchBuyVerifierProps)
     return changed.map((row) => `${row.name} — ${row.reason}`).join("\n");
   }, [result]);
 
+
+  const filteredBuyManifest = useMemo(() => {
+    if (!result) return null;
+    return buildFilteredBuyManifest({
+      manifestText,
+      manifestItems: result.manifestItems,
+      comparison: result.comparison,
+    });
+  }, [manifestText, result]);
+
   const slippageValue = useMemo(() => {
     if (slippageValueInput.trim() === "") return Number.NaN;
     return Number(slippageValueInput);
@@ -325,6 +336,29 @@ export function BatchBuyVerifier({ initialManifestText }: BatchBuyVerifierProps)
     if (!result) return;
     const ok = await copyToClipboard(doNotBuyLinesText);
     setCopyStatus(ok ? "Do-not-buy lines copied." : "Copy failed.");
+  };
+
+
+  const hasExcludedManifestRows = Boolean(
+    result && result.comparison.rows.some((row) => row.manifestItem && row.state !== "safe"),
+  );
+  const hasSafeRows = Boolean(filteredBuyManifest && filteredBuyManifest.lines.length > 0);
+  const hasDuplicateNameWarning = Boolean(filteredBuyManifest?.hasDuplicateNormalizedManifestNames);
+
+
+  const handleExportBuyManifest = async () => {
+    if (!filteredBuyManifest || filteredBuyManifest.lines.length === 0) {
+      setCopyStatus("No buyable rows to export.");
+      return;
+    }
+
+    if (filteredBuyManifest.hasDuplicateNormalizedManifestNames) {
+      setCopyStatus("Copy failed.");
+      return;
+    }
+
+    const ok = await copyToClipboard(filteredBuyManifest.text);
+    setCopyStatus(ok ? "Buy manifest copied." : "Copy failed.");
   };
 
   const hasChangedLines = Boolean(
@@ -540,7 +574,59 @@ export function BatchBuyVerifier({ initialManifestText }: BatchBuyVerifierProps)
                 })()}
               </div>
             </div>
+            {filteredBuyManifest ? (
+              <div
+                style={{
+                  marginTop: 12,
+                  display: "grid",
+                  gap: 8,
+                  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                }}
+              >
+                <div>
+                  <div className="text-eve-dim">Buy lines kept</div>
+                  <strong>{filteredBuyManifest.summary.keptLineCount}</strong>
+                </div>
+                <div>
+                  <div className="text-eve-dim">Excluded manifest lines</div>
+                  <strong>{filteredBuyManifest.summary.excludedManifestLineCount}</strong>
+                </div>
+                <div>
+                  <div className="text-eve-dim">Current buy cost</div>
+                  <strong>{formatSummaryTotal(filteredBuyManifest.summary.totalBuyCost)} ISK</strong>
+                </div>
+                <div>
+                  <div className="text-eve-dim">Planned sell value</div>
+                  <strong>{formatSummaryTotal(filteredBuyManifest.summary.totalPlannedSell)} ISK</strong>
+                </div>
+                <div>
+                  <div className="text-eve-dim">Estimated profit</div>
+                  <strong>{formatSummaryTotal(filteredBuyManifest.summary.totalAdjustedProfit)} ISK</strong>
+                </div>
+                <div>
+                  <div className="text-eve-dim">Volume after removals</div>
+                  <strong>
+                    {formatNumber(filteredBuyManifest.summary.totalVolume)} m3
+                    {typeof result.manifestHeader?.cargoM3 === "number"
+                      ? ` / cargo baseline ${formatNumber(result.manifestHeader.cargoM3)} m3`
+                      : ""}
+                  </strong>
+                </div>
+                <div>
+                  <div className="text-eve-dim">ISK/jump</div>
+                  <strong>{formatSummaryTotal(filteredBuyManifest.summary.iskPerJump)} ISK</strong>
+                </div>
+              </div>
+            ) : null}
+
             <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={handleExportBuyManifest}
+                disabled={!hasSafeRows || hasDuplicateNameWarning}
+              >
+                Export Buy Manifest
+              </button>
               <button type="button" onClick={handleCopyChangedLines} disabled={!hasChangedLines}>
                 Copy Changed Lines
               </button>
@@ -548,6 +634,16 @@ export function BatchBuyVerifier({ initialManifestText }: BatchBuyVerifierProps)
                 Copy Do-Not-Buy Lines
               </button>
             </div>
+            {hasDuplicateNameWarning ? (
+              <p role="alert" className="text-eve-error" style={{ marginTop: 10, marginBottom: 0 }}>
+                Duplicate manifest names detected after normalization: {filteredBuyManifest?.duplicateNormalizedManifestNames.join(", ")}.
+              </p>
+            ) : null}
+            {hasExcludedManifestRows ? (
+              <p className="text-eve-dim" style={{ marginTop: 10, marginBottom: 0 }}>
+                Some manifest rows were excluded from the export due to non-safe evaluation states.
+              </p>
+            ) : null}
             {result.comparison.summary.alertingRowsCount > 0 ? (
               <div
                 role="alert"
