@@ -35,6 +35,7 @@ export type FilteredBuyManifest = {
   text: string;
   hasDuplicateNormalizedManifestNames: boolean;
   duplicateNormalizedManifestNames: string[];
+  usedMissingSellOrProfitFallback: boolean;
 };
 
 export type BuildFilteredBuyManifestInput = {
@@ -191,6 +192,7 @@ export function buildFilteredBuyManifest(input: BuildFilteredBuyManifestInput): 
     .map(([name]) => name);
 
   const lines: FilteredBuyManifestLine[] = [];
+  let usedMissingSellOrProfitFallback = false;
   for (const manifestItem of input.manifestItems) {
     const row = rowLookup.get(normalizeItemName(manifestItem.name));
     if (!row || row.state !== "safe" || !row.exportItem) {
@@ -198,6 +200,9 @@ export function buildFilteredBuyManifest(input: BuildFilteredBuyManifestInput): 
     }
 
     const plannedBuyTotal = manifestItem.buyTotal ?? (manifestItem.buyPer ?? 0) * manifestItem.qty;
+    const hasSellFallback = typeof manifestItem.sellTotal !== "number" || typeof manifestItem.sellPer !== "number";
+    const hasProfitFallback = typeof manifestItem.profit !== "number";
+    usedMissingSellOrProfitFallback = usedMissingSellOrProfitFallback || hasSellFallback || hasProfitFallback;
     const plannedSellTotal = manifestItem.sellTotal ?? (manifestItem.sellPer ?? 0) * manifestItem.qty;
     const actualBuyTotal = row.exportItem.buyTotal;
     const plannedProfit =
@@ -235,5 +240,6 @@ export function buildFilteredBuyManifest(input: BuildFilteredBuyManifestInput): 
     text: formatFilteredBuyManifestText({ lines, summary, header }),
     hasDuplicateNormalizedManifestNames: duplicateNormalizedManifestNames.length > 0,
     duplicateNormalizedManifestNames,
+    usedMissingSellOrProfitFallback,
   };
 }

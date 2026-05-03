@@ -102,3 +102,17 @@ describe("buildFilteredBuyManifest", () => {
     expect(result.text).not.toContain("B 2");
   });
 });
+
+
+it("uses export quantity for safe rows even when qty differs and flags fallback for missing sell/profit", () => {
+  const item = manifestItem({ name: "A", rawName: "A", qty: 10, sellPer: undefined, sellTotal: undefined, profit: undefined });
+  const comparison = comparisonResult([
+    { name: "A", state: "safe", reason: "", manifestItem: item, exportItem: { rawName: "A", name: "A", qty: 7, buyPer: 5, buyTotal: 35 } },
+  ]);
+  const result = buildFilteredBuyManifest({ manifestText: "", manifestItems: [item], comparison });
+  expect(result.lines[0]?.qty).toBe(7);
+  expect(result.lines[0]?.sellPer).toBe(0);
+  expect(result.lines[0]?.sellTotal).toBe(0);
+  expect(result.summary.totalPlannedSell).toBe(0);
+  expect(result.usedMissingSellOrProfitFallback).toBe(true);
+});
