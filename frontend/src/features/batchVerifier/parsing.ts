@@ -30,6 +30,57 @@ export type ExportItem = {
   buyTotal: number;
 };
 
+
+export type BatchManifestHeader = {
+  buyStation?: string;
+  jumpsToBuyStation?: number;
+  sellStation?: string;
+  jumpsBuyToSell?: number;
+  cargoM3?: number;
+};
+
+const batchManifestHeaderParsers: Array<[RegExp, (value: string, header: BatchManifestHeader) => void]> = [
+  [/^buy station:\s*(.*)$/i, (value, header) => {
+    const station = normalizeItemName(value);
+    if (station) header.buyStation = station;
+  }],
+  [/^jumps to buy station:\s*(.*)$/i, (value, header) => {
+    const parsed = parseIskNumber(value);
+    if (Number.isFinite(parsed)) header.jumpsToBuyStation = parsed;
+  }],
+  [/^sell station:\s*(.*)$/i, (value, header) => {
+    const station = normalizeItemName(value);
+    if (station) header.sellStation = station;
+  }],
+  [/^jumps buy\s*->\s*sell:\s*(.*)$/i, (value, header) => {
+    const parsed = parseIskNumber(value);
+    if (Number.isFinite(parsed)) header.jumpsBuyToSell = parsed;
+  }],
+  [/^cargo m3:\s*(.*)$/i, (value, header) => {
+    const parsed = parseIskNumber(value);
+    if (Number.isFinite(parsed)) header.cargoM3 = parsed;
+  }],
+];
+
+export function parseBatchManifestHeader(text: string): BatchManifestHeader {
+  const header: BatchManifestHeader = {};
+
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    for (const [pattern, assign] of batchManifestHeaderParsers) {
+      const match = trimmed.match(pattern);
+      if (!match) continue;
+
+      assign(match[1] ?? "", header);
+      break;
+    }
+  }
+
+  return header;
+}
+
 const manifestLabels = ["qty", "buy total", "buy per", "sell total", "sell per", "vol", "profit"] as const;
 const manifestLabelSet = new Set<string>(manifestLabels);
 
