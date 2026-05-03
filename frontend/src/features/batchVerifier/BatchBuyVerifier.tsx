@@ -13,11 +13,16 @@ import {
 } from "@/features/batchVerifier/formatting";
 import {
   parseBatchManifest,
+  parseBatchManifestHeader,
   parseExportOrder,
+  type BatchManifestHeader,
+  type ManifestItem,
   type ParseDiagnostic,
 } from "@/features/batchVerifier/parsing";
 
 type EvaluationResult = {
+  manifestItems: ManifestItem[];
+  manifestHeader?: BatchManifestHeader;
   buyThese: ComparisonRow[];
   doNotBuyThese: ComparisonRow[];
   missing: ComparisonRow[];
@@ -273,10 +278,13 @@ export function BatchBuyVerifier({ initialManifestText }: BatchBuyVerifierProps)
   const handleEvaluate = () => {
     if (slippageValidationMessage || priceDiffValidationMessage) return;
     const manifestParsed = parseBatchManifest(manifestText);
+    const manifestHeader = parseBatchManifestHeader(manifestText);
     const exportParsed = parseExportOrder(exportText);
     const comparison = compareManifestToExport(manifestParsed.items, exportParsed.items, optionsForCompare);
 
     setResult({
+      manifestItems: manifestParsed.items,
+      manifestHeader,
       buyThese: comparison.buyThese,
       doNotBuyThese: [...comparison.doNotBuy, ...(comparison.review ?? [])],
       missing: comparison.missing,
