@@ -44,25 +44,40 @@ export type BuildFilteredBuyManifestInput = {
 };
 
 type BatchManifestHeader = {
+  buyStation?: string;
   jumpsToBuyStation: number;
+  sellStation?: string;
   jumpsBuyToSell: number;
+  cargoM3?: number;
 };
 
 export function parseBatchManifestHeader(manifestText: string): BatchManifestHeader {
   const normalizedText = manifestText.replace(/\r/g, "");
+  const buyStation = extractHeaderText(normalizedText, /buy\s*station\s*[:=]\s*(.+)$/im);
   const jumpsToBuyStation = extractHeaderNumber(normalizedText, [
     /jumps\s*to\s*buy\s*station\s*[:=]\s*(\d+)/i,
     /buy\s*station\s*jumps\s*[:=]\s*(\d+)/i,
   ]);
+  const sellStation = extractHeaderText(normalizedText, /sell\s*station\s*[:=]\s*(.+)$/im);
   const jumpsBuyToSell = extractHeaderNumber(normalizedText, [
     /jumps\s*(?:buy\s*to\s*sell|to\s*sell\s*station)\s*[:=]\s*(\d+)/i,
+    /jumps\s*buy\s*->\s*sell\s*[:=]\s*(\d+)/i,
     /sell\s*station\s*jumps\s*[:=]\s*(\d+)/i,
   ]);
+  const cargoM3 = extractHeaderDecimal(normalizedText, [/cargo\s*m3\s*[:=]\s*([\d,.]+)/i]);
 
   return {
+    buyStation,
     jumpsToBuyStation,
+    sellStation,
     jumpsBuyToSell,
+    cargoM3,
   };
+}
+
+function extractHeaderText(text: string, pattern: RegExp): string | undefined {
+  const matched = text.match(pattern)?.[1]?.trim();
+  return matched ? matched : undefined;
 }
 
 function extractHeaderNumber(text: string, patterns: RegExp[]): number {
@@ -78,13 +93,59 @@ function extractHeaderNumber(text: string, patterns: RegExp[]): number {
   return 0;
 }
 
-function formatFilteredBuyManifestText(lines: FilteredBuyManifestLine[]): string {
-  return lines
-    .map(
-      (line) =>
-        `${line.name}\t${line.qty}\t${line.buyPer.toFixed(2)}\t${line.buyTotal.toFixed(2)}\t${line.sellPer.toFixed(2)}\t${line.sellTotal.toFixed(2)}\t${line.volume.toFixed(2)}\t${line.profit.toFixed(2)}`,
-    )
-    .join("\n");
+function extractHeaderDecimal(text: string, patterns: RegExp[]): number | undefined {
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match?.[1]) continue;
+    const parsed = Number.parseFloat(match[1].replace(/,/g, ""));
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      return parsed;
+    }
+  }
+  return undefined;
+}
+
+function formatFilteredBuyManifestText(input: {
+  lines: FilteredBuyManifestLine[];
+  summary: FilteredBuyManifestSummary;
+  header: BatchManifestHeader;
+}): string {
+  const out: string[] = [];
+  if (input.header.buyStation) out.push(`Buy station: ${input.header.buyStation}`);
+  out.push(`Jumps to buy station: ${input.summary.jumpsToBuyStation}`);
+  if (input.header.sellStation) out.push(`Sell station: ${input.header.sellStation}`);
+  out.push(`Jumps buy -> sell: ${input.summary.jumpsBuyToSell}`);
+  out.push(`Cargo m3: ${formatVolume(input.header.cargoM3 ?? input.summary.totalVolume)}`);
+  out.push(`Items: ${input.summary.keptLineCount}`);
+  out.push(`Total volume: ${formatVolume(input.summary.totalVolume)} m3`);
+  out.push(`Total capital: ${formatIsk(input.summary.totalBuyCost)} ISK`);
+  out.push(`Total gross sell: ${formatIsk(input.summary.totalPlannedSell)} ISK`);
+  out.push(`Total profit: ${formatIsk(input.summary.totalAdjustedProfit)} ISK`);
+  out.push(`Total isk/jump: ${formatIsk(input.summary.iskPerJump)} ISK`);
+  out.push("");
+
+  for (const line of input.lines) {
+    out.push(
+      `${line.name} | qty ${Math.max(0, Math.trunc(line.qty)).toLocaleString("en-US")} | buy total ${formatIsk(line.buyTotal)} ISK | buy per ${formatIsk(line.buyPer)} ISK | sell total ${formatIsk(line.sellTotal)} ISK | sell per ${formatIsk(line.sellPer)} ISK | vol ${formatVolume(line.volume)} m3 | profit ${formatIsk(line.profit)} ISK`,
+    );
+  }
+
+  out.push("");
+  for (const line of input.lines) {
+    out.push(`${line.name} ${Math.max(0, Math.trunc(line.qty))}`);
+  }
+
+  return out.join("\n");
+}
+
+function formatIsk(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+  return Math.round(value).toLocaleString("en-US");
+}
+
+function formatVolume(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+  return value.toLocaleString("en-US", { maximumFractionDigits: 1 });
 }
 
 export function computeFilteredBuyManifestSummary(input: {
@@ -171,7 +232,7 @@ export function buildFilteredBuyManifest(input: BuildFilteredBuyManifestInput): 
   return {
     lines,
     summary,
-    text: formatFilteredBuyManifestText(lines),
+    text: formatFilteredBuyManifestText({ lines, summary, header }),
     hasDuplicateNormalizedManifestNames: duplicateNormalizedManifestNames.length > 0,
     duplicateNormalizedManifestNames,
   };
