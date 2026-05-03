@@ -165,7 +165,8 @@ function scoreRecommendation(item: RadiusBuyRecommendation, kind: RadiusDecision
   const verificationAdjustment = getVerificationAdjustment(item);
 
   const haulWorthiness = classifyHaulWorthiness({ jumps, profitIsk: profit, iskPerJump: safeNumber(item.batchIskPerJump), cargoUsedPercent: safeNumber(item.cargoUsedPercent) });
-  const longHaulWorthNorm = haulWorthiness.label === "long_worth_it" ? 1 : haulWorthiness.label === "short_efficient" ? 0.85 : haulWorthiness.label === "long_marginal" ? 0.45 : 0;
+  const longHaulWorthNorm = haulWorthiness.label === "long_worth_it" ? 1 : haulWorthiness.label === "short_efficient" ? 0.85 : haulWorthiness.label === "long_marginal" ? 0.35 : 0;
+  const longHaulPenaltyNorm = haulWorthiness.label === "long_not_worth" ? 0.2 : haulWorthiness.label === "long_marginal" ? 0.04 : 0;
   const verificationReadinessNorm = clamp01(item.action === "verify" ? 1 : fillConfidenceNorm * executionQualityNorm);
 
   const riskPenalty = clamp01(safeNumber(baseBreakdown.riskPenalty));
@@ -183,9 +184,10 @@ function scoreRecommendation(item: RadiusBuyRecommendation, kind: RadiusDecision
     dailyTurnoverNorm * weights.dailyProfitTurnover +
     movementNorm * weights.movement +
     watchlistBonusNorm * weights.watchlistBonus +
-    longHaulWorthNorm * 0.1 +
+    longHaulWorthNorm * 0.12 +
     verificationReadinessNorm * 0.05 +
-    verificationAdjustment.bonus;
+    verificationAdjustment.bonus -
+    longHaulPenaltyNorm;
   const totalPenalty =
     riskPenalty * weights.riskPenalty +
     slippagePenalty * weights.slippagePenalty +

@@ -3,7 +3,7 @@ import { formatISK } from "@/lib/format";
 import type { BuyPlannerMode, RadiusBuyRecommendation } from "@/lib/radiusBuyRecommendation";
 import { verificationSortRank } from "@/lib/radiusDecisionQueue";
 
-type SortKey = "rank" | "action" | "kind" | "stations" | "items" | "profit" | "iskJump" | "cargoUsed" | "remaining" | "capital" | "roi" | "jumps" | "fill" | "risk" | "verification";
+type SortKey = "rank" | "action" | "kind" | "stations" | "items" | "profit" | "iskJump" | "cargoUsed" | "remaining" | "capital" | "roi" | "jumps" | "fill" | "risk" | "haul" | "verification";
 type VerificationFilter = "all" | "verified" | "needs_verify" | "stale" | "failed";
 
 type Props = {
@@ -75,7 +75,7 @@ export function RadiusBatchBuyPlanner({ recommendations, mode, onModeChange, onO
       <table className="min-w-full text-left">
         <thead className="text-eve-dim">
           <tr>{[
-            ["rank", "Rank"], ["action", "Action"], ["kind", "Package"], ["stations", "Stations"], ["items", "Items"], ["profit", "Profit"], ["iskJump", "ISK/jump"], ["cargoUsed", "Cargo use"], ["remaining", "Remaining"], ["capital", "Capital"], ["roi", "ROI"], ["jumps", "Jumps"], ["fill", "Fill"], ["risk", "Risk"], ["verification", "Verification"],
+            ["rank", "Rank"], ["action", "Action"], ["kind", "Package"], ["haul", "Haul"], ["stations", "Stations"], ["items", "Items"], ["profit", "Profit"], ["iskJump", "ISK/jump"], ["cargoUsed", "Cargo use"], ["remaining", "Remaining"], ["capital", "Capital"], ["roi", "ROI"], ["jumps", "Jumps"], ["fill", "Fill"], ["risk", "Risk"], ["verification", "Verification"],
           ].map(([key, label]) => <th key={key} className="px-1 py-1"><button type="button" onClick={() => onSort(key as SortKey)}>{label}</button></th>)}<th className="px-1 py-1">Actions</th></tr>
         </thead>
         <tbody>
@@ -86,7 +86,7 @@ export function RadiusBatchBuyPlanner({ recommendations, mode, onModeChange, onO
             const slippage = Number(recommendation.packageMetrics?.weightedSlippagePct ?? 0);
             const verificationText = formatVerificationState(recommendation.verificationState);
             return <tr key={recommendation.id} className="border-t border-eve-border/30">
-              <td className="px-1 py-1">#{rank}</td><td>{recommendation.action}</td><td>{recommendation.kind}</td>
+              <td className="px-1 py-1">#{rank}</td><td>{recommendation.action}</td><td>{recommendation.kind}</td><td><span className="rounded-sm border border-sky-500/40 px-1 py-0 text-[10px] text-sky-300" title={(recommendation as { haulWorthiness?: { reason?: string } }).haulWorthiness?.reason ?? ""}>{(recommendation as { haulWorthiness?: { label?: string } }).haulWorthiness?.label ?? "n/a"}</span><div className="text-[10px] text-sky-200/90">{(recommendation as { haulWorthiness?: { reason?: string } }).haulWorthiness?.reason ?? ""}</div></td>
               <td>{first?.BuyStation ?? "?"} → {first?.SellStation ?? "?"}</td>
               <td>{recommendation.lines.length}</td><td>{formatISK(recommendation.packageMetrics.batchProfitIsk)}</td><td>{formatISK(recommendation.packageMetrics.batchIskPerJump)}</td>
               <td>{recommendation.packageMetrics.cargoUsedPercent.toFixed(1)}%</td><td>{recommendation.remainingCargoM3.toLocaleString("en-US")} m3</td><td>{formatISK(recommendation.packageMetrics.batchCapitalIsk)}</td>
@@ -125,6 +125,7 @@ function getSortValue(recommendation: RadiusBuyRecommendation, rank: number, key
     case "action": return recommendation.action;
     case "kind": return recommendation.kind;
     case "stations": return `${first?.BuyStation ?? ""}-${first?.SellStation ?? ""}`;
+    case "haul": return (recommendation as { haulWorthiness?: { label?: string } }).haulWorthiness?.label ?? "";
     case "items": return recommendation.lines.length;
     case "profit": return recommendation.packageMetrics.batchProfitIsk;
     case "iskJump": return recommendation.packageMetrics.batchIskPerJump;

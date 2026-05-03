@@ -104,10 +104,12 @@ export function RadiusBuyNowQueuePanel({
                 <span className="font-mono text-eve-dim">#{rank}</span>
                 <span className="rounded-sm border border-eve-accent/40 px-1 py-0 text-[10px] text-eve-accent">{recommendation.action}</span>
                 <span className="rounded-sm border border-eve-border/40 px-1 py-0 text-[10px] text-eve-dim">{recommendation.kind}</span>
-                <span className="rounded-sm border border-sky-500/40 px-1 py-0 text-[10px] text-sky-300">{recommendation.haulWorthiness.label}</span>
+                <span className="rounded-sm border border-sky-500/40 px-1 py-0 text-[10px] text-sky-300" title={recommendation.haulWorthiness.reason}>{recommendation.haulWorthiness.label}</span>
                 <span className={verificationBadgeClass} data-testid="verification-state-label">{verificationLabel}</span>
                 <span className="text-eve-text">{buyStation} → {sellStation}</span>
               </div>
+
+              <div className="mt-1 text-[10px] text-sky-200/90">Haul worthiness: {recommendation.haulWorthiness.reason}</div>
 
               {selectedLayout === "compact" ? (
                 <div className="mt-1 flex flex-wrap gap-2 text-eve-dim" data-testid="compact-row">
